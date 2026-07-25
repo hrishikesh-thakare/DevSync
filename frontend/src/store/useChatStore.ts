@@ -154,8 +154,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
 
     try {
-      // 1. Get signed URL
-      const data = await apiFetch(`/workspaces/${slug}/files/upload-url`, {
+      // Convert file to base64 for server-side upload
+      const fileBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          // Remove the data:...;base64, prefix
+          resolve(result.split(',')[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      // Upload via backend (server-side Supabase upload)
+      const data = await apiFetch(`/workspaces/${slug}/files/upload`, {
         method: 'POST',
         body: JSON.stringify({
           filename: file.name,
@@ -163,32 +175,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
           sizeBytes: file.size,
           filetype: file.type.startsWith('image/') ? 'image' : 
                    file.type.startsWith('video/') ? 'video' :
-                   file.type === 'application/pdf' ? 'pdf' : 'other'
+                   file.type === 'application/pdf' ? 'pdf' : 'other',
+          fileBase64,
         })
       });
 
-      if (!data.uploadUrl || !data.fileRecord) throw new Error('No upload URL returned');
+      if (!data.fileRecord) throw new Error('No file record created');
 
-      // 2. Upload to Supabase directly
-      const uploadRes = await fetch(data.uploadUrl, {
-        method: 'PUT',
-        body: file,
-        headers: {
-          'Content-Type': file.type
-        }
-      });
-
-      if (!uploadRes.ok) throw new Error('Upload failed');
-
-      // 3. Return file record details
       return {
         fileId: data.fileRecord.fileId,
         filename: data.fileRecord.filename
       };
-      
     } catch (err) {
       console.error('File upload failed:', err);
       return null;
     }
   }
+
 }));

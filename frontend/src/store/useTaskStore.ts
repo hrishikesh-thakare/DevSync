@@ -3,11 +3,14 @@ import { Task, TaskStatus } from '../types';
 import { apiFetch } from '../lib/api';
 import { useWorkspaceStore } from './workspaceStore';
 import { useProjectStore } from './useProjectStore';
+import { useCurrentWorkspaceStore } from './currentWorkspace';
+
 
 interface TaskState {
   tasks: Task[];
   isLoading: boolean;
-  fetchTasks: () => Promise<void>;
+  fetchTasks: (targetProjectKey?: string) => Promise<void>;
+
   createTask: (title: string, description: string, status: TaskStatus) => Promise<void>;
   updateTaskStatus: (taskId: string, status: TaskStatus) => Promise<void>;
   updateTaskSprint: (taskId: string, sprintId: string | null) => Promise<void>;
@@ -19,36 +22,58 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   tasks: [],
   isLoading: false,
 
-  fetchTasks: async () => {
-    const workspace = useWorkspaceStore.getState().currentWorkspace;
-    const project = useProjectStore.getState().activeProject;
-    
-    if (!workspace || !project) return;
+  fetchTasks: async (targetProjectKey?: string) => {
+    let slug = useWorkspaceStore.getState().currentWorkspace?.slug;
+    const cw = useCurrentWorkspaceStore.getState();
+    slug = slug || cw.slug;
+    if (!slug) return;
 
     set({ isLoading: true });
     try {
-      const data = await apiFetch(`/workspaces/${workspace.slug}/projects/${project.id}/tasks`);
-      
-      const mappedTasks: Task[] = data.tasks.map((t: any) => ({
-        id: t.taskId,
-        taskKey: t.taskKey,
-        title: t.title,
-        description: t.description || '',
-        status: t.status as TaskStatus,
-        priority: t.priority || 'medium',
-        type: t.type || 'task',
-        assigneeId: t.assigneeId,
-        reporterId: t.reporterId,
-        sprintId: t.sprintId,
-        createdAt: t.createdAt
-      }));
+      const activeProj = useProjectStore.getState().activeProject as { projectKey?: string; key?: string } | null;
+      const activeProjectKey = targetProjectKey || activeProj?.projectKey || activeProj?.key;
 
-      set({ tasks: mappedTasks, isLoading: false });
+      let allTasks: Task[] = [];
+
+      if (activeProjectKey) {
+        interface RawTask {
+          taskId: string;
+          taskKey?: string;
+          title: string;
+          description?: string | null;
+          status: string;
+          priority?: string;
+          type?: string;
+          assigneeId?: string | null;
+          reporterId?: string | null;
+          sprintId?: string | null;
+          createdAt: string;
+        }
+        const data = await apiFetch(`/workspaces/${slug}/projects/${activeProjectKey}/tasks`);
+        allTasks = (data.tasks || []).map((t: RawTask) => ({
+          id: t.taskId,
+          taskKey: t.taskKey,
+          title: t.title,
+          description: t.description || '',
+          status: t.status as TaskStatus,
+          priority: (t.priority as 'low' | 'medium' | 'high' | 'urgent') || 'medium',
+          type: (t.type as 'task' | 'bug' | 'feature' | 'epic') || 'task',
+
+          assigneeId: t.assigneeId || null,
+          reporterId: t.reporterId || '',
+          sprintId: t.sprintId || null,
+          createdAt: t.createdAt
+        }));
+      }
+
+      set({ tasks: allTasks, isLoading: false });
     } catch (err) {
       console.error('Failed to fetch tasks:', err);
       set({ isLoading: false });
     }
   },
+
+
 
   createTask: async (title, description, status) => {
     const workspace = useWorkspaceStore.getState().currentWorkspace;
