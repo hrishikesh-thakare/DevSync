@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase';
 export default function RegisterPage() {
   const navigate = useNavigate();
   const { register } = useAuthStore();
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -47,7 +47,7 @@ export default function RegisterPage() {
     <div className="auth-bg min-h-screen flex items-center justify-center p-4">
       <div className="auth-shape-1"></div>
       <div className="auth-shape-2"></div>
-      
+
       <div className="glass-card-strong max-w-md w-full p-8 animate-fadeIn glow-purple relative z-10">
         <div className="mb-10 text-center">
           <h1 className="text-4xl font-bold gradient-text mb-2">Join DevSync</h1>
@@ -135,33 +135,33 @@ export default function RegisterPage() {
           </button>
         </form>
 
-        <div className="mt-8">
-          <div className="relative">
+        {/* <div className="mt-8"> */}
+        {/* <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-border-light"></div>
             </div>
             <div className="relative flex justify-center text-sm">
               <span className="px-2 bg-transparent text-text-secondary">Or continue with</span>
             </div>
-          </div>
+          </div> */}
 
-          <div className="mt-6 space-y-4">
-            <button
-              type="button"
-              onClick={() => handleOAuth('github')}
-              className="glass-card w-full py-3 hover:bg-bg-hover transition-colors font-medium text-text-primary"
-            >
-              Continue with GitHub
-            </button>
-            <button
-              type="button"
-              onClick={() => handleOAuth('google')}
-              className="glass-card w-full py-3 hover:bg-bg-hover transition-colors font-medium text-text-primary"
-            >
-              Continue with Google
-            </button>
-          </div>
+        <div className="mt-6 space-y-4">
+          <button
+            type="button"
+            onClick={() => handleOAuth('github')}
+            className="glass-card w-full py-3 hover:bg-bg-hover transition-colors font-medium text-text-primary"
+          >
+            Continue with GitHub
+          </button>
+          <button
+            type="button"
+            onClick={() => handleOAuth('google')}
+            className="glass-card w-full py-3 hover:bg-bg-hover transition-colors font-medium text-text-primary"
+          >
+            Continue with Google
+          </button>
         </div>
+        {/* </div> */}
 
         <p className="mt-8 text-center text-sm text-text-secondary">
           Already have an account?{' '}

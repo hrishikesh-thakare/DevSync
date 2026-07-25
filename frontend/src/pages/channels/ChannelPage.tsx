@@ -8,6 +8,50 @@ import { Hash, Lock, Users, Loader2, Smile, MessageSquare, X, Edit2 } from 'luci
 import { format } from 'date-fns';
 import { apiFetch } from '../../lib/api.js';
 
+function FileImagePreview({ slug, fileId, fileName }: { slug: string; fileId: string; fileName: string }) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    apiFetch(`/workspaces/${slug}/files/${fileId}/download`)
+      .then((res) => {
+        if (isMounted && res.downloadUrl) setImageUrl(res.downloadUrl);
+      })
+      .catch((err) => console.error('Failed to load image preview', err))
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+    return () => { isMounted = false; };
+  }, [slug, fileId]);
+
+  if (loading) {
+    return (
+      <div className="w-48 h-32 bg-gray-800/60 animate-pulse rounded-lg flex items-center justify-center border border-gray-700/50">
+        <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!imageUrl) return null;
+
+  return (
+    <a
+      href={imageUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="block my-1.5 overflow-hidden rounded-xl border border-gray-700/60 bg-gray-900 max-w-sm group transition-transform hover:scale-[1.01]"
+    >
+      <img
+        src={imageUrl}
+        alt={fileName}
+        className="max-h-64 max-w-full object-cover rounded-xl"
+        loading="lazy"
+      />
+    </a>
+  );
+}
+
 export const ChannelPage = () => {
   const { slug, channelId } = useParams();
   const navigate = useNavigate();
@@ -196,6 +240,9 @@ export const ChannelPage = () => {
     // Render raw HTML — convert file markers and task mentions into styled anchors/spans
     const htmlContent = renderMessageContent(msg.bodyText || '');
 
+    // Extract any file attachments in the message to display image previews
+    const fileMatches = Array.from((msg.bodyText || '').matchAll(/\[(.*?)\]\(file:([a-zA-Z0-9-]+)\)/g)) as RegExpMatchArray[];
+
     return (
       <div key={msg.messageId} className={`group flex items-start py-1 hover:bg-gray-900/40 rounded-lg transition-colors relative ${isThreadContext ? '' : '-mx-4 px-4'}`}>
         <div className="w-10 flex-shrink-0 flex justify-center">
@@ -235,14 +282,30 @@ export const ChannelPage = () => {
               const taskLink = target.closest('[data-task-key]');
               if (taskLink) {
                 e.preventDefault();
-                const taskKey = taskLink.getAttribute('data-task-key');
+                let taskKey = taskLink.getAttribute('data-task-key');
                 if (taskKey) {
+                  taskKey = taskKey.replace(/^@/, '');
                   const projectKey = taskKey.split('-')[0];
                   navigate(`/w/${slug}/projects/${projectKey}/tasks/${taskKey}`);
                 }
               }
             }}
           />
+
+          {/* Render Image Previews for Image Files */}
+          {fileMatches.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {fileMatches.map((match) => {
+                const fileName = match[1];
+                const fileId = match[2];
+                const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(fileName);
+                if (!isImage) return null;
+                return (
+                  <FileImagePreview key={fileId} slug={slug!} fileId={fileId} fileName={fileName} />
+                );
+              })}
+            </div>
+          )}
 
           {!isThreadContext && msg.replyCount > 0 && (
             <div className="mt-2 flex items-center gap-3">
