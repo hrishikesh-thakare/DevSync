@@ -2,9 +2,10 @@ import { Request, Response } from 'express';
 import { db } from '../../config/db.js';
 import { messages } from '../../db/schema/channels.js';
 import { users } from '../../db/schema/auth.js';
-import { eq, and, desc, asc, sql, or, ilike } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, or, ilike, inArray } from 'drizzle-orm';
 import { getIO } from '../../sockets/index.js';
-import { channels, channelMembers } from '../../db/schema/channels.js';
+import { channels, channelMembers, workspaceFiles } from '../../db/schema/channels.js';
+import { supabase } from '../../config/supabase.js';
 import { tasks } from '../../db/schema/tasks.js';
 import { createNotification } from '../notifications/notifications.controller.js';
 import { workspaceMembers } from '../../db/schema/workspaces.js';
@@ -259,8 +260,10 @@ export const listMessages = async (req: Request, res: Response): Promise<void> =
           sql`${messages.threadId} IS NULL`
         )
       )
+
       .orderBy(desc(messages.createdAt))
       .limit(parsedLimit);
+
 
     res.json({ messages: results.reverse() }); // Reverse so oldest is first for UI display
   } catch (err) {
@@ -291,7 +294,9 @@ export const getThreadReplies = async (req: Request, res: Response): Promise<voi
       .from(messages)
       .leftJoin(users, eq(messages.authorId, users.userId))
       .where(eq(messages.threadId, messageId))
+
       .orderBy(asc(messages.createdAt)); // Chronological order for threads
+
 
     res.json({ replies: results });
   } catch (err) {
@@ -386,9 +391,9 @@ export const deleteMessage = async (req: Request, res: Response): Promise<void> 
     const { channelId, messageId } = req.params as Record<string, string>;
     const userId = req.user!.userId;
 
-    // Verify ownership
+    // Verify ownership & fetch replyCount
     const [msg] = await db
-      .select({ authorId: messages.authorId, threadId: messages.threadId })
+      .select({ authorId: messages.authorId, threadId: messages.threadId, replyCount: messages.replyCount, bodyText: messages.bodyText })
       .from(messages)
       .where(eq(messages.messageId, messageId))
       .limit(1);
@@ -409,19 +414,75 @@ export const deleteMessage = async (req: Request, res: Response): Promise<void> 
       }
       isDeletedByAdmin = true;
     }
+    
+    // Extract fileIds from the message body
+    let filesToDelete: string[] = [];
+    if (msg.bodyText) {
+      const fileMatches = Array.from(msg.bodyText.matchAll(/\[(.*?)\]\(file:([a-zA-Z0-9-]+)\)/g));
+      filesToDelete = fileMatches.map(m => m[2]);
+    }
 
     await db.transaction(async (tx) => {
-      await tx
-        .update(messages)
-        .set({
-          isDeleted: true,
-          bodyText: 'This message was deleted.',
-          bodyBlocks: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(messages.messageId, messageId));
+      // If deleting a child reply, decrement parent's replyCount
+      if (msg.threadId) {
+        await tx
+          .update(messages)
+          .set({ replyCount: sql`GREATEST(0, reply_count - 1)`, updatedAt: new Date() })
+          .where(eq(messages.messageId, msg.threadId));
+
+        // If parent was soft-deleted and now has 0 replies, hard delete parent too
+        const [parent] = await tx
+          .select({ isDeleted: messages.isDeleted, replyCount: messages.replyCount })
+          .from(messages)
+          .where(eq(messages.messageId, msg.threadId));
+
+        if (parent && parent.isDeleted && parent.replyCount <= 0) {
+          await tx.delete(messages).where(eq(messages.messageId, msg.threadId));
+        }
+      }
+
+      // If parent message has active thread replies (> 0), soft delete to preserve thread tree
+      if ((msg.replyCount || 0) > 0) {
+        await tx
+          .update(messages)
+          .set({
+            isDeleted: true,
+            bodyText: 'This message was deleted.',
+            bodyBlocks: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(messages.messageId, messageId));
+      } else {
+        // Standalone message or child reply with 0 replies: Hard delete completely
+        await tx
+          .delete(messages)
+          .where(eq(messages.messageId, messageId));
+      }
+      
+      // Handle file deletion
+      if (filesToDelete.length > 0) {
+        const files = await tx.select({ fileId: workspaceFiles.fileId, storagePath: workspaceFiles.storagePath })
+           .from(workspaceFiles)
+           .where(inArray(workspaceFiles.fileId, filesToDelete));
+        
+        if (files.length > 0) {
+           const storagePaths = files.map(f => f.storagePath);
+           
+           // Delete from DB
+           await tx.delete(workspaceFiles).where(inArray(workspaceFiles.fileId, filesToDelete));
+           
+           // Delete from Supabase
+           const { error: storageError } = await supabase.storage.from('workspace-files').remove(storagePaths);
+           if (storageError) {
+              console.error("Failed to delete files from Supabase", storageError);
+           }
+        }
+      }
 
       if (isDeletedByAdmin) {
+
+
+
         const [channel] = await tx.select({ workspaceId: channels.workspaceId }).from(channels).where(eq(channels.channelId, channelId)).limit(1);
         await logAuditAction({
           actorId: userId,
@@ -437,7 +498,8 @@ export const deleteMessage = async (req: Request, res: Response): Promise<void> 
 
     // Emit real-time event
     const io = getIO();
-    io.to(`channel:${channelId}`).emit('message_deleted', { messageId });
+    io.to(`channel:${channelId}`).emit('message_deleted', { messageId, threadId: msg.threadId });
+
 
     res.json({ message: 'Message deleted' });
   } catch (err) {

@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { useChatStore } from '../../store/chatStore.js';
+import { useChatStore, Message } from '../../store/chatStore.js';
+
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useAuthStore } from '../../store/auth.js';
-import { TiptapEditor, renderMessageContent } from '../../components/chat/TiptapEditor.js';
+import { useTaskStore } from '../../store/useTaskStore.js';
+import { TiptapEditor } from '../../components/chat/TiptapEditor.js';
+
+import { renderMessageContent } from '../../components/chat/renderMessageContent.js';
+
 import { Hash, Lock, Users, Loader2, Smile, MessageSquare, X, Edit2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { apiFetch } from '../../lib/api.js';
+import { socketClient } from '../../lib/socket.js';
+
 
 function FileImagePreview({ slug, fileId, fileName }: { slug: string; fileId: string; fileName: string }) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -57,19 +64,16 @@ export const ChannelPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const taskKeyQuery = searchParams.get('task');
-  const [initialChatContent, setInitialChatContent] = useState('');
 
-  useEffect(() => {
-    if (taskKeyQuery) {
-      setInitialChatContent(`<p><span class="text-blue-400 bg-blue-500/10 px-1 rounded font-medium">@${taskKeyQuery}</span> </p>`);
-    } else {
-      setInitialChatContent('');
-    }
-  }, [taskKeyQuery, channelId]);
+  const initialChatContent = taskKeyQuery
+    ? `<p><span class="text-blue-400 bg-blue-500/10 px-1 rounded font-medium">@${taskKeyQuery}</span> </p>`
+    : '';
+
 
   const { user } = useAuthStore();
   const { channels, memberCount, isAdmin, fetchWorkspaceData, myRole } = useCurrentWorkspaceStore();
-  const { messages, isLoading, joinChannel, leaveChannel, sendMessage } = useChatStore();
+  const { messages, isLoading, joinChannel, leaveChannel, sendMessage, removeMessage } = useChatStore();
+
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const threadScrollRef = useRef<HTMLDivElement>(null);
@@ -78,10 +82,11 @@ export const ChannelPage = () => {
 
   // Thread State
   const [activeThreadMessageId, setActiveThreadMessageId] = useState<string | null>(null);
-  const [threadReplies, setThreadReplies] = useState<any[]>([]);
+  const [threadReplies, setThreadReplies] = useState<Message[]>([]);
   const [isThreadLoading, setIsThreadLoading] = useState(false);
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
-  const [threadsCache, setThreadsCache] = useState<Record<string, any[]>>({});
+  const [threadsCache, setThreadsCache] = useState<Record<string, Message[]>>({});
+
   const [canChat, setCanChat] = useState(true);
 
   useEffect(() => {
@@ -93,9 +98,14 @@ export const ChannelPage = () => {
           const project = useCurrentWorkspaceStore.getState().projects.find(p => p.projectId === currentChannel.projectId);
           if (!project) throw new Error('Project not found in store');
           
+          interface ProjectMember {
+            userId: string;
+            role: string;
+          }
           const data = await apiFetch(`/workspaces/${slug}/projects/${project.key}/members`);
-          const members = data.members || [];
-          const myMembership = members.find((m: any) => m.userId === user?.userId);
+          const members: ProjectMember[] = data.members || [];
+          const myMembership = members.find((m) => m.userId === user?.userId);
+
           
           if (isAdmin()) {
             setCanChat(true);
@@ -117,15 +127,52 @@ export const ChannelPage = () => {
       }
     };
     checkPermissions();
-  }, [currentChannel?.channelId, currentChannel?.projectId, slug, user?.userId, isAdmin, myRole]);
+  }, [currentChannel, slug, user?.userId, isAdmin, myRole]);
+
+
+  const [prevChannelId, setPrevChannelId] = useState(channelId);
+  if (channelId !== prevChannelId) {
+    setPrevChannelId(channelId);
+    setActiveThreadMessageId(null);
+  }
 
   useEffect(() => {
     if (slug && channelId) {
       joinChannel(slug, channelId);
-      setActiveThreadMessageId(null);
+      if (currentChannel?.projectId) {
+        const project = useCurrentWorkspaceStore.getState().projects.find(p => p.projectId === currentChannel.projectId);
+        if (project?.key) {
+          useTaskStore.getState().fetchTasks(project.key);
+        }
+      } else {
+        // Workspace wide channels have no project tasks
+        useTaskStore.setState({ tasks: [] });
+      }
     }
     return () => leaveChannel();
-  }, [slug, channelId, joinChannel, leaveChannel]);
+  }, [slug, channelId, currentChannel, joinChannel, leaveChannel]);
+
+
+  useEffect(() => {
+    const socket = socketClient.getSocket();
+    const handleMessageDeleted = ({ messageId }: { messageId: string }) => {
+      setThreadReplies((prev) => prev.filter((m) => m.messageId !== messageId));
+      setThreadsCache((prev) => {
+        const updated = { ...prev };
+        for (const parentId in updated) {
+          updated[parentId] = updated[parentId].filter((m) => m.messageId !== messageId);
+        }
+        return updated;
+      });
+    };
+
+    socket.on('message_deleted', handleMessageDeleted);
+    return () => {
+      socket.off('message_deleted', handleMessageDeleted);
+    };
+  }, []);
+
+
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -153,7 +200,7 @@ export const ChannelPage = () => {
         try {
           const data = await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages/${messageId}/thread`);
           setThreadsCache(prev => ({ ...prev, [messageId]: data.replies || [] }));
-        } catch (err: any) {
+        } catch (err) {
           console.error(err);
         }
       }
@@ -166,13 +213,14 @@ export const ChannelPage = () => {
     try {
       const data = await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages/${messageId}/thread`);
       setThreadReplies(data.replies || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      alert(err.message || 'Failed to load thread');
+      alert(err instanceof Error ? err.message : 'Failed to load thread');
     } finally {
       setIsThreadLoading(false);
     }
   };
+
 
   const handleSendMain = async (content: string) => {
     if (slug && channelId) {
@@ -188,8 +236,8 @@ export const ChannelPage = () => {
           body: JSON.stringify({ bodyText: content, threadId: activeThreadMessageId }),
         });
         setThreadReplies([...threadReplies, data.data]);
-      } catch (err: any) {
-        alert(err.message || 'Failed to send reply');
+      } catch (err) {
+        alert(err instanceof Error ? err.message : 'Failed to send reply');
       }
     }
   };
@@ -197,13 +245,27 @@ export const ChannelPage = () => {
   const deleteMessage = async (msgId: string) => {
     if (!confirm('Delete message?')) return;
     try {
+      const targetMsg = messages.find(m => m.messageId === msgId) || threadReplies.find(m => m.messageId === msgId);
+      const threadId = targetMsg?.threadId || null;
+
+
       await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages/${msgId}`, { method: 'DELETE' });
-      // Hack to refresh since chatStore doesn't expose deleteMessage
-      joinChannel(slug as string, channelId as string);
-    } catch (err: any) {
-      alert(err.message);
+      removeMessage(msgId, threadId);
+      setThreadReplies((prev) => prev.filter((m) => m.messageId !== msgId));
+      setThreadsCache((prev) => {
+        const updated = { ...prev };
+        for (const parentId in updated) {
+          updated[parentId] = updated[parentId].filter((m) => m.messageId !== msgId);
+        }
+        return updated;
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete message');
     }
   };
+
+
+
 
   const handleDeleteChannel = async () => {
     if (!confirm('Are you sure you want to delete this channel?')) return;
@@ -211,10 +273,11 @@ export const ChannelPage = () => {
       await apiFetch(`/workspaces/${slug}/channels/${channelId}`, { method: 'DELETE' });
       fetchWorkspaceData(slug as string);
       navigate(`/w/${slug}`);
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete channel');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete channel');
     }
   };
+
 
   const handleUpdateChannelName = async () => {
     if (!currentChannel) return;
@@ -227,13 +290,15 @@ export const ChannelPage = () => {
         body: JSON.stringify({ name: newName })
       });
       fetchWorkspaceData(slug as string);
-    } catch (err: any) {
-      alert(err.message || 'Failed to update channel name');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update channel name');
     }
   };
 
-  const renderMessage = (msg: any, isThreadContext = false) => {
-    const isMe = msg.authorId === user?.userId || msg.senderId === user?.userId;
+  const renderMessage = (msg: Message, isThreadContext = false) => {
+    const isMe = ('authorId' in msg ? (msg as { authorId?: string }).authorId : undefined) === user?.userId || msg.senderId === user?.userId;
+
+
     // Basic logic for headers (simplified for thread)
     const showHeader = true;
 
@@ -307,15 +372,16 @@ export const ChannelPage = () => {
             </div>
           )}
 
-          {!isThreadContext && msg.replyCount > 0 && (
+          {!isThreadContext && (msg.replyCount ?? msg.threadCount ?? 0) > 0 && (
             <div className="mt-2 flex items-center gap-3">
               <button 
                 onClick={() => toggleThreadInline(msg.messageId)}
                 className="flex items-center text-sm font-medium text-blue-400 hover:text-blue-300 px-1 py-0.5 rounded transition-colors"
               >
                 <span className="font-mono font-bold mr-1.5 text-lg leading-none">{expandedThreads.has(msg.messageId) ? '[-]' : '[+]'}</span>
-                {msg.replyCount} {msg.replyCount === 1 ? 'reply' : 'replies'} inline
+                {msg.replyCount ?? msg.threadCount} {(msg.replyCount ?? msg.threadCount) === 1 ? 'reply' : 'replies'} inline
               </button>
+
               <button 
                 onClick={() => loadThread(msg.messageId)}
                 className="flex items-center text-sm font-medium text-gray-400 hover:text-gray-300 bg-gray-800/50 hover:bg-gray-800 px-2 py-1 rounded transition-colors"
@@ -329,11 +395,12 @@ export const ChannelPage = () => {
           {/* Inline Nested Replies */}
           {!isThreadContext && expandedThreads.has(msg.messageId) && threadsCache[msg.messageId] && (
             <div className="mt-3 ml-2 pl-4 border-l-2 border-gray-800 space-y-2">
-              {threadsCache[msg.messageId].map((reply: any) => (
+              {threadsCache[msg.messageId].map((reply: Message) => (
                 <div key={reply.messageId} className="relative">
                   {renderMessage(reply, true)}
                 </div>
               ))}
+
             </div>
           )}
         </div>
@@ -349,7 +416,7 @@ export const ChannelPage = () => {
               <MessageSquare className="w-4 h-4" />
             </button>
           )}
-          {isMe && (
+          {(isMe || isAdmin()) && (
             <button onClick={() => deleteMessage(msg.messageId)} className="p-1.5 text-red-400 hover:text-red-300 hover:bg-gray-800 rounded" title="Delete Message">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
             </button>

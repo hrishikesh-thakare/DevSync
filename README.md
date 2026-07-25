@@ -93,12 +93,12 @@ npm run dev
 ### 3. Frontend Setup
 ```bash
 cd ../frontend
-npm install
+npm install --legacy-peer-deps
 ```
 Create a `.env` file in the `frontend/` directory:
 ```env
-VITE_API_URL=http://localhost:3000/api
-VITE_SOCKET_URL=http://localhost:3000
+VITE_API_URL=http://localhost:5000/api
+VITE_SOCKET_URL=http://localhost:5000
 VITE_SUPABASE_URL=https://your-project-id.supabase.co
 VITE_SUPABASE_ANON_KEY=your_anon_key
 ```
@@ -106,6 +106,17 @@ Start the Vite development server:
 ```bash
 npm run dev
 ```
+
+### 4. Optional: Ngrok Setup (For GitHub Webhooks & Remote Testing)
+To receive external GitHub webhooks (such as commit triggers or PR auto-linking) or share your local environment remotely, use [Ngrok](https://ngrok.com/):
+
+1. Start your backend and frontend servers as described above.
+2. In a separate terminal, expose your backend port (default `5000`):
+   ```bash
+   ngrok http 5000
+   ```
+3. Copy the generated `https://xxxx.ngrok-free.app` URL and update your backend GitHub webhook URL or `WEBHOOK_BASE_URL` in `backend/.env`.
+
 
 ---
 

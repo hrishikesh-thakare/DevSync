@@ -10,19 +10,9 @@ import clsx from 'clsx';
 import suggestion from './suggestion.js';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useChatStore as useUploadStore } from '../../store/useChatStore.js';
+import { useTaskStore } from '../../store/useTaskStore.js';
 
-export function renderMessageContent(html: string): string {
-  let processed = html.replace(/\[(.*?)\]\(file:([a-zA-Z0-9-]+)\)/g, (_, name, id) =>
-    `<a href="#" data-file-id="${id}" data-file-name="${name}" class="inline-flex items-center gap-1.5 px-2 py-0.5 mx-0.5 bg-gray-800 rounded border border-gray-700 text-blue-400 hover:bg-gray-700 transition-colors no-underline text-xs font-medium">📎 ${name}</a>`
-  );
 
-  // Replace @TASK-123 with clickable spans
-  processed = processed.replace(/(?<!["'])@([A-Za-z]+-\d+)/gi, (fullMatch, taskKey) => {
-    return `<span data-task-key="${taskKey.toUpperCase()}" class="text-blue-400 bg-blue-500/10 px-1 rounded font-medium cursor-pointer hover:underline" title="Go to task ${taskKey.toUpperCase()}">${fullMatch}</span>`;
-  });
-
-  return processed;
-}
 
 interface TiptapEditorProps {
   onSubmit: (content: string) => void;
@@ -40,16 +30,20 @@ export const TiptapEditor = ({
   const submitRef = useRef(onSubmit);
   const isSendingRef = useRef(isSending);
   const { members } = useCurrentWorkspaceStore();
+  const { tasks } = useTaskStore();
   const { uploadFile } = useUploadStore();
 
   const [isUploading, setIsUploading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [isEmpty, setIsEmpty] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
 
   useEffect(() => {
     submitRef.current = onSubmit;
     isSendingRef.current = isSending;
   }, [onSubmit, isSending]);
+
 
   // ── Tiptap editor ──────────────────────────────────────────────────────────
   const editor = useEditor({
@@ -86,14 +80,21 @@ export const TiptapEditor = ({
           return {
             Enter: () => {
               if (isSendingRef.current) return true;
+              // If mention popup is currently visible, let Mention extension handle Enter
+              if (document.querySelector('.tippy-box')) {
+                return false;
+              }
               const html = this.editor.getHTML();
               const text = this.editor.getText().trim();
               if (text !== '') {
                 submitRef.current(html);
                 this.editor.commands.clearContent();
+                setIsEmpty(true);
               }
+
               return true;
             },
+
           };
         },
       }),
@@ -104,16 +105,35 @@ export const TiptapEditor = ({
         },
         suggestion: {
           ...suggestion,
-          items: ({ query }: { query: string }) =>
-            members
-              .filter(m => m.fullName.toLowerCase().includes(query.toLowerCase()))
-              .map(m => ({ id: m.userId, label: m.fullName }))
-              .slice(0, 8),
+          items: ({ query }: { query: string }) => {
+            const cleanQuery = query.toLowerCase().trim();
+            const memberMatches = members
+              .filter(m => m.fullName.toLowerCase().includes(cleanQuery))
+              .map(m => ({ id: m.userId, label: m.fullName }));
+
+            const taskMatches = tasks
+              .filter(t => 
+                (t.title || '').toLowerCase().includes(cleanQuery) || 
+                (t.taskKey || '').toLowerCase().includes(cleanQuery)
+              )
+              .map(t => ({ 
+                id: t.taskKey || t.id, 
+                label: t.taskKey ? `${t.taskKey}: ${t.title}` : t.title 
+              }));
+
+
+            return [...memberMatches, ...taskMatches].slice(0, 10);
+          },
         },
       }),
+
     ],
 
     content: initialContent,
+    onUpdate: ({ editor }) => {
+      setIsEmpty(editor.isEmpty || editor.getText().trim() === '');
+    },
+
 
     editorProps: {
       attributes: {
@@ -136,6 +156,7 @@ export const TiptapEditor = ({
     }
   }, [editor, initialContent]);
 
+
   // ── Submit ─────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(() => {
     if (!editor || isSending) return;
@@ -143,6 +164,7 @@ export const TiptapEditor = ({
     if (!text) return;
     onSubmit(editor.getHTML());
     editor.commands.clearContent();
+    setIsEmpty(true);
   }, [editor, onSubmit, isSending]);
 
   // ── File upload ────────────────────────────────────────────────────────────
@@ -154,13 +176,13 @@ export const TiptapEditor = ({
     setIsUploading(false);
     if (result) {
       editor.commands.insertContent(`[${result.filename}](file:${result.fileId}) `);
+      setIsEmpty(false);
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   if (!editor) return null;
 
-  const isEmpty = editor.getText().trim() === '';
 
   return (
     <div className="relative">
