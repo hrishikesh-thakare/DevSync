@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import crypto from 'node:crypto';
 import { db } from '../../config/db.js';
 import { env } from '../../config/env.js';
-import { githubConnections, githubCommits, githubCiStatus } from '../../db/schema/github.js';
+import { githubConnections, githubCommits, githubCiStatus, githubIssues, githubPullRequests, githubBranches } from '../../db/schema/github.js';
 import { tasks } from '../../db/schema/tasks.js';
 import { projects, projectMembers } from '../../db/schema/projects.js';
 import { users } from '../../db/schema/auth.js';
@@ -128,7 +128,7 @@ export const connectGithubRepo = async (req: Request, res: Response): Promise<vo
       body: JSON.stringify({
         name: 'web',
         active: true,
-        events: ['push', 'workflow_run'],
+        events: ['push', 'workflow_run', 'pull_request', 'issues', 'create', 'delete'],
         config: {
           url: webhookUrl,
           content_type: 'json',
@@ -359,6 +359,12 @@ export const handleGithubWebhook = async (req: Request, res: Response): Promise<
       await handlePushEvent(connection.projectId, payload);
     } else if (event === 'workflow_run') {
       await handleWorkflowRunEvent(connection.projectId, payload);
+    } else if (event === 'pull_request') {
+      await handlePullRequestEvent(connection.projectId, payload);
+    } else if (event === 'issues') {
+      await handleIssuesEvent(connection.projectId, payload);
+    } else if (event === 'create' || event === 'delete') {
+      await handleBranchEvent(connection.projectId, payload, event);
     }
 
     // Always return 200 quickly — GitHub retries on non-2xx
@@ -488,6 +494,25 @@ const handlePushEvent = async (projectId: string, payload: any) => {
           entityId: task.taskId,
           newValues: { commit_sha: commit.id.substring(0, 7), task_key: task.taskKey, branch: branchName },
         });
+
+        // ─── Smart Commit Status Update ────────────────────────────────
+        // If commit message contains "fixes DEV-101", "closes DEV-101", "resolves DEV-101"
+        // automatically move the task to 'done'
+        const closeRegex = new RegExp(`(?:fix(?:es|ed)?|close[sd]?|resolve[sd]?)\\s+${taskKey}`, 'i');
+        if (closeRegex.test(message)) {
+          await db
+            .update(tasks)
+            .set({ status: 'done', updatedAt: new Date() })
+            .where(eq(tasks.taskId, task.taskId));
+
+          await logAuditAction({
+            actorId: authorUserId,
+            action: 'task.auto_closed_by_commit',
+            entityType: 'task',
+            entityId: task.taskId,
+            newValues: { status: 'done', commit_sha: commit.id.substring(0, 7) },
+          });
+        }
       }
     } else {
       // No task key found — store commit unlinked
@@ -793,3 +818,915 @@ export const getTaskCommits = async (req: Request, res: Response): Promise<void>
     res.status(500).json({ error: 'Server error fetching task commits.' });
   }
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW: Helper — Match task key from text
+// ═══════════════════════════════════════════════════════════════════════════
+const matchTaskKeyFromText = (text: string): string | null => {
+  if (!text) return null;
+  const upper = text.toUpperCase();
+  const match = upper.match(/\b([A-Z]{1,10}-\d+)\b/);
+  return match ? match[1] : null;
+};
+
+const findTaskByKey = async (projectId: string, taskKey: string) => {
+  const [task] = await db
+    .select({ taskId: tasks.taskId, taskKey: tasks.taskKey, status: tasks.status })
+    .from(tasks)
+    .where(and(eq(tasks.projectId, projectId), eq(tasks.taskKey, taskKey), isNull(tasks.deletedAt)))
+    .limit(1);
+  return task || null;
+};
+
+const matchAuthorUserId = async (login: string | null): Promise<string | null> => {
+  if (!login) return null;
+  const [user] = await db
+    .select({ userId: users.userId })
+    .from(users)
+    .where(eq(users.githubLogin, login))
+    .limit(1);
+  return user?.userId || null;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW: Webhook — Pull Request Event Handler
+// ═══════════════════════════════════════════════════════════════════════════
+const handlePullRequestEvent = async (projectId: string, payload: any) => {
+  const pr = payload.pull_request;
+  if (!pr) return;
+
+  const action = payload.action; // opened, closed, reopened, edited, synchronize
+  const prNumber = pr.number;
+  const prTitle = pr.title || '';
+  const prBody = pr.body || '';
+  const headBranch = pr.head?.ref || '';
+  const baseBranch = pr.base?.ref || '';
+  const authorLogin = pr.user?.login || null;
+  const htmlUrl = pr.html_url || null;
+
+  // Determine state
+  let state = pr.state; // 'open' or 'closed'
+  if (pr.merged || pr.merged_at) state = 'merged';
+
+  // Match task key from PR title, body, or head branch
+  const taskKey = matchTaskKeyFromText(prTitle) || matchTaskKeyFromText(prBody) || matchTaskKeyFromText(headBranch);
+  let taskId: string | null = null;
+  if (taskKey) {
+    const task = await findTaskByKey(projectId, taskKey);
+    if (task) taskId = task.taskId;
+  }
+
+  const authorUserId = await matchAuthorUserId(authorLogin);
+
+  // Upsert
+  const [existing] = await db
+    .select({ id: githubPullRequests.id })
+    .from(githubPullRequests)
+    .where(and(eq(githubPullRequests.projectId, projectId), eq(githubPullRequests.prNumber, prNumber)))
+    .limit(1);
+
+  if (existing) {
+    await db.update(githubPullRequests).set({
+      title: prTitle.substring(0, 500),
+      body: prBody,
+      state,
+      headBranch,
+      baseBranch,
+      htmlUrl,
+      authorGithubLogin: authorLogin,
+      authorUserId,
+      taskId,
+      mergedAt: pr.merged_at ? new Date(pr.merged_at) : null,
+      closedAt: pr.closed_at ? new Date(pr.closed_at) : null,
+      updatedAt: new Date(),
+    }).where(eq(githubPullRequests.id, existing.id));
+  } else {
+    await db.insert(githubPullRequests).values({
+      projectId,
+      taskId,
+      prNumber,
+      githubPrId: pr.id,
+      title: prTitle.substring(0, 500),
+      body: prBody,
+      state,
+      htmlUrl,
+      headBranch,
+      baseBranch,
+      authorGithubLogin: authorLogin,
+      authorUserId,
+      mergedAt: pr.merged_at ? new Date(pr.merged_at) : null,
+      closedAt: pr.closed_at ? new Date(pr.closed_at) : null,
+    }).onConflictDoNothing();
+  }
+
+  // If PR is merged and linked to a task, auto-move task to "done"
+  if (state === 'merged' && taskId) {
+    await db.update(tasks).set({ status: 'done', updatedAt: new Date() }).where(eq(tasks.taskId, taskId));
+    await logAuditAction({
+      actorId: authorUserId,
+      action: 'task.auto_closed_by_pr_merge',
+      entityType: 'task',
+      entityId: taskId,
+      newValues: { status: 'done', pr_number: prNumber },
+    });
+  }
+
+  // Notifications
+  if (action === 'opened' || state === 'merged') {
+    const [project] = await db.select({ name: projects.name }).from(projects).where(eq(projects.projectId, projectId));
+    const members = await db
+      .select({ userId: projectMembers.userId })
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), inArray(projectMembers.role, ['project_admin', 'developer'])));
+
+    const type = state === 'merged' ? 'pr_merged' : 'pr_opened';
+    const title = state === 'merged'
+      ? `PR #${prNumber} merged in ${project?.name || 'Project'}`
+      : `PR #${prNumber} opened in ${project?.name || 'Project'}`;
+
+    for (const member of members) {
+      if (member.userId !== authorUserId) {
+        await createNotification({
+          recipientId: member.userId as string,
+          actorId: authorUserId || undefined,
+          type,
+          entityType: 'project',
+          entityId: projectId,
+          title,
+          body: `"${prTitle.substring(0, 100)}" by ${authorLogin || 'someone'} (${headBranch} → ${baseBranch})`,
+        });
+      }
+    }
+  }
+
+  await logAuditAction({
+    actorId: authorUserId,
+    action: `github.pr_${action}`,
+    entityType: 'project',
+    entityId: projectId,
+    newValues: { pr_number: prNumber, state, head_branch: headBranch },
+  });
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW: Webhook — Issues Event Handler
+// ═══════════════════════════════════════════════════════════════════════════
+const handleIssuesEvent = async (projectId: string, payload: any) => {
+  const issue = payload.issue;
+  if (!issue) return;
+
+  const issueNumber = issue.number;
+  const issueTitle = issue.title || '';
+  const issueBody = issue.body || '';
+  const authorLogin = issue.user?.login || null;
+  const htmlUrl = issue.html_url || null;
+  const state = issue.state; // open|closed
+  const labels = (issue.labels || []).map((l: any) => l.name);
+
+  // Match task key
+  const taskKey = matchTaskKeyFromText(issueTitle) || matchTaskKeyFromText(issueBody);
+  let taskId: string | null = null;
+  if (taskKey) {
+    const task = await findTaskByKey(projectId, taskKey);
+    if (task) taskId = task.taskId;
+  }
+
+  const authorUserId = await matchAuthorUserId(authorLogin);
+
+  // Upsert
+  const [existing] = await db
+    .select({ id: githubIssues.id })
+    .from(githubIssues)
+    .where(and(eq(githubIssues.projectId, projectId), eq(githubIssues.githubIssueNumber, issueNumber)))
+    .limit(1);
+
+  if (existing) {
+    await db.update(githubIssues).set({
+      title: issueTitle.substring(0, 500),
+      body: issueBody,
+      state,
+      htmlUrl,
+      authorGithubLogin: authorLogin,
+      authorUserId,
+      taskId,
+      labels,
+      closedAt: issue.closed_at ? new Date(issue.closed_at) : null,
+      updatedAt: new Date(),
+    }).where(eq(githubIssues.id, existing.id));
+  } else {
+    await db.insert(githubIssues).values({
+      projectId,
+      taskId,
+      githubIssueNumber: issueNumber,
+      githubIssueId: issue.id,
+      title: issueTitle.substring(0, 500),
+      body: issueBody,
+      state,
+      htmlUrl,
+      authorGithubLogin: authorLogin,
+      authorUserId,
+      labels,
+      closedAt: issue.closed_at ? new Date(issue.closed_at) : null,
+    }).onConflictDoNothing();
+  }
+
+  await logAuditAction({
+    actorId: authorUserId,
+    action: `github.issue_${payload.action}`,
+    entityType: 'project',
+    entityId: projectId,
+    newValues: { issue_number: issueNumber, state },
+  });
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW: Webhook — Branch Create / Delete Event Handler
+// ═══════════════════════════════════════════════════════════════════════════
+const handleBranchEvent = async (projectId: string, payload: any, event: string) => {
+  // Only handle branch events (not tags)
+  if (payload.ref_type !== 'branch') return;
+
+  const branchName = payload.ref;
+  if (!branchName) return;
+
+  const senderLogin = payload.sender?.login || null;
+  const senderUserId = await matchAuthorUserId(senderLogin);
+
+  // Try to match task key from branch name
+  const taskKey = matchTaskKeyFromText(branchName);
+  let taskId: string | null = null;
+  if (taskKey) {
+    const task = await findTaskByKey(projectId, taskKey);
+    if (task) taskId = task.taskId;
+  }
+
+  // Get repo info for html_url
+  const repoFullName = payload.repository?.full_name || '';
+  const htmlUrl = repoFullName ? `https://github.com/${repoFullName}/tree/${branchName}` : null;
+
+  if (event === 'create') {
+    await db.insert(githubBranches).values({
+      projectId,
+      taskId,
+      branchName,
+      isDeleted: false,
+      createdByUserId: senderUserId,
+      htmlUrl,
+    }).onConflictDoNothing();
+
+    // If linked to a task, update task status to "in_progress"
+    if (taskId) {
+      const linkedTask = await findTaskByKey(projectId, taskKey!);
+      if (linkedTask && linkedTask.status === 'todo') {
+        await db.update(tasks).set({ status: 'in_progress', updatedAt: new Date() }).where(eq(tasks.taskId, taskId));
+      }
+    }
+  } else if (event === 'delete') {
+    await db.update(githubBranches).set({ isDeleted: true })
+      .where(and(eq(githubBranches.projectId, projectId), eq(githubBranches.branchName, branchName)));
+  }
+
+  await logAuditAction({
+    actorId: senderUserId,
+    action: `github.branch_${event}d`,
+    entityType: 'project',
+    entityId: projectId,
+    newValues: { branch: branchName },
+  });
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW: REST API — Create GitHub Issue
+// ═══════════════════════════════════════════════════════════════════════════
+// POST /api/workspaces/:slug/projects/:key/github/issues
+export const createGithubIssue = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+    const userId = req.user!.userId;
+    const { title, body, labels, taskId } = req.body;
+
+    if (!title) {
+      res.status(400).json({ error: 'Issue title is required.' });
+      return;
+    }
+
+    // Get connection + token
+    const [connection] = await db
+      .select({ githubRepoFullName: githubConnections.githubRepoFullName, githubAccessToken: githubConnections.githubAccessToken })
+      .from(githubConnections)
+      .where(eq(githubConnections.projectId, projectId))
+      .limit(1);
+
+    if (!connection || !connection.githubAccessToken) {
+      res.status(404).json({ error: 'No GitHub connection found.' });
+      return;
+    }
+
+    const token = decrypt(connection.githubAccessToken);
+
+    // Create issue on GitHub
+    const ghRes = await githubApiFetch(
+      `https://api.github.com/repos/${connection.githubRepoFullName}/issues`,
+      token,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, body: body || '', labels: labels || [] }),
+      }
+    ) as any;
+
+    if (!ghRes.ok) {
+      const errText = await ghRes.text();
+      console.error('GitHub create issue error:', ghRes.status, errText);
+      res.status(502).json({ error: 'Failed to create issue on GitHub.' });
+      return;
+    }
+
+    const ghIssue = await ghRes.json() as any;
+
+    // Get user's GitHub login
+    const [user] = await db.select({ githubLogin: users.githubLogin }).from(users).where(eq(users.userId, userId)).limit(1);
+
+    // Save locally
+    const [saved] = await db.insert(githubIssues).values({
+      projectId,
+      taskId: taskId || null,
+      githubIssueNumber: ghIssue.number,
+      githubIssueId: ghIssue.id,
+      title: ghIssue.title,
+      body: ghIssue.body || '',
+      state: ghIssue.state,
+      htmlUrl: ghIssue.html_url,
+      authorGithubLogin: user?.githubLogin || null,
+      authorUserId: userId,
+      labels: (ghIssue.labels || []).map((l: any) => l.name),
+    }).returning();
+
+    await logAuditAction({
+      actorId: userId,
+      action: 'github.issue_created',
+      entityType: 'project',
+      entityId: projectId,
+      newValues: { issue_number: ghIssue.number, title },
+    });
+
+    res.status(201).json({ message: 'Issue created on GitHub.', issue: saved });
+  } catch (err) {
+    console.error('Create GitHub issue error:', err);
+    res.status(500).json({ error: 'Server error creating GitHub issue.' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW: REST API — List GitHub Issues
+// ═══════════════════════════════════════════════════════════════════════════
+// GET /api/workspaces/:slug/projects/:key/github/issues
+export const getGithubIssues = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(Math.max(1, parseInt(req.query.limit as string) || 25), 100);
+    const offset = (page - 1) * limit;
+    const state = req.query.state as string | undefined;
+
+    const conditions = [eq(githubIssues.projectId, projectId)];
+    if (state && state !== 'all') conditions.push(eq(githubIssues.state, state));
+
+    const whereClause = and(...conditions);
+
+    const [{ value: totalCount }] = await db.select({ value: count() }).from(githubIssues).where(whereClause);
+
+    const rows = await db
+      .select({
+        id: githubIssues.id,
+        githubIssueNumber: githubIssues.githubIssueNumber,
+        title: githubIssues.title,
+        body: githubIssues.body,
+        state: githubIssues.state,
+        htmlUrl: githubIssues.htmlUrl,
+        authorGithubLogin: githubIssues.authorGithubLogin,
+        labels: githubIssues.labels,
+        taskId: githubIssues.taskId,
+        taskKey: tasks.taskKey,
+        closedAt: githubIssues.closedAt,
+        createdAt: githubIssues.createdAt,
+      })
+      .from(githubIssues)
+      .leftJoin(tasks, eq(githubIssues.taskId, tasks.taskId))
+      .where(whereClause)
+      .orderBy(desc(githubIssues.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    res.json({
+      issues: rows,
+      totalCount: Number(totalCount),
+      page,
+      totalPages: Math.ceil(Number(totalCount) / limit),
+    });
+  } catch (err) {
+    console.error('Get GitHub issues error:', err);
+    res.status(500).json({ error: 'Server error fetching issues.' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW: REST API — Add Comment to GitHub Issue
+// ═══════════════════════════════════════════════════════════════════════════
+// POST /api/workspaces/:slug/projects/:key/github/issues/:issueNumber/comments
+export const addIssueComment = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { projectId, issueNumber } = req.params as Record<string, string>;
+    const { body } = req.body;
+
+    if (!body) {
+      res.status(400).json({ error: 'Comment body is required.' });
+      return;
+    }
+
+    const [connection] = await db
+      .select({ githubRepoFullName: githubConnections.githubRepoFullName, githubAccessToken: githubConnections.githubAccessToken })
+      .from(githubConnections)
+      .where(eq(githubConnections.projectId, projectId))
+      .limit(1);
+
+    if (!connection || !connection.githubAccessToken) {
+      res.status(404).json({ error: 'No GitHub connection found.' });
+      return;
+    }
+
+    const token = decrypt(connection.githubAccessToken);
+
+    const ghRes = await githubApiFetch(
+      `https://api.github.com/repos/${connection.githubRepoFullName}/issues/${issueNumber}/comments`,
+      token,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body }),
+      }
+    ) as any;
+
+    if (!ghRes.ok) {
+      const errText = await ghRes.text();
+      console.error('GitHub add comment error:', ghRes.status, errText);
+      res.status(502).json({ error: 'Failed to add comment on GitHub.' });
+      return;
+    }
+
+    const comment = await ghRes.json() as any;
+    res.status(201).json({ message: 'Comment posted on GitHub.', comment: { id: comment.id, body: comment.body, html_url: comment.html_url } });
+  } catch (err) {
+    console.error('Add issue comment error:', err);
+    res.status(500).json({ error: 'Server error adding comment.' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW: REST API — Create Pull Request
+// ═══════════════════════════════════════════════════════════════════════════
+// POST /api/workspaces/:slug/projects/:key/github/pull-requests
+export const createGithubPullRequest = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+    const userId = req.user!.userId;
+    const { title, body, head, base, taskId } = req.body;
+
+    if (!title || !head || !base) {
+      res.status(400).json({ error: 'title, head (source branch), and base (target branch) are required.' });
+      return;
+    }
+
+    const [connection] = await db
+      .select({ githubRepoFullName: githubConnections.githubRepoFullName, githubAccessToken: githubConnections.githubAccessToken })
+      .from(githubConnections)
+      .where(eq(githubConnections.projectId, projectId))
+      .limit(1);
+
+    if (!connection || !connection.githubAccessToken) {
+      res.status(404).json({ error: 'No GitHub connection found.' });
+      return;
+    }
+
+    const token = decrypt(connection.githubAccessToken);
+
+    const ghRes = await githubApiFetch(
+      `https://api.github.com/repos/${connection.githubRepoFullName}/pulls`,
+      token,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, body: body || '', head, base }),
+      }
+    ) as any;
+
+    if (!ghRes.ok) {
+      const errText = await ghRes.text();
+      console.error('GitHub create PR error:', ghRes.status, errText);
+      
+      let userFriendlyError = 'Failed to create PR on GitHub.';
+      if (errText.includes('No commits between')) {
+        userFriendlyError = `Branches '${head}' and '${base}' are identical / in sync. Push at least one new commit to '${head}' before creating a Pull Request.`;
+      } else if (errText.includes('A pull request already exists')) {
+        userFriendlyError = `A Pull Request already exists between '${head}' and '${base}'.`;
+      } else {
+        try {
+          const parsed = JSON.parse(errText);
+          userFriendlyError = parsed.message || userFriendlyError;
+          if (parsed.errors && parsed.errors[0]?.message) {
+            userFriendlyError += ` (${parsed.errors[0].message})`;
+          }
+        } catch (e) {}
+      }
+
+      res.status(400).json({ error: userFriendlyError });
+      return;
+    }
+
+    const ghPr = await ghRes.json() as any;
+    const [user] = await db.select({ githubLogin: users.githubLogin }).from(users).where(eq(users.userId, userId)).limit(1);
+
+    const [saved] = await db.insert(githubPullRequests).values({
+      projectId,
+      taskId: taskId || null,
+      prNumber: ghPr.number,
+      githubPrId: ghPr.id,
+      title: ghPr.title,
+      body: ghPr.body || '',
+      state: ghPr.state,
+      htmlUrl: ghPr.html_url,
+      headBranch: head,
+      baseBranch: base,
+      authorGithubLogin: user?.githubLogin || null,
+      authorUserId: userId,
+    }).returning();
+
+    await logAuditAction({
+      actorId: userId,
+      action: 'github.pr_created',
+      entityType: 'project',
+      entityId: projectId,
+      newValues: { pr_number: ghPr.number, title, head, base },
+    });
+
+    res.status(201).json({ message: 'Pull request created on GitHub.', pullRequest: saved });
+  } catch (err) {
+    console.error('Create GitHub PR error:', err);
+    res.status(500).json({ error: 'Server error creating pull request.' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW: REST API — List Pull Requests
+// ═══════════════════════════════════════════════════════════════════════════
+// GET /api/workspaces/:slug/projects/:key/github/pull-requests
+export const getGithubPullRequests = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(Math.max(1, parseInt(req.query.limit as string) || 25), 100);
+    const offset = (page - 1) * limit;
+    const state = req.query.state as string | undefined;
+
+    const conditions = [eq(githubPullRequests.projectId, projectId)];
+    if (state && state !== 'all') conditions.push(eq(githubPullRequests.state, state));
+
+    const whereClause = and(...conditions);
+
+    const [{ value: totalCount }] = await db.select({ value: count() }).from(githubPullRequests).where(whereClause);
+
+    const rows = await db
+      .select({
+        id: githubPullRequests.id,
+        prNumber: githubPullRequests.prNumber,
+        title: githubPullRequests.title,
+        state: githubPullRequests.state,
+        htmlUrl: githubPullRequests.htmlUrl,
+        headBranch: githubPullRequests.headBranch,
+        baseBranch: githubPullRequests.baseBranch,
+        authorGithubLogin: githubPullRequests.authorGithubLogin,
+        taskId: githubPullRequests.taskId,
+        taskKey: tasks.taskKey,
+        mergedAt: githubPullRequests.mergedAt,
+        closedAt: githubPullRequests.closedAt,
+        createdAt: githubPullRequests.createdAt,
+      })
+      .from(githubPullRequests)
+      .leftJoin(tasks, eq(githubPullRequests.taskId, tasks.taskId))
+      .where(whereClause)
+      .orderBy(desc(githubPullRequests.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    res.json({
+      pullRequests: rows,
+      totalCount: Number(totalCount),
+      page,
+      totalPages: Math.ceil(Number(totalCount) / limit),
+    });
+  } catch (err) {
+    console.error('Get GitHub PRs error:', err);
+    res.status(500).json({ error: 'Server error fetching pull requests.' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW: REST API — Create Branch
+// ═══════════════════════════════════════════════════════════════════════════
+// POST /api/workspaces/:slug/projects/:key/github/branches
+export const createGithubBranch = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+    const userId = req.user!.userId;
+    const { branchName, baseBranch, taskId } = req.body;
+
+    if (!branchName) {
+      res.status(400).json({ error: 'Branch name is required.' });
+      return;
+    }
+
+    const [connection] = await db
+      .select({
+        githubRepoFullName: githubConnections.githubRepoFullName,
+        githubAccessToken: githubConnections.githubAccessToken,
+        defaultBranch: githubConnections.defaultBranch,
+      })
+      .from(githubConnections)
+      .where(eq(githubConnections.projectId, projectId))
+      .limit(1);
+
+    if (!connection || !connection.githubAccessToken) {
+      res.status(404).json({ error: 'No GitHub connection found.' });
+      return;
+    }
+
+    const token = decrypt(connection.githubAccessToken);
+    const base = baseBranch || connection.defaultBranch || 'main';
+
+    // Get the SHA of the base branch
+    const refRes = await githubApiFetch(
+      `https://api.github.com/repos/${connection.githubRepoFullName}/git/ref/heads/${base}`,
+      token,
+    ) as any;
+
+    if (!refRes.ok) {
+      const errText = await refRes.text();
+      console.error('GitHub get ref error:', refRes.status, errText);
+      res.status(502).json({ error: `Failed to find base branch '${base}' on GitHub.` });
+      return;
+    }
+
+    const refData = await refRes.json() as any;
+    const sha = refData.object?.sha;
+
+    // Create new branch
+    const createRes = await githubApiFetch(
+      `https://api.github.com/repos/${connection.githubRepoFullName}/git/refs`,
+      token,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref: `refs/heads/${branchName}`, sha }),
+      }
+    ) as any;
+
+    if (!createRes.ok) {
+      const errText = await createRes.text();
+      console.error('GitHub create branch error:', createRes.status, errText);
+      let userFriendlyError = `Failed to create branch '${branchName}' on GitHub.`;
+      if (errText.includes('Reference already exists')) {
+        userFriendlyError = `Branch '${branchName}' already exists on GitHub.`;
+      }
+      res.status(400).json({ error: userFriendlyError });
+      return;
+    }
+
+    const htmlUrl = `https://github.com/${connection.githubRepoFullName}/tree/${branchName}`;
+
+    // Save locally
+    const [saved] = await db.insert(githubBranches).values({
+      projectId,
+      taskId: taskId || null,
+      branchName,
+      isDeleted: false,
+      createdByUserId: userId,
+      htmlUrl,
+    }).onConflictDoNothing().returning();
+
+    // If linked to a task in "todo" status, move it to "in_progress"
+    if (taskId) {
+      const [task] = await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.taskId, taskId)).limit(1);
+      if (task && task.status === 'todo') {
+        await db.update(tasks).set({ status: 'in_progress', updatedAt: new Date() }).where(eq(tasks.taskId, taskId));
+      }
+    }
+
+    await logAuditAction({
+      actorId: userId,
+      action: 'github.branch_created',
+      entityType: 'project',
+      entityId: projectId,
+      newValues: { branch: branchName, base },
+    });
+
+    res.status(201).json({ message: 'Branch created on GitHub.', branch: saved || { branchName, htmlUrl } });
+  } catch (err) {
+    console.error('Create GitHub branch error:', err);
+    res.status(500).json({ error: 'Server error creating branch.' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW: REST API — List Branches
+// ═══════════════════════════════════════════════════════════════════════════
+// GET /api/workspaces/:slug/projects/:key/github/branches
+export const getGithubBranches = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+
+    const rows = await db
+      .select({
+        id: githubBranches.id,
+        branchName: githubBranches.branchName,
+        isDeleted: githubBranches.isDeleted,
+        htmlUrl: githubBranches.htmlUrl,
+        taskId: githubBranches.taskId,
+        taskKey: tasks.taskKey,
+        createdByUserId: githubBranches.createdByUserId,
+        createdAt: githubBranches.createdAt,
+      })
+      .from(githubBranches)
+      .leftJoin(tasks, eq(githubBranches.taskId, tasks.taskId))
+      .where(eq(githubBranches.projectId, projectId))
+      .orderBy(desc(githubBranches.createdAt));
+
+    // Try fetching live branches directly from GitHub API if connected
+    let liveBranches: any[] = [];
+    try {
+      const [connection] = await db
+        .select({
+          githubRepoFullName: githubConnections.githubRepoFullName,
+          githubAccessToken: githubConnections.githubAccessToken,
+        })
+        .from(githubConnections)
+        .where(eq(githubConnections.projectId, projectId));
+
+      if (connection && connection.githubAccessToken && connection.githubRepoFullName) {
+        const token = decrypt(connection.githubAccessToken);
+        const ghRes = await fetch(
+          `https://api.github.com/repos/${connection.githubRepoFullName}/branches?per_page=100`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: 'application/vnd.github.v3+json',
+              'User-Agent': 'DevSync-App',
+            },
+          }
+        );
+
+        if (ghRes.ok) {
+          const ghData = (await ghRes.json()) as any[];
+          liveBranches = ghData.map(b => ({
+            id: `gh-${b.name}`,
+            branchName: b.name,
+            isDeleted: false,
+            htmlUrl: `https://github.com/${connection.githubRepoFullName}/tree/${b.name}`,
+            taskId: null,
+            taskKey: null,
+            createdByUserId: null,
+            createdAt: new Date().toISOString(),
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch live GitHub branches:', e);
+    }
+
+    // Merge DB branches with live GitHub branches (avoiding duplicates)
+    const dbBranchNames = new Set(rows.map(b => b.branchName));
+    const mergedBranches = [...rows];
+
+    for (const lb of liveBranches) {
+      if (!dbBranchNames.has(lb.branchName)) {
+        mergedBranches.push(lb);
+      }
+    }
+
+    res.json({ branches: mergedBranches });
+  } catch (err) {
+    console.error('Get GitHub branches error:', err);
+    res.status(500).json({ error: 'Server error fetching branches.' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW: REST API — Re-run Failed CI Workflow
+// ═══════════════════════════════════════════════════════════════════════════
+// POST /api/workspaces/:slug/projects/:key/github/ci/:runId/rerun
+export const retriggerWorkflow = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { projectId, runId } = req.params as Record<string, string>;
+
+    const [connection] = await db
+      .select({ githubRepoFullName: githubConnections.githubRepoFullName, githubAccessToken: githubConnections.githubAccessToken })
+      .from(githubConnections)
+      .where(eq(githubConnections.projectId, projectId))
+      .limit(1);
+
+    if (!connection || !connection.githubAccessToken) {
+      res.status(404).json({ error: 'No GitHub connection found.' });
+      return;
+    }
+
+    const token = decrypt(connection.githubAccessToken);
+
+    const ghRes = await githubApiFetch(
+      `https://api.github.com/repos/${connection.githubRepoFullName}/actions/runs/${runId}/rerun`,
+      token,
+      { method: 'POST' }
+    ) as any;
+
+    if (!ghRes.ok && ghRes.status !== 201) {
+      const errText = await ghRes.text();
+      console.error('GitHub rerun error:', ghRes.status, errText);
+      res.status(502).json({ error: 'Failed to re-run workflow on GitHub.' });
+      return;
+    }
+
+    await logAuditAction({
+      actorId: req.user!.userId,
+      action: 'github.ci_rerun',
+      entityType: 'project',
+      entityId: projectId,
+      newValues: { run_id: runId },
+    });
+
+    res.json({ message: 'Workflow re-run triggered on GitHub.' });
+  } catch (err) {
+    console.error('Retrigger workflow error:', err);
+    res.status(500).json({ error: 'Server error re-running workflow.' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW: REST API — Get GitHub Activity for a Task
+// ═══════════════════════════════════════════════════════════════════════════
+// GET /api/workspaces/:slug/projects/:key/tasks/:taskKey/github-activity
+export const getTaskGithubActivity = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const taskId = (req.params.taskId || res.locals.taskId) as string;
+
+    if (!taskId) {
+      res.status(400).json({ error: 'Task ID is required.' });
+      return;
+    }
+
+    const [linkedPRs, linkedIssues, linkedBranches, linkedCommitsData] = await Promise.all([
+      db.select({
+        id: githubPullRequests.id,
+        prNumber: githubPullRequests.prNumber,
+        title: githubPullRequests.title,
+        state: githubPullRequests.state,
+        htmlUrl: githubPullRequests.htmlUrl,
+        headBranch: githubPullRequests.headBranch,
+        baseBranch: githubPullRequests.baseBranch,
+        mergedAt: githubPullRequests.mergedAt,
+      }).from(githubPullRequests).where(eq(githubPullRequests.taskId, taskId)).orderBy(desc(githubPullRequests.createdAt)),
+
+      db.select({
+        id: githubIssues.id,
+        githubIssueNumber: githubIssues.githubIssueNumber,
+        title: githubIssues.title,
+        state: githubIssues.state,
+        htmlUrl: githubIssues.htmlUrl,
+      }).from(githubIssues).where(eq(githubIssues.taskId, taskId)).orderBy(desc(githubIssues.createdAt)),
+
+      db.select({
+        id: githubBranches.id,
+        branchName: githubBranches.branchName,
+        isDeleted: githubBranches.isDeleted,
+        htmlUrl: githubBranches.htmlUrl,
+      }).from(githubBranches).where(eq(githubBranches.taskId, taskId)).orderBy(desc(githubBranches.createdAt)),
+
+      db.select({
+        id: githubCommits.id,
+        commitSha: githubCommits.commitSha,
+        messageHeadline: githubCommits.messageHeadline,
+        authorName: githubCommits.authorName,
+        committedAt: githubCommits.committedAt,
+        url: githubCommits.url,
+      }).from(githubCommits).where(eq(githubCommits.taskId, taskId)).orderBy(desc(githubCommits.committedAt)).limit(10),
+    ]);
+
+    res.json({
+      pullRequests: linkedPRs,
+      issues: linkedIssues,
+      branches: linkedBranches,
+      commits: linkedCommitsData,
+    });
+  } catch (err) {
+    console.error('Get task GitHub activity error:', err);
+    res.status(500).json({ error: 'Server error fetching task GitHub activity.' });
+  }
+};
+

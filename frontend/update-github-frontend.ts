@@ -1,4 +1,12 @@
-import { useState, useEffect } from 'react';
+import * as fs from 'fs';
+
+const originalPath = 'src/pages/projects/GitHubIntegration.tsx';
+const originalContent = fs.readFileSync(originalPath, 'utf8');
+
+// I will construct the new content.
+// Since it's huge, I'll do this in a few steps inside the typescript file, or better yet, I'll just write the entire new content in this script.
+
+const newContent = `import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { GitBranch, GitCommit, GitPullRequest, CheckCircle2, XCircle, Loader2, RefreshCw, AlertCircle, ExternalLink, ChevronLeft, ChevronRight, Plus, MessageSquare } from 'lucide-react';
 import { apiFetch } from '../../lib/api.js';
@@ -6,9 +14,6 @@ import { formatDistanceToNow, format } from 'date-fns';
 import clsx from 'clsx';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useAuthStore } from '../../store/auth.js';
-import { CreatePRModal } from './github/CreatePRModal.js';
-import { CreateIssueModal } from './github/CreateIssueModal.js';
-import { CreateBranchModal } from './github/CreateBranchModal.js';
 
 export const GitHubIntegration = () => {
   const { slug, key } = useParams();
@@ -59,15 +64,10 @@ export const GitHubIntegration = () => {
   const [prStateFilter, setPrStateFilter] = useState('all'); // all, open, closed, merged
   const [issueStateFilter, setIssueStateFilter] = useState('all'); // all, open, closed
 
-  // Modals State
-  const [showCreatePR, setShowCreatePR] = useState(false);
-  const [showCreateIssue, setShowCreateIssue] = useState(false);
-  const [showCreateBranch, setShowCreateBranch] = useState(false);
-
   useEffect(() => {
     const fetchRole = async () => {
       try {
-        const data = await apiFetch(`/workspaces/${slug}/projects/${key}/members`);
+        const data = await apiFetch(\`/workspaces/\${slug}/projects/\${key}/members\`);
         const members = data.members || [];
         const myMembership = members.find((m: any) => m.userId === currentUser?.userId);
         setIsProjectAdmin(myMembership?.role === 'project_admin');
@@ -81,7 +81,7 @@ export const GitHubIntegration = () => {
   useEffect(() => {
     const fetchConnection = async () => {
       try {
-        const data = await apiFetch(`/workspaces/${slug}/projects/${key}/github/connection`);
+        const data = await apiFetch(\`/workspaces/\${slug}/projects/\${key}/github/connection\`);
         setConnection(data.connection);
       } catch (err) {
         console.error('Failed to load GitHub connection', err);
@@ -95,9 +95,9 @@ export const GitHubIntegration = () => {
   const fetchCommits = async (page = commitsPage) => {
     setIsLoading(true); setError(null);
     try {
-      let url = `/workspaces/${slug}/projects/${key}/github/commits?page=${page}&limit=25`;
-      if (branchFilter !== 'all') url += `&branch=${encodeURIComponent(branchFilter)}`;
-      if (commitsLinkedFilter !== 'all') url += `&linked=${commitsLinkedFilter}`;
+      let url = \`/workspaces/\${slug}/projects/\${key}/github/commits?page=\${page}&limit=25\`;
+      if (branchFilter !== 'all') url += \`&branch=\${encodeURIComponent(branchFilter)}\`;
+      if (commitsLinkedFilter !== 'all') url += \`&linked=\${commitsLinkedFilter}\`;
 
       const res = await apiFetch(url);
       setCommits(res.commits || []); setCommitsTotal(res.totalCount || 0);
@@ -109,9 +109,9 @@ export const GitHubIntegration = () => {
   const fetchCiRuns = async (page = ciPage) => {
     setIsLoading(true); setError(null);
     try {
-      let url = `/workspaces/${slug}/projects/${key}/github/ci?page=${page}&limit=25`;
-      if (branchFilter !== 'all') url += `&branch=${encodeURIComponent(branchFilter)}`;
-      if (ciConclusionFilter !== 'all') url += `&conclusion=${encodeURIComponent(ciConclusionFilter)}`;
+      let url = \`/workspaces/\${slug}/projects/\${key}/github/ci?page=\${page}&limit=25\`;
+      if (branchFilter !== 'all') url += \`&branch=\${encodeURIComponent(branchFilter)}\`;
+      if (ciConclusionFilter !== 'all') url += \`&conclusion=\${encodeURIComponent(ciConclusionFilter)}\`;
 
       const res = await apiFetch(url);
       setCiRuns(res.runs || []); setCiTotal(res.totalCount || 0);
@@ -123,8 +123,8 @@ export const GitHubIntegration = () => {
   const fetchPrs = async (page = prsPage) => {
     setIsLoading(true); setError(null);
     try {
-      let url = `/workspaces/${slug}/projects/${key}/github/pull-requests?page=${page}&limit=25`;
-      if (prStateFilter !== 'all') url += `&state=${prStateFilter}`;
+      let url = \`/workspaces/\${slug}/projects/\${key}/github/pull-requests?page=\${page}&limit=25\`;
+      if (prStateFilter !== 'all') url += \`&state=\${prStateFilter}\`;
       const res = await apiFetch(url);
       setPrs(res.pullRequests || []); setPrsTotal(res.totalCount || 0);
       setPrsPage(res.page || 1); setPrsTotalPages(res.totalPages || 1);
@@ -134,8 +134,8 @@ export const GitHubIntegration = () => {
   const fetchIssues = async (page = issuesPage) => {
     setIsLoading(true); setError(null);
     try {
-      let url = `/workspaces/${slug}/projects/${key}/github/issues?page=${page}&limit=25`;
-      if (issueStateFilter !== 'all') url += `&state=${issueStateFilter}`;
+      let url = \`/workspaces/\${slug}/projects/\${key}/github/issues?page=\${page}&limit=25\`;
+      if (issueStateFilter !== 'all') url += \`&state=\${issueStateFilter}\`;
       const res = await apiFetch(url);
       setIssues(res.issues || []); setIssuesTotal(res.totalCount || 0);
       setIssuesPage(res.page || 1); setIssuesTotalPages(res.totalPages || 1);
@@ -145,7 +145,7 @@ export const GitHubIntegration = () => {
   const fetchBranches = async (page = branchesPage) => {
     setIsLoading(true); setError(null);
     try {
-      const res = await apiFetch(`/workspaces/${slug}/projects/${key}/github/branches`);
+      const res = await apiFetch(\`/workspaces/\${slug}/projects/\${key}/github/branches\`);
       setGitBranches(res.branches || []); setBranchesTotal(res.branches?.length || 0);
     } catch (err: any) { setError(err.message || 'Failed to fetch branches'); } finally { setIsLoading(false); }
   };
@@ -178,7 +178,7 @@ export const GitHubIntegration = () => {
             <span className="font-semibold text-sm">No GitHub repository connected</span>
           </div>
           <Link 
-            to={`/w/${slug}/projects/${key}/settings`} 
+            to={\`/w/\${slug}/projects/\${key}/settings\`} 
             className="bg-white text-blue-700 px-3 py-1.5 rounded text-sm font-bold hover:bg-gray-100 transition-colors"
           >
             Connect a repository in Project Settings
@@ -199,7 +199,7 @@ export const GitHubIntegration = () => {
           <div className="flex items-center space-x-4">
             {connection && (
               <a 
-                href={`https://github.com/${connection.githubRepoFullName}`}
+                href={\`https://github.com/\${connection.githubRepoFullName}\`}
                 target="_blank" rel="noopener noreferrer"
                 className="flex items-center text-sm font-semibold text-gray-300 hover:text-white bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-lg transition-colors"
               >
@@ -221,31 +221,31 @@ export const GitHubIntegration = () => {
           <div className="flex space-x-6">
             <button 
               onClick={() => setActiveTab('commits')}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'commits' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
+              className={\`pb-3 text-sm font-medium border-b-2 transition-colors \${activeTab === 'commits' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}\`}
             >
               Commits {commitsTotal > 0 && <span className="ml-1.5 bg-gray-800 text-gray-300 py-0.5 px-2 rounded-full text-xs">{commitsTotal}</span>}
             </button>
             <button 
               onClick={() => setActiveTab('prs')}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'prs' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
+              className={\`pb-3 text-sm font-medium border-b-2 transition-colors \${activeTab === 'prs' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}\`}
             >
               Pull Requests {prsTotal > 0 && <span className="ml-1.5 bg-gray-800 text-gray-300 py-0.5 px-2 rounded-full text-xs">{prsTotal}</span>}
             </button>
             <button 
               onClick={() => setActiveTab('issues')}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'issues' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
+              className={\`pb-3 text-sm font-medium border-b-2 transition-colors \${activeTab === 'issues' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}\`}
             >
               Issues {issuesTotal > 0 && <span className="ml-1.5 bg-gray-800 text-gray-300 py-0.5 px-2 rounded-full text-xs">{issuesTotal}</span>}
             </button>
             <button 
               onClick={() => setActiveTab('branches')}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'branches' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
+              className={\`pb-3 text-sm font-medium border-b-2 transition-colors \${activeTab === 'branches' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}\`}
             >
               Branches {branchesTotal > 0 && <span className="ml-1.5 bg-gray-800 text-gray-300 py-0.5 px-2 rounded-full text-xs">{branchesTotal}</span>}
             </button>
             <button 
               onClick={() => setActiveTab('ci')}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'ci' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
+              className={\`pb-3 text-sm font-medium border-b-2 transition-colors \${activeTab === 'ci' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}\`}
             >
               CI Runs {ciTotal > 0 && <span className="ml-1.5 bg-gray-800 text-gray-300 py-0.5 px-2 rounded-full text-xs">{ciTotal}</span>}
             </button>
@@ -278,67 +278,41 @@ export const GitHubIntegration = () => {
             )}
 
             {activeTab === 'prs' && (
-              <div className="flex space-x-2">
-                <select 
-                  value={prStateFilter}
-                  onChange={e => setPrStateFilter(e.target.value)}
-                  className="bg-gray-900 border border-gray-800 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none"
-                >
-                  <option value="all">All PRs</option>
-                  <option value="open">Open</option>
-                  <option value="closed">Closed</option>
-                  <option value="merged">Merged</option>
-                </select>
-                <button 
-                  onClick={() => setShowCreatePR(true)}
-                  className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-3 py-1.5 rounded-lg flex items-center transition-colors"
-                >
-                  <Plus className="w-4 h-4 mr-1" /> New PR
-                </button>
-              </div>
+              <select 
+                value={prStateFilter}
+                onChange={e => setPrStateFilter(e.target.value)}
+                className="bg-gray-900 border border-gray-800 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none"
+              >
+                <option value="all">All PRs</option>
+                <option value="open">Open</option>
+                <option value="closed">Closed</option>
+                <option value="merged">Merged</option>
+              </select>
             )}
 
             {activeTab === 'issues' && (
-              <div className="flex space-x-2">
-                <select 
-                  value={issueStateFilter}
-                  onChange={e => setIssueStateFilter(e.target.value)}
-                  className="bg-gray-900 border border-gray-800 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none"
-                >
-                  <option value="all">All Issues</option>
-                  <option value="open">Open</option>
-                  <option value="closed">Closed</option>
-                </select>
-                <button 
-                  onClick={() => setShowCreateIssue(true)}
-                  className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-3 py-1.5 rounded-lg flex items-center transition-colors"
-                >
-                  <Plus className="w-4 h-4 mr-1" /> New Issue
-                </button>
-              </div>
+              <select 
+                value={issueStateFilter}
+                onChange={e => setIssueStateFilter(e.target.value)}
+                className="bg-gray-900 border border-gray-800 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none"
+              >
+                <option value="all">All Issues</option>
+                <option value="open">Open</option>
+                <option value="closed">Closed</option>
+              </select>
             )}
             
-            {(activeTab === 'commits' || activeTab === 'ci' || activeTab === 'branches') && (
-              <div className="flex space-x-2">
-                <select 
-                  value={branchFilter}
-                  onChange={e => setBranchFilter(e.target.value)}
-                  className="bg-gray-900 border border-gray-800 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none max-w-[200px]"
-                >
-                  <option value="all">All Branches</option>
-                  {branchesList.map(b => (
-                    <option key={b} value={b}>{b}</option>
-                  ))}
-                </select>
-                {activeTab === 'branches' && (
-                  <button 
-                    onClick={() => setShowCreateBranch(true)}
-                    className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-3 py-1.5 rounded-lg flex items-center transition-colors"
-                  >
-                    <Plus className="w-4 h-4 mr-1" /> New Branch
-                  </button>
-                )}
-              </div>
+            {(activeTab === 'commits' || activeTab === 'ci') && (
+              <select 
+                value={branchFilter}
+                onChange={e => setBranchFilter(e.target.value)}
+                className="bg-gray-900 border border-gray-800 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none max-w-[200px]"
+              >
+                <option value="all">All Branches</option>
+                {branchesList.map(b => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
             )}
           </div>
         </div>
@@ -363,7 +337,7 @@ export const GitHubIntegration = () => {
                 <GitCommit className="w-10 h-10 text-gray-700 mx-auto mb-4" />
                 <h3 className="text-lg font-bold text-gray-300 mb-1">No commits found</h3>
                 <p className="text-gray-500 mb-4">
-                  {connection ? `Commits will appear here when you push to ${connection.githubRepoFullName}` : 'Connect a repository to see commits.'}
+                  {connection ? \`Commits will appear here when you push to \${connection.githubRepoFullName}\` : 'Connect a repository to see commits.'}
                 </p>
               </div>
             ) : (
@@ -392,7 +366,7 @@ export const GitHubIntegration = () => {
                           <td className="px-4 py-3"><span className="text-sm font-medium text-gray-200 line-clamp-1">{commit.messageHeadline}</span></td>
                           <td className="px-4 py-3">
                             {commit.taskId ? (
-                              <Link to={`/w/${slug}/projects/${key}/tasks/${commit.taskKey}`} className="inline-flex bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{commit.taskKey}</Link>
+                              <Link to={\`/w/\${slug}/projects/\${key}/tasks/\${commit.taskKey}\`} className="inline-flex bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{commit.taskKey}</Link>
                             ) : <span className="text-gray-600">—</span>}
                           </td>
                           <td className="px-4 py-3"><span className="text-sm text-gray-400 truncate">{commit.authorGithubLogin || 'Unknown'}</span></td>
@@ -446,7 +420,7 @@ export const GitHubIntegration = () => {
                           {pr.state === 'closed' && <span className="text-red-400 text-xs px-2 py-1 bg-red-500/10 border border-red-500/20 rounded-full">Closed</span>}
                         </td>
                         <td className="px-4 py-3">
-                          {pr.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${pr.taskKey}`} className="inline-flex bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{pr.taskKey}</Link> : <span className="text-gray-600">—</span>}
+                          {pr.taskId ? <Link to={\`/w/\${slug}/projects/\${key}/tasks/\${pr.taskKey}\`} className="inline-flex bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{pr.taskKey}</Link> : <span className="text-gray-600">—</span>}
                         </td>
                         <td className="px-4 py-3 text-xs text-gray-400">
                           {pr.headBranch} → {pr.baseBranch}
@@ -489,7 +463,7 @@ export const GitHubIntegration = () => {
                           {issue.state === 'open' ? <span className="text-green-400 text-xs px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-full">Open</span> : <span className="text-red-400 text-xs px-2 py-1 bg-red-500/10 border border-red-500/20 rounded-full">Closed</span>}
                         </td>
                         <td className="px-4 py-3">
-                          {issue.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${issue.taskKey}`} className="inline-flex bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{issue.taskKey}</Link> : <span className="text-gray-600">—</span>}
+                          {issue.taskId ? <Link to={\`/w/\${slug}/projects/\${key}/tasks/\${issue.taskKey}\`} className="inline-flex bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{issue.taskKey}</Link> : <span className="text-gray-600">—</span>}
                         </td>
                         <td className="px-4 py-3 text-right">
                           {issue.htmlUrl && <a href={issue.htmlUrl} target="_blank" rel="noreferrer" className="inline-flex text-gray-400 hover:text-white"><ExternalLink className="w-4 h-4" /></a>}
@@ -527,7 +501,7 @@ export const GitHubIntegration = () => {
                           {!branch.isDeleted ? <span className="text-green-400 text-xs px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-full">Active</span> : <span className="text-gray-400 text-xs px-2 py-1 bg-gray-500/10 border border-gray-500/20 rounded-full">Deleted</span>}
                         </td>
                         <td className="px-4 py-3">
-                          {branch.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${branch.taskKey}`} className="inline-flex bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{branch.taskKey}</Link> : <span className="text-gray-600">—</span>}
+                          {branch.taskId ? <Link to={\`/w/\${slug}/projects/\${key}/tasks/\${branch.taskKey}\`} className="inline-flex bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{branch.taskKey}</Link> : <span className="text-gray-600">—</span>}
                         </td>
                         <td className="px-4 py-3 text-right">
                           {branch.htmlUrl && <a href={branch.htmlUrl} target="_blank" rel="noreferrer" className="inline-flex text-gray-400 hover:text-white"><ExternalLink className="w-4 h-4" /></a>}
@@ -581,7 +555,7 @@ export const GitHubIntegration = () => {
                               <button 
                                 onClick={async () => {
                                   try {
-                                    await apiFetch(`/workspaces/${slug}/projects/${key}/github/ci/${run.runId}/rerun`, { method: 'POST' });
+                                    await apiFetch(\`/workspaces/\${slug}/projects/\${key}/github/ci/\${run.runId}/rerun\`, { method: 'POST' });
                                     fetchCiRuns(ciPage);
                                   } catch (e: any) { alert(e.message); }
                                 }}
@@ -602,42 +576,10 @@ export const GitHubIntegration = () => {
           </div>
         )}
       </div>
-
-      {showCreatePR && (
-        <CreatePRModal
-          slug={slug as string}
-          keyStr={key as string}
-          onClose={() => setShowCreatePR(false)}
-          onCreated={() => {
-            setShowCreatePR(false);
-            fetchPrs(1);
-          }}
-        />
-      )}
-
-      {showCreateIssue && (
-        <CreateIssueModal
-          slug={slug as string}
-          keyStr={key as string}
-          onClose={() => setShowCreateIssue(false)}
-          onCreated={() => {
-            setShowCreateIssue(false);
-            fetchIssues(1);
-          }}
-        />
-      )}
-
-      {showCreateBranch && (
-        <CreateBranchModal
-          slug={slug as string}
-          keyStr={key as string}
-          onClose={() => setShowCreateBranch(false)}
-          onCreated={() => {
-            setShowCreateBranch(false);
-            fetchBranches(1);
-          }}
-        />
-      )}
     </div>
   );
 };
+`;
+
+fs.writeFileSync('src/pages/projects/GitHubIntegration.tsx', newContent, 'utf8');
+console.log('GitHubIntegration.tsx has been updated with the 5 new tabs!');

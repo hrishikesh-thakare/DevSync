@@ -6,7 +6,8 @@ import { format } from 'date-fns';
 import clsx from 'clsx';
 import { useAuthStore } from '../../store/auth.js';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, GitPullRequest, AlertCircle, GitBranch, PlayCircle, ExternalLink } from 'lucide-react';
+import { CreateBranchModal } from './github/CreateBranchModal.js';
 
 const STATUSES = [
   { value: 'TODO', label: 'To Do' },
@@ -54,8 +55,21 @@ export const TaskDetailPage = () => {
 
   // New feature states
   const [allTasks, setAllTasks] = useState<any[]>([]);
-  const [linkedCommits, setLinkedCommits] = useState<any[]>([]);
+  const [githubActivity, setGithubActivity] = useState<{
+    commits: any[];
+    pullRequests: any[];
+    issues: any[];
+    branches: any[];
+  }>({ commits: [], pullRequests: [], issues: [], branches: [] });
+  const [showCreateBranch, setShowCreateBranch] = useState(false);
   const { channels } = useCurrentWorkspaceStore();
+
+  const fetchGithubActivity = async () => {
+    try {
+      const cRes = await apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}/github-activity`);
+      setGithubActivity(cRes.activity || { commits: [], pullRequests: [], issues: [], branches: [] });
+    } catch (e) {}
+  };
 
   useEffect(() => {
     const fetchTask = async () => {
@@ -70,8 +84,8 @@ export const TaskDetailPage = () => {
 
         let commitsData = [];
         try {
-          const cRes = await apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}/github/commits`);
-          commitsData = cRes.commits || [];
+          const cRes = await apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}/github-activity`);
+          setGithubActivity(cRes.activity || { commits: [], pullRequests: [], issues: [], branches: [] });
         } catch (e) {}
         setTask(taskData.task);
         setEditTitle(taskData.task.title);
@@ -80,7 +94,6 @@ export const TaskDetailPage = () => {
         setMembers(membersData.members || []);
         setSprints(sprintsData.sprints || []);
         setAllTasks(allTasksData.tasks || []);
-        setLinkedCommits(commitsData);
       } catch (err) {
         console.error('Failed to load task', err);
       } finally {
@@ -198,6 +211,18 @@ export const TaskDetailPage = () => {
               <Trash2 className="w-4 h-4" />
             </button>
           )}
+          <button 
+            onClick={handleDiscussInChannel}
+            className="text-sm font-medium px-3 py-1.5 bg-gray-800 text-gray-300 hover:text-white hover:bg-gray-700 rounded transition-colors flex items-center"
+          >
+            <MessageSquare className="w-4 h-4 mr-1.5" /> Discuss
+          </button>
+          <button
+            onClick={() => setShowCreateBranch(true)}
+            className="text-sm font-medium px-3 py-1.5 bg-blue-600 text-white hover:bg-blue-500 rounded transition-colors flex items-center"
+          >
+            <PlayCircle className="w-4 h-4 mr-1.5" /> Start Work
+          </button>
         </div>
       </div>
 
@@ -452,35 +477,112 @@ export const TaskDetailPage = () => {
                 )}
               </div>
 
-              {/* Linked Commits */}
+              {/* GitHub Activity Sidebar Section */}
               <div className="pt-4 border-t border-gray-800/80">
-                <div className="flex items-center space-x-2 mb-3">
-                  <GitCommit className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-300 font-semibold">
-                    Linked Commits
-                    {task.linkedCommitsCount > 0 && <span className="ml-2 bg-gray-800 text-gray-300 py-0.5 px-2 rounded-full text-[10px]">{task.linkedCommitsCount}</span>}
-                  </span>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-2">
+                    <GitBranch className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-gray-300 font-semibold">GitHub Activity</span>
+                  </div>
                 </div>
-                {linkedCommits.length === 0 ? (
-                  <div className="text-center py-4 bg-gray-900/40 border border-gray-800/80 rounded-lg">
-                    <p className="text-xs text-gray-400 mb-2 font-medium">No commits linked yet</p>
-                    <p className="text-[10px] text-gray-500 max-w-[200px] mx-auto leading-relaxed">
-                      Mention <span className="font-mono text-gray-300 bg-gray-800 px-1 rounded">{taskKey}</span> in a commit message to link it automatically.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {linkedCommits.map(c => (
-                      <a key={c.commitSha} href={c.url} target="_blank" rel="noopener noreferrer" className="block bg-gray-900 border border-gray-800 rounded p-2 hover:border-gray-600 transition-colors">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-mono text-xs text-blue-400">{c.commitSha.substring(0, 7)}</span>
-                          <span className="text-[10px] text-gray-500">{format(new Date(c.committedAt), 'MMM d, yyyy')}</span>
-                        </div>
-                        <p className="text-xs text-gray-300 truncate" title={c.messageHeadline}>{c.messageHeadline}</p>
-                      </a>
-                    ))}
-                  </div>
-                )}
+
+                <div className="space-y-4">
+                  {/* Pull Requests */}
+                  {githubActivity.pullRequests?.length > 0 && (
+                    <div>
+                      <div className="flex items-center text-xs text-gray-500 font-medium mb-1.5 uppercase tracking-wider">
+                        <GitPullRequest className="w-3 h-3 mr-1" /> Pull Requests
+                      </div>
+                      <div className="space-y-1.5">
+                        {githubActivity.pullRequests.map(pr => (
+                          <a key={pr.id} href={pr.htmlUrl} target="_blank" rel="noopener noreferrer" className="block bg-gray-900 border border-gray-800 rounded p-2 hover:border-gray-600 transition-colors">
+                            <div className="flex items-start justify-between">
+                              <span className="text-xs text-gray-300 font-medium line-clamp-2 pr-2">{pr.title}</span>
+                              {pr.state === 'open' && <span className="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded flex-shrink-0">Open</span>}
+                              {pr.state === 'merged' && <span className="text-[10px] text-purple-400 bg-purple-500/10 border border-purple-500/20 px-1.5 py-0.5 rounded flex-shrink-0">Merged</span>}
+                              {pr.state === 'closed' && <span className="text-[10px] text-red-400 bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded flex-shrink-0">Closed</span>}
+                            </div>
+                            <div className="text-[10px] font-mono text-gray-500 mt-1">#{pr.prNumber}</div>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Branches */}
+                  {githubActivity.branches?.length > 0 && (
+                    <div>
+                      <div className="flex items-center text-xs text-gray-500 font-medium mb-1.5 uppercase tracking-wider">
+                        <GitBranch className="w-3 h-3 mr-1" /> Branches
+                      </div>
+                      <div className="space-y-1.5">
+                        {githubActivity.branches.map(b => (
+                          <div key={b.id} className="flex flex-col bg-gray-900 border border-gray-800 rounded p-2">
+                            <div className="flex items-start justify-between">
+                              <span className="text-xs font-mono text-blue-400 break-all">{b.branchName}</span>
+                              {b.isDeleted && <span className="text-[10px] text-gray-400 bg-gray-500/10 border border-gray-500/20 px-1.5 py-0.5 rounded ml-2 flex-shrink-0">Deleted</span>}
+                            </div>
+                            {b.htmlUrl && !b.isDeleted && (
+                              <a href={b.htmlUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-gray-500 hover:text-white mt-1 flex items-center">
+                                View on GitHub <ExternalLink className="w-3 h-3 ml-1" />
+                              </a>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Issues */}
+                  {githubActivity.issues?.length > 0 && (
+                    <div>
+                      <div className="flex items-center text-xs text-gray-500 font-medium mb-1.5 uppercase tracking-wider">
+                        <AlertCircle className="w-3 h-3 mr-1" /> Issues
+                      </div>
+                      <div className="space-y-1.5">
+                        {githubActivity.issues.map(issue => (
+                          <a key={issue.id} href={issue.htmlUrl} target="_blank" rel="noopener noreferrer" className="block bg-gray-900 border border-gray-800 rounded p-2 hover:border-gray-600 transition-colors">
+                            <div className="flex items-start justify-between">
+                              <span className="text-xs text-gray-300 font-medium line-clamp-2 pr-2">{issue.title}</span>
+                              {issue.state === 'open' ? <span className="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded flex-shrink-0">Open</span> : <span className="text-[10px] text-red-400 bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded flex-shrink-0">Closed</span>}
+                            </div>
+                            <div className="text-[10px] font-mono text-gray-500 mt-1">#{issue.githubIssueNumber}</div>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Commits */}
+                  {githubActivity.commits?.length > 0 && (
+                    <div>
+                      <div className="flex items-center text-xs text-gray-500 font-medium mb-1.5 uppercase tracking-wider">
+                        <GitCommit className="w-3 h-3 mr-1" /> Commits
+                      </div>
+                      <div className="space-y-1.5">
+                        {githubActivity.commits.map(c => (
+                          <a key={c.commitSha} href={c.url} target="_blank" rel="noopener noreferrer" className="block bg-gray-900 border border-gray-800 rounded p-2 hover:border-gray-600 transition-colors">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-mono text-xs text-blue-400">{c.commitSha.substring(0, 7)}</span>
+                              <span className="text-[10px] text-gray-500">{format(new Date(c.committedAt), 'MMM d')}</span>
+                            </div>
+                            <p className="text-xs text-gray-300 truncate" title={c.messageHeadline}>{c.messageHeadline}</p>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Empty State */}
+                  {githubActivity.commits.length === 0 && githubActivity.pullRequests.length === 0 && githubActivity.issues.length === 0 && githubActivity.branches.length === 0 && (
+                    <div className="text-center py-4 bg-gray-900/40 border border-gray-800/80 rounded-lg">
+                      <p className="text-xs text-gray-400 mb-2 font-medium">No GitHub activity yet</p>
+                      <p className="text-[10px] text-gray-500 max-w-[200px] mx-auto leading-relaxed">
+                        Mention <span className="font-mono text-gray-300 bg-gray-800 px-1 rounded">{taskKey}</span> in branches, PRs, issues or commits.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
 
 
@@ -500,6 +602,18 @@ export const TaskDetailPage = () => {
         </div>
 
       </div>
+      {showCreateBranch && (
+        <CreateBranchModal
+          slug={slug as string}
+          keyStr={key as string}
+          initialTaskId={task.taskId}
+          onClose={() => setShowCreateBranch(false)}
+          onCreated={() => {
+            setShowCreateBranch(false);
+            fetchGithubActivity();
+          }}
+        />
+      )}
     </div>
   );
 };

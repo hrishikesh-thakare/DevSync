@@ -20,17 +20,20 @@ test.describe('Workspace CRUD', () => {
   test('can create workspace via API', async () => {
     const accessToken = getAuthToken('owner');
     const uniqueSlug = `e2e-crud-${Date.now()}`;
-    const { status, data } = await apiRequest('/workspaces', accessToken, {
-      method: 'POST',
-      body: JSON.stringify({
-        name: `CRUD Test ${Date.now()}`,
-        slug: uniqueSlug,
-      }),
-    });
-    expect([200, 201]).toContain(status);
-
-    // Clean up: delete the workspace
-    await apiRequest(`/workspaces/${uniqueSlug}`, accessToken, { method: 'DELETE' });
+    
+    try {
+      const { status, data } = await apiRequest('/workspaces', accessToken, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `CRUD Test ${Date.now()}`,
+          slug: uniqueSlug,
+        }),
+      });
+      expect([200, 201]).toContain(status);
+    } finally {
+      // Clean up: delete the workspace even if the test fails
+      await apiRequest(`/workspaces/${uniqueSlug}`, accessToken, { method: 'DELETE' });
+    }
   });
 
   test('can update workspace name via API', async () => {
