@@ -13,7 +13,7 @@ import { projects } from '../../db/schema/projects.js';
 // POST /api/projects/:projectId/sprints
 export const createSprint = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { projectId } = req.params as Record<string, string>;
+    const projectId = req.params.projectId || res.locals.projectId;
     const { name, goal, startDate, endDate } = req.body;
 
     if (!name) {
@@ -77,7 +77,7 @@ export const createSprint = async (req: Request, res: Response): Promise<void> =
 // GET /api/projects/:projectId/sprints
 export const listSprints = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { projectId } = req.params as Record<string, string>;
+    const projectId = req.params.projectId || res.locals.projectId;
 
     const results = await db
       .select()
@@ -96,7 +96,8 @@ export const listSprints = async (req: Request, res: Response): Promise<void> =>
 // PATCH /api/projects/:projectId/sprints/:sprintId/start
 export const startSprint = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { projectId, sprintId } = req.params as Record<string, string>;
+    const { sprintId } = req.params as Record<string, string>;
+    const projectId = req.params.projectId || res.locals.projectId;
     const { startDate, endDate } = req.body;
 
     // Check no other sprint is active

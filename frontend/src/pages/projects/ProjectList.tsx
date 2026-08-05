@@ -6,7 +6,7 @@ import { FolderKanban, Plus, ChevronRight } from 'lucide-react';
 export const ProjectList = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { projects } = useCurrentWorkspaceStore();
+  const { projects, isAdmin } = useCurrentWorkspaceStore();
 
   return (
     <div className="h-full overflow-y-auto p-8 font-sans bg-gray-950 text-gray-200">
@@ -15,13 +15,15 @@ export const ProjectList = () => {
           <h1 className="text-2xl font-bold text-white mb-1">Projects</h1>
           <p className="text-sm text-gray-400">View and manage all active projects in this workspace.</p>
         </div>
-        <button 
-          onClick={() => navigate(`/w/${slug}/projects/new`)}
-          className="flex items-center px-4 py-2 bg-gray-400 hover:bg-white text-white font-bold rounded-lg transition-colors shadow-[0_0_15px_-3px_rgba(37,99,235,0.4)]"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Create Project
-        </button>
+        {isAdmin() && (
+          <button 
+            onClick={() => navigate(`/w/${slug}/projects/new`)}
+            className="flex items-center px-4 py-2 bg-gray-400 hover:bg-white text-white font-bold rounded-lg transition-colors shadow-[0_0_15px_-3px_rgba(37,99,235,0.4)]"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Create Project
+          </button>
+        )}
       </div>
 
       {projects.length === 0 ? (

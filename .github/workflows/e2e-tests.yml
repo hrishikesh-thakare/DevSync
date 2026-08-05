@@ -1,0 +1,145 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  NODE_ENV: test
+
+jobs:
+  e2e-tests:
+    name: Playwright E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: devsync_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+            e2e/package-lock.json
+
+      # ─── Install Dependencies ───────────────────────────────────────────
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci --legacy-peer-deps
+
+      - name: Install E2E dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      # ─── Database Setup ─────────────────────────────────────────────────
+      - name: Create backend .env for CI
+        working-directory: backend
+        run: |
+          cat > .env << EOF
+          PORT=3001
+          NODE_ENV=test
+          FRONTEND_URL=http://localhost:5173
+          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/devsync_test
+          JWT_SECRET=${{ secrets.JWT_SECRET || 'e2e-test-jwt-secret-do-not-use-in-production' }}
+          ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY || 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2' }}
+          BACKEND_URL=http://localhost:3001
+          EOF
+
+      - name: Create frontend .env for CI
+        working-directory: frontend
+        run: |
+          cat > .env << EOF
+          VITE_API_URL=http://localhost:3001/api
+          VITE_SOCKET_URL=http://localhost:3001
+          VITE_SUPABASE_URL=https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY=placeholder
+          EOF
+
+      - name: Run database migrations
+        working-directory: backend
+        run: npx drizzle-kit push
+
+      # ─── Start Services ─────────────────────────────────────────────────
+      - name: Start backend server
+        working-directory: backend
+        run: npm run dev &
+        env:
+          PORT: 3001
+
+      - name: Start frontend server
+        working-directory: frontend
+        run: npm run dev &
+
+      - name: Wait for servers to be ready
+        run: |
+          echo "Waiting for backend..."
+          for i in $(seq 1 30); do
+            curl -s http://localhost:3001/api/health > /dev/null 2>&1 && break
+            sleep 2
+          done
+          echo "Waiting for frontend..."
+          for i in $(seq 1 30); do
+            curl -s http://localhost:5173 > /dev/null 2>&1 && break
+            sleep 2
+          done
+          echo "Both servers are ready!"
+
+      # ─── Seed Test Data ─────────────────────────────────────────────────
+      - name: Seed test data
+        working-directory: e2e
+        run: npx tsx seed/seed-test-data.ts
+
+      # ─── Run Tests ──────────────────────────────────────────────────────
+      - name: Run Playwright tests
+        working-directory: e2e
+        run: npx playwright test
+        env:
+          BASE_URL: http://localhost:5173
+          API_URL: http://localhost:3001/api
+
+      # ─── Upload Reports ─────────────────────────────────────────────────
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 14
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: test-results
+          path: e2e/test-results/
+          retention-days: 7

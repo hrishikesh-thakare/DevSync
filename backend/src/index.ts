@@ -59,8 +59,7 @@ app.use('/api/workspaces/:slug/channels', channelsRoutes);
 import filesRoutes from './modules/files/files.routes.js';
 app.use('/api/workspaces/:slug/files', filesRoutes);
 
-import messagesRoutes from './modules/messages/messages.routes.js';
-app.use('/api/workspaces/:slug/channels/:channelId/messages', messagesRoutes);
+// Messages routes moved to channels.routes.ts
 
 import { githubConfigRouter, githubTaskRouter, githubUserRouter } from './modules/github/github.routes.js';
 app.use('/api/workspaces/:slug/projects/:key/github', githubConfigRouter);

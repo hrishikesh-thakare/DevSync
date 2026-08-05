@@ -1,0 +1,173 @@
+/**
+ * Task CRUD & Comments Tests
+ */
+import { test, expect } from '../../fixtures/test-fixtures.js';
+import { TEST_WORKSPACE, TEST_PROJECT, TEST_USERS, ROUTES } from '../../helpers/constants.js';
+import { apiLogin, apiRequest, getAuthToken } from '../../helpers/api-helpers.js';
+
+const SLUG = TEST_WORKSPACE.slug;
+const KEY = TEST_PROJECT.key;
+
+test.describe('Task CRUD', () => {
+  test('can create task via API', async () => {
+    const accessToken = getAuthToken('owner');
+    const { status, data } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}/tasks`,
+      accessToken,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          title: `API Task ${Date.now()}`,
+          issueType: 'task',
+          priority: 'medium',
+        }),
+      }
+    );
+    expect([200, 201]).toContain(status);
+    expect(data?.task?.taskKey || data?.taskKey).toBeTruthy();
+  });
+
+  test('can list tasks via API', async () => {
+    const accessToken = getAuthToken('owner');
+    const { status, data } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}/tasks`,
+      accessToken
+    );
+    expect(status).toBe(200);
+  });
+
+  test('can get single task via API', async () => {
+    const accessToken = getAuthToken('owner');
+    const { data: tasksData } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}/tasks`,
+      accessToken
+    );
+    const task = tasksData?.tasks?.[0] || tasksData?.[0];
+    if (!task) {
+      test.skip();
+      return;
+    }
+
+    const { status } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}/tasks/${task.taskKey}`,
+      accessToken
+    );
+    expect(status).toBe(200);
+  });
+
+  test('can update task fields via API', async () => {
+    const accessToken = getAuthToken('owner');
+
+    // Create a task to update
+    const { data: newTask } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}/tasks`,
+      accessToken,
+      {
+        method: 'POST',
+        body: JSON.stringify({ title: `Update Me ${Date.now()}`, issueType: 'task' }),
+      }
+    );
+
+    const taskKey = newTask?.task?.taskKey || newTask?.taskKey;
+    if (!taskKey) {
+      test.skip();
+      return;
+    }
+
+    const { status } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}/tasks/${taskKey}`,
+      accessToken,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title: 'Updated Title',
+          priority: 'high',
+          status: 'in_progress',
+        }),
+      }
+    );
+    expect(status).toBe(200);
+  });
+
+  test('can delete task via API (project admin)', async () => {
+    const accessToken = getAuthToken('owner');
+
+    const { data: newTask } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}/tasks`,
+      accessToken,
+      {
+        method: 'POST',
+        body: JSON.stringify({ title: `Delete Me ${Date.now()}`, issueType: 'task' }),
+      }
+    );
+
+    const taskKey = newTask?.task?.taskKey || newTask?.taskKey;
+    if (!taskKey) {
+      test.skip();
+      return;
+    }
+
+    const { status } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}/tasks/${taskKey}`,
+      accessToken,
+      { method: 'DELETE' }
+    );
+    expect([200, 204]).toContain(status);
+  });
+
+  test('board page renders tasks (UI)', async ({ ownerPage }) => {
+    await ownerPage.goto(ROUTES.projectBoard(SLUG, KEY));
+    await ownerPage.waitForLoadState('networkidle');
+
+    // Verify board columns are visible
+    const statusHeaders = ownerPage.locator('text=/Todo|In Progress|In Review|Done/i');
+    await expect(statusHeaders.first()).toBeVisible({ timeout: 10_000 });
+  });
+});
+
+test.describe('Task Comments', () => {
+  test('can post comment on task via API', async () => {
+    const accessToken = getAuthToken('owner');
+
+    // Get a task
+    const { data: tasksData } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}/tasks`,
+      accessToken
+    );
+    const task = tasksData?.tasks?.[0] || tasksData?.[0];
+    if (!task) {
+      test.skip();
+      return;
+    }
+
+    const { status } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}/tasks/${task.taskKey}/comments`,
+      accessToken,
+      {
+        method: 'POST',
+        body: JSON.stringify({ bodyText: `E2E test comment ${Date.now()}` }),
+      }
+    );
+    expect([200, 201]).toContain(status);
+  });
+
+  test('can list comments on task via API', async () => {
+    const accessToken = getAuthToken('owner');
+
+    const { data: tasksData } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}/tasks`,
+      accessToken
+    );
+    const task = tasksData?.tasks?.[0] || tasksData?.[0];
+    if (!task) {
+      test.skip();
+      return;
+    }
+
+    const { status } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}/tasks/${task.taskKey}/comments`,
+      accessToken
+    );
+    expect(status).toBe(200);
+  });
+});

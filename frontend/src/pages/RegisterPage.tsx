@@ -36,8 +36,9 @@ export default function RegisterPage() {
     try {
       await register({ email, password, fullName });
       navigate('/workspaces', { replace: true });
-    } catch (err: any) {
-      setError(err.message || 'Failed to create account');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create account';
+      setError(message);
     } finally {
       setIsLoading(false);
     }
@@ -71,10 +72,11 @@ export default function RegisterPage() {
               </div>
               <input
                 type="text"
+                name="fullName"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 className="w-full pl-11 pr-4 py-3 bg-bg-primary/50 border border-border-light rounded-xl text-text-primary placeholder-text-secondary focus:outline-none focus:ring-1 focus:ring-primary-500 transition-all duration-200"
-                placeholder="John Doe"
+                placeholder="Full name"
                 required
               />
             </div>
@@ -90,6 +92,7 @@ export default function RegisterPage() {
               </div>
               <input
                 type="email"
+                name="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-11 pr-4 py-3 bg-bg-primary/50 border border-border-light rounded-xl text-text-primary placeholder-text-secondary focus:outline-none focus:ring-1 focus:ring-primary-500 transition-all duration-200"
@@ -109,6 +112,7 @@ export default function RegisterPage() {
               </div>
               <input
                 type="password"
+                name="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full pl-11 pr-4 py-3 bg-bg-primary/50 border border-border-light rounded-xl text-text-primary placeholder-text-secondary focus:outline-none focus:ring-1 focus:ring-primary-500 transition-all duration-200"

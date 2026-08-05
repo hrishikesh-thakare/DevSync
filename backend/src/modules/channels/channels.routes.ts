@@ -12,6 +12,8 @@ import {
   updateChannel,
 } from './channels.controller.js';
 
+import messagesRoutes from '../messages/messages.routes.js';
+
 // Mounted at /api/workspaces/:workspaceId/channels
 const router = Router({ mergeParams: true });
 
@@ -28,5 +30,8 @@ router.delete('/:channelId/leave', leaveChannel);
 router.patch('/:channelId/archive', requireWorkspaceRole(['owner', 'admin']), archiveChannel);
 router.patch('/:channelId', requireWorkspaceRole(['owner', 'admin']), updateChannel);
 router.delete('/:channelId', requireWorkspaceRole(['owner', 'admin']), deleteChannel);
+
+// ─── Messages (Nested) ───────────────────────────────────────────────────────
+router.use('/:channelId/messages', messagesRoutes);
 
 export default router;

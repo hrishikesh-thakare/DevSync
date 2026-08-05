@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useWorkspaceStore } from '../store/workspaceStore';
+import { useCurrentWorkspaceStore } from '../store/currentWorkspace';
 import { useProjectStore } from '../store/useProjectStore';
 import { 
   FolderGit2, 
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 const ProjectListPage: React.FC = () => {
-  const { currentWorkspace } = useWorkspaceStore();
+  const { name: workspaceName, isAdmin } = useCurrentWorkspaceStore();
   const { projects, isLoading, fetchProjects, createProject } = useProjectStore();
   const navigate = useNavigate();
 
@@ -28,10 +28,8 @@ const ProjectListPage: React.FC = () => {
   const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
-    if (currentWorkspace) {
-      fetchProjects();
-    }
-  }, [currentWorkspace, fetchProjects]);
+    fetchProjects();
+  }, [fetchProjects]);
 
   // Auto-generate key when name changes
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,14 +67,14 @@ const ProjectListPage: React.FC = () => {
     p.id.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const canCreate = currentWorkspace?.role === 'owner' || currentWorkspace?.role === 'admin';
+  const canCreate = isAdmin();
 
   return (
     <div className="p-8 h-full flex flex-col max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold mb-2">Projects</h1>
-          <p className="text-text-secondary text-sm">All active projects in {currentWorkspace?.name}</p>
+          <p className="text-text-secondary text-sm">All active projects in {workspaceName}</p>
         </div>
         
         {canCreate && (

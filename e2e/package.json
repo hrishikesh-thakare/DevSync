@@ -1,0 +1,20 @@
+{
+  "name": "devsync-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:rbac": "playwright test --grep @rbac",
+    "test:auth": "playwright test --grep @auth",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:report": "playwright show-report",
+    "seed": "tsx seed/seed-test-data.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@types/node": "^20.11.0",
+    "tsx": "^4.19.4"
+  }
+}

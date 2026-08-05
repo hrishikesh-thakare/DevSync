@@ -8,12 +8,23 @@ interface User {
   avatarUrl: string | null;
 }
 
-interface AuthState {
+export interface LoginCredentials {
+  email: string;
+  password?: string;
+}
+
+export interface RegisterCredentials {
+  email: string;
+  password?: string;
+  fullName?: string;
+}
+
+export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isInitializing: boolean;
-  login: (credentials: any) => Promise<void>;
-  register: (credentials: any) => Promise<void>;
+  login: (credentials: LoginCredentials) => Promise<void>;
+  register: (credentials: RegisterCredentials) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
 }
@@ -64,7 +75,7 @@ export const useAuthStore = create<AuthState>((set) => {
       try {
         const data = await apiFetch('/auth/me');
         set({ user: data.user, isAuthenticated: true, isInitializing: false });
-      } catch (err) {
+      } catch {
         set({ user: null, isAuthenticated: false, isInitializing: false });
       }
     },

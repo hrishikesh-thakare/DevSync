@@ -171,7 +171,7 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
 // GET /api/projects/:projectId/tasks
 export const listTasks = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { projectId } = req.params as Record<string, string>;
+    const projectId = req.params.projectId || res.locals.projectId;
     const { status, assigneeId, sprintId, issueType, search } = req.query;
 
     let conditions = [eq(tasks.projectId, projectId), isNull(tasks.deletedAt)];

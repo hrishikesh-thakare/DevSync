@@ -21,7 +21,7 @@ const generateSlug = (name: string): string => {
 // POST /api/workspaces
 export const createWorkspace = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, description, iconUrl } = req.body;
+    const { name, description, iconUrl, slug: requestedSlug } = req.body;
     const userId = req.user!.userId;
 
     if (!name || name.trim().length < 2) {
@@ -29,9 +29,9 @@ export const createWorkspace = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    // Generate a unique slug (append random suffix to avoid collisions)
+    // Generate a unique slug or use the provided one
     const baseSlug = generateSlug(name);
-    const slug = `${baseSlug}-${Date.now().toString(36)}`;
+    const slug = requestedSlug || `${baseSlug}-${Date.now().toString(36)}`;
 
     const result = await db.transaction(async (tx) => {
       // 1. Create the workspace
@@ -71,9 +71,14 @@ export const createWorkspace = async (req: Request, res: Response): Promise<void
       message: 'Workspace created successfully',
       workspace: result,
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error('Create workspace error:', err);
-    res.status(500).json({ error: 'Server error creating workspace.' });
+    const errStr = String(err?.message || err);
+    if (err?.code === '23505' || errStr.includes('unique constraint') || errStr.includes('duplicate key')) {
+      res.status(409).json({ error: 'Workspace with this slug already exists.' });
+      return;
+    }
+    res.status(500).json({ error: 'Server error creating workspace.', details: errStr });
   }
 };
 
@@ -117,7 +122,7 @@ export const listWorkspaces = async (req: Request, res: Response): Promise<void>
 // GET /api/workspaces/:workspaceId
 export const getWorkspace = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId } = req.params as Record<string, string>;
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
 
     const [workspace] = await db
       .select()
@@ -159,7 +164,7 @@ export const getWorkspace = async (req: Request, res: Response): Promise<void> =
 // GET /api/workspaces/:slug/members
 export const listWorkspaceMembers = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId } = req.params as Record<string, string>;
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
 
     const members = await db
       .select({
@@ -189,7 +194,7 @@ export const listWorkspaceMembers = async (req: Request, res: Response): Promise
 // PATCH /api/workspaces/:workspaceId
 export const updateWorkspace = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId } = req.params as Record<string, string>;
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
     const { name, description, iconUrl } = req.body;
 
     const updateData: Record<string, any> = { updatedAt: new Date() };
@@ -244,7 +249,7 @@ export const updateWorkspace = async (req: Request, res: Response): Promise<void
 // DELETE /api/workspaces/:workspaceId
 export const deleteWorkspace = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId } = req.params as Record<string, string>;
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
 
     const result = await db.transaction(async (tx) => {
       const [oldWorkspace] = await tx.select().from(workspaces).where(and(eq(workspaces.workspaceId, workspaceId), isNull(workspaces.deletedAt))).limit(1);
@@ -286,7 +291,7 @@ export const deleteWorkspace = async (req: Request, res: Response): Promise<void
 // POST /api/workspaces/:workspaceId/invite
 export const inviteMember = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId } = req.params as Record<string, string>;
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
     const { email, role } = req.body;
     const inviterId = req.user!.userId;
 
@@ -389,7 +394,7 @@ export const inviteMember = async (req: Request, res: Response): Promise<void> =
 // POST /api/workspaces/:workspaceId/invites/accept
 export const acceptInvite = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId } = req.params as Record<string, string>;
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
     const currentUserId = req.user!.userId;
 
     const [updated] = await db
@@ -430,7 +435,8 @@ export const acceptInvite = async (req: Request, res: Response): Promise<void> =
 // PATCH /api/workspaces/:workspaceId/members/:userId
 export const updateMemberRole = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId, userId } = req.params as Record<string, string>;
+    const { userId } = req.params as Record<string, string>;
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
     const { role } = req.body;
     const currentUserId = req.user!.userId;
 
@@ -510,7 +516,8 @@ export const updateMemberRole = async (req: Request, res: Response): Promise<voi
 // DELETE /api/workspaces/:workspaceId/members/:userId
 export const removeMember = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId, userId } = req.params as Record<string, string>;
+    const { userId } = req.params as Record<string, string>;
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
     const currentUserId = req.user!.userId;
 
     // Check if trying to remove the owner

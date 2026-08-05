@@ -15,7 +15,7 @@ const channelSlug = (name: string): string =>
 // POST /api/workspaces/:workspaceId/channels
 export const createChannel = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId } = req.params as Record<string, string>;
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
     const userId = req.user!.userId;
     const { name, description, type, projectId, isAnnouncementOnly, isDefault, memberIds } = req.body;
 
@@ -75,9 +75,14 @@ export const createChannel = async (req: Request, res: Response): Promise<void> 
     });
 
     res.status(201).json({ message: 'Channel created', channel: result });
-  } catch (err) {
+  } catch (err: any) {
     console.error('Create channel error:', err);
-    res.status(500).json({ error: 'Server error creating channel.' });
+    const errStr = String(err?.message || err);
+    if (err?.code === '23505' || errStr.includes('unique constraint') || errStr.includes('duplicate key')) {
+      res.status(409).json({ error: 'Channel with this name already exists.' });
+      return;
+    }
+    res.status(500).json({ error: 'Server error creating channel.', details: errStr });
   }
 };
 
@@ -85,7 +90,7 @@ export const createChannel = async (req: Request, res: Response): Promise<void> 
 // GET /api/workspaces/:workspaceId/channels
 export const listChannels = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId } = req.params as Record<string, string>;
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
     const userId = req.user!.userId;
     const workspaceRole = req.workspaceRole; // from middleware
 
@@ -200,9 +205,9 @@ export const joinChannel = async (req: Request, res: Response): Promise<void> =>
     });
 
     res.status(201).json({ message: 'Joined channel' });
-  } catch (err) {
+  } catch (err: any) {
     console.error('Join channel error:', err);
-    res.status(500).json({ error: 'Server error joining channel.' });
+    res.status(500).json({ error: 'Server error joining channel.', details: err?.message || String(err) });
   }
 };
 
