@@ -120,6 +120,52 @@ test.describe('Sprint Lifecycle', () => {
     expect([200, 201, 400, 409]).toContain(status);
   });
 
+  test('remove task from sprint via API', async () => {
+    const accessToken = getAuthToken('owner');
+    const { data: sprintsData } = await apiRequest(`/workspaces/${SLUG}/projects/${KEY}/sprints`, accessToken);
+    const sprint = (sprintsData?.sprints || sprintsData || [])[0];
+    const { data: tasksData } = await apiRequest(`/workspaces/${SLUG}/projects/${KEY}/tasks`, accessToken);
+    const task = (tasksData?.tasks || tasksData || [])[0];
+    if (!sprint || !task) { test.skip(); return; }
+
+    const { status } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}/sprints/${sprint.sprintId}/tasks/${task.taskId}`,
+      accessToken,
+      { method: 'DELETE' }
+    );
+    expect([200, 204]).toContain(status);
+  });
+
+  test('general sprint update via API', async () => {
+    const accessToken = getAuthToken('owner');
+    const { data: sprintsData } = await apiRequest(`/workspaces/${SLUG}/projects/${KEY}/sprints`, accessToken);
+    const sprint = (sprintsData?.sprints || sprintsData || [])[0];
+    if (!sprint) { test.skip(); return; }
+
+    const { status } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}/sprints/${sprint.sprintId}`,
+      accessToken,
+      { method: 'PATCH', body: JSON.stringify({ name: 'Updated Sprint Name', goal: 'Updated Goal' }) }
+    );
+    expect(status).toBe(200);
+  });
+
+  test('can delete a sprint via API', async () => {
+    const accessToken = getAuthToken('owner');
+    const { data: s, status: createStatus } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}/sprints`, accessToken,
+      { method: 'POST', body: JSON.stringify({ name: `Delete Me ${Date.now()}` }) }
+    );
+    const sprintId = s?.sprint?.sprintId || s?.sprintId;
+    if (createStatus !== 201 || !sprintId) throw new Error(`Setup failed: ${createStatus}`);
+
+    const { status } = await apiRequest(`/workspaces/${SLUG}/projects/${KEY}/sprints/${sprintId}`, accessToken, { method: 'DELETE' });
+    expect([200, 204]).toContain(status);
+
+    const { data: after } = await apiRequest(`/workspaces/${SLUG}/projects/${KEY}/sprints`, accessToken);
+    expect((after?.sprints || after || []).some((x: any) => x.sprintId === sprintId)).toBe(false);
+  });
+
   test('sprint list page renders (UI)', async ({ ownerPage }) => {
     await ownerPage.goto(ROUTES.projectSprints(SLUG, KEY));
     await ownerPage.waitForLoadState('networkidle');

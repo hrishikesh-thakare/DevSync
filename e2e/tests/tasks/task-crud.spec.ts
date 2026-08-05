@@ -123,6 +123,20 @@ test.describe('Task CRUD', () => {
     const statusHeaders = ownerPage.locator('text=/Todo|In Progress|In Review|Done/i');
     await expect(statusHeaders.first()).toBeVisible({ timeout: 10_000 });
   });
+
+  test('can reorder a task via API', async () => {
+    const accessToken = getAuthToken('owner');
+    const { data: tasksData } = await apiRequest(`/workspaces/${SLUG}/projects/${KEY}/tasks`, accessToken);
+    const tasks = tasksData?.tasks || tasksData || [];
+    if (tasks.length < 2) { test.skip(); return; }
+
+    const { status } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}/tasks/${tasks[0].taskKey}/reorder`,
+      accessToken,
+      { method: 'PATCH', body: JSON.stringify({ afterTaskId: tasks[1].taskId }) }
+    );
+    expect(status).toBe(200);
+  });
 });
 
 test.describe('Task Comments', () => {

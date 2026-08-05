@@ -3,7 +3,8 @@
  * @tags @auth
  */
 import { test, expect } from '@playwright/test';
-import { ROUTES } from '../../helpers/constants.js';
+import { ROUTES, TEST_USERS, API_URL } from '../../helpers/constants.js';
+import { apiRequest } from '../../helpers/api-helpers.js';
 
 test.describe('Session Management @auth', () => {
   test('should redirect unauthenticated user to login when accessing protected route', async ({ page }) => {
@@ -46,5 +47,61 @@ test.describe('Session Management @auth', () => {
     await expect(authPage).not.toHaveURL(/\/login/, { timeout: 10_000 });
 
     await context.close();
+  });
+
+  test('GET /auth/me returns current user', async () => {
+    // We need to login via raw fetch to get the access token
+    const loginRes = await fetch(`${API_URL}/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: TEST_USERS.owner.email, password: 'password123' })
+    });
+    const { accessToken } = await loginRes.json();
+
+    const { status, data } = await apiRequest('/auth/me', accessToken);
+    expect(status).toBe(200);
+    expect(data?.user?.email).toBe(TEST_USERS.owner.email);
+  });
+
+  test('refresh rotates token', async () => {
+    const loginRes = await fetch(`${API_URL}/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: TEST_USERS.owner.email, password: 'password123' })
+    });
+    const { accessToken: oldToken } = await loginRes.json();
+    const cookies = loginRes.headers.get('set-cookie');
+    if (!cookies) throw new Error('No set-cookie header');
+
+    // Wait 1 sec so iat timestamp changes in token signature
+    await new Promise((r) => setTimeout(r, 1000));
+
+    const refreshRes = await fetch(`${API_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Cookie': cookies }
+    });
+    expect(refreshRes.status).toBe(200);
+    const { accessToken: newToken } = await refreshRes.json();
+    expect(newToken).toBeTruthy();
+    expect(newToken).not.toBe(oldToken);
+  });
+
+  test('logout revokes refresh token', async () => {
+    const loginRes = await fetch(`${API_URL}/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: TEST_USERS.owner.email, password: 'password123' })
+    });
+    const cookies = loginRes.headers.get('set-cookie');
+    if (!cookies) throw new Error('No set-cookie header');
+
+    const logoutRes = await fetch(`${API_URL}/auth/logout`, {
+      method: 'POST',
+      headers: { 'Cookie': cookies }
+    });
+    expect(logoutRes.status).toBe(200);
+
+    const refreshRes = await fetch(`${API_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Cookie': cookies } // Using old cookie which is now revoked
+    });
+    expect(refreshRes.status).toBe(401);
   });
 });

@@ -23,24 +23,19 @@ test.describe('Workspace RBAC — Settings Access @rbac', () => {
     await expect(ownerPage).toHaveURL(new RegExp(`/w/${SLUG}/settings`));
   });
 
-  test('admin CANNOT access workspace settings (owner-only page)', async ({ adminPage }) => {
+  test('admin CAN access workspace settings page', async ({ adminPage }) => {
     await adminPage.goto(ROUTES.workspaceSettings(SLUG));
     await adminPage.waitForLoadState('networkidle');
 
-    // Should be redirected or show forbidden — either way, not on settings page
-    // The frontend may redirect to workspace home or show an error
-    const url = adminPage.url();
-    const isBlocked = !url.includes('/settings') ||
-      (await adminPage.locator('text=/forbidden|not authorized|access denied/i').count()) > 0;
+    // Settings page should render for admins
+    await expect(adminPage).toHaveURL(new RegExp(`/w/${SLUG}/settings`));
 
-    // If the UI doesn't redirect, verify via API
-    if (url.includes('/settings')) {
-      const { accessToken } = await apiLogin(TEST_USERS.admin.email);
-      const { status } = await apiRequest(`/workspaces/${SLUG}`, accessToken, {
-        method: 'DELETE',
-      });
-      expect(status).toBe(403); // Admin cannot delete workspace
-    }
+    // But admin cannot delete workspace via API
+    const { accessToken } = await apiLogin(TEST_USERS.admin.email);
+    const { status } = await apiRequest(`/workspaces/${SLUG}`, accessToken, {
+      method: 'DELETE',
+    });
+    expect(status).toBe(403); // Admin cannot delete workspace
   });
 
   test('member CANNOT access workspace settings', async ({ viewerPage }) => {
@@ -49,15 +44,17 @@ test.describe('Workspace RBAC — Settings Access @rbac', () => {
 
     // Member should be blocked from settings
     const url = viewerPage.url();
-    if (url.includes('/settings')) {
-      // Verify API-level enforcement
-      const { accessToken } = await apiLogin(TEST_USERS.viewer.email);
-      const { status } = await apiRequest(`/workspaces/${SLUG}`, accessToken, {
-        method: 'PATCH',
-        body: JSON.stringify({ name: 'Hacked Name' }),
-      });
-      expect(status).toBe(403);
-    }
+    const forbiddenText = await viewerPage.locator('text=/forbidden|not authorized|access denied/i').count();
+    const isBlocked = !url.includes('/settings') || forbiddenText > 0;
+    expect(isBlocked).toBe(true);
+
+    // Verify API-level enforcement
+    const { accessToken } = await apiLogin(TEST_USERS.viewer.email);
+    const { status } = await apiRequest(`/workspaces/${SLUG}`, accessToken, {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'Hacked Name' }),
+    });
+    expect(status).toBe(403);
   });
 });
 
@@ -99,12 +96,26 @@ test.describe('Workspace RBAC — Member Invitations @rbac', () => {
 test.describe('Workspace RBAC — Role Management @rbac', () => {
   test('owner CAN change member roles (API)', async () => {
     const { accessToken } = await apiLogin(TEST_USERS.owner.email);
-    // Get members list first
-    const { status: listStatus, data: members } = await apiRequest(
-      `/workspaces/${SLUG}/members`,
-      accessToken
+    const { data: members } = await apiRequest(`/workspaces/${SLUG}/members`, accessToken);
+    const devMember = (members?.members || members || []).find(
+      (m: any) => (m.email || m.user?.email) === TEST_USERS.developer.email
     );
-    expect(listStatus).toBe(200);
+    if (!devMember) { test.skip(); return; }
+    const userId = devMember.userId || devMember.user?.userId;
+
+    const { status } = await apiRequest(`/workspaces/${SLUG}/members/${userId}`, accessToken, {
+      method: 'PATCH',
+      body: JSON.stringify({ role: 'admin' }),
+    });
+    expect(status).toBe(200);
+
+    const { data: after } = await apiRequest(`/workspaces/${SLUG}/members`, accessToken);
+    const updated = (after?.members || after || []).find((m: any) => (m.userId || m.user?.userId) === userId);
+    expect(updated?.role).toBe('admin');
+
+    await apiRequest(`/workspaces/${SLUG}/members/${userId}`, accessToken, {
+      method: 'PATCH', body: JSON.stringify({ role: 'member' }),
+    }); // restore
   });
 
   test('admin CANNOT change member roles (API 403)', async () => {

@@ -57,6 +57,19 @@ test.describe('Project CRUD', () => {
     );
     expect(status).toBe(200);
   });
+  test('archive project succeeds via API', async () => {
+    const accessToken = getAuthToken('owner');
+    
+    // Create a disposable project to archive
+    const uniqueKey = `A${Date.now().toString().slice(-4)}`;
+    const { data: newProj, status: createStatus } = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken, {
+      method: 'POST', body: JSON.stringify({ name: 'To Archive', key: uniqueKey })
+    });
+    if (createStatus !== 201) { test.skip(); return; }
+
+    const { status } = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}/archive`, accessToken, { method: 'PATCH' });
+    expect(status).toBe(200);
+  });
 
   test('can view project board (UI)', async ({ ownerPage }) => {
     await ownerPage.goto(ROUTES.projectBoard(SLUG, KEY));

@@ -114,4 +114,38 @@ test.describe('Project Members', () => {
       }
     );
   });
+
+  test('remove project member via API', async () => {
+    // Register a temp user
+    const tempEmail = `rm-proj-${Date.now()}@demo.com`;
+    const regRes = await fetch(`${process.env.API_URL || 'http://localhost:3001/api'}/auth/register`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: tempEmail, fullName: 'RM Proj Test', password: 'password123' }),
+    });
+    expect(regRes.ok).toBe(true);
+    const { user: { userId } } = await regRes.json();
+
+    const ownerLogin = await apiLogin(TEST_USERS.owner.email);
+    
+    // Add to workspace
+    await apiRequest(`/workspaces/${SLUG}/invite`, ownerLogin.accessToken, {
+      method: 'POST', body: JSON.stringify({ email: tempEmail, role: 'member' }),
+    });
+
+    const tempLogin = await fetch(`${process.env.API_URL || 'http://localhost:3001/api'}/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: tempEmail, password: 'password123' }),
+    });
+    const { accessToken: tempToken } = await tempLogin.json();
+    await apiRequest(`/workspaces/${SLUG}/invites/accept`, tempToken, { method: 'POST' });
+
+    // Add to project as viewer
+    await apiRequest(`/workspaces/${SLUG}/projects/${KEY}/members`, ownerLogin.accessToken, {
+      method: 'POST', body: JSON.stringify({ userId, role: 'viewer' }),
+    });
+
+    // Now remove them
+    const { status } = await apiRequest(`/workspaces/${SLUG}/projects/${KEY}/members/${userId}`, ownerLogin.accessToken, { method: 'DELETE' });
+    expect([200, 204]).toContain(status);
+  });
 });
