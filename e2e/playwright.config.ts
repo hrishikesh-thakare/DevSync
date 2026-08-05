@@ -13,8 +13,8 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI
-    ? [['html', { open: 'never' }], ['github']]
-    : [['html', { open: 'on-failure' }]],
+    ? [['list'], ['github'], ['html', { open: 'never' }]]
+    : [['list'], ['html', { open: 'on-failure' }]],
 
   // Global settings
   use: {
