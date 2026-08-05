@@ -25,7 +25,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -73,6 +73,8 @@ jobs:
           JWT_SECRET=${{ secrets.JWT_SECRET || 'e2e-test-jwt-secret-do-not-use-in-production' }}
           ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY || 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2' }}
           BACKEND_URL=http://localhost:3001
+          SUPABASE_URL=http://localhost:3001
+          SUPABASE_SERVICE_ROLE_KEY=test-key-do-not-use-in-production
           EOF
 
       - name: Create frontend .env for CI
@@ -92,21 +94,34 @@ jobs:
       # ─── Start Services ─────────────────────────────────────────────────
       - name: Start backend server
         working-directory: backend
-        run: npm run dev &
+        run: nohup npm run dev > backend.log 2>&1 &
         env:
           PORT: 3001
 
       - name: Start frontend server
         working-directory: frontend
-        run: npm run dev &
+        run: nohup npm run dev > frontend.log 2>&1 &
 
       - name: Wait for servers to be ready
         run: |
           echo "Waiting for backend..."
-          for i in $(seq 1 30); do
-            curl -s http://localhost:3001/api/health > /dev/null 2>&1 && break
-            sleep 2
+          max_retries=60
+          retries=0
+          while [ $retries -lt $max_retries ]; do
+            if curl -s http://localhost:3001/api/health > /dev/null 2>&1; then
+              echo "Backend is ready!"
+              break
+            fi
+            retries=$((retries + 1))
+            sleep 1
           done
+          
+          if [ $retries -eq $max_retries ]; then
+            echo "Backend failed to start. Logs:"
+            cat backend/backend.log || true
+            exit 1
+          fi
+
           echo "Waiting for frontend..."
           for i in $(seq 1 30); do
             curl -s http://localhost:5173 > /dev/null 2>&1 && break
