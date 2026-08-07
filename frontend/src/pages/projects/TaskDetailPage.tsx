@@ -6,8 +6,8 @@ import { format } from 'date-fns';
 import clsx from 'clsx';
 import { useAuthStore } from '../../store/auth.js';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
-import { MessageSquare, GitPullRequest, AlertCircle, GitBranch, PlayCircle, ExternalLink } from 'lucide-react';
-import { CreateBranchModal } from './github/CreateBranchModal.js';
+import { MessageSquare, GitPullRequest, AlertCircle, GitBranch, ExternalLink, Plus, Copy, Check } from 'lucide-react';
+import { CreatePRModal } from './github/CreatePRModal.js';
 
 const STATUSES = [
   { value: 'TODO', label: 'To Do' },
@@ -31,13 +31,79 @@ const ISSUE_TYPES = [
   { value: 'subtask', label: 'Subtask' },
 ];
 
+interface ProjectMember {
+  userId: string;
+  fullName: string;
+  role: string;
+  avatarUrl?: string;
+}
+
+interface SprintItem {
+  sprintId: string;
+  name: string;
+}
+
+interface TaskItem {
+  taskId: string;
+  taskKey: string;
+  projectId: string;
+  title: string;
+  description?: string;
+  descriptionText?: string;
+  status: string;
+  type?: string;
+  priority: string;
+  assigneeId?: string | null;
+  reporterId?: string | null;
+  sprintId?: string | null;
+  parentTaskId?: string | null;
+  points?: number | null;
+  dueDate?: string | null;
+  labels?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface GithubActivityCommit {
+  commitSha: string;
+  messageHeadline: string;
+  authorName?: string;
+  committedAt: string;
+  url?: string;
+}
+
+interface GithubActivityPR {
+  id: string;
+  prNumber: number;
+  title: string;
+  state: string;
+  htmlUrl?: string;
+  headBranch?: string;
+  baseBranch?: string;
+}
+
+interface GithubActivityIssue {
+  id: string;
+  githubIssueNumber: number;
+  title: string;
+  state: string;
+  htmlUrl?: string;
+}
+
+interface GithubActivityBranch {
+  id: string;
+  branchName: string;
+  isDeleted?: boolean;
+  htmlUrl?: string;
+}
+
 export const TaskDetailPage = () => {
   const { slug, key, taskKey } = useParams();
   const navigate = useNavigate();
-  const [task, setTask] = useState<any>(null);
+  const [task, setTask] = useState<TaskItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [members, setMembers] = useState<any[]>([]);
-  const [sprints, setSprints] = useState<any[]>([]);
+  const [members, setMembers] = useState<ProjectMember[]>([]);
+  const [sprints, setSprints] = useState<SprintItem[]>([]);
 
   // Auth and permissions
   const currentUser = useAuthStore(state => state.user);
@@ -54,21 +120,29 @@ export const TaskDetailPage = () => {
   const [isSaving, setIsSaving] = useState(false);
 
   // New feature states
-  const [allTasks, setAllTasks] = useState<any[]>([]);
+  const [allTasks, setAllTasks] = useState<TaskItem[]>([]);
   const [githubActivity, setGithubActivity] = useState<{
-    commits: any[];
-    pullRequests: any[];
-    issues: any[];
-    branches: any[];
+    commits: GithubActivityCommit[];
+    pullRequests: GithubActivityPR[];
+    issues: GithubActivityIssue[];
+    branches: GithubActivityBranch[];
   }>({ commits: [], pullRequests: [], issues: [], branches: [] });
-  const [showCreateBranch, setShowCreateBranch] = useState(false);
+  const [showCreatePR, setShowCreatePR] = useState(false);
+  const [copiedBranch, setCopiedBranch] = useState(false);
   const { channels } = useCurrentWorkspaceStore();
 
   const fetchGithubActivity = async () => {
     try {
-      const cRes = await apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}/github-activity`);
-      setGithubActivity(cRes.activity || { commits: [], pullRequests: [], issues: [], branches: [] });
-    } catch (e) {}
+      const cRes = await apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}/github/github-activity`);
+      setGithubActivity({
+        commits: cRes.commits || [],
+        pullRequests: cRes.pullRequests || [],
+        issues: cRes.issues || [],
+        branches: cRes.branches || []
+      });
+    } catch (err: unknown) {
+      console.debug('Failed to fetch GitHub activity:', err);
+    }
   };
 
   useEffect(() => {
@@ -82,11 +156,17 @@ export const TaskDetailPage = () => {
           apiFetch(`/workspaces/${slug}/projects/${key}/tasks`),
         ]);
 
-        let commitsData = [];
         try {
-          const cRes = await apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}/github-activity`);
-          setGithubActivity(cRes.activity || { commits: [], pullRequests: [], issues: [], branches: [] });
-        } catch (e) {}
+          const cRes = await apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}/github/github-activity`);
+          setGithubActivity({
+            commits: cRes.commits || [],
+            pullRequests: cRes.pullRequests || [],
+            issues: cRes.issues || [],
+            branches: cRes.branches || []
+          });
+        } catch (err: unknown) {
+          console.debug('Failed to fetch initial GitHub activity:', err);
+        }
         setTask(taskData.task);
         setEditTitle(taskData.task.title);
         const descVal = typeof taskData.task.description === 'string' ? taskData.task.description : taskData.task.descriptionText || '';
@@ -103,35 +183,35 @@ export const TaskDetailPage = () => {
     if (slug && key && taskKey) fetchTask();
   }, [slug, key, taskKey]);
 
-  const patchTask = async (fields: Record<string, any>) => {
-    if (!canEditTask) return;
+  const patchTask = async (fields: Record<string, unknown>) => {
     setIsSaving(true);
     try {
       await apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}`, {
         method: 'PATCH',
         body: JSON.stringify(fields),
       });
-      setTask((prev: any) => ({ ...prev, ...fields }));
-    } catch (err: any) {
-      alert(err.message || 'Failed to update task');
+      setTask((prev) => (prev ? { ...prev, ...fields } as TaskItem : null));
+    } catch (err: unknown) {
+      console.error('Failed to update task', err);
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDeleteTask = async () => {
-    if (!canEditTask) return;
-    if (!confirm('Are you sure you want to delete this task? This cannot be undone.')) return;
+    if (!window.confirm('Are you sure you want to delete this task?')) return;
     try {
-      await apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}`, { method: 'DELETE' });
-      navigate(`/w/${slug}/projects/${key}`);
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete task');
+      await apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}`, {
+        method: 'DELETE',
+      });
+      navigate(`/w/${slug}/projects/${key}/board`);
+    } catch (err: unknown) {
+      console.error('Failed to delete task', err);
     }
   };
 
   const handleTitleSave = () => {
-    if (!canEditTask) return;
+    if (!canEditTask || !task) return;
     if (editTitle.trim() && editTitle !== task.title) {
       patchTask({ title: editTitle.trim() });
     }
@@ -139,15 +219,16 @@ export const TaskDetailPage = () => {
   };
 
   const handleDescSave = () => {
-    if (!canEditTask) return;
-    if (editDesc !== (task.description || '')) {
+    if (!canEditTask || !task) return;
+    const currentDesc = typeof task.description === 'string' ? task.description : task.descriptionText || '';
+    if (editDesc !== currentDesc) {
       patchTask({ description: editDesc });
     }
     setIsEditingDesc(false);
   };
 
   const addLabel = () => {
-    if (!canEditTask) return;
+    if (!canEditTask || !task) return;
     if (!labelInput.trim()) return;
     const currentLabels = task.labels || [];
     if (!currentLabels.includes(labelInput.trim())) {
@@ -158,7 +239,7 @@ export const TaskDetailPage = () => {
   };
 
   const removeLabel = (label: string) => {
-    if (!canEditTask) return;
+    if (!canEditTask || !task) return;
     const newLabels = (task.labels || []).filter((l: string) => l !== label);
     patchTask({ labels: newLabels });
   };
@@ -216,12 +297,6 @@ export const TaskDetailPage = () => {
             className="text-sm font-medium px-3 py-1.5 bg-gray-800 text-gray-300 hover:text-white hover:bg-gray-700 rounded transition-colors flex items-center"
           >
             <MessageSquare className="w-4 h-4 mr-1.5" /> Discuss
-          </button>
-          <button
-            onClick={() => setShowCreateBranch(true)}
-            className="text-sm font-medium px-3 py-1.5 bg-blue-600 text-white hover:bg-blue-500 rounded transition-colors flex items-center"
-          >
-            <PlayCircle className="w-4 h-4 mr-1.5" /> Start Work
           </button>
         </div>
       </div>
@@ -369,7 +444,7 @@ export const TaskDetailPage = () => {
                   className="bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-1 text-sm focus:outline-none max-w-[160px] disabled:opacity-50"
                 >
                   <option value="">Unassigned</option>
-                  {members.map((m: any) => (
+                  {members.map((m: ProjectMember) => (
                     <option key={m.userId} value={m.userId}>{m.fullName}</option>
                   ))}
                 </select>
@@ -410,7 +485,7 @@ export const TaskDetailPage = () => {
                   className="bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-1 text-sm focus:outline-none max-w-[160px] disabled:opacity-50"
                 >
                   <option value="">Backlog</option>
-                  {sprints.map((s: any) => (
+                  {sprints.map((s: SprintItem) => (
                     <option key={s.sprintId} value={s.sprintId}>{s.name}</option>
                   ))}
                 </select>
@@ -426,7 +501,7 @@ export const TaskDetailPage = () => {
                   className="bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-1 text-sm focus:outline-none max-w-[160px] disabled:opacity-50"
                 >
                   <option value="">None</option>
-                  {allTasks.filter(t => t.taskId !== task.taskId).map((t: any) => (
+                  {allTasks.filter(t => t.taskId !== task.taskId).map((t: TaskItem) => (
                     <option key={t.taskId} value={t.taskId}>{t.taskKey} - {t.title.substring(0, 20)}...</option>
                   ))}
                 </select>
@@ -484,9 +559,52 @@ export const TaskDetailPage = () => {
                     <GitBranch className="w-4 h-4 text-gray-400" />
                     <span className="text-sm text-gray-300 font-semibold">GitHub Activity</span>
                   </div>
+                  {canEditTask && (
+                    <div className="flex items-center space-x-1">
+
+                      <button
+                        onClick={() => setShowCreatePR(true)}
+                        className="text-[10px] text-gray-400 hover:text-white hover:bg-gray-800 px-1.5 py-0.5 rounded transition-colors flex items-center"
+                        title="Create Pull Request"
+                      >
+                        <Plus className="w-3 h-3 mr-0.5" />
+                        <GitPullRequest className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-4">
+                  {/* Smart Branch Suggestion */}
+                  <div className="bg-gray-900 border border-gray-800 rounded p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center text-xs text-gray-500 font-medium uppercase tracking-wider">
+                        <GitBranch className="w-3 h-3 mr-1" /> Smart Branch Name
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <code className="flex-1 bg-gray-950 border border-gray-800 text-[10px] text-gray-300 px-2 py-1.5 rounded font-mono truncate">
+                        {`feature/${task.taskKey}-${task.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`}
+                      </code>
+                      <button
+                        onClick={() => {
+                          const branchName = `feature/${task.taskKey}-${task.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`;
+                          navigator.clipboard.writeText(`git checkout -b ${branchName}`);
+                          setCopiedBranch(true);
+                          setTimeout(() => setCopiedBranch(false), 2000);
+                        }}
+                        className="text-[10px] text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 px-2 py-1.5 rounded transition-colors flex items-center flex-shrink-0"
+                        title="Copy git checkout command"
+                      >
+                        {copiedBranch ? <Check className="w-3 h-3 mr-1 text-green-400" /> : <Copy className="w-3 h-3 mr-1" />}
+                        {copiedBranch ? 'Copied' : 'Copy'}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-2">
+                      One-click copy to enable sync, linking, and traceability
+                    </p>
+                  </div>
+
                   {/* Pull Requests */}
                   {githubActivity.pullRequests?.length > 0 && (
                     <div>
@@ -602,14 +720,13 @@ export const TaskDetailPage = () => {
         </div>
 
       </div>
-      {showCreateBranch && (
-        <CreateBranchModal
+      {showCreatePR && (
+        <CreatePRModal
           slug={slug as string}
           keyStr={key as string}
-          initialTaskId={task.taskId}
-          onClose={() => setShowCreateBranch(false)}
+          onClose={() => setShowCreatePR(false)}
           onCreated={() => {
-            setShowCreateBranch(false);
+            setShowCreatePR(false);
             fetchGithubActivity();
           }}
         />

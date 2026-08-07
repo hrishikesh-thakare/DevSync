@@ -9,15 +9,17 @@ import {
   getGithubCiRuns,
   getTaskCommits,
   handleGithubWebhook,
-  createGithubIssue,
   getGithubIssues,
   addIssueComment,
+  addPrComment,
   createGithubPullRequest,
   getGithubPullRequests,
   createGithubBranch,
   getGithubBranches,
   retriggerWorkflow,
   getTaskGithubActivity,
+  getIssueComments,
+  getWorkflowRunLogs,
 } from './github.controller.js';
 import express from 'express';
 
@@ -34,14 +36,18 @@ githubConfigRouter.get('/commits', requireProjectRole(['project_admin', 'develop
 githubConfigRouter.get('/ci', requireProjectRole(['project_admin', 'developer', 'viewer']), getGithubCiRuns);
 
 // ─── NEW: Issues, Pull Requests, Branches, CI Re-run ────────────────────────
-githubConfigRouter.post('/issues', requireProjectRole(['project_admin', 'developer']), createGithubIssue);
+
 githubConfigRouter.get('/issues', requireProjectRole(['project_admin', 'developer', 'viewer']), getGithubIssues);
 githubConfigRouter.post('/issues/:issueNumber/comments', requireProjectRole(['project_admin', 'developer']), addIssueComment);
+githubConfigRouter.get('/issues/:issueNumber/comments', requireProjectRole(['project_admin', 'developer', 'viewer']), getIssueComments);
 githubConfigRouter.post('/pull-requests', requireProjectRole(['project_admin', 'developer']), createGithubPullRequest);
 githubConfigRouter.get('/pull-requests', requireProjectRole(['project_admin', 'developer', 'viewer']), getGithubPullRequests);
+githubConfigRouter.post('/pull-requests/:prNumber/comments', requireProjectRole(['project_admin', 'developer']), addPrComment);
+githubConfigRouter.get('/pull-requests/:prNumber/comments', requireProjectRole(['project_admin', 'developer', 'viewer']), getIssueComments);
 githubConfigRouter.post('/branches', requireProjectRole(['project_admin', 'developer']), createGithubBranch);
 githubConfigRouter.get('/branches', requireProjectRole(['project_admin', 'developer', 'viewer']), getGithubBranches);
 githubConfigRouter.post('/ci/:runId/rerun', requireProjectRole(['project_admin', 'developer']), retriggerWorkflow);
+githubConfigRouter.get('/ci/:runId/logs', requireProjectRole(['project_admin', 'developer', 'viewer']), getWorkflowRunLogs);
 
 // ─── Webhook routes for GitHub payloads ──────────────────────────────────────
 // Mounted at: /api/webhooks/github
@@ -57,10 +63,11 @@ githubTaskRouter.get('/commits', requireProjectRole(['project_admin', 'developer
 githubTaskRouter.get('/github-activity', requireProjectRole(['project_admin', 'developer', 'viewer']), getTaskGithubActivity);
 
 // ─── User-level OAuth routes ────────────────────────────────────────────────
-import { exchangeGithubCode, getUserGithubRepos, getGithubOauthUrl } from './github.oauth.controller.js';
+import { exchangeGithubCode, getUserGithubRepos, getGithubOauthUrl, disconnectUserGithub } from './github.oauth.controller.js';
 export const githubUserRouter = Router();
 githubUserRouter.use(requireAuth);
 githubUserRouter.get('/oauth/url', getGithubOauthUrl);
 githubUserRouter.post('/oauth/exchange', exchangeGithubCode);
 githubUserRouter.get('/user/repos', getUserGithubRepos);
+githubUserRouter.delete('/user/disconnect', disconnectUserGithub);
 

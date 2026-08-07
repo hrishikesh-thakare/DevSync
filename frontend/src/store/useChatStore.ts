@@ -10,14 +10,17 @@ interface Channel {
   type: 'public' | 'private' | 'dm';
 }
 
-interface Message {
-  id: string;
+export interface Message {
+  messageId: string;
   channelId: string;
-  senderId: string;
-  body: string;
+  authorId?: string;
+  authorName?: string;
+  authorAvatar?: string;
+  bodyText?: string;
   createdAt: string;
   replyCount: number;
   threadId: string | null;
+  [key: string]: unknown;
 }
 
 interface ChatState {
@@ -32,6 +35,9 @@ interface ChatState {
   fetchThreadReplies: (channelId: string, messageId: string) => Promise<void>;
   sendMessage: (channelId: string, body: string, threadId?: string) => Promise<void>;
   uploadFile: (file: File) => Promise<{ fileId: string, filename: string } | null>;
+  joinChannel: (_slug?: string, channelId?: string) => void;
+  leaveChannel: (_slug?: string, _channelId?: string) => void;
+  removeMessage: (messageId: string, threadId?: string | null) => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -40,16 +46,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   threads: {},
   isLoading: false,
+  joinChannel: (_slug, channelId) => {
+    if (channelId) get().fetchMessages(channelId);
+  },
+  leaveChannel: (_slug, _channelId) => {},
+  removeMessage: (messageId) => {
+    set((state) => {
+      const newMessages = state.messages.filter((m) => m.messageId !== messageId);
+      const newThreads = { ...state.threads };
+      for (const parentId in newThreads) {
+        newThreads[parentId] = newThreads[parentId].filter((m) => m.messageId !== messageId);
+      }
+      return { messages: newMessages, threads: newThreads };
+    });
+  },
 
   fetchChannels: async () => {
-    const workspace = useWorkspaceStore.getState().currentWorkspace;
-    if (!workspace) return;
+    const slug = useWorkspaceStore.getState().currentWorkspace?.slug || useCurrentWorkspaceStore.getState().slug;
+    if (!slug) return;
 
     set({ isLoading: true });
     try {
-      const data = await apiFetch(`/workspaces/${workspace.slug}/channels`);
+      const data = await apiFetch(`/workspaces/${slug}/channels`);
       
-      const mappedChannels = data.channels.map((c: any) => ({
+      const mappedChannels = data.channels.map((c: { channelId: string; name: string; type?: 'public' | 'private' | 'dm' }) => ({
         id: c.channelId,
         name: c.name,
         type: c.type || 'public'
@@ -76,46 +96,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   fetchMessages: async (channelId) => {
-    const workspace = useWorkspaceStore.getState().currentWorkspace;
-    if (!workspace) return;
+    const slug = useWorkspaceStore.getState().currentWorkspace?.slug || useCurrentWorkspaceStore.getState().slug;
+    if (!slug) return;
 
     try {
-      const data = await apiFetch(`/workspaces/${workspace.slug}/channels/${channelId}/messages`);
-      const mapped = data.messages.map((m: any) => ({
-        id: m.messageId,
-        channelId: m.channelId,
-        senderId: m.authorId || m.senderId,
-        body: m.bodyText || '',
-        createdAt: m.createdAt,
-        replyCount: m.replyCount || 0,
-        threadId: m.threadId || null
-      }));
-      set({ messages: mapped });
+      const data = await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages`);
+      set({ messages: data.messages || [] });
     } catch (err) {
       console.error('Failed to fetch messages:', err);
     }
   },
 
   fetchThreadReplies: async (channelId, messageId) => {
-    const workspace = useWorkspaceStore.getState().currentWorkspace;
-    if (!workspace) return;
+    const slug = useWorkspaceStore.getState().currentWorkspace?.slug || useCurrentWorkspaceStore.getState().slug;
+    if (!slug) return;
 
     try {
-      const data = await apiFetch(`/workspaces/${workspace.slug}/channels/${channelId}/messages/${messageId}/thread`);
-      const mapped = data.replies.map((m: any) => ({
-        id: m.messageId,
-        channelId: channelId,
-        senderId: m.authorId || m.senderId,
-        body: m.bodyText || '',
-        createdAt: m.createdAt,
-        replyCount: 0,
-        threadId: m.threadId || messageId
-      }));
+      const data = await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages/${messageId}/thread`);
       
       set((state) => ({
         threads: {
           ...state.threads,
-          [messageId]: mapped
+          [messageId]: data.replies || []
         }
       }));
     } catch (err) {
@@ -124,11 +126,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   sendMessage: async (channelId, body, threadId) => {
-    const workspace = useWorkspaceStore.getState().currentWorkspace;
-    if (!workspace) return;
+    const slug = useWorkspaceStore.getState().currentWorkspace?.slug || useCurrentWorkspaceStore.getState().slug;
+    if (!slug) return;
 
     try {
-      await apiFetch(`/workspaces/${workspace.slug}/channels/${channelId}/messages`, {
+      await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages`, {
         method: 'POST',
         body: JSON.stringify({ bodyText: body, threadId }),
       });

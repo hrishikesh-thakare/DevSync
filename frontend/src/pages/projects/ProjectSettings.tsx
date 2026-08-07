@@ -115,6 +115,9 @@ export const ProjectSettings = () => {
         options: {
           scopes: 'repo admin:repo_hook',
           redirectTo: `${window.location.origin}/github/callback?returnTo=/w/${slug}/projects/${key}/settings`,
+          queryParams: {
+            prompt: 'consent',
+          }
         },
       });
       if (error) throw error;
@@ -161,6 +164,17 @@ export const ProjectSettings = () => {
       alert(err.message || 'Failed to disconnect repository.');
     } finally {
       setIsDisconnecting(false);
+    }
+  };
+
+  const handleDisconnectUserGithub = async () => {
+    if (!confirm('This will disconnect your personal GitHub account from DevSync. Proceed?')) return;
+    try {
+      await apiFetch(`/github/user/disconnect`, { method: 'DELETE' });
+      setIsGithubAuthorized(false);
+      setUserRepos([]);
+    } catch (err: any) {
+      alert(err.message || 'Failed to disconnect personal GitHub account.');
     }
   };
 
@@ -304,12 +318,20 @@ export const ProjectSettings = () => {
                       {isConnecting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                       {isConnecting ? 'Connecting...' : 'Link Repository'}
                     </button>
-                    <button 
-                      onClick={handleAuthorizeGithub}
-                      className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
-                    >
-                      Reconnect Account / Refresh Repos
-                    </button>
+                    <div className="flex flex-col items-end space-y-2">
+                      <button 
+                        onClick={handleAuthorizeGithub}
+                        className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                      >
+                        Refresh Repositories
+                      </button>
+                      <button 
+                        onClick={handleDisconnectUserGithub}
+                        className="text-xs text-red-500/80 hover:text-red-400 transition-colors"
+                      >
+                        Disconnect GitHub Account
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

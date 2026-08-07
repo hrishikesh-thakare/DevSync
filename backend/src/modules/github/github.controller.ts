@@ -327,6 +327,7 @@ export const handleGithubWebhook = async (req: Request, res: Response): Promise<
       .select({
         projectId: githubConnections.projectId,
         webhookSecret: githubConnections.webhookSecret,
+        defaultBranch: githubConnections.defaultBranch,
       })
       .from(githubConnections)
       .where(eq(githubConnections.projectId, projectId))
@@ -360,7 +361,7 @@ export const handleGithubWebhook = async (req: Request, res: Response): Promise<
     } else if (event === 'workflow_run') {
       await handleWorkflowRunEvent(connection.projectId, payload);
     } else if (event === 'pull_request') {
-      await handlePullRequestEvent(connection.projectId, payload);
+      await handlePullRequestEvent(connection.projectId, payload, connection.defaultBranch);
     } else if (event === 'issues') {
       await handleIssuesEvent(connection.projectId, payload);
     } else if (event === 'create' || event === 'delete') {
@@ -425,13 +426,22 @@ const handlePushEvent = async (projectId: string, payload: any) => {
     const upperMessage = message.toUpperCase();
     const taskKeyRegex = /\b([A-Z]{1,10}-\d+)\b/g;
     const matches = [...upperMessage.matchAll(taskKeyRegex)];
-    const taskKeys = [...new Set(matches.map(m => m[1]))]; // deduplicate
+    let taskKeys = [...new Set(matches.map(m => m[1]))]; // deduplicate
+
+    // Also match task key from branch name
+    if (branchName) {
+      const branchTaskKeyMatch = branchName.toUpperCase().match(/\b([A-Z]{1,10}-\d+)\b/);
+      if (branchTaskKeyMatch) {
+        taskKeys.push(branchTaskKeyMatch[1]);
+        taskKeys = [...new Set(taskKeys)];
+      }
+    }
 
     if (taskKeys.length > 0) {
       // Link commit to ALL matched tasks
       for (const taskKey of taskKeys) {
         const [task] = await db
-          .select({ taskId: tasks.taskId, taskKey: tasks.taskKey, assigneeId: tasks.assigneeId, reporterId: tasks.reporterId })
+          .select({ taskId: tasks.taskId, taskKey: tasks.taskKey, status: tasks.status, assigneeId: tasks.assigneeId, reporterId: tasks.reporterId })
           .from(tasks)
           .where(
             and(
@@ -511,6 +521,20 @@ const handlePushEvent = async (projectId: string, payload: any) => {
             entityType: 'task',
             entityId: task.taskId,
             newValues: { status: 'done', commit_sha: commit.id.substring(0, 7) },
+          });
+        } else if (task.status === 'todo') {
+          // If a branch is pushed with the task ID, or a commit is linked to a todo task, move to in_progress
+          await db
+            .update(tasks)
+            .set({ status: 'in_progress', updatedAt: new Date() })
+            .where(eq(tasks.taskId, task.taskId));
+
+          await logAuditAction({
+            actorId: authorUserId,
+            action: 'task.auto_progress_by_commit',
+            entityType: 'task',
+            entityId: task.taskId,
+            newValues: { status: 'in_progress', commit_sha: commit.id.substring(0, 7) },
           });
         }
       }
@@ -851,7 +875,7 @@ const matchAuthorUserId = async (login: string | null): Promise<string | null> =
 // ═══════════════════════════════════════════════════════════════════════════
 // NEW: Webhook — Pull Request Event Handler
 // ═══════════════════════════════════════════════════════════════════════════
-const handlePullRequestEvent = async (projectId: string, payload: any) => {
+const handlePullRequestEvent = async (projectId: string, payload: any, defaultBranch: string | null) => {
   const pr = payload.pull_request;
   if (!pr) return;
 
@@ -920,7 +944,10 @@ const handlePullRequestEvent = async (projectId: string, payload: any) => {
   }
 
   // If PR is merged and linked to a task, auto-move task to "done"
-  if (state === 'merged' && taskId) {
+  // ONLY IF the target branch (baseBranch) is the default branch
+  const isDefaultBranch = defaultBranch ? baseBranch === defaultBranch : (baseBranch === 'main' || baseBranch === 'master');
+
+  if (state === 'merged' && taskId && isDefaultBranch) {
     await db.update(tasks).set({ status: 'done', updatedAt: new Date() }).where(eq(tasks.taskId, taskId));
     await logAuditAction({
       actorId: authorUserId,
@@ -929,6 +956,19 @@ const handlePullRequestEvent = async (projectId: string, payload: any) => {
       entityId: taskId,
       newValues: { status: 'done', pr_number: prNumber },
     });
+  } else if ((action === 'opened' || action === 'reopened') && taskId) {
+    // If PR is opened and linked to a task, auto-move task to "in_review"
+    const linkedTask = await findTaskByKey(projectId, taskKey!);
+    if (linkedTask && (linkedTask.status === 'todo' || linkedTask.status === 'in_progress')) {
+      await db.update(tasks).set({ status: 'in_review', updatedAt: new Date() }).where(eq(tasks.taskId, taskId));
+      await logAuditAction({
+        actorId: authorUserId,
+        action: 'task.auto_review_by_pr_open',
+        entityType: 'task',
+        entityId: taskId,
+        newValues: { status: 'in_review', pr_number: prNumber },
+      });
+    }
   }
 
   // Notifications
@@ -1095,87 +1135,6 @@ const handleBranchEvent = async (projectId: string, payload: any, event: string)
   });
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// NEW: REST API — Create GitHub Issue
-// ═══════════════════════════════════════════════════════════════════════════
-// POST /api/workspaces/:slug/projects/:key/github/issues
-export const createGithubIssue = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { projectId } = req.params as Record<string, string>;
-    const userId = req.user!.userId;
-    const { title, body, labels, taskId } = req.body;
-
-    if (!title) {
-      res.status(400).json({ error: 'Issue title is required.' });
-      return;
-    }
-
-    // Get connection + token
-    const [connection] = await db
-      .select({ githubRepoFullName: githubConnections.githubRepoFullName, githubAccessToken: githubConnections.githubAccessToken })
-      .from(githubConnections)
-      .where(eq(githubConnections.projectId, projectId))
-      .limit(1);
-
-    if (!connection || !connection.githubAccessToken) {
-      res.status(404).json({ error: 'No GitHub connection found.' });
-      return;
-    }
-
-    const token = decrypt(connection.githubAccessToken);
-
-    // Create issue on GitHub
-    const ghRes = await githubApiFetch(
-      `https://api.github.com/repos/${connection.githubRepoFullName}/issues`,
-      token,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, body: body || '', labels: labels || [] }),
-      }
-    ) as any;
-
-    if (!ghRes.ok) {
-      const errText = await ghRes.text();
-      console.error('GitHub create issue error:', ghRes.status, errText);
-      res.status(502).json({ error: 'Failed to create issue on GitHub.' });
-      return;
-    }
-
-    const ghIssue = await ghRes.json() as any;
-
-    // Get user's GitHub login
-    const [user] = await db.select({ githubLogin: users.githubLogin }).from(users).where(eq(users.userId, userId)).limit(1);
-
-    // Save locally
-    const [saved] = await db.insert(githubIssues).values({
-      projectId,
-      taskId: taskId || null,
-      githubIssueNumber: ghIssue.number,
-      githubIssueId: ghIssue.id,
-      title: ghIssue.title,
-      body: ghIssue.body || '',
-      state: ghIssue.state,
-      htmlUrl: ghIssue.html_url,
-      authorGithubLogin: user?.githubLogin || null,
-      authorUserId: userId,
-      labels: (ghIssue.labels || []).map((l: any) => l.name),
-    }).returning();
-
-    await logAuditAction({
-      actorId: userId,
-      action: 'github.issue_created',
-      entityType: 'project',
-      entityId: projectId,
-      newValues: { issue_number: ghIssue.number, title },
-    });
-
-    res.status(201).json({ message: 'Issue created on GitHub.', issue: saved });
-  } catch (err) {
-    console.error('Create GitHub issue error:', err);
-    res.status(500).json({ error: 'Server error creating GitHub issue.' });
-  }
-};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NEW: REST API — List GitHub Issues
@@ -1279,6 +1238,114 @@ export const addIssueComment = async (req: Request, res: Response): Promise<void
   } catch (err) {
     console.error('Add issue comment error:', err);
     res.status(500).json({ error: 'Server error adding comment.' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW: REST API — Get Comments for GitHub Issue or PR
+// ═══════════════════════════════════════════════════════════════════════════
+// GET /api/workspaces/:slug/projects/:key/github/issues/:issueNumber/comments
+// GET /api/workspaces/:slug/projects/:key/github/pull-requests/:prNumber/comments
+export const getIssueComments = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { projectId, issueNumber, prNumber } = req.params as Record<string, string>;
+    const number = issueNumber || prNumber;
+
+    const [connection] = await db
+      .select({ githubRepoFullName: githubConnections.githubRepoFullName, githubAccessToken: githubConnections.githubAccessToken })
+      .from(githubConnections)
+      .where(eq(githubConnections.projectId, projectId))
+      .limit(1);
+
+    if (!connection || !connection.githubAccessToken) {
+      res.status(404).json({ error: 'No GitHub connection found.' });
+      return;
+    }
+
+    const token = decrypt(connection.githubAccessToken);
+
+    const ghRes = await githubApiFetch(
+      `https://api.github.com/repos/${connection.githubRepoFullName}/issues/${number}/comments`,
+      token
+    ) as any;
+
+    if (!ghRes.ok) {
+      const errText = await ghRes.text();
+      console.error('GitHub get comments error:', ghRes.status, errText);
+      res.status(502).json({ error: 'Failed to fetch comments from GitHub.' });
+      return;
+    }
+
+    const comments = await ghRes.json() as any[];
+    const formattedComments = comments.map(c => ({
+      id: c.id,
+      body: c.body,
+      user: {
+        login: c.user.login,
+        avatarUrl: c.user.avatar_url,
+      },
+      createdAt: c.created_at,
+      updatedAt: c.updated_at,
+      htmlUrl: c.html_url,
+    }));
+
+    res.json({ comments: formattedComments });
+  } catch (err) {
+    console.error('Get issue comments error:', err);
+    res.status(500).json({ error: 'Server error fetching comments.' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW: REST API — Add Comment to GitHub Pull Request
+// ═══════════════════════════════════════════════════════════════════════════
+// POST /api/workspaces/:slug/projects/:key/github/pull-requests/:prNumber/comments
+export const addPrComment = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { projectId, prNumber } = req.params as Record<string, string>;
+    const { body } = req.body;
+
+    if (!body) {
+      res.status(400).json({ error: 'Comment body is required.' });
+      return;
+    }
+
+    const [connection] = await db
+      .select({ githubRepoFullName: githubConnections.githubRepoFullName, githubAccessToken: githubConnections.githubAccessToken })
+      .from(githubConnections)
+      .where(eq(githubConnections.projectId, projectId))
+      .limit(1);
+
+    if (!connection || !connection.githubAccessToken) {
+      res.status(404).json({ error: 'No GitHub connection found.' });
+      return;
+    }
+
+    const token = decrypt(connection.githubAccessToken);
+
+    // GitHub's API treats PRs as issues — same comment endpoint works
+    const ghRes = await githubApiFetch(
+      `https://api.github.com/repos/${connection.githubRepoFullName}/issues/${prNumber}/comments`,
+      token,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body }),
+      }
+    ) as any;
+
+    if (!ghRes.ok) {
+      const errText = await ghRes.text();
+      console.error('GitHub add PR comment error:', ghRes.status, errText);
+      res.status(502).json({ error: 'Failed to add comment on GitHub PR.' });
+      return;
+    }
+
+    const comment = await ghRes.json() as any;
+    res.status(201).json({ message: 'Comment posted on GitHub PR.', comment: { id: comment.id, body: comment.body, html_url: comment.html_url } });
+  } catch (err) {
+    console.error('Add PR comment error:', err);
+    res.status(500).json({ error: 'Server error adding PR comment.' });
   }
 };
 
@@ -1640,16 +1707,33 @@ export const retriggerWorkflow = async (req: Request, res: Response): Promise<vo
 
     const token = decrypt(connection.githubAccessToken);
 
-    const ghRes = await githubApiFetch(
-      `https://api.github.com/repos/${connection.githubRepoFullName}/actions/runs/${runId}/rerun`,
+    // Try rerun-failed-jobs first, if that fails try full rerun
+    let ghRes = await githubApiFetch(
+      `https://api.github.com/repos/${connection.githubRepoFullName}/actions/runs/${runId}/rerun-failed-jobs`,
       token,
       { method: 'POST' }
     ) as any;
 
-    if (!ghRes.ok && ghRes.status !== 201) {
+    if (!ghRes.ok && (ghRes.status === 404 || ghRes.status === 422)) {
+      // Fallback to full workflow rerun
+      ghRes = await githubApiFetch(
+        `https://api.github.com/repos/${connection.githubRepoFullName}/actions/runs/${runId}/rerun`,
+        token,
+        { method: 'POST' }
+      ) as any;
+    }
+
+    if (!ghRes.ok && ghRes.status !== 201 && ghRes.status !== 202) {
       const errText = await ghRes.text();
+      let errMsg = 'Failed to re-run workflow on GitHub.';
+      try {
+        const parsed = JSON.parse(errText);
+        if (parsed.message) errMsg = `GitHub Error: ${parsed.message}`;
+      } catch {
+        if (errText) errMsg = `GitHub Error: ${errText}`;
+      }
       console.error('GitHub rerun error:', ghRes.status, errText);
-      res.status(502).json({ error: 'Failed to re-run workflow on GitHub.' });
+      res.status(ghRes.status || 502).json({ error: errMsg });
       return;
     }
 
@@ -1665,6 +1749,99 @@ export const retriggerWorkflow = async (req: Request, res: Response): Promise<vo
   } catch (err) {
     console.error('Retrigger workflow error:', err);
     res.status(500).json({ error: 'Server error re-running workflow.' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW: REST API — Get GitHub CI Logs
+// ═══════════════════════════════════════════════════════════════════════════
+// GET /api/workspaces/:slug/projects/:key/github/ci/:runId/logs
+export const getWorkflowRunLogs = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { projectId, runId } = req.params as Record<string, string>;
+
+    const [connection] = await db
+      .select({ githubRepoFullName: githubConnections.githubRepoFullName, githubAccessToken: githubConnections.githubAccessToken })
+      .from(githubConnections)
+      .where(eq(githubConnections.projectId, projectId))
+      .limit(1);
+
+    if (!connection || !connection.githubAccessToken) {
+      res.status(404).json({ error: 'No GitHub connection found.' });
+      return;
+    }
+
+    const token = decrypt(connection.githubAccessToken);
+
+    // 1. Fetch jobs for the run
+    const jobsRes = await githubApiFetch(
+      `https://api.github.com/repos/${connection.githubRepoFullName}/actions/runs/${runId}/jobs`,
+      token
+    ) as any;
+
+    if (!jobsRes.ok) {
+      res.status(502).json({ error: 'Failed to fetch jobs for the workflow run.' });
+      return;
+    }
+
+    const jobsData = await jobsRes.json();
+    const jobs = jobsData.jobs || [];
+
+    // Filter for failed jobs, or fallback to all jobs if none failed
+    let targetJobs = jobs.filter((j: any) => j.conclusion === 'failure');
+    if (targetJobs.length === 0) {
+      targetJobs = jobs; // just show all if none failed
+    }
+
+    // 2. Fetch logs for target jobs
+    const logsPromises = targetJobs.map(async (job: any) => {
+      try {
+        // GitHub logs endpoint redirects (302) to an S3/Azure URL.
+        // Sending GitHub Authorization header to S3 causes S3 to reject with 400 Bad Request.
+        // We use redirect: 'manual' and then fetch the redirected location without Auth header.
+        const logRes = await fetch(
+          `https://api.github.com/repos/${connection.githubRepoFullName}/actions/jobs/${job.id}/logs`,
+          {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/vnd.github+json',
+              'Authorization': `Bearer ${token}`,
+              'X-GitHub-Api-Version': '2022-11-28',
+            },
+            redirect: 'manual',
+          }
+        ) as unknown as globalThis.Response;
+
+        let rawLogs = '';
+        if (logRes.status === 302 || logRes.status === 301 || logRes.status === 307) {
+          const redirectUrl = logRes.headers.get('location');
+          if (redirectUrl) {
+            const s3Res = await fetch(redirectUrl);
+            if (s3Res.ok) {
+              rawLogs = await s3Res.text();
+            }
+          }
+        } else if (logRes.ok) {
+          rawLogs = await logRes.text();
+        }
+
+        if (!rawLogs) {
+          return { jobName: job.name, logs: 'Logs are expired, archived by GitHub, or unavailable.' };
+        }
+
+        // Clean ANSI escape sequences for crisp terminal viewing
+        const cleanLogs = rawLogs.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+        return { jobName: job.name, logs: cleanLogs };
+      } catch (e) {
+        return { jobName: job.name, logs: 'Error fetching logs.' };
+      }
+    });
+
+    const logsData = await Promise.all(logsPromises);
+    res.json({ jobs: logsData });
+  } catch (err) {
+    console.error('Get workflow run logs error:', err);
+    res.status(500).json({ error: 'Server error fetching workflow logs.' });
   }
 };
 

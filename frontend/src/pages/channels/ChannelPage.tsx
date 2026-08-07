@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { useChatStore, Message } from '../../store/chatStore.js';
+import { useChatStore, Message } from '../../store/useChatStore.js';
 
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useAuthStore } from '../../store/auth.js';
@@ -224,7 +224,7 @@ export const ChannelPage = () => {
 
   const handleSendMain = async (content: string) => {
     if (slug && channelId) {
-      await sendMessage(slug, channelId, content);
+      await sendMessage(channelId, content);
     }
   };
 

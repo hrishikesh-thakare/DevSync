@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useWorkspaceStore } from '../../store/workspace.js';
+import { useWorkspaceStore } from '../../store/workspaceStore.js';
 import { useAuthStore } from '../../store/auth.js';
 import { Plus, Briefcase, ChevronRight, LogOut, Loader2, ServerCrash } from 'lucide-react';
 

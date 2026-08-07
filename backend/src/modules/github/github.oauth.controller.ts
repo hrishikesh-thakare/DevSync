@@ -15,7 +15,7 @@ export const getGithubOauthUrl = (req: Request, res: Response) => {
   }
   const redirectUri = `${env.FRONTEND_URL}/github/callback`;
   const stateStr = returnTo ? Buffer.from(JSON.stringify({ returnTo })).toString('base64') : '';
-  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=repo%20admin:repo_hook&redirect_uri=${encodeURIComponent(redirectUri)}${stateStr ? `&state=${encodeURIComponent(stateStr)}` : ''}`;
+  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=repo%20workflow%20admin:repo_hook&prompt=consent&redirect_uri=${encodeURIComponent(redirectUri)}${stateStr ? `&state=${encodeURIComponent(stateStr)}` : ''}`;
   res.json({ url });
 };
 
@@ -99,5 +99,18 @@ export const getUserGithubRepos = async (req: Request, res: Response): Promise<v
   } catch (error) {
     console.error('Get GitHub repos error:', error);
     res.status(500).json({ error: 'Server error fetching GitHub repositories.' });
+  }
+};
+
+// ─── DISCONNECT USER GITHUB ─────────────────────────────────────────────────
+// DELETE /api/github/user/disconnect
+export const disconnectUserGithub = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+    await db.update(users).set({ githubAccessToken: null }).where(eq(users.userId, userId));
+    res.json({ message: 'GitHub account disconnected successfully.' });
+  } catch (error) {
+    console.error('Disconnect user GitHub error:', error);
+    res.status(500).json({ error: 'Server error disconnecting GitHub account.' });
   }
 };

@@ -38,9 +38,6 @@ app.param('taskKey', resolveTaskKey);
 import authRoutes from './modules/auth/auth.routes.js';
 app.use('/api/auth', authRoutes);
 
-import { storageRoutes } from './modules/storage/storage.routes.js';
-app.use('/api/storage', storageRoutes);
-
 import workspacesRoutes from './modules/workspaces/workspaces.routes.js';
 app.use('/api/workspaces', workspacesRoutes);
 

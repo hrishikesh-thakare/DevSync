@@ -1,52 +1,105 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { GitBranch, GitCommit, GitPullRequest, CheckCircle2, XCircle, Loader2, RefreshCw, AlertCircle, ExternalLink, ChevronLeft, ChevronRight, Plus, MessageSquare } from 'lucide-react';
+import { GitBranch, GitPullRequest, CheckCircle2, XCircle, Loader2, RefreshCw, AlertCircle, ExternalLink, Plus, MessageSquare, Terminal } from 'lucide-react';
 import { apiFetch } from '../../lib/api.js';
-import { formatDistanceToNow, format } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import clsx from 'clsx';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useAuthStore } from '../../store/auth.js';
 import { CreatePRModal } from './github/CreatePRModal.js';
-import { CreateIssueModal } from './github/CreateIssueModal.js';
-import { CreateBranchModal } from './github/CreateBranchModal.js';
+import { CommentSection } from './github/CommentSection.js';
+import { CiLogsModal } from './github/CiLogsModal.js';
+
+interface GithubConnection {
+  connectionId?: string;
+  githubRepoFullName: string;
+  defaultBranch?: string;
+  webhookStatus?: string;
+  connectedByName?: string;
+  connectedByAvatar?: string;
+  createdAt?: string;
+}
+
+interface GithubCiRun {
+  id: string;
+  workflowName?: string;
+  runId: number;
+  status: string;
+  conclusion?: string;
+  headBranch?: string;
+  headSha?: string;
+  htmlUrl?: string;
+  triggeredAt: string;
+}
+
+interface GithubPullRequest {
+  id: string;
+  prNumber: number;
+  title: string;
+  state: string;
+  htmlUrl?: string;
+  headBranch?: string;
+  baseBranch?: string;
+  taskId?: string;
+  taskKey?: string;
+}
+
+interface GithubCommit {
+  id: string;
+  commitSha: string;
+  messageHeadline: string;
+  authorName?: string;
+  authorAvatar?: string;
+  committedAt: string;
+  branchName?: string;
+  url?: string;
+  taskId?: string;
+  taskKey?: string;
+}
+
+interface GithubIssue {
+  id: string;
+  githubIssueNumber: number;
+  title: string;
+  body?: string;
+  state: 'open' | 'closed';
+  htmlUrl: string;
+  authorGithubLogin?: string;
+  labels?: string[];
+  taskId?: string;
+  taskKey?: string;
+  closedAt?: string;
+  createdAt: string;
+}
 
 export const GitHubIntegration = () => {
   const { slug, key } = useParams();
-  const [activeTab, setActiveTab] = useState<'commits' | 'prs' | 'issues' | 'branches' | 'ci'>('commits');
+  const [activeTab, setActiveTab] = useState<'prs' | 'issues' | 'ci' | 'commits'>('prs');
   
   const { isAdmin } = useCurrentWorkspaceStore();
   const currentUser = useAuthStore(state => state.user);
   const [isProjectAdmin, setIsProjectAdmin] = useState(false);
   
   // Connection State
-  const [connection, setConnection] = useState<any>(null);
+  const [connection, setConnection] = useState<GithubConnection | null>(null);
   const [isConnLoading, setIsConnLoading] = useState(true);
 
-  // Data State
-  const [commits, setCommits] = useState<any[]>([]);
-  const [commitsTotal, setCommitsTotal] = useState(0);
-  const [commitsPage, setCommitsPage] = useState(1);
-  const [commitsTotalPages, setCommitsTotalPages] = useState(1);
-  
-  const [ciRuns, setCiRuns] = useState<any[]>([]);
+  const [ciRuns, setCiRuns] = useState<GithubCiRun[]>([]);
   const [ciTotal, setCiTotal] = useState(0);
   const [ciPage, setCiPage] = useState(1);
-  const [ciTotalPages, setCiTotalPages] = useState(1);
 
-  const [prs, setPrs] = useState<any[]>([]);
+  const [prs, setPrs] = useState<GithubPullRequest[]>([]);
   const [prsTotal, setPrsTotal] = useState(0);
   const [prsPage, setPrsPage] = useState(1);
-  const [prsTotalPages, setPrsTotalPages] = useState(1);
 
-  const [issues, setIssues] = useState<any[]>([]);
+  const [issues, setIssues] = useState<GithubIssue[]>([]);
   const [issuesTotal, setIssuesTotal] = useState(0);
   const [issuesPage, setIssuesPage] = useState(1);
-  const [issuesTotalPages, setIssuesTotalPages] = useState(1);
+  const [issueStateFilter, setIssueStateFilter] = useState<'all' | 'open' | 'closed'>('all');
 
-  const [gitBranches, setGitBranches] = useState<any[]>([]);
-  const [branchesTotal, setBranchesTotal] = useState(0);
-  const [branchesPage, setBranchesPage] = useState(1);
-  const [branchesTotalPages, setBranchesTotalPages] = useState(1);
+  const [commits, setCommits] = useState<GithubCommit[]>([]);
+  const [commitsTotal, setCommitsTotal] = useState(0);
+  const [commitsPage, setCommitsPage] = useState(1);
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,22 +107,24 @@ export const GitHubIntegration = () => {
   // Filters State
   const [branchFilter, setBranchFilter] = useState('all');
   const [branchesList, setBranchesList] = useState<string[]>([]);
-  const [commitsLinkedFilter, setCommitsLinkedFilter] = useState('all'); // all, true, false
   const [ciConclusionFilter, setCiConclusionFilter] = useState('all');
   const [prStateFilter, setPrStateFilter] = useState('all'); // all, open, closed, merged
-  const [issueStateFilter, setIssueStateFilter] = useState('all'); // all, open, closed
 
   // Modals State
   const [showCreatePR, setShowCreatePR] = useState(false);
-  const [showCreateIssue, setShowCreateIssue] = useState(false);
-  const [showCreateBranch, setShowCreateBranch] = useState(false);
+
+  // Inline commenting state: tracks which issue/PR number has its comment form open
+  const [commentingOn, setCommentingOn] = useState<{ type: 'issue' | 'pr'; number: number } | null>(null);
+  
+  // CI Logs State
+  const [viewingLogsForRunId, setViewingLogsForRunId] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchRole = async () => {
       try {
         const data = await apiFetch(`/workspaces/${slug}/projects/${key}/members`);
         const members = data.members || [];
-        const myMembership = members.find((m: any) => m.userId === currentUser?.userId);
+        const myMembership = members.find((m: { userId: string; role: string }) => m.userId === currentUser?.userId);
         setIsProjectAdmin(myMembership?.role === 'project_admin');
       } catch (err) {
         console.error('Failed to fetch project members for GitHub integration', err);
@@ -92,21 +147,7 @@ export const GitHubIntegration = () => {
     if (slug && key) fetchConnection();
   }, [slug, key]);
 
-  const fetchCommits = async (page = commitsPage) => {
-    setIsLoading(true); setError(null);
-    try {
-      let url = `/workspaces/${slug}/projects/${key}/github/commits?page=${page}&limit=25`;
-      if (branchFilter !== 'all') url += `&branch=${encodeURIComponent(branchFilter)}`;
-      if (commitsLinkedFilter !== 'all') url += `&linked=${commitsLinkedFilter}`;
-
-      const res = await apiFetch(url);
-      setCommits(res.commits || []); setCommitsTotal(res.totalCount || 0);
-      setCommitsPage(res.page || 1); setCommitsTotalPages(res.totalPages || 1);
-      setBranchesList(prev => Array.from(new Set([...prev, ...(res.branches || [])])));
-    } catch (err: any) { setError(err.message || 'Failed to fetch commits'); } finally { setIsLoading(false); }
-  };
-
-  const fetchCiRuns = async (page = ciPage) => {
+  const fetchCiRuns = useCallback(async (page = ciPage) => {
     setIsLoading(true); setError(null);
     try {
       let url = `/workspaces/${slug}/projects/${key}/github/ci?page=${page}&limit=25`;
@@ -115,56 +156,69 @@ export const GitHubIntegration = () => {
 
       const res = await apiFetch(url);
       setCiRuns(res.runs || []); setCiTotal(res.totalCount || 0);
-      setCiPage(res.page || 1); setCiTotalPages(res.totalPages || 1);
+      setCiPage(res.page || 1);
       setBranchesList(prev => Array.from(new Set([...prev, ...(res.branches || [])])));
-    } catch (err: any) { setError(err.message || 'Failed to fetch CI runs'); } finally { setIsLoading(false); }
-  };
+    } catch (err: unknown) { const e = err as Error; setError(e.message || 'Failed to fetch CI runs'); } finally { setIsLoading(false); }
+  }, [slug, key, ciPage, branchFilter, ciConclusionFilter]);
 
-  const fetchPrs = async (page = prsPage) => {
+  const fetchPrs = useCallback(async (page = prsPage) => {
     setIsLoading(true); setError(null);
     try {
       let url = `/workspaces/${slug}/projects/${key}/github/pull-requests?page=${page}&limit=25`;
       if (prStateFilter !== 'all') url += `&state=${prStateFilter}`;
       const res = await apiFetch(url);
       setPrs(res.pullRequests || []); setPrsTotal(res.totalCount || 0);
-      setPrsPage(res.page || 1); setPrsTotalPages(res.totalPages || 1);
-    } catch (err: any) { setError(err.message || 'Failed to fetch PRs'); } finally { setIsLoading(false); }
-  };
+      setPrsPage(res.page || 1);
+    } catch (err: unknown) { const e = err as Error; setError(e.message || 'Failed to fetch PRs'); } finally { setIsLoading(false); }
+  }, [slug, key, prsPage, prStateFilter]);
 
-  const fetchIssues = async (page = issuesPage) => {
+  const fetchCommits = useCallback(async (page = commitsPage) => {
+    setIsLoading(true); setError(null);
+    try {
+      let url = `/workspaces/${slug}/projects/${key}/github/commits?page=${page}&limit=25`;
+      if (branchFilter !== 'all') url += `&branch=${encodeURIComponent(branchFilter)}`;
+      const res = await apiFetch(url);
+      setCommits(res.commits || []); setCommitsTotal(res.totalCount || 0);
+      setCommitsPage(res.page || 1);
+      setBranchesList(prev => Array.from(new Set([...prev, ...(res.branches || [])])));
+    } catch (err: unknown) { const e = err as Error; setError(e.message || 'Failed to fetch commits'); } finally { setIsLoading(false); }
+  }, [slug, key, commitsPage, branchFilter]);
+
+  const fetchIssues = useCallback(async (page = issuesPage) => {
     setIsLoading(true); setError(null);
     try {
       let url = `/workspaces/${slug}/projects/${key}/github/issues?page=${page}&limit=25`;
       if (issueStateFilter !== 'all') url += `&state=${issueStateFilter}`;
       const res = await apiFetch(url);
       setIssues(res.issues || []); setIssuesTotal(res.totalCount || 0);
-      setIssuesPage(res.page || 1); setIssuesTotalPages(res.totalPages || 1);
-    } catch (err: any) { setError(err.message || 'Failed to fetch Issues'); } finally { setIsLoading(false); }
-  };
-
-  const fetchBranches = async (page = branchesPage) => {
-    setIsLoading(true); setError(null);
-    try {
-      const res = await apiFetch(`/workspaces/${slug}/projects/${key}/github/branches`);
-      setGitBranches(res.branches || []); setBranchesTotal(res.branches?.length || 0);
-    } catch (err: any) { setError(err.message || 'Failed to fetch branches'); } finally { setIsLoading(false); }
-  };
+      setIssuesPage(res.page || 1);
+    } catch (err: unknown) { const e = err as Error; setError(e.message || 'Failed to fetch Issues'); } finally { setIsLoading(false); }
+  }, [slug, key, issuesPage, issueStateFilter]);
 
   useEffect(() => {
     if (!slug || !key) return;
-    if (activeTab === 'commits') fetchCommits(1);
-    else if (activeTab === 'prs') fetchPrs(1);
-    else if (activeTab === 'issues') fetchIssues(1);
-    else if (activeTab === 'branches') fetchBranches(1);
-    else fetchCiRuns(1);
-  }, [slug, key, activeTab, branchFilter, commitsLinkedFilter, ciConclusionFilter, prStateFilter, issueStateFilter]);
+    let cancelled = false;
+
+    const loadData = async () => {
+      await Promise.resolve();
+      if (cancelled) return;
+
+      if (activeTab === 'prs') fetchPrs(1);
+      else if (activeTab === 'issues') fetchIssues(1);
+      else if (activeTab === 'ci') fetchCiRuns(1);
+      else if (activeTab === 'commits') fetchCommits(1);
+    };
+
+    loadData();
+
+    return () => { cancelled = true; };
+  }, [slug, key, activeTab, fetchPrs, fetchCiRuns, fetchCommits, fetchIssues]);
 
   const handleRefresh = () => {
-    if (activeTab === 'commits') fetchCommits(commitsPage);
-    else if (activeTab === 'prs') fetchPrs(prsPage);
+    if (activeTab === 'prs') fetchPrs(prsPage);
     else if (activeTab === 'issues') fetchIssues(issuesPage);
-    else if (activeTab === 'branches') fetchBranches(branchesPage);
-    else fetchCiRuns(ciPage);
+    else if (activeTab === 'ci') fetchCiRuns(ciPage);
+    else if (activeTab === 'commits') fetchCommits(commitsPage);
   };
 
   return (
@@ -194,7 +248,7 @@ export const GitHubIntegration = () => {
               <GitBranch className="w-6 h-6 mr-3 text-white" />
               GitHub Integration
             </h2>
-            <p className="text-sm text-gray-400 mb-6">Track commits, pull requests, issues, branches and CI/CD pipelines connected to tasks.</p>
+            <p className="text-sm text-gray-400 mb-6">Track pull requests and CI/CD pipelines connected to project tasks.</p>
           </div>
           <div className="flex items-center space-x-4">
             {connection && (
@@ -219,12 +273,7 @@ export const GitHubIntegration = () => {
         
         <div className="flex items-center justify-between">
           <div className="flex space-x-6">
-            <button 
-              onClick={() => setActiveTab('commits')}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'commits' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
-            >
-              Commits {commitsTotal > 0 && <span className="ml-1.5 bg-gray-800 text-gray-300 py-0.5 px-2 rounded-full text-xs">{commitsTotal}</span>}
-            </button>
+
             <button 
               onClick={() => setActiveTab('prs')}
               className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'prs' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
@@ -238,31 +287,21 @@ export const GitHubIntegration = () => {
               Issues {issuesTotal > 0 && <span className="ml-1.5 bg-gray-800 text-gray-300 py-0.5 px-2 rounded-full text-xs">{issuesTotal}</span>}
             </button>
             <button 
-              onClick={() => setActiveTab('branches')}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'branches' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
-            >
-              Branches {branchesTotal > 0 && <span className="ml-1.5 bg-gray-800 text-gray-300 py-0.5 px-2 rounded-full text-xs">{branchesTotal}</span>}
-            </button>
-            <button 
               onClick={() => setActiveTab('ci')}
               className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'ci' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
             >
               CI Runs {ciTotal > 0 && <span className="ml-1.5 bg-gray-800 text-gray-300 py-0.5 px-2 rounded-full text-xs">{ciTotal}</span>}
             </button>
+            <button 
+              onClick={() => setActiveTab('commits')}
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'commits' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
+            >
+              Commits {commitsTotal > 0 && <span className="ml-1.5 bg-gray-800 text-gray-300 py-0.5 px-2 rounded-full text-xs">{commitsTotal}</span>}
+            </button>
           </div>
 
           <div className="flex items-center space-x-3 mb-2">
-            {activeTab === 'commits' && (
-              <select 
-                value={commitsLinkedFilter}
-                onChange={e => setCommitsLinkedFilter(e.target.value)}
-                className="bg-gray-900 border border-gray-800 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none"
-              >
-                <option value="all">All Commits</option>
-                <option value="true">Linked to Task</option>
-                <option value="false">Unlinked</option>
-              </select>
-            )}
+
             
             {activeTab === 'ci' && (
               <select 
@@ -284,7 +323,7 @@ export const GitHubIntegration = () => {
                   onChange={e => setPrStateFilter(e.target.value)}
                   className="bg-gray-900 border border-gray-800 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none"
                 >
-                  <option value="all">All PRs</option>
+                  <option value="all">All States</option>
                   <option value="open">Open</option>
                   <option value="closed">Closed</option>
                   <option value="merged">Merged</option>
@@ -297,28 +336,23 @@ export const GitHubIntegration = () => {
                 </button>
               </div>
             )}
-
+            
             {activeTab === 'issues' && (
               <div className="flex space-x-2">
                 <select 
                   value={issueStateFilter}
-                  onChange={e => setIssueStateFilter(e.target.value)}
+                  onChange={e => setIssueStateFilter(e.target.value as 'all' | 'open' | 'closed')}
                   className="bg-gray-900 border border-gray-800 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none"
                 >
-                  <option value="all">All Issues</option>
+                  <option value="all">All States</option>
                   <option value="open">Open</option>
                   <option value="closed">Closed</option>
                 </select>
-                <button 
-                  onClick={() => setShowCreateIssue(true)}
-                  className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-3 py-1.5 rounded-lg flex items-center transition-colors"
-                >
-                  <Plus className="w-4 h-4 mr-1" /> New Issue
-                </button>
               </div>
             )}
-            
-            {(activeTab === 'commits' || activeTab === 'ci' || activeTab === 'branches') && (
+
+
+            {(activeTab === 'ci' || activeTab === 'commits') && (
               <div className="flex space-x-2">
                 <select 
                   value={branchFilter}
@@ -330,14 +364,6 @@ export const GitHubIntegration = () => {
                     <option key={b} value={b}>{b}</option>
                   ))}
                 </select>
-                {activeTab === 'branches' && (
-                  <button 
-                    onClick={() => setShowCreateBranch(true)}
-                    className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-3 py-1.5 rounded-lg flex items-center transition-colors"
-                  >
-                    <Plus className="w-4 h-4 mr-1" /> New Branch
-                  </button>
-                )}
               </div>
             )}
           </div>
@@ -355,65 +381,6 @@ export const GitHubIntegration = () => {
           <div className="text-center py-12 border border-dashed border-red-500/30 bg-red-500/5 rounded-xl">
             <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-3" />
             <p className="text-red-400">{error}</p>
-          </div>
-        ) : activeTab === 'commits' ? (
-          <div className="space-y-4 max-w-5xl">
-            {commits.length === 0 && !isLoading ? (
-              <div className="text-center py-16 border border-dashed border-gray-800 rounded-xl bg-gray-900/30">
-                <GitCommit className="w-10 h-10 text-gray-700 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-gray-300 mb-1">No commits found</h3>
-                <p className="text-gray-500 mb-4">
-                  {connection ? `Commits will appear here when you push to ${connection.githubRepoFullName}` : 'Connect a repository to see commits.'}
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="border border-gray-800 rounded-xl overflow-hidden bg-gray-900/30">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-gray-900/80 border-b border-gray-800 text-xs font-semibold text-gray-400 tracking-wider">
-                        <th className="px-4 py-3 w-24">SHA</th>
-                        <th className="px-4 py-3">Message</th>
-                        <th className="px-4 py-3 w-32">Task</th>
-                        <th className="px-4 py-3 w-40">Author</th>
-                        <th className="px-4 py-3 w-40">Branch</th>
-                        <th className="px-4 py-3 w-32">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-800/60">
-                      {commits.map(commit => (
-                        <tr key={commit.id} className="hover:bg-gray-800/30 transition-colors group">
-                          <td className="px-4 py-3">
-                            <a href={commit.url} target="_blank" rel="noreferrer" className="text-sm font-mono text-blue-400 hover:underline flex items-center">
-                              <GitCommit className="w-3.5 h-3.5 mr-1 text-gray-500" />
-                              {commit.commitSha?.substring(0, 7)}
-                            </a>
-                          </td>
-                          <td className="px-4 py-3"><span className="text-sm font-medium text-gray-200 line-clamp-1">{commit.messageHeadline}</span></td>
-                          <td className="px-4 py-3">
-                            {commit.taskId ? (
-                              <Link to={`/w/${slug}/projects/${key}/tasks/${commit.taskKey}`} className="inline-flex bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{commit.taskKey}</Link>
-                            ) : <span className="text-gray-600">—</span>}
-                          </td>
-                          <td className="px-4 py-3"><span className="text-sm text-gray-400 truncate">{commit.authorGithubLogin || 'Unknown'}</span></td>
-                          <td className="px-4 py-3"><span className="font-mono text-xs text-gray-400">{commit.branchName || '—'}</span></td>
-                          <td className="px-4 py-3 text-sm text-gray-500">{formatDistanceToNow(new Date(commit.committedAt), { addSuffix: true })}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {commitsTotalPages > 1 && (
-                  <div className="flex items-center justify-between pt-4">
-                    <span className="text-sm text-gray-500">Showing {(commitsPage - 1) * 25 + 1} to {Math.min(commitsPage * 25, commitsTotal)} of {commitsTotal}</span>
-                    <div className="flex space-x-2">
-                      <button onClick={() => fetchCommits(commitsPage - 1)} disabled={commitsPage === 1} className="p-1 rounded bg-gray-900 border border-gray-800 text-gray-400 hover:text-white disabled:opacity-50"><ChevronLeft className="w-5 h-5" /></button>
-                      <button onClick={() => fetchCommits(commitsPage + 1)} disabled={commitsPage === commitsTotalPages} className="p-1 rounded bg-gray-900 border border-gray-800 text-gray-400 hover:text-white disabled:opacity-50"><ChevronRight className="w-5 h-5" /></button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
           </div>
         ) : activeTab === 'prs' ? (
           <div className="space-y-4 max-w-5xl">
@@ -437,22 +404,49 @@ export const GitHubIntegration = () => {
                   </thead>
                   <tbody className="divide-y divide-gray-800/60">
                     {prs.map(pr => (
-                      <tr key={pr.id} className="hover:bg-gray-800/30 transition-colors">
-                        <td className="px-4 py-3 text-sm font-mono text-gray-400">#{pr.prNumber}</td>
-                        <td className="px-4 py-3 text-sm text-gray-200">{pr.title}</td>
-                        <td className="px-4 py-3">
-                          {pr.state === 'open' && <span className="text-green-400 text-xs px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-full">Open</span>}
-                          {pr.state === 'merged' && <span className="text-purple-400 text-xs px-2 py-1 bg-purple-500/10 border border-purple-500/20 rounded-full">Merged</span>}
-                          {pr.state === 'closed' && <span className="text-red-400 text-xs px-2 py-1 bg-red-500/10 border border-red-500/20 rounded-full">Closed</span>}
-                        </td>
-                        <td className="px-4 py-3">
-                          {pr.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${pr.taskKey}`} className="inline-flex bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{pr.taskKey}</Link> : <span className="text-gray-600">—</span>}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-gray-400">
-                          {pr.headBranch} → {pr.baseBranch}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {pr.htmlUrl && <a href={pr.htmlUrl} target="_blank" rel="noreferrer" className="inline-flex text-gray-400 hover:text-white"><ExternalLink className="w-4 h-4" /></a>}
+                      <tr key={pr.id} className="group">
+                        <td colSpan={6} className="p-0">
+                          <div className="hover:bg-gray-800/30 transition-colors px-4 py-3 grid" style={{ gridTemplateColumns: '6rem 1fr 8rem 8rem 10rem 6rem' }}>
+                            <span className="text-sm font-mono text-gray-400">#{pr.prNumber}</span>
+                            <span className="text-sm text-gray-200">{pr.title}</span>
+                            <span>
+                              {pr.state === 'open' && <span className="text-green-400 text-xs px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-full">Open</span>}
+                              {pr.state === 'merged' && <span className="text-purple-400 text-xs px-2 py-1 bg-purple-500/10 border border-purple-500/20 rounded-full">Merged</span>}
+                              {pr.state === 'closed' && <span className="text-red-400 text-xs px-2 py-1 bg-red-500/10 border border-red-500/20 rounded-full">Closed</span>}
+                            </span>
+                            <span>
+                              {pr.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${pr.taskKey}`} className="inline-flex bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{pr.taskKey}</Link> : <span className="text-gray-600">—</span>}
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              {pr.headBranch} → {pr.baseBranch}
+                            </span>
+                            <span className="flex items-center justify-end space-x-2">
+                              <button
+                                onClick={() => setCommentingOn(commentingOn?.type === 'pr' && commentingOn.number === pr.prNumber ? null : { type: 'pr', number: pr.prNumber })}
+                                className={clsx(
+                                  'text-xs px-2 py-1 rounded transition-colors flex items-center',
+                                  commentingOn?.type === 'pr' && commentingOn.number === pr.prNumber
+                                    ? 'text-blue-400 bg-blue-500/10 border border-blue-500/20'
+                                    : 'text-gray-500 hover:text-gray-300 opacity-0 group-hover:opacity-100'
+                                )}
+                                title="Add comment"
+                              >
+                                <MessageSquare className="w-3.5 h-3.5" />
+                              </button>
+                              {pr.htmlUrl && <a href={pr.htmlUrl} target="_blank" rel="noreferrer" className="inline-flex text-gray-400 hover:text-white"><ExternalLink className="w-4 h-4" /></a>}
+                            </span>
+                          </div>
+                          {commentingOn?.type === 'pr' && commentingOn.number === pr.prNumber && (
+                            <div className="px-4 pb-3">
+                              <CommentSection
+                                slug={slug as string}
+                                keyStr={key as string}
+                                type="pr"
+                                number={pr.prNumber}
+                                onClose={() => setCommentingOn(null)}
+                              />
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -473,26 +467,39 @@ export const GitHubIntegration = () => {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-gray-900/80 border-b border-gray-800 text-xs font-semibold text-gray-400 tracking-wider">
-                      <th className="px-4 py-3 w-24">Issue</th>
+                      <th className="px-4 py-3 w-16">#</th>
                       <th className="px-4 py-3">Title</th>
-                      <th className="px-4 py-3 w-32">Status</th>
-                      <th className="px-4 py-3 w-32">Task</th>
-                      <th className="px-4 py-3 w-24 text-right">Link</th>
+                      <th className="px-4 py-3 w-28">Status</th>
+                      <th className="px-4 py-3 w-32">Author</th>
+                      <th className="px-4 py-3 w-32">Labels</th>
+                      <th className="px-4 py-3 w-28">Task</th>
+                      <th className="px-4 py-3 w-32">Date</th>
+                      <th className="px-4 py-3 w-16 text-right">Link</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800/60">
                     {issues.map(issue => (
                       <tr key={issue.id} className="hover:bg-gray-800/30 transition-colors">
-                        <td className="px-4 py-3 text-sm font-mono text-gray-400">#{issue.githubIssueNumber}</td>
-                        <td className="px-4 py-3 text-sm text-gray-200">{issue.title}</td>
+                        <td className="px-4 py-3 text-xs font-mono text-gray-500">#{issue.githubIssueNumber}</td>
+                        <td className="px-4 py-3 text-sm text-gray-200 font-medium truncate max-w-sm" title={issue.title}>{issue.title}</td>
                         <td className="px-4 py-3">
-                          {issue.state === 'open' ? <span className="text-green-400 text-xs px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-full">Open</span> : <span className="text-red-400 text-xs px-2 py-1 bg-red-500/10 border border-red-500/20 rounded-full">Closed</span>}
+                          {issue.state === 'open' 
+                            ? <span className="inline-flex items-center text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20"><AlertCircle className="w-3 h-3 mr-1" /> Open</span>
+                            : <span className="inline-flex items-center text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20"><AlertCircle className="w-3 h-3 mr-1" /> Closed</span>
+                          }
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs text-gray-400 truncate w-24">{issue.authorGithubLogin || 'Unknown'}</span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-400 truncate max-w-xs" title={(issue.labels || []).join(', ')}>
+                          {(issue.labels || []).join(', ') || '—'}
                         </td>
                         <td className="px-4 py-3">
                           {issue.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${issue.taskKey}`} className="inline-flex bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{issue.taskKey}</Link> : <span className="text-gray-600">—</span>}
                         </td>
+                        <td className="px-4 py-3 text-xs text-gray-500">{formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}</td>
                         <td className="px-4 py-3 text-right">
-                          {issue.htmlUrl && <a href={issue.htmlUrl} target="_blank" rel="noreferrer" className="inline-flex text-gray-400 hover:text-white"><ExternalLink className="w-4 h-4" /></a>}
+                          <a href={issue.htmlUrl} target="_blank" rel="noreferrer" className="inline-flex text-gray-400 hover:text-white"><ExternalLink className="w-4 h-4" /></a>
                         </td>
                       </tr>
                     ))}
@@ -501,36 +508,51 @@ export const GitHubIntegration = () => {
               </div>
             )}
           </div>
-        ) : activeTab === 'branches' ? (
+        ) : activeTab === 'commits' ? (
           <div className="space-y-4 max-w-5xl">
-            {gitBranches.length === 0 && !isLoading ? (
+            {commits.length === 0 && !isLoading ? (
               <div className="text-center py-16 border border-dashed border-gray-800 rounded-xl bg-gray-900/30">
                 <GitBranch className="w-10 h-10 text-gray-700 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-gray-300 mb-1">No branches found</h3>
+                <h3 className="text-lg font-bold text-gray-300 mb-1">No commits found</h3>
               </div>
             ) : (
               <div className="border border-gray-800 rounded-xl overflow-hidden bg-gray-900/30">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-gray-900/80 border-b border-gray-800 text-xs font-semibold text-gray-400 tracking-wider">
-                      <th className="px-4 py-3">Branch Name</th>
-                      <th className="px-4 py-3 w-32">Status</th>
+                      <th className="px-4 py-3 w-24">SHA</th>
+                      <th className="px-4 py-3">Message</th>
+                      <th className="px-4 py-3 w-32">Author</th>
+                      <th className="px-4 py-3 w-40">Branch</th>
                       <th className="px-4 py-3 w-32">Task</th>
-                      <th className="px-4 py-3 w-24 text-right">Link</th>
+                      <th className="px-4 py-3 w-32">Date</th>
+                      <th className="px-4 py-3 w-16 text-right">Link</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800/60">
-                    {gitBranches.map(branch => (
-                      <tr key={branch.id} className="hover:bg-gray-800/30 transition-colors">
-                        <td className="px-4 py-3 text-sm font-mono text-gray-200">{branch.branchName}</td>
+                    {commits.map(commit => (
+                      <tr key={commit.id} className="hover:bg-gray-800/30 transition-colors">
+                        <td className="px-4 py-3 text-xs font-mono text-blue-400">{commit.commitSha.substring(0, 7)}</td>
+                        <td className="px-4 py-3 text-sm text-gray-200 truncate max-w-xs" title={commit.messageHeadline}>{commit.messageHeadline}</td>
                         <td className="px-4 py-3">
-                          {!branch.isDeleted ? <span className="text-green-400 text-xs px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-full">Active</span> : <span className="text-gray-400 text-xs px-2 py-1 bg-gray-500/10 border border-gray-500/20 rounded-full">Deleted</span>}
+                          <div className="flex items-center space-x-2">
+                            {commit.authorAvatar ? (
+                              <img src={commit.authorAvatar} alt="" className="w-5 h-5 rounded-full" />
+                            ) : (
+                              <div className="w-5 h-5 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-[10px] text-gray-400 font-bold">
+                                {(commit.authorName || '?').charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <span className="text-xs text-gray-400 truncate w-24">{commit.authorName || 'Unknown'}</span>
+                          </div>
                         </td>
+                        <td className="px-4 py-3 text-xs font-mono text-gray-400 truncate w-40" title={commit.branchName || ''}>{commit.branchName || '—'}</td>
                         <td className="px-4 py-3">
-                          {branch.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${branch.taskKey}`} className="inline-flex bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{branch.taskKey}</Link> : <span className="text-gray-600">—</span>}
+                          {commit.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${commit.taskKey}`} className="inline-flex bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{commit.taskKey}</Link> : <span className="text-gray-600">—</span>}
                         </td>
+                        <td className="px-4 py-3 text-xs text-gray-500">{formatDistanceToNow(new Date(commit.committedAt), { addSuffix: true })}</td>
                         <td className="px-4 py-3 text-right">
-                          {branch.htmlUrl && <a href={branch.htmlUrl} target="_blank" rel="noreferrer" className="inline-flex text-gray-400 hover:text-white"><ExternalLink className="w-4 h-4" /></a>}
+                          {commit.url && <a href={commit.url} target="_blank" rel="noreferrer" className="inline-flex text-gray-400 hover:text-white"><ExternalLink className="w-4 h-4" /></a>}
                         </td>
                       </tr>
                     ))}
@@ -578,18 +600,15 @@ export const GitHubIntegration = () => {
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end space-x-2">
                             {run.conclusion === 'failure' && (
-                              <button 
-                                onClick={async () => {
-                                  try {
-                                    await apiFetch(`/workspaces/${slug}/projects/${key}/github/ci/${run.runId}/rerun`, { method: 'POST' });
-                                    fetchCiRuns(ciPage);
-                                  } catch (e: any) { alert(e.message); }
-                                }}
-                                className="text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 px-2 py-1 rounded bg-blue-500/10 transition-colors"
-                              >
-                                Re-run
-                              </button>
-                            )}
+                                <button 
+                                  onClick={() => setViewingLogsForRunId(run.runId)}
+                                  className="text-xs text-gray-400 hover:text-white border border-gray-600 px-2 py-1 rounded bg-gray-800/50 flex items-center transition-colors"
+                                  title="View Terminal Logs"
+                                >
+                                  <Terminal className="w-3 h-3 mr-1" />
+                                  Debug
+                                </button>
+                              )}
                             {run.htmlUrl && <a href={run.htmlUrl} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-white"><ExternalLink className="w-4 h-4" /></a>}
                           </div>
                         </td>
@@ -615,27 +634,12 @@ export const GitHubIntegration = () => {
         />
       )}
 
-      {showCreateIssue && (
-        <CreateIssueModal
+      {viewingLogsForRunId && (
+        <CiLogsModal
           slug={slug as string}
           keyStr={key as string}
-          onClose={() => setShowCreateIssue(false)}
-          onCreated={() => {
-            setShowCreateIssue(false);
-            fetchIssues(1);
-          }}
-        />
-      )}
-
-      {showCreateBranch && (
-        <CreateBranchModal
-          slug={slug as string}
-          keyStr={key as string}
-          onClose={() => setShowCreateBranch(false)}
-          onCreated={() => {
-            setShowCreateBranch(false);
-            fetchBranches(1);
-          }}
+          runId={viewingLogsForRunId as number}
+          onClose={() => setViewingLogsForRunId(null)}
         />
       )}
     </div>

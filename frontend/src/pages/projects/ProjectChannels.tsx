@@ -1,14 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Hash, Plus, X, Loader2, Lock } from 'lucide-react';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 
 
+interface ProjectChannel {
+  channelId: string;
+  projectId?: string | null;
+  name: string;
+  type: string;
+}
+
 export const ProjectChannels = () => {
   const { slug, key } = useParams();
   const navigate = useNavigate();
   const { projects, isAdmin } = useCurrentWorkspaceStore();
-  const [channels, setChannels] = useState<any[]>([]);
+  const [channels, setChannels] = useState<ProjectChannel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   const [showModal, setShowModal] = useState(false);
@@ -18,26 +25,34 @@ export const ProjectChannels = () => {
 
   const currentProject = projects.find(p => p.key === key?.toUpperCase());
 
-  const fetchProjectChannels = async () => {
+  const fetchProjectChannels = useCallback(async () => {
+    if (!slug || !currentProject) return;
+    await Promise.resolve();
     try {
       const { apiFetch } = await import('../../lib/api.js');
       // The backend doesn't have a specific GET /projects/:projectId/channels,
       // but we can fetch all workspace channels and filter by projectId
       const data = await apiFetch(`/workspaces/${slug}/channels`);
-      const projectChannels = data.channels.filter((c: any) => c.projectId === currentProject?.projectId);
+      const projectChannels = data.channels.filter((c: ProjectChannel) => c.projectId === currentProject?.projectId);
       setChannels(projectChannels);
     } catch (err) {
       console.error(err);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [slug, currentProject]);
 
   useEffect(() => {
-    if (slug && currentProject) {
-      fetchProjectChannels();
-    }
-  }, [slug, currentProject]);
+    let isMounted = true;
+    Promise.resolve().then(() => {
+      if (isMounted) {
+        fetchProjectChannels();
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [fetchProjectChannels]);
 
   const handleCreateChannel = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,8 +71,9 @@ export const ProjectChannels = () => {
       setShowModal(false);
       setNewChannelName('');
       fetchProjectChannels();
-    } catch (err: any) {
-      alert(err.message || 'Failed to create channel.');
+    } catch (err: unknown) {
+      const e = err as Error;
+      alert(e.message || 'Failed to create channel.');
     } finally {
       setIsCreatingChannel(false);
     }
