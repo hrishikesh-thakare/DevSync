@@ -264,8 +264,34 @@ export const listMessages = async (req: Request, res: Response): Promise<void> =
       .orderBy(desc(messages.createdAt))
       .limit(parsedLimit);
 
+    const messageIds = results.map(r => r.messageId);
+    const reactionsMap: Record<string, any[]> = {};
 
-    res.json({ messages: results.reverse() }); // Reverse so oldest is first for UI display
+    if (messageIds.length > 0) {
+      const { messageReactions } = await import('../../db/schema/channels.js');
+      const allReactions = await db
+        .select({
+          messageId: messageReactions.messageId,
+          userId: messageReactions.userId,
+          emoji: messageReactions.emoji,
+          userName: users.fullName
+        })
+        .from(messageReactions)
+        .leftJoin(users, eq(messageReactions.userId, users.userId))
+        .where(inArray(messageReactions.messageId, messageIds));
+        
+      for (const rx of allReactions) {
+        if (!reactionsMap[rx.messageId]) reactionsMap[rx.messageId] = [];
+        reactionsMap[rx.messageId].push(rx);
+      }
+    }
+
+    const enrichedResults = results.map(r => ({
+      ...r,
+      reactions: reactionsMap[r.messageId] || []
+    })).reverse(); // Reverse so oldest is first for UI display
+
+    res.json({ messages: enrichedResults }); 
   } catch (err) {
     console.error('List messages error:', err);
     res.status(500).json({ error: 'Server error listing messages.' });
@@ -297,8 +323,34 @@ export const getThreadReplies = async (req: Request, res: Response): Promise<voi
 
       .orderBy(asc(messages.createdAt)); // Chronological order for threads
 
+    const replyIds = results.map(r => r.messageId);
+    const reactionsMap: Record<string, any[]> = {};
 
-    res.json({ replies: results });
+    if (replyIds.length > 0) {
+      const { messageReactions } = await import('../../db/schema/channels.js');
+      const allReactions = await db
+        .select({
+          messageId: messageReactions.messageId,
+          userId: messageReactions.userId,
+          emoji: messageReactions.emoji,
+          userName: users.fullName
+        })
+        .from(messageReactions)
+        .leftJoin(users, eq(messageReactions.userId, users.userId))
+        .where(inArray(messageReactions.messageId, replyIds));
+        
+      for (const rx of allReactions) {
+        if (!reactionsMap[rx.messageId]) reactionsMap[rx.messageId] = [];
+        reactionsMap[rx.messageId].push(rx);
+      }
+    }
+
+    const enrichedResults = results.map(r => ({
+      ...r,
+      reactions: reactionsMap[r.messageId] || []
+    }));
+
+    res.json({ replies: enrichedResults });
   } catch (err) {
     console.error('Get thread error:', err);
     res.status(500).json({ error: 'Server error fetching thread replies.' });
@@ -436,7 +488,7 @@ export const deleteMessage = async (req: Request, res: Response): Promise<void> 
           .from(messages)
           .where(eq(messages.messageId, msg.threadId));
 
-        if (parent && parent.isDeleted && parent.replyCount <= 0) {
+        if (parent && parent.isDeleted && (parent.replyCount || 0) <= 0) {
           await tx.delete(messages).where(eq(messages.messageId, msg.threadId));
         }
       }
@@ -500,10 +552,68 @@ export const deleteMessage = async (req: Request, res: Response): Promise<void> 
     const io = getIO();
     io.to(`channel:${channelId}`).emit('message_deleted', { messageId, threadId: msg.threadId });
 
-
     res.json({ message: 'Message deleted' });
   } catch (err) {
     console.error('Delete message error:', err);
     res.status(500).json({ error: 'Server error deleting message.' });
+  }
+};
+
+// ─── ADD REACTION ────────────────────────────────────────────────────────────
+// POST /api/channels/:channelId/messages/:messageId/reactions
+export const addReaction = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { channelId, messageId } = req.params as Record<string, string>;
+    const userId = req.user!.userId;
+    const { emoji } = req.body;
+
+    if (!emoji) {
+      res.status(400).json({ error: 'Emoji is required.' });
+      return;
+    }
+
+    const { messageReactions } = await import('../../db/schema/channels.js');
+
+    await db
+      .insert(messageReactions)
+      .values({ messageId, userId, emoji })
+      .onConflictDoNothing(); // If already reacted, do nothing
+
+    const [userRecord] = await db.select({ fullName: users.fullName }).from(users).where(eq(users.userId, userId)).limit(1);
+
+    const io = getIO();
+    io.to(`channel:${channelId}`).emit('message_reaction_added', { messageId, userId, emoji, userName: userRecord?.fullName || 'User' });
+
+    res.json({ message: 'Reaction added' });
+  } catch (err) {
+    console.error('Add reaction error:', err);
+    res.status(500).json({ error: 'Server error adding reaction.' });
+  }
+};
+
+// ─── REMOVE REACTION ─────────────────────────────────────────────────────────
+// DELETE /api/channels/:channelId/messages/:messageId/reactions/:emoji
+export const removeReaction = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { channelId, messageId, emoji } = req.params as Record<string, string>;
+    const userId = req.user!.userId;
+
+    const { messageReactions } = await import('../../db/schema/channels.js');
+
+    await db
+      .delete(messageReactions)
+      .where(and(
+        eq(messageReactions.messageId, messageId),
+        eq(messageReactions.userId, userId),
+        eq(messageReactions.emoji, emoji)
+      ));
+
+    const io = getIO();
+    io.to(`channel:${channelId}`).emit('message_reaction_removed', { messageId, userId, emoji });
+
+    res.json({ message: 'Reaction removed' });
+  } catch (err) {
+    console.error('Remove reaction error:', err);
+    res.status(500).json({ error: 'Server error removing reaction.' });
   }
 };

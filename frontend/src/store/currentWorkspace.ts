@@ -37,6 +37,7 @@ interface CurrentWorkspaceState {
   fetchWorkspaceData: (slug: string) => Promise<void>;
   createChannel: (slug: string, name: string, isPrivate: boolean) => Promise<void>;
   createProject: (slug: string, name: string, key: string, description?: string) => Promise<void>;
+  updateMemberPresence: (userId: string, data: { presence?: string, statusText?: string, statusEmoji?: string }) => void;
 }
 
 export const useCurrentWorkspaceStore = create<CurrentWorkspaceState>((set, get) => ({
@@ -113,6 +114,12 @@ export const useCurrentWorkspaceStore = create<CurrentWorkspaceState>((set, get)
     });
     set((state) => ({
       projects: [...state.projects, data.project],
+    }));
+  },
+
+  updateMemberPresence: (userId, data) => {
+    set((state) => ({
+      members: state.members.map(m => m.userId === userId ? { ...m, ...data } : m)
     }));
   },
 }));

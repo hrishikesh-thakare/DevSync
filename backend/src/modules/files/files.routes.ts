@@ -1,10 +1,13 @@
 import { Router } from 'express';
 import { requireAuth } from '../../middleware/auth.js';
 import { requireWorkspaceRole } from '../../middleware/roles.js';
-import { uploadFile, getUploadUrl, getDownloadUrl } from './files.controller.js';
+import { uploadFile, getUploadUrl, getDownloadUrl, getRawFile } from './files.controller.js';
 
 // Mounted at: /api/workspaces/:slug/files
 const router = Router({ mergeParams: true });
+
+// Raw file streaming (unauthenticated / UUID lookup for browser navigation)
+router.get('/:fileId/raw', getRawFile);
 
 router.use(requireAuth);
 router.use(requireWorkspaceRole(['owner', 'admin', 'member']));

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ChatSidebar from '../components/chat/ChatSidebar';
-import { useChatStore } from '../store/useChatStore';
+import { useChatStore, Message } from '../store/useChatStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { users } from '../data/users'; // Temporary fallback for user metadata
 import { apiFetch } from '../lib/api';
@@ -24,7 +24,7 @@ const ChatPage: React.FC = () => {
   const { channels, activeChannel, messages, threads, fetchChannels, setActiveChannel, fetchThreadReplies, sendMessage, uploadFile } = useChatStore();
   const [inputText, setInputText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  const [replyingTo, setReplyingTo] = useState<any>(null);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -103,13 +103,42 @@ const ChatPage: React.FC = () => {
           className="inline-flex items-center gap-1.5 px-2 py-1 mx-1 bg-bg-hover rounded-md border border-border-default text-accent-purple hover:bg-bg-elevated transition-colors"
           onClick={async (e) => {
              e.preventDefault();
+             const isPreviewable = /\.(jpg|jpeg|png|gif|webp|pdf|txt|csv|mp4|webm)$/i.test(filename || '');
+             
+             console.log(`[File Click] filename=${filename}, isPreviewable=${isPreviewable}`);
+
+             let win: Window | null = null;
+             if (isPreviewable) {
+               console.log(`[File Click] Opening synchronous about:blank tab for preview...`);
+               win = window.open('about:blank', '_blank');
+             }
+
              try {
+                console.log(`[File Click] Fetching download URL from backend...`);
                 const res = await apiFetch(`/workspaces/${currentWorkspace?.slug}/files/${fileId}/download`);
+                console.log(`[File Click] Backend response:`, res);
+
                 if (res.downloadUrl) {
-                   window.open(res.downloadUrl, '_blank');
+                   if (isPreviewable && win) {
+                     console.log(`[File Click] Navigating preview tab to: ${res.downloadUrl}`);
+                     win.location.href = res.downloadUrl;
+                   } else {
+                     console.log(`[File Click] Triggering background download for: ${res.downloadUrl}`);
+                     const a = document.createElement('a');
+                     a.href = res.downloadUrl;
+                     a.rel = 'noreferrer';
+                     if (filename) a.download = filename;
+                     document.body.appendChild(a);
+                     a.click();
+                     document.body.removeChild(a);
+                   }
+                } else {
+                   console.warn(`[File Click] No downloadUrl in response! Closing tab if open.`);
+                   if (win) win.close();
                 }
              } catch (err) {
-                console.error("Failed to get download URL", err);
+                console.error('[File Click] Failed to get download URL', err);
+                if (win) win.close();
              }
           }}
         >
@@ -150,16 +179,15 @@ const ChatPage: React.FC = () => {
               <button className="hover:text-text-primary px-1"><Info size={18} /></button>
               <button className="hover:text-text-primary px-1"><MoreVertical size={18} /></button>
            </div>
-        </header>
-
-        {/* Message Area */}
+        </header>         {/* Message Area */}
         <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
            {messages.map(msg => {
+              const msgKey = msg.id || msg.messageId;
               const sender = users.find(u => u.id === msg.senderId) || { fullName: 'User', avatar: 'https://ui-avatars.com/api/?name=U' };
-              const isExpanded = expandedThreads.has(msg.id);
+              const isExpanded = expandedThreads.has(msgKey);
               
               return (
-                <div key={msg.id} className="flex flex-col gap-2 group/msg">
+                <div key={msgKey} className="flex flex-col gap-2 group/msg">
                    <div className="flex gap-4">
                       <img src={sender?.avatar} alt={sender?.fullName} className="w-10 h-10 rounded-full shrink-0" />
                       <div className="flex-1 min-w-0 relative">
@@ -170,7 +198,7 @@ const ChatPage: React.FC = () => {
                             </span>
                          </div>
                          <p className="text-sm text-text-primary leading-relaxed break-words whitespace-pre-wrap">
-                           {renderMessageBody(msg.body)}
+                           {renderMessageBody(msg.body || msg.bodyText || '')}
                          </p>
 
                          {/* Hover actions */}
@@ -187,17 +215,17 @@ const ChatPage: React.FC = () => {
                    </div>
 
                    {/* Thread toggle button */}
-                   {msg.replyCount > 0 && (
+                   {!msg.isDeleted && (msg.replyCount || 0) > 0 && (
                      <div className="ml-14">
                         <button 
                           onClick={() => {
                              const newExpanded = new Set(expandedThreads);
                              if (isExpanded) {
-                                newExpanded.delete(msg.id);
+                                newExpanded.delete(msgKey);
                              } else {
-                                newExpanded.add(msg.id);
-                                if (activeChannel && !threads[msg.id]) {
-                                   fetchThreadReplies(activeChannel.id, msg.id);
+                                newExpanded.add(msgKey);
+                                if (activeChannel && !threads[msgKey]) {
+                                   fetchThreadReplies(activeChannel.id, msgKey);
                                 }
                              }
                              setExpandedThreads(newExpanded);
@@ -211,12 +239,13 @@ const ChatPage: React.FC = () => {
                    )}
 
                    {/* Nested Replies */}
-                   {isExpanded && threads[msg.id] && (
+                   {!msg.isDeleted && isExpanded && threads[msgKey] && (
                      <div className="ml-14 pl-4 border-l-2 border-border-default/50 space-y-4 mt-2">
-                        {threads[msg.id].map(reply => {
+                        {threads[msgKey].map((reply: Message) => {
+                           const replyKey = reply.id || reply.messageId;
                            const replySender = users.find(u => u.id === reply.senderId) || { fullName: 'User', avatar: 'https://ui-avatars.com/api/?name=U' };
                            return (
-                              <div key={reply.id} className="flex gap-3">
+                              <div key={replyKey} className="flex gap-3">
                                  <img src={replySender?.avatar} alt={replySender?.fullName} className="w-6 h-6 rounded-full shrink-0" />
                                  <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-1">
@@ -226,7 +255,7 @@ const ChatPage: React.FC = () => {
                                        </span>
                                     </div>
                                     <p className="text-sm text-text-primary leading-relaxed break-words whitespace-pre-wrap">
-                                       {renderMessageBody(reply.body)}
+                                       {renderMessageBody(reply.body || reply.bodyText || '')}
                                     </p>
                                  </div>
                               </div>
@@ -248,7 +277,7 @@ const ChatPage: React.FC = () => {
                       <span className="text-accent-purple font-medium">
                         Replying to {users.find(u => u.id === replyingTo.senderId)?.fullName || 'message'}
                       </span>
-                      <span className="truncate max-w-[200px] italic">"{replyingTo.body.substring(0, 30)}..."</span>
+                      <span className="truncate max-w-[200px] italic">"{(replyingTo.body || replyingTo.bodyText || '').substring(0, 30)}..."</span>
                    </div>
                    <button onClick={() => setReplyingTo(null)} className="text-text-muted hover:text-text-primary">
                       <X size={14} />

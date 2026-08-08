@@ -12,30 +12,59 @@ interface CommentSectionProps {
   onClose: () => void;
 }
 
+interface GitHubUser {
+  login: string;
+  avatarUrl: string;
+}
+
+interface GitHubComment {
+  id: number;
+  user: GitHubUser;
+  createdAt: string;
+  body: string;
+}
+
 export const CommentSection = ({ slug, keyStr, type, number, onClose }: CommentSectionProps) => {
-  const [comments, setComments] = useState<any[]>([]);
+  const [comments, setComments] = useState<GitHubComment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const fetchComments = async () => {
+  const [refreshKey, setRefreshKey] = useState(0);
+  
+  const handleRefresh = () => {
     setIsLoading(true);
-    try {
-      const endpoint = type === 'issue'
-        ? `/workspaces/${slug}/projects/${keyStr}/github/issues/${number}/comments`
-        : `/workspaces/${slug}/projects/${keyStr}/github/pull-requests/${number}/comments`;
-        
-      const res = await apiFetch(endpoint);
-      setComments(res.comments || []);
-    } catch (err: any) {
-      setError('Failed to load comments');
-    } finally {
-      setIsLoading(false);
-    }
+    setError(null);
+    setRefreshKey(prev => prev + 1);
   };
 
   useEffect(() => {
-    fetchComments();
-  }, [slug, keyStr, type, number]);
+    let mounted = true;
+    const load = async () => {
+      try {
+        const endpoint = type === 'issue'
+          ? `/workspaces/${slug}/projects/${keyStr}/github/issues/${number}/comments`
+          : `/workspaces/${slug}/projects/${keyStr}/github/pull-requests/${number}/comments`;
+          
+        const res = await apiFetch(endpoint);
+        if (mounted) {
+          setComments(res.comments || []);
+        }
+      } catch {
+        if (mounted) {
+          setError('Failed to load comments');
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, [slug, keyStr, type, number, refreshKey]);
 
   return (
     <div className="mt-2 bg-gray-950 border border-gray-700 rounded-lg overflow-hidden flex flex-col max-h-[400px]">
@@ -84,10 +113,7 @@ export const CommentSection = ({ slug, keyStr, type, number, onClose }: CommentS
           keyStr={keyStr} 
           type={type} 
           number={number} 
-          onClose={() => {
-            // Re-fetch comments instead of closing the whole section
-            fetchComments();
-          }} 
+          onClose={handleRefresh} 
           isEmbedded={true}
         />
       </div>

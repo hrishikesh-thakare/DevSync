@@ -12,15 +12,19 @@ interface Channel {
 
 export interface Message {
   messageId: string;
+  id?: string;
   channelId: string;
   authorId?: string;
   authorName?: string;
   authorAvatar?: string;
+  senderId?: string;
   bodyText?: string;
+  body?: string;
   createdAt: string;
   replyCount: number;
+  threadCount?: number;
   threadId: string | null;
-  [key: string]: unknown;
+  isDeleted?: boolean;
 }
 
 interface ChatState {
@@ -38,6 +42,9 @@ interface ChatState {
   joinChannel: (_slug?: string, channelId?: string) => void;
   leaveChannel: (_slug?: string, _channelId?: string) => void;
   removeMessage: (messageId: string, threadId?: string | null) => void;
+  updateMessage: (updatedMsg: Partial<Message> & { messageId: string }) => void;
+  addReactionToMessage: (messageId: string, rx: { userId: string; emoji: string; userName?: string }) => void;
+  removeReactionFromMessage: (messageId: string, rx: { userId: string; emoji: string }) => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -49,13 +56,66 @@ export const useChatStore = create<ChatState>((set, get) => ({
   joinChannel: (_slug, channelId) => {
     if (channelId) get().fetchMessages(channelId);
   },
-  leaveChannel: (_slug, _channelId) => {},
+  leaveChannel: () => {},
   removeMessage: (messageId) => {
     set((state) => {
       const newMessages = state.messages.filter((m) => m.messageId !== messageId);
       const newThreads = { ...state.threads };
+      delete newThreads[messageId];
       for (const parentId in newThreads) {
         newThreads[parentId] = newThreads[parentId].filter((m) => m.messageId !== messageId);
+      }
+      return { messages: newMessages, threads: newThreads };
+    });
+  },
+  updateMessage: (updatedMsg) => {
+    set((state) => {
+      const newMessages = state.messages.map(m => m.messageId === updatedMsg.messageId ? { ...m, ...updatedMsg } : m);
+      const newThreads = { ...state.threads };
+      for (const parentId in newThreads) {
+        newThreads[parentId] = newThreads[parentId].map(m => m.messageId === updatedMsg.messageId ? { ...m, ...updatedMsg } : m);
+      }
+      return { messages: newMessages, threads: newThreads };
+    });
+  },
+  addReactionToMessage: (messageId, rx) => {
+    set((state) => {
+      const updateMsgList = (list: Message[]) =>
+        list.map((m) => {
+          if (m.messageId !== messageId) return m;
+          const currentRx = (m as any).reactions || [];
+          const exists = currentRx.some((r: any) => r.userId === rx.userId && r.emoji === rx.emoji);
+          if (exists) return m;
+          return {
+            ...m,
+            reactions: [...currentRx, { messageId, userId: rx.userId, emoji: rx.emoji, userName: rx.userName || 'User' }]
+          };
+        });
+
+      const newMessages = updateMsgList(state.messages);
+      const newThreads: Record<string, Message[]> = {};
+      for (const parentId in state.threads) {
+        newThreads[parentId] = updateMsgList(state.threads[parentId]);
+      }
+      return { messages: newMessages, threads: newThreads };
+    });
+  },
+  removeReactionFromMessage: (messageId, rx) => {
+    set((state) => {
+      const updateMsgList = (list: Message[]) =>
+        list.map((m) => {
+          if (m.messageId !== messageId) return m;
+          const currentRx = (m as any).reactions || [];
+          return {
+            ...m,
+            reactions: currentRx.filter((r: any) => !(r.userId === rx.userId && r.emoji === rx.emoji))
+          };
+        });
+
+      const newMessages = updateMsgList(state.messages);
+      const newThreads: Record<string, Message[]> = {};
+      for (const parentId in state.threads) {
+        newThreads[parentId] = updateMsgList(state.threads[parentId]);
       }
       return { messages: newMessages, threads: newThreads };
     });

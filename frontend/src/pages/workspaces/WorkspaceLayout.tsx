@@ -2,15 +2,18 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Outlet, useParams, NavLink, useNavigate } from 'react-router-dom';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useAuthStore } from '../../store/auth.js';
+import { useNotificationStore, Notification } from '../../store/useNotificationStore.js';
 import { Hash, Lock, Search, Bell, Settings, Plus, FolderKanban, Loader2, Home, X, LogOut, ChevronDown as ChevronDownIcon, Command } from 'lucide-react';
 import { CommandPalette } from '../../components/layout/CommandPalette.js';
 import clsx from 'clsx';
+import { socketClient } from '../../lib/socket.js';
 
 export const WorkspaceLayout = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
-  const { name, projects, channels, members, isLoading, error, myRole, isAdmin, isOwner, fetchWorkspaceData } = useCurrentWorkspaceStore();
+  const { unreadCount, fetchNotifications, addNotification } = useNotificationStore();
+  const { name, projects, channels, members, isLoading, error, myRole, isAdmin, isOwner, fetchWorkspaceData, updateMemberPresence } = useCurrentWorkspaceStore();
   const [showChannelModal, setShowChannelModal] = useState(false);
   const [showDMModal, setShowDMModal] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
@@ -21,7 +24,12 @@ export const WorkspaceLayout = () => {
   const [isCreatingChannel, setIsCreatingChannel] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [isEditingStatus, setIsEditingStatus] = useState(false);
+  const [statusText, setStatusText] = useState('');
+  const [statusEmoji, setStatusEmoji] = useState('💬');
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const currentUserMember = members.find(m => m.userId === user?.userId);
 
   // Global Ctrl+K / Cmd+K shortcut
   useEffect(() => {
@@ -40,6 +48,27 @@ export const WorkspaceLayout = () => {
       fetchWorkspaceData(slug);
     }
   }, [slug, fetchWorkspaceData]);
+
+  useEffect(() => {
+    fetchNotifications();
+    const socket = socketClient.getSocket();
+    
+    const handlePresenceUpdated = (data: { userId: string, presence?: string, statusText?: string, statusEmoji?: string }) => {
+      updateMemberPresence(data.userId, data);
+    };
+    
+    const handleNewNotification = (notification: Notification) => {
+      addNotification(notification);
+    };
+    
+    socket.on('user_presence_updated', handlePresenceUpdated);
+    socket.on('new_notification', handleNewNotification);
+    
+    return () => {
+      socket.off('user_presence_updated', handlePresenceUpdated);
+      socket.off('new_notification', handleNewNotification);
+    };
+  }, [updateMemberPresence, fetchNotifications, addNotification]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -76,6 +105,34 @@ export const WorkspaceLayout = () => {
       alert(err.message || 'Failed to create channel.');
     } finally {
       setIsCreatingChannel(false);
+    }
+  };
+
+  const handleSaveStatus = async () => {
+    try {
+      const { apiFetch } = await import('../../lib/api.js');
+      await apiFetch(`/auth/status`, {
+        method: 'POST',
+        body: JSON.stringify({ statusText, statusEmoji }),
+      });
+      setIsEditingStatus(false);
+    } catch (err: any) {
+      alert(err.message || 'Failed to update status.');
+    }
+  };
+
+  const handleClearStatus = async () => {
+    try {
+      const { apiFetch } = await import('../../lib/api.js');
+      await apiFetch(`/auth/status`, {
+        method: 'POST',
+        body: JSON.stringify({ statusText: '', statusEmoji: '' }),
+      });
+      setIsEditingStatus(false);
+      setStatusText('');
+      setStatusEmoji('💬');
+    } catch (err: any) {
+      alert(err.message || 'Failed to clear status.');
     }
   };
 
@@ -283,21 +340,32 @@ export const WorkspaceLayout = () => {
               {channels.filter(c => c.type === 'dm' || c.type === 'group_dm').length === 0 ? (
                 <p className="text-xs text-gray-600 px-2 py-2 italic">No conversations yet</p>
               ) : (
-                channels.filter(c => c.type === 'dm' || c.type === 'group_dm').map((ch) => (
-                  <NavLink
-                    key={ch.channelId}
-                    to={`/w/${slug}/channels/${ch.channelId}`}
-                    className={({ isActive }) => clsx(
-                      "flex items-center px-2 py-1 rounded-md text-[15px] transition-colors",
-                      isActive ? "bg-white/10 text-gray-300 font-medium" : "text-gray-400 hover:bg-gray-800/60 hover:text-gray-200"
-                    )}
-                  >
-                    <div className="w-4 h-4 mr-2 rounded-full bg-gradient-to-tr from-gray-700 to-gray-500 flex items-center justify-center text-[8px] text-white font-bold shrink-0">
-                      {ch.name?.charAt(0).toUpperCase() || '?'}
-                    </div>
-                    <span className="truncate">{ch.name}</span>
-                  </NavLink>
-                ))
+                channels.filter(c => c.type === 'dm' || c.type === 'group_dm').map((ch) => {
+                  const dmMember = members.find(m => m.fullName === ch.name || m.displayName === ch.name);
+                  return (
+                    <NavLink
+                      key={ch.channelId}
+                      to={`/w/${slug}/channels/${ch.channelId}`}
+                      className={({ isActive }) => clsx(
+                        "flex items-center px-2 py-1 rounded-md text-[15px] transition-colors group",
+                        isActive ? "bg-white/10 text-gray-300 font-medium" : "text-gray-400 hover:bg-gray-800/60 hover:text-gray-200"
+                      )}
+                    >
+                      <div className="relative mr-2">
+                        <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-gray-700 to-gray-500 flex items-center justify-center text-[8px] text-white font-bold shrink-0">
+                          {ch.name?.charAt(0).toUpperCase() || '?'}
+                        </div>
+                        {dmMember?.presence === 'online' && (
+                          <div className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 bg-green-500 border border-gray-950 rounded-full"></div>
+                        )}
+                      </div>
+                      <span className="truncate flex-1">{ch.name}</span>
+                      {dmMember?.statusEmoji && (
+                        <span className="text-[10px] ml-1 opacity-60 group-hover:opacity-100 transition-opacity" title={dmMember.statusText || ''}>{dmMember.statusEmoji}</span>
+                      )}
+                    </NavLink>
+                  );
+                })
               )}
             </div>
           </div>
@@ -343,7 +411,11 @@ export const WorkspaceLayout = () => {
             {/* Notifications Bell */}
             <button onClick={() => navigate(`/w/${slug}/notifications`)} className="text-gray-400 hover:text-white transition-colors relative">
               <Bell className="w-5 h-5" />
-              <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border border-gray-950"></span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[16px] h-[16px] px-1 bg-red-500 rounded-full text-[9px] font-bold text-white border border-gray-950 shadow-sm">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
             </button>
 
             {/* User Dropdown */}
@@ -352,10 +424,22 @@ export const WorkspaceLayout = () => {
                 onClick={() => setShowUserDropdown(!showUserDropdown)}
                 className="flex items-center space-x-2 px-2 py-1 rounded-lg hover:bg-gray-800/50 transition-colors"
               >
-                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-gray-600 to-gray-500 flex items-center justify-center text-white text-xs font-bold border border-gray-700">
-                  {user?.fullName?.[0]?.toUpperCase() || 'U'}
+                <div className="relative">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-gray-600 to-gray-500 flex items-center justify-center text-white text-xs font-bold border border-gray-700">
+                    {user?.fullName?.[0]?.toUpperCase() || 'U'}
+                  </div>
+                  {currentUserMember?.presence === 'online' && (
+                    <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-gray-950 rounded-full"></div>
+                  )}
                 </div>
-                <span className="text-sm font-medium text-gray-300 hidden sm:inline">{user?.fullName?.split(' ')[0]}</span>
+                <div className="flex flex-col items-start hidden sm:flex">
+                  <div className="flex items-center space-x-1">
+                    <span className="text-sm font-medium text-gray-300">{user?.fullName?.split(' ')[0]}</span>
+                    {currentUserMember?.statusEmoji && (
+                      <span className="text-xs" title={currentUserMember.statusText || ''}>{currentUserMember.statusEmoji}</span>
+                    )}
+                  </div>
+                </div>
                 <ChevronDownIcon className="w-3.5 h-3.5 text-gray-500" />
               </button>
 
@@ -368,6 +452,56 @@ export const WorkspaceLayout = () => {
                       {myRole}
                     </span>
                   </div>
+                  
+                  {/* Status Section */}
+                  <div className="border-b border-gray-800 p-2">
+                    {isEditingStatus ? (
+                      <div className="flex flex-col space-y-2 p-2">
+                        <div className="flex space-x-2">
+                          <input 
+                            type="text" 
+                            className="w-10 bg-gray-800 border border-gray-700 rounded text-center text-sm outline-none"
+                            value={statusEmoji}
+                            onChange={(e) => setStatusEmoji(e.target.value)}
+                            maxLength={2}
+                          />
+                          <input 
+                            type="text" 
+                            className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 text-sm text-gray-200 outline-none"
+                            placeholder="What's your status?"
+                            value={statusText}
+                            onChange={(e) => setStatusText(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleSaveStatus(); }}
+                          />
+                        </div>
+                        <div className="flex space-x-2 justify-end">
+                          <button className="text-xs text-gray-500 hover:text-gray-300" onClick={() => setIsEditingStatus(false)}>Cancel</button>
+                          <button className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded" onClick={handleSaveStatus}>Save</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => {
+                          setStatusText(currentUserMember?.statusText || '');
+                          setStatusEmoji(currentUserMember?.statusEmoji || '💬');
+                          setIsEditingStatus(true);
+                        }}
+                        className="w-full flex items-center px-2 py-2 text-sm text-gray-300 hover:bg-gray-800/60 rounded transition-colors group"
+                      >
+                        <span className="mr-2">{currentUserMember?.statusEmoji || '💬'}</span>
+                        <span className="flex-1 text-left truncate">{currentUserMember?.statusText || 'Update your status'}</span>
+                        {currentUserMember?.statusText && (
+                          <div
+                            className="text-gray-500 hover:text-gray-300 ml-2 opacity-0 group-hover:opacity-100 transition-opacity" 
+                            onClick={(e) => { e.stopPropagation(); handleClearStatus(); }}
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </div>
+                        )}
+                      </button>
+                    )}
+                  </div>
+
                   {isOwner() && (
                     <button 
                       onClick={() => { setShowUserDropdown(false); navigate(`/w/${slug}/settings`); }}

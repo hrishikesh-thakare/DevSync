@@ -12,6 +12,13 @@ import {
 import { relations } from 'drizzle-orm';
 import { users } from './auth.js';
 import { projects } from './projects.js';
+import { customType } from 'drizzle-orm/pg-core';
+
+const tsvector = customType<{ data: string }>({
+  dataType() {
+    return 'tsvector';
+  },
+});
 
 // ─── tasks ───────────────────────────────────────────────────────────────────
 // NOTE: description_tsv (TSVECTOR GENERATED ALWAYS AS ...) is handled via
@@ -28,7 +35,7 @@ export const tasks = pgTable('tasks', {
   title:              varchar('title', { length: 500 }).notNull(),
   description:        jsonb('description').default({}),
   descriptionText:    text('description_text').default(''),
-  // description_tsv: TSVECTOR — added via migration SQL
+  descriptionTsv:     tsvector('description_tsv'),
   issueType:          varchar('issue_type', { length: 20 }).default('task'),      // epic|story|task|bug|subtask
   status:             varchar('status', { length: 30 }).default('todo'),          // todo|in_progress|in_review|done
   priority:           varchar('priority', { length: 20 }).default('medium'),      // critical|high|medium|low

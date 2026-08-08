@@ -11,10 +11,13 @@ import { eq, and } from 'drizzle-orm';
  */
 export const resolveSlug = async (req: Request, res: Response, next: NextFunction, slug: string): Promise<void> => {
   try {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(slug);
+    const condition = isUuid ? eq(workspaces.workspaceId, slug) : eq(workspaces.slug, slug);
+
     const [ws] = await db
       .select({ id: workspaces.workspaceId })
       .from(workspaces)
-      .where(eq(workspaces.slug, slug))
+      .where(condition)
       .limit(1);
 
     if (!ws) {

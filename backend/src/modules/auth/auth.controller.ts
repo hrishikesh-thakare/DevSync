@@ -8,6 +8,7 @@ import { env } from '../../config/env.js';
 import { eq, and } from 'drizzle-orm';
 import { supabase } from '../../config/supabase.js';
 import { logAuditAction } from '../audit/audit.controller.js';
+import { getIO } from '../../sockets/index.js';
 
 // ─── Token Helpers ───────────────────────────────────────────────────────────
 
@@ -406,3 +407,44 @@ export const oauthCallback = async (req: Request, res: Response): Promise<void> 
     res.status(500).json({ error: 'Server error during OAuth processing.' });
   }
 };
+
+// ─── Status & Presence Handlers ──────────────────────────────────────────────
+
+export const updateStatus = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+    const { statusText, statusEmoji } = req.body;
+    
+    await db.update(users)
+      .set({ statusText, statusEmoji, lastActiveAt: new Date() })
+      .where(eq(users.userId, userId));
+      
+    const io = getIO();
+    io.emit('user_presence_updated', { userId, statusText, statusEmoji });
+    
+    res.json({ message: 'Status updated successfully' });
+  } catch (err) {
+    console.error('Update status error:', err);
+    res.status(500).json({ error: 'Server error updating status.' });
+  }
+};
+
+export const updatePresence = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+    const { presence } = req.body;
+    
+    await db.update(users)
+      .set({ presence, lastActiveAt: new Date() })
+      .where(eq(users.userId, userId));
+      
+    const io = getIO();
+    io.emit('user_presence_updated', { userId, presence });
+    
+    res.json({ message: 'Presence updated successfully' });
+  } catch (err) {
+    console.error('Update presence error:', err);
+    res.status(500).json({ error: 'Server error updating presence.' });
+  }
+};
+

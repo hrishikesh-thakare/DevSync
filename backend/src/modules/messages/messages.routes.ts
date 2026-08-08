@@ -11,6 +11,8 @@ import {
   getThreadReplies,
   editMessage,
   deleteMessage,
+  addReaction,
+  removeReaction
 } from './messages.controller.js';
 
 // Mounted at /api/channels/:channelId/messages
@@ -24,5 +26,7 @@ router.get('/', listMessages);
 router.get('/:messageId/thread', getThreadReplies);
 router.patch('/:messageId', editMessage);
 router.delete('/:messageId', deleteMessage);
+router.post('/:messageId/reactions', addReaction);
+router.delete('/:messageId/reactions/:emoji', removeReaction);
 
 export default router;

@@ -5,7 +5,7 @@ import { useChatStore, Message } from '../../store/useChatStore.js';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useAuthStore } from '../../store/auth.js';
 import { useTaskStore } from '../../store/useTaskStore.js';
-import { TiptapEditor } from '../../components/chat/TiptapEditor.js';
+import { LexicalEditor } from '../../components/chat/LexicalEditor.js';
 
 import { renderMessageContent } from '../../components/chat/renderMessageContent.js';
 
@@ -71,9 +71,8 @@ export const ChannelPage = () => {
 
 
   const { user } = useAuthStore();
-  const { channels, memberCount, isAdmin, fetchWorkspaceData, myRole } = useCurrentWorkspaceStore();
-  const { messages, isLoading, joinChannel, leaveChannel, sendMessage, removeMessage } = useChatStore();
-
+  const { channels, memberCount, members, isAdmin, fetchWorkspaceData, myRole } = useCurrentWorkspaceStore();
+  const { messages, isLoading, joinChannel, leaveChannel, sendMessage, removeMessage, updateMessage, addReactionToMessage, removeReactionFromMessage } = useChatStore();
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const threadScrollRef = useRef<HTMLDivElement>(null);
@@ -87,7 +86,68 @@ export const ChannelPage = () => {
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
   const [threadsCache, setThreadsCache] = useState<Record<string, Message[]>>({});
 
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [canChat, setCanChat] = useState(true);
+
+  const handleSaveEdit = async (messageId: string, newContent: string) => {
+    if (!slug || !channelId) return;
+    try {
+      // Optimistic update
+      updateMessage({ messageId, bodyText: newContent });
+      setThreadReplies(prev => prev.map(m => m.messageId === messageId ? { ...m, bodyText: newContent } : m));
+      setThreadsCache(prev => {
+        const next = { ...prev };
+        for (const k in next) {
+          next[k] = next[k].map(m => m.messageId === messageId ? { ...m, bodyText: newContent } : m);
+        }
+        return next;
+      });
+      setEditingMessageId(null);
+
+      await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages/${messageId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ bodyText: newContent })
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to edit message');
+    }
+  };
+
+  const toggleReaction = async (messageId: string, emoji: string) => {
+    if (!slug || !channelId || !user) return;
+    
+    const msg = messages.find(m => m.messageId === messageId) 
+      || (activeThreadMessageId && threadsCache[activeThreadMessageId]?.find(m => m.messageId === messageId))
+      || (activeThreadMessageId === messageId ? messages.find(m => m.messageId === activeThreadMessageId) : null);
+    
+    const hasReacted = msg?.reactions?.some((r: any) => r.userId === user.userId && r.emoji === emoji);
+    
+    // Optimistic UI update
+    if (hasReacted) {
+      removeReactionFromMessage(messageId, { userId: user.userId, emoji });
+    } else {
+      addReactionToMessage(messageId, { userId: user.userId, emoji, userName: user.fullName || 'Me' });
+    }
+
+    try {
+      if (hasReacted) {
+        await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, { method: 'DELETE' });
+      } else {
+        await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages/${messageId}/reactions`, {
+          method: 'POST',
+          body: JSON.stringify({ emoji })
+        });
+      }
+    } catch (err) {
+      console.error('Failed to toggle reaction', err);
+      // Revert if error
+      if (hasReacted) {
+        addReactionToMessage(messageId, { userId: user.userId, emoji, userName: user.fullName || 'Me' });
+      } else {
+        removeReactionFromMessage(messageId, { userId: user.userId, emoji });
+      }
+    }
+  };
 
   useEffect(() => {
     const checkPermissions = async () => {
@@ -155,22 +215,83 @@ export const ChannelPage = () => {
 
   useEffect(() => {
     const socket = socketClient.getSocket();
+
+    const handleNewMessage = (msg: Message) => {
+      if (msg.threadId) {
+        setThreadReplies((prev) => [...prev, msg]);
+        setThreadsCache((prev) => ({
+          ...prev,
+          [msg.threadId as string]: [...(prev[msg.threadId as string] || []), msg]
+        }));
+        useChatStore.getState().fetchMessages(channelId!); // to update reply count
+      } else {
+        useChatStore.getState().fetchMessages(channelId!);
+      }
+    };
+
+    const handleMessageUpdated = (updatedMsg: Message) => {
+      useChatStore.getState().updateMessage(updatedMsg);
+      if (updatedMsg.threadId) {
+        setThreadReplies((prev) => prev.map(m => m.messageId === updatedMsg.messageId ? { ...m, ...updatedMsg } : m));
+        setThreadsCache((prev) => {
+          const thread = prev[updatedMsg.threadId as string] || [];
+          return { ...prev, [updatedMsg.threadId as string]: thread.map(m => m.messageId === updatedMsg.messageId ? { ...m, ...updatedMsg } : m) };
+        });
+      }
+    };
+
     const handleMessageDeleted = ({ messageId }: { messageId: string }) => {
       setThreadReplies((prev) => prev.filter((m) => m.messageId !== messageId));
       setThreadsCache((prev) => {
         const updated = { ...prev };
+        delete updated[messageId];
         for (const parentId in updated) {
           updated[parentId] = updated[parentId].filter((m) => m.messageId !== messageId);
         }
         return updated;
       });
+      setExpandedThreads((prev) => {
+        if (prev.has(messageId)) {
+          const next = new Set(prev);
+          next.delete(messageId);
+          return next;
+        }
+        return prev;
+      });
+      setActiveThreadMessageId((prev) => (prev === messageId ? null : prev));
+      useChatStore.getState().fetchMessages(channelId!);
     };
 
-    socket.on('message_deleted', handleMessageDeleted);
-    return () => {
-      socket.off('message_deleted', handleMessageDeleted);
+    const handleReactionAdded = (data: { messageId: string; userId: string; emoji: string; userName?: string }) => {
+      useChatStore.getState().addReactionToMessage(data.messageId, data);
+      setThreadReplies(prev => prev.map(m => m.messageId === data.messageId ? {
+        ...m,
+        reactions: [...((m as any).reactions || []).filter((r: any) => !(r.userId === data.userId && r.emoji === data.emoji)), { messageId: data.messageId, userId: data.userId, emoji: data.emoji, userName: data.userName || 'User' }]
+      } : m));
     };
-  }, []);
+
+    const handleReactionRemoved = (data: { messageId: string; userId: string; emoji: string }) => {
+      useChatStore.getState().removeReactionFromMessage(data.messageId, data);
+      setThreadReplies(prev => prev.map(m => m.messageId === data.messageId ? {
+        ...m,
+        reactions: ((m as any).reactions || []).filter((r: any) => !(r.userId === data.userId && r.emoji === data.emoji))
+      } : m));
+    };
+
+    socket.on('new_message', handleNewMessage);
+    socket.on('message_updated', handleMessageUpdated);
+    socket.on('message_deleted', handleMessageDeleted);
+    socket.on('message_reaction_added', handleReactionAdded);
+    socket.on('message_reaction_removed', handleReactionRemoved);
+
+    return () => {
+      socket.off('new_message', handleNewMessage);
+      socket.off('message_updated', handleMessageUpdated);
+      socket.off('message_deleted', handleMessageDeleted);
+      socket.off('message_reaction_added', handleReactionAdded);
+      socket.off('message_reaction_removed', handleReactionRemoved);
+    };
+  }, [channelId, slug]);
 
 
 
@@ -254,11 +375,20 @@ export const ChannelPage = () => {
       setThreadReplies((prev) => prev.filter((m) => m.messageId !== msgId));
       setThreadsCache((prev) => {
         const updated = { ...prev };
+        delete updated[msgId];
         for (const parentId in updated) {
           updated[parentId] = updated[parentId].filter((m) => m.messageId !== msgId);
         }
         return updated;
       });
+      setExpandedThreads((prev) => {
+        const next = new Set(prev);
+        next.delete(msgId);
+        return next;
+      });
+      if (activeThreadMessageId === msgId) {
+        setActiveThreadMessageId(null);
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to delete message');
     }
@@ -297,7 +427,15 @@ export const ChannelPage = () => {
 
   const renderMessage = (msg: Message, isThreadContext = false) => {
     const isMe = ('authorId' in msg ? (msg as { authorId?: string }).authorId : undefined) === user?.userId || msg.senderId === user?.userId;
+    const authorId = ('authorId' in msg ? (msg as { authorId?: string }).authorId : undefined) || msg.senderId;
+    const authorMember = members.find(m => m.userId === authorId);
 
+    const isMentioned = user?.userId && msg.bodyText && (
+      msg.bodyText.includes(`data-id="${user.userId}"`) ||
+      (user.fullName && msg.bodyText.toLowerCase().includes(`@${user.fullName.toLowerCase()}`)) ||
+      (user.displayName && msg.bodyText.toLowerCase().includes(`@${user.displayName.toLowerCase()}`)) ||
+      msg.bodyText.includes('@everyone') || msg.bodyText.includes('@channel') || msg.bodyText.includes('@all')
+    );
 
     // Basic logic for headers (simplified for thread)
     const showHeader = true;
@@ -309,11 +447,20 @@ export const ChannelPage = () => {
     const fileMatches = Array.from((msg.bodyText || '').matchAll(/\[(.*?)\]\(file:([a-zA-Z0-9-]+)\)/g)) as RegExpMatchArray[];
 
     return (
-      <div key={msg.messageId} className={`group flex items-start py-1 hover:bg-gray-900/40 rounded-lg transition-colors relative ${isThreadContext ? '' : '-mx-4 px-4'}`}>
+      <div 
+        key={msg.messageId} 
+        className={`group flex items-start py-1 hover:bg-gray-900/40 transition-colors relative ${isThreadContext ? '' : '-mx-4 px-4'} ${isMentioned ? 'bg-amber-500/10 hover:bg-amber-500/20 rounded-none' : 'rounded-lg'}`}
+      >
+        {isMentioned && <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500 rounded-r-full" />}
         <div className="w-10 flex-shrink-0 flex justify-center">
           {showHeader && (
-            <div className="w-9 h-9 rounded-md bg-gradient-to-br from-gray-700 to-gray-500 flex items-center justify-center text-white font-bold shadow-md border border-gray-800">
-              {msg.authorName?.[0]?.toUpperCase() || 'U'}
+            <div className="relative mt-1">
+              <div className="w-9 h-9 rounded-md bg-gradient-to-br from-gray-700 to-gray-500 flex items-center justify-center text-white font-bold shadow-md border border-gray-800">
+                {msg.authorName?.[0]?.toUpperCase() || 'U'}
+              </div>
+              {authorMember?.presence === 'online' && (
+                <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-green-500 border-2 border-gray-950 rounded-full"></div>
+              )}
             </div>
           )}
         </div>
@@ -322,24 +469,70 @@ export const ChannelPage = () => {
           {showHeader && (
             <div className="flex items-baseline space-x-2 mb-0.5">
               <span className="font-semibold text-gray-100">{msg.authorName || 'Unknown User'}</span>
+              {authorMember?.statusEmoji && (
+                <span className="text-xs" title={authorMember.statusText || ''}>{authorMember.statusEmoji}</span>
+              )}
               <span className="text-xs text-gray-500">{msg.createdAt ? format(new Date(msg.createdAt), 'h:mm a') : ''}</span>
             </div>
           )}
-          
-          <div 
-            className="text-gray-300 text-[15px] leading-relaxed prose prose-invert max-w-none prose-p:my-0 prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-800 prose-code:before:content-none prose-code:after:content-none"
-            dangerouslySetInnerHTML={{ __html: htmlContent }}
-            onClick={async (e) => {
+          {editingMessageId === msg.messageId ? (
+            <div className="mt-1 bg-gray-950/50 p-2 rounded-lg border border-gray-700 shadow-sm">
+              <LexicalEditor 
+                onSubmit={(content) => handleSaveEdit(msg.messageId, content)} 
+                initialContent={msg.bodyText} 
+                placeholder="Edit your message..."
+              />
+              <button onClick={() => setEditingMessageId(null)} className="text-xs font-medium text-gray-400 hover:text-white mt-2 ml-1 transition-colors">
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div 
+              className="text-gray-300 text-[15px] leading-relaxed prose prose-invert max-w-none prose-p:my-0 prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-800 prose-code:before:content-none prose-code:after:content-none"
+              dangerouslySetInnerHTML={{ __html: htmlContent }}
+              onClick={async (e) => {
               const target = e.target as HTMLElement;
               const fileLink = target.closest('[data-file-id]');
               if (fileLink) {
                 e.preventDefault();
                 const fileId = fileLink.getAttribute('data-file-id');
+                const fileName = fileLink.getAttribute('data-file-name') || '';
+                const isPreviewable = /\.(jpg|jpeg|png|gif|webp|pdf|txt|csv|mp4|webm)$/i.test(fileName);
+                
+                console.log(`[File Click] id=${fileId}, fileName=${fileName}, isPreviewable=${isPreviewable}`);
+
+                let win: Window | null = null;
+                if (isPreviewable) {
+                  console.log(`[File Click] Opening synchronous about:blank tab for preview...`);
+                  win = window.open('about:blank', '_blank');
+                }
+
                 try {
+                  console.log(`[File Click] Fetching download URL from backend...`);
                   const res = await apiFetch(`/workspaces/${slug}/files/${fileId}/download`);
-                  if (res.downloadUrl) window.open(res.downloadUrl, '_blank');
+                  console.log(`[File Click] Backend response:`, res);
+
+                  if (res.downloadUrl) {
+                    if (isPreviewable && win) {
+                      console.log(`[File Click] Navigating preview tab to: ${res.downloadUrl}`);
+                      win.location.href = res.downloadUrl;
+                    } else {
+                      console.log(`[File Click] Triggering background download for: ${res.downloadUrl}`);
+                      const a = document.createElement('a');
+                      a.href = res.downloadUrl;
+                      a.rel = 'noreferrer';
+                      if (fileName) a.download = fileName;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                    }
+                  } else {
+                    console.warn(`[File Click] No downloadUrl in response! Closing tab if open.`);
+                    if (win) win.close();
+                  }
                 } catch (err) {
-                  console.error('Failed to get download URL', err);
+                  console.error('[File Click] Failed to get download URL', err);
+                  if (win) win.close();
                 }
                 return;
               }
@@ -356,6 +549,7 @@ export const ChannelPage = () => {
               }
             }}
           />
+          )}
 
           {/* Render Image Previews for Image Files */}
           {fileMatches.length > 0 && (
@@ -372,7 +566,7 @@ export const ChannelPage = () => {
             </div>
           )}
 
-          {!isThreadContext && (msg.replyCount ?? msg.threadCount ?? 0) > 0 && (
+          {!isThreadContext && !msg.isDeleted && (msg.replyCount ?? msg.threadCount ?? 0) > 0 && (
             <div className="mt-2 flex items-center gap-3">
               <button 
                 onClick={() => toggleThreadInline(msg.messageId)}
@@ -393,20 +587,70 @@ export const ChannelPage = () => {
           )}
 
           {/* Inline Nested Replies */}
-          {!isThreadContext && expandedThreads.has(msg.messageId) && threadsCache[msg.messageId] && (
+          {!isThreadContext && !msg.isDeleted && expandedThreads.has(msg.messageId) && threadsCache[msg.messageId] && (
             <div className="mt-3 ml-2 pl-4 border-l-2 border-gray-800 space-y-2">
               {threadsCache[msg.messageId].map((reply: Message) => (
                 <div key={reply.messageId} className="relative">
                   {renderMessage(reply, true)}
                 </div>
               ))}
+            </div>
+          )}
 
+          {/* Reaction Pills */}
+          {msg.reactions && msg.reactions.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {Object.entries(
+                (msg.reactions as any[]).reduce((acc: any, rx: any) => {
+                  if (!acc[rx.emoji]) acc[rx.emoji] = { count: 0, userIds: [], userNames: [] };
+                  acc[rx.emoji].count++;
+                  acc[rx.emoji].userIds.push(rx.userId);
+                  acc[rx.emoji].userNames.push(rx.userName);
+                  return acc;
+                }, {})
+              ).map(([emoji, data]: [string, any]) => {
+                const hasReacted = data.userIds.includes(user?.userId);
+                return (
+                  <button
+                    key={emoji}
+                    onClick={() => toggleReaction(msg.messageId, emoji)}
+                    title={data.userNames.join(', ')}
+                    className={`flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-xs font-medium border transition-colors ${
+                      hasReacted 
+                        ? 'bg-blue-500/20 border-blue-500/30 text-blue-300 hover:bg-blue-500/30' 
+                        : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-gray-800'
+                    }`}
+                  >
+                    <span>{emoji}</span>
+                    <span>{data.count}</span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
 
         <div className="opacity-0 group-hover:opacity-100 flex items-center space-x-1 bg-gray-900 border border-gray-800 rounded-md p-1 shadow-sm absolute right-6 -mt-3 transition-opacity">
-          <button className="p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-800 rounded"><Smile className="w-4 h-4" /></button>
+          
+          <div className="relative group/react">
+            <button className="p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-800 rounded">
+              <Smile className="w-4 h-4" />
+            </button>
+            <div className="absolute bottom-full right-0 pb-1 hidden group-hover/react:block z-50">
+              <div className="flex items-center space-x-1 bg-gray-900 p-1.5 rounded-full shadow-lg border border-gray-700">
+                {['👍', '❤️', '😂', '🎉', '👀'].map(emoji => (
+                  <button 
+                    key={emoji} 
+                    onClick={() => toggleReaction(msg.messageId, emoji)} 
+                    className="hover:bg-gray-700 rounded-full w-7 h-7 flex items-center justify-center text-sm transition-transform hover:scale-110"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           {!isThreadContext && (
             <button 
               onClick={() => loadThread(msg.messageId)}
@@ -414,6 +658,15 @@ export const ChannelPage = () => {
               title="Reply in thread"
             >
               <MessageSquare className="w-4 h-4" />
+            </button>
+          )}
+          {(isMe || isAdmin()) && (
+            <button 
+              onClick={() => setEditingMessageId(msg.messageId)} 
+              className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded" 
+              title="Edit Message"
+            >
+              <Edit2 className="w-4 h-4" />
             </button>
           )}
           {(isMe || isAdmin()) && (
@@ -491,7 +744,7 @@ export const ChannelPage = () => {
         {/* Input Area */}
         <div className="px-6 pb-6 pt-2 shrink-0">
           {canChat ? (
-            <TiptapEditor 
+            <LexicalEditor 
               onSubmit={handleSendMain} 
               placeholder={`Message #${currentChannel?.name || 'channel'}`} 
               initialContent={initialChatContent}
@@ -546,7 +799,7 @@ export const ChannelPage = () => {
           {/* Thread Input Area */}
           <div className="p-4 bg-gray-950/80 border-t border-gray-800/60 shrink-0">
             {canChat ? (
-              <TiptapEditor onSubmit={handleSendThread} placeholder="Reply to thread..." />
+              <LexicalEditor onSubmit={handleSendThread} placeholder="Reply to thread..." />
             ) : (
               <div className="text-gray-500 text-xs text-center p-2 bg-gray-900/50 rounded border border-gray-800">
                 Read-only

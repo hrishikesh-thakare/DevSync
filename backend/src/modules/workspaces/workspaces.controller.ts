@@ -148,6 +148,8 @@ export const getWorkspace = async (req: Request, res: Response): Promise<void> =
         email: users.email,
         avatarUrl: users.avatarUrl,
         presence: users.presence,
+        statusText: users.statusText,
+        statusEmoji: users.statusEmoji,
       })
       .from(workspaceMembers)
       .innerJoin(users, eq(workspaceMembers.userId, users.userId))
