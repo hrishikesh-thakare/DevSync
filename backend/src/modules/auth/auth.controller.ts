@@ -413,16 +413,30 @@ export const oauthCallback = async (req: Request, res: Response): Promise<void> 
 export const updateStatus = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user!.userId;
-    const { statusText, statusEmoji } = req.body;
+    const { statusText, presence } = req.body;
     
+    const updateData: Record<string, any> = { lastActiveAt: new Date() };
+    if (statusText !== undefined) updateData.statusText = statusText;
+    if (presence !== undefined) updateData.presence = presence;
+
     await db.update(users)
-      .set({ statusText, statusEmoji, lastActiveAt: new Date() })
+      .set(updateData)
       .where(eq(users.userId, userId));
       
+    // Fetch updated user state to broadcast full state
+    const [updatedUser] = await db.select({
+      presence: users.presence,
+      statusText: users.statusText
+    }).from(users).where(eq(users.userId, userId)).limit(1);
+
     const io = getIO();
-    io.emit('user_presence_updated', { userId, statusText, statusEmoji });
+    io.emit('user_presence_updated', { 
+      userId, 
+      presence: updatedUser?.presence || 'online', 
+      statusText: updatedUser?.statusText || '' 
+    });
     
-    res.json({ message: 'Status updated successfully' });
+    res.json({ message: 'Status updated successfully', user: updatedUser });
   } catch (err) {
     console.error('Update status error:', err);
     res.status(500).json({ error: 'Server error updating status.' });
@@ -437,14 +451,43 @@ export const updatePresence = async (req: Request, res: Response): Promise<void>
     await db.update(users)
       .set({ presence, lastActiveAt: new Date() })
       .where(eq(users.userId, userId));
+
+    const [updatedUser] = await db.select({
+      presence: users.presence,
+      statusText: users.statusText
+    }).from(users).where(eq(users.userId, userId)).limit(1);
       
     const io = getIO();
-    io.emit('user_presence_updated', { userId, presence });
+    io.emit('user_presence_updated', { 
+      userId, 
+      presence: updatedUser?.presence || 'online', 
+      statusText: updatedUser?.statusText || '' 
+    });
     
-    res.json({ message: 'Presence updated successfully' });
+    res.json({ message: 'Presence updated successfully', user: updatedUser });
   } catch (err) {
     console.error('Update presence error:', err);
     res.status(500).json({ error: 'Server error updating presence.' });
+  }
+};
+
+export const updatePreferences = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+    const { preferences } = req.body;
+    
+    const [currentUser] = await db.select({ preferences: users.preferences }).from(users).where(eq(users.userId, userId));
+    const currentPrefs = currentUser?.preferences || {};
+    const newPrefs = { ...(currentPrefs as object), ...preferences };
+    
+    await db.update(users)
+      .set({ preferences: newPrefs })
+      .where(eq(users.userId, userId));
+
+    res.json({ message: 'Preferences updated successfully', preferences: newPrefs });
+  } catch (err) {
+    console.error('Update preferences error:', err);
+    res.status(500).json({ error: 'Server error updating preferences.' });
   }
 };
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { GitBranch, GitPullRequest, CheckCircle2, XCircle, Loader2, RefreshCw, AlertCircle, ExternalLink, Plus, MessageSquare, Terminal } from 'lucide-react';
 import { apiFetch } from '../../lib/api.js';
 import { formatDistanceToNow } from 'date-fns';
@@ -74,7 +74,17 @@ interface GithubIssue {
 
 export const GitHubIntegration = () => {
   const { slug, key } = useParams();
-  const [activeTab, setActiveTab] = useState<'prs' | 'issues' | 'ci' | 'commits'>('prs');
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab') as 'prs' | 'issues' | 'ci' | 'commits' | null;
+  const [activeTab, setActiveTab] = useState<'prs' | 'issues' | 'ci' | 'commits'>(
+    tabParam && ['prs', 'issues', 'ci', 'commits'].includes(tabParam) ? tabParam : 'prs'
+  );
+
+  useEffect(() => {
+    if (tabParam && ['prs', 'issues', 'ci', 'commits'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
   
   const { isAdmin } = useCurrentWorkspaceStore();
   const currentUser = useAuthStore(state => state.user);

@@ -4,16 +4,25 @@ import { useChatStore, Message } from '../../store/useChatStore.js';
 
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useAuthStore } from '../../store/auth.js';
+import { useNotificationStore } from '../../store/useNotificationStore.js';
 import { useTaskStore } from '../../store/useTaskStore.js';
 import { LexicalEditor } from '../../components/chat/LexicalEditor.js';
 
 import { renderMessageContent } from '../../components/chat/renderMessageContent.js';
+import { LinkUnfurl } from '../../components/chat/LinkUnfurl.js';
 
-import { Hash, Lock, Users, Loader2, Smile, MessageSquare, X, Edit2 } from 'lucide-react';
+import { Hash, Lock, Users, Loader2, Smile, MessageSquare, X, Edit2, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { apiFetch } from '../../lib/api.js';
 import { socketClient } from '../../lib/socket.js';
 
+
+const getStatusDotClass = (presence?: string, statusText?: string) => {
+  if (presence === 'offline' || statusText === 'Away') return 'bg-gray-500';
+  if (statusText === 'In a meeting' || statusText === 'Focusing') return 'bg-red-500';
+  if (statusText === 'Commuting' || statusText === 'Out sick' || statusText === 'Vacationing') return 'bg-amber-500';
+  return 'bg-green-500';
+};
 
 function FileImagePreview({ slug, fileId, fileName }: { slug: string; fileId: string; fileName: string }) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -71,13 +80,56 @@ export const ChannelPage = () => {
 
 
   const { user } = useAuthStore();
-  const { channels, memberCount, members, isAdmin, fetchWorkspaceData, myRole } = useCurrentWorkspaceStore();
-  const { messages, isLoading, joinChannel, leaveChannel, sendMessage, removeMessage, updateMessage, addReactionToMessage, removeReactionFromMessage } = useChatStore();
+  const { channels, memberCount, members, projects, isAdmin, fetchWorkspaceData, myRole } = useCurrentWorkspaceStore();
+  const { messages, isLoading, joinChannel, leaveChannel, sendMessage, removeMessage, updateMessage, addReactionToMessage, removeReactionFromMessage, searchChannelMessages, clearSearch, searchResults, isSearching } = useChatStore();
+  const { tasks, fetchTasks } = useTaskStore();
+  const { notifications, markAsRead } = useNotificationStore();
+  
+  // Mark channel notifications as read when viewing
+  useEffect(() => {
+    if (!channelId) return;
+    const unreadInChannel = notifications.filter(n => !n.isRead && n.channelId === channelId);
+    unreadInChannel.forEach(n => markAsRead(n.notificationId));
+  }, [channelId, notifications, markAsRead]);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const threadScrollRef = useRef<HTMLDivElement>(null);
   
   const currentChannel = channels.find(c => c.channelId === channelId);
+  const currentProject = projects.find(p => p.projectId === currentChannel?.projectId);
+
+  useEffect(() => {
+    if (currentProject?.key) {
+      fetchTasks(currentProject.key);
+    }
+  }, [currentProject?.key, fetchTasks]);
+
+  // Search State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isSearchOpen) return;
+    const trimmed = searchQuery.trim();
+    if (trimmed.length >= 2 && channelId) {
+      const delayFn = setTimeout(() => {
+        searchChannelMessages(channelId, trimmed);
+      }, 300);
+      return () => clearTimeout(delayFn);
+    } else if (trimmed.length === 0) {
+      clearSearch();
+    }
+  }, [searchQuery, isSearchOpen, channelId, searchChannelMessages, clearSearch]);
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setIsSearchOpen(false);
+    clearSearch();
+  };
 
   // Thread State
   const [activeThreadMessageId, setActiveThreadMessageId] = useState<string | null>(null);
@@ -120,7 +172,7 @@ export const ChannelPage = () => {
       || (activeThreadMessageId && threadsCache[activeThreadMessageId]?.find(m => m.messageId === messageId))
       || (activeThreadMessageId === messageId ? messages.find(m => m.messageId === activeThreadMessageId) : null);
     
-    const hasReacted = msg?.reactions?.some((r: any) => r.userId === user.userId && r.emoji === emoji);
+    const hasReacted = msg?.reactions?.some((r) => r.userId === user.userId && r.emoji === emoji);
     
     // Optimistic UI update
     if (hasReacted) {
@@ -198,7 +250,7 @@ export const ChannelPage = () => {
 
   useEffect(() => {
     if (slug && channelId) {
-      joinChannel(slug, channelId);
+      joinChannel(channelId);
       if (currentChannel?.projectId) {
         const project = useCurrentWorkspaceStore.getState().projects.find(p => p.projectId === currentChannel.projectId);
         if (project?.key) {
@@ -266,7 +318,7 @@ export const ChannelPage = () => {
       useChatStore.getState().addReactionToMessage(data.messageId, data);
       setThreadReplies(prev => prev.map(m => m.messageId === data.messageId ? {
         ...m,
-        reactions: [...((m as any).reactions || []).filter((r: any) => !(r.userId === data.userId && r.emoji === data.emoji)), { messageId: data.messageId, userId: data.userId, emoji: data.emoji, userName: data.userName || 'User' }]
+        reactions: [...(m.reactions || []).filter((r) => !(r.userId === data.userId && r.emoji === data.emoji)), { messageId: data.messageId, userId: data.userId, emoji: data.emoji, userName: data.userName || 'User' }]
       } : m));
     };
 
@@ -274,7 +326,7 @@ export const ChannelPage = () => {
       useChatStore.getState().removeReactionFromMessage(data.messageId, data);
       setThreadReplies(prev => prev.map(m => m.messageId === data.messageId ? {
         ...m,
-        reactions: ((m as any).reactions || []).filter((r: any) => !(r.userId === data.userId && r.emoji === data.emoji))
+        reactions: (m.reactions || []).filter((r) => !(r.userId === data.userId && r.emoji === data.emoji))
       } : m));
     };
 
@@ -295,12 +347,23 @@ export const ChannelPage = () => {
 
 
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom or specific message
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      const messageIdQuery = searchParams.get('messageId');
+      if (messageIdQuery && messages.some(m => m.messageId === messageIdQuery)) {
+        const el = document.getElementById(messageIdQuery);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Flash effect
+          el.classList.add('bg-blue-900/30', 'transition-all', 'duration-1000');
+          setTimeout(() => el.classList.remove('bg-blue-900/30'), 2000);
+        }
+      } else {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
     }
-  }, [messages]);
+  }, [messages, searchParams]);
 
   // Auto-scroll thread
   useEffect(() => {
@@ -345,6 +408,52 @@ export const ChannelPage = () => {
 
   const handleSendMain = async (content: string) => {
     if (slug && channelId) {
+      if (isSearchOpen) {
+        handleClearSearch();
+      }
+
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = content;
+      const rawText = tempDiv.textContent || tempDiv.innerText || '';
+      
+      const matchWithKey = rawText.trim().match(/^\/task\s+(create)\s+([a-zA-Z0-9]+)\s+(.+)/i);
+      const matchWithoutKey = rawText.trim().match(/^\/task\s+(create)\s+(.+)/i);
+
+      let targetProjectKey = '';
+      let title = '';
+
+      if (matchWithKey && projects.some(p => p.key.toLowerCase() === matchWithKey[2].toLowerCase())) {
+        targetProjectKey = matchWithKey[2].toUpperCase();
+        title = matchWithKey[3];
+      } else if (matchWithoutKey) {
+        if (currentProject) {
+          targetProjectKey = currentProject.key;
+          title = matchWithoutKey[2];
+        } else if (projects.length === 1) {
+          targetProjectKey = projects[0].key;
+          title = matchWithoutKey[2];
+        } else if (projects.length > 1) {
+          alert('You are not in a project channel. Please specify a project key: /task create [ProjectKey] [Title]');
+          return;
+        } else {
+          alert('No projects exist in this workspace. Please create a project first.');
+          return;
+        }
+      }
+
+      if (targetProjectKey && title) {
+        try {
+          await apiFetch(`/workspaces/${slug}/projects/${targetProjectKey}/tasks`, {
+            method: 'POST',
+            body: JSON.stringify({ title, issueType: 'task', priority: 'medium' })
+          });
+          return; // Do not send normal chat message
+        } catch (err) {
+          alert(err instanceof Error ? err.message : 'Failed to create task via slash command');
+          return;
+        }
+      }
+
       await sendMessage(channelId, content);
     }
   };
@@ -366,12 +475,8 @@ export const ChannelPage = () => {
   const deleteMessage = async (msgId: string) => {
     if (!confirm('Delete message?')) return;
     try {
-      const targetMsg = messages.find(m => m.messageId === msgId) || threadReplies.find(m => m.messageId === msgId);
-      const threadId = targetMsg?.threadId || null;
-
-
       await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages/${msgId}`, { method: 'DELETE' });
-      removeMessage(msgId, threadId);
+      removeMessage(msgId);
       setThreadReplies((prev) => prev.filter((m) => m.messageId !== msgId));
       setThreadsCache((prev) => {
         const updated = { ...prev };
@@ -430,11 +535,19 @@ export const ChannelPage = () => {
     const authorId = ('authorId' in msg ? (msg as { authorId?: string }).authorId : undefined) || msg.senderId;
     const authorMember = members.find(m => m.userId === authorId);
 
+    const userFirstName = user?.fullName?.split(' ')[0]?.toLowerCase();
+    const userFullNameNoSpace = user?.fullName?.replace(/\s+/g, '')?.toLowerCase();
+    const userFullName = user?.fullName?.toLowerCase();
+    const userDisplayName = (user as { displayName?: string } | null)?.displayName?.toLowerCase();
+    const bodyLower = msg.bodyText?.toLowerCase() || '';
+
     const isMentioned = user?.userId && msg.bodyText && (
       msg.bodyText.includes(`data-id="${user.userId}"`) ||
-      (user.fullName && msg.bodyText.toLowerCase().includes(`@${user.fullName.toLowerCase()}`)) ||
-      (user.displayName && msg.bodyText.toLowerCase().includes(`@${user.displayName.toLowerCase()}`)) ||
-      msg.bodyText.includes('@everyone') || msg.bodyText.includes('@channel') || msg.bodyText.includes('@all')
+      (userFirstName && bodyLower.includes(`@${userFirstName}`)) ||
+      (userFullNameNoSpace && bodyLower.includes(`@${userFullNameNoSpace}`)) ||
+      (userFullName && bodyLower.includes(`@${userFullName}`)) ||
+      (userDisplayName && bodyLower.includes(`@${userDisplayName}`)) ||
+      bodyLower.includes('@everyone') || bodyLower.includes('@channel') || bodyLower.includes('@all')
     );
 
     // Basic logic for headers (simplified for thread)
@@ -449,18 +562,18 @@ export const ChannelPage = () => {
     return (
       <div 
         key={msg.messageId} 
-        className={`group flex items-start py-1 hover:bg-gray-900/40 transition-colors relative ${isThreadContext ? '' : '-mx-4 px-4'} ${isMentioned ? 'bg-amber-500/10 hover:bg-amber-500/20 rounded-none' : 'rounded-lg'}`}
+        id={msg.messageId}
+        className={`group flex items-start py-1.5 transition-colors relative ${isThreadContext ? '' : '-mx-4 px-4'} ${
+          isMentioned ? 'bg-blue-950/40 hover:bg-blue-950/60 border-l-4 border-blue-500 rounded-r-lg font-medium' : 'hover:bg-gray-900/40 rounded-lg'
+        }`}
       >
-        {isMentioned && <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500 rounded-r-full" />}
         <div className="w-10 flex-shrink-0 flex justify-center">
           {showHeader && (
             <div className="relative mt-1">
               <div className="w-9 h-9 rounded-md bg-gradient-to-br from-gray-700 to-gray-500 flex items-center justify-center text-white font-bold shadow-md border border-gray-800">
                 {msg.authorName?.[0]?.toUpperCase() || 'U'}
               </div>
-              {authorMember?.presence === 'online' && (
-                <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-green-500 border-2 border-gray-950 rounded-full"></div>
-              )}
+              <div className={`absolute -bottom-1 -right-1 w-2.5 h-2.5 ${getStatusDotClass(authorMember?.presence, authorMember?.statusText)} border-2 border-gray-950 rounded-full`}></div>
             </div>
           )}
         </div>
@@ -469,8 +582,8 @@ export const ChannelPage = () => {
           {showHeader && (
             <div className="flex items-baseline space-x-2 mb-0.5">
               <span className="font-semibold text-gray-100">{msg.authorName || 'Unknown User'}</span>
-              {authorMember?.statusEmoji && (
-                <span className="text-xs" title={authorMember.statusText || ''}>{authorMember.statusEmoji}</span>
+              {authorMember?.statusText && (
+                <span className="text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded font-normal" title={authorMember.statusText}>{authorMember.statusText}</span>
               )}
               <span className="text-xs text-gray-500">{msg.createdAt ? format(new Date(msg.createdAt), 'h:mm a') : ''}</span>
             </div>
@@ -555,7 +668,8 @@ export const ChannelPage = () => {
           {fileMatches.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
               {fileMatches.map((match) => {
-                const fileName = match[1];
+                const rawName = match[1];
+                const fileName = rawName.replace(/<[^>]*>?/gm, '').trim();
                 const fileId = match[2];
                 const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(fileName);
                 if (!isImage) return null;
@@ -565,6 +679,19 @@ export const ChannelPage = () => {
               })}
             </div>
           )}
+
+          {/* Render Link Unfurls */}
+          {(() => {
+            if (!msg.bodyText || !slug) return null;
+            const urlMatches = msg.bodyText.match(/https?:\/\/[^\s<"']+/gi);
+            if (!urlMatches || urlMatches.length === 0) return null;
+            const cleanUrls = urlMatches.map(u => u.replace(/[.,>)]+$/, ''));
+            const firstExternalUrl = cleanUrls.find(u => !u.includes('localhost:') && !u.includes(window.location.host));
+            if (firstExternalUrl) {
+              return <LinkUnfurl url={firstExternalUrl} workspaceSlug={slug} />;
+            }
+            return null;
+          })()}
 
           {!isThreadContext && !msg.isDeleted && (msg.replyCount ?? msg.threadCount ?? 0) > 0 && (
             <div className="mt-2 flex items-center gap-3">
@@ -601,15 +728,15 @@ export const ChannelPage = () => {
           {msg.reactions && msg.reactions.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {Object.entries(
-                (msg.reactions as any[]).reduce((acc: any, rx: any) => {
+                msg.reactions.reduce((acc: Record<string, { count: number; userIds: string[]; userNames: string[] }>, rx) => {
                   if (!acc[rx.emoji]) acc[rx.emoji] = { count: 0, userIds: [], userNames: [] };
                   acc[rx.emoji].count++;
                   acc[rx.emoji].userIds.push(rx.userId);
-                  acc[rx.emoji].userNames.push(rx.userName);
+                  if (rx.userName) acc[rx.emoji].userNames.push(rx.userName);
                   return acc;
                 }, {})
-              ).map(([emoji, data]: [string, any]) => {
-                const hasReacted = data.userIds.includes(user?.userId);
+              ).map(([emoji, data]) => {
+                const hasReacted = data.userIds.includes(user?.userId || '');
                 return (
                   <button
                     key={emoji}
@@ -706,6 +833,27 @@ export const ChannelPage = () => {
             )}
           </div>
           <div className="flex items-center space-x-4">
+            {isSearchOpen ? (
+              <form onSubmit={handleSearchSubmit} className="relative flex items-center">
+                <Search className="w-4 h-4 text-gray-500 absolute left-2.5" />
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Search channel..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="bg-gray-900 border border-gray-700 rounded-md pl-8 pr-8 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-gray-500 w-64"
+                />
+                <button type="button" onClick={handleClearSearch} className="absolute right-2 text-gray-400 hover:text-gray-200">
+                  <X className="w-4 h-4" />
+                </button>
+              </form>
+            ) : (
+              <button onClick={() => setIsSearchOpen(true)} className="text-gray-500 hover:text-gray-300 transition-colors" title="Search Channel">
+                <Search className="w-5 h-5" />
+              </button>
+            )}
+            
             {isAdmin() && (
               <button 
                 onClick={handleDeleteChannel}
@@ -722,22 +870,34 @@ export const ChannelPage = () => {
           </div>
         </div>
 
-        {/* Messages Area */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6 space-y-6 custom-scrollbar">
-          {isLoading ? (
-            <div className="flex justify-center items-center h-full">
-              <Loader2 className="w-8 h-8 animate-spin text-white" />
+        {/* Message Feed */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>
+          {isLoading || isSearching ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
             </div>
+          ) : isSearchOpen && searchQuery.trim().length >= 2 ? (
+            searchResults.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                <Search className="w-12 h-12 mb-3 opacity-20" />
+                <p>No messages match your search.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="text-sm font-semibold text-gray-400 pb-2 border-b border-gray-800">
+                  Search Results for "{searchQuery}"
+                </div>
+                {searchResults.map(msg => renderMessage(msg, false))}
+              </div>
+            )
           ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-500">
-              <div className="w-16 h-16 bg-gray-900 rounded-2xl flex items-center justify-center mb-4 border border-gray-800">
-                {currentChannel?.type === 'private' ? <Lock className="w-8 h-8" /> : <Hash className="w-8 h-8" />}
-              </div>
-              <h3 className="text-xl font-bold text-gray-300 mb-2">Welcome to #{currentChannel?.name}</h3>
-              <p className="text-sm">This is the beginning of this channel's history.</p>
+              <Hash className="w-16 h-16 mb-4 opacity-20" />
+              <p className="text-lg">Welcome to #{currentChannel?.name}!</p>
+              <p className="text-sm">This is the start of the channel.</p>
             </div>
           ) : (
-            messages.map((msg) => renderMessage(msg, false))
+            messages.map(msg => renderMessage(msg, false))
           )}
         </div>
 
@@ -748,6 +908,7 @@ export const ChannelPage = () => {
               onSubmit={handleSendMain} 
               placeholder={`Message #${currentChannel?.name || 'channel'}`} 
               initialContent={initialChatContent}
+              tasks={currentProject ? tasks : []}
             />
           ) : (
             <div 
@@ -799,7 +960,7 @@ export const ChannelPage = () => {
           {/* Thread Input Area */}
           <div className="p-4 bg-gray-950/80 border-t border-gray-800/60 shrink-0">
             {canChat ? (
-              <LexicalEditor onSubmit={handleSendThread} placeholder="Reply to thread..." />
+              <LexicalEditor onSubmit={handleSendThread} placeholder="Reply to thread..." tasks={currentProject ? tasks : []} />
             ) : (
               <div className="text-gray-500 text-xs text-center p-2 bg-gray-900/50 rounded border border-gray-800">
                 Read-only

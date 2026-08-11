@@ -8,6 +8,7 @@ import { useAuthStore } from '../../store/auth.js';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { MessageSquare, GitPullRequest, AlertCircle, GitBranch, ExternalLink, Plus, Copy, Check } from 'lucide-react';
 import { CreatePRModal } from './github/CreatePRModal.js';
+import { TaskComments } from './TaskComments.js';
 
 const STATUSES = [
   { value: 'TODO', label: 'To Do' },
@@ -704,8 +705,12 @@ export const TaskDetailPage = () => {
               </div>
 
 
+
+              {/* Activity & Comments (Two-Way Sync) */}
+              <TaskComments slug={slug as string} projectKey={key as string} taskKey={taskKey as string} />
+
               {/* Created / Updated */}
-              <div className="pt-2 border-t border-gray-800 space-y-2">
+              <div className="pt-6 mt-6 border-t border-gray-800 space-y-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-600">Created</span>
                   <span className="text-gray-500">{task.createdAt ? format(new Date(task.createdAt), 'MMM d, yyyy') : '—'}</span>

@@ -1,19 +1,37 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Outlet, useParams, NavLink, useNavigate } from 'react-router-dom';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useAuthStore } from '../../store/auth.js';
 import { useNotificationStore, Notification } from '../../store/useNotificationStore.js';
 import { Hash, Lock, Search, Bell, Settings, Plus, FolderKanban, Loader2, Home, X, LogOut, ChevronDown as ChevronDownIcon, Command } from 'lucide-react';
 import { CommandPalette } from '../../components/layout/CommandPalette.js';
+import NotificationDropdown from '../../components/layout/NotificationDropdown.js';
 import clsx from 'clsx';
 import { socketClient } from '../../lib/socket.js';
+
+const getStatusDotClass = (presence?: string, statusText?: string) => {
+  if (presence === 'offline' || statusText === 'Away') return 'bg-gray-500';
+  if (statusText === 'In a meeting' || statusText === 'Focusing') return 'bg-red-500';
+  if (statusText === 'Commuting' || statusText === 'Out sick' || statusText === 'Vacationing') return 'bg-amber-500';
+  return 'bg-green-500';
+};
 
 export const WorkspaceLayout = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
-  const { unreadCount, fetchNotifications, addNotification } = useNotificationStore();
+  const { notifications, unreadCount, fetchNotifications, addNotification } = useNotificationStore();
   const { name, projects, channels, members, isLoading, error, myRole, isAdmin, isOwner, fetchWorkspaceData, updateMemberPresence } = useCurrentWorkspaceStore();
+
+  const channelUnreadCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    notifications.forEach((n: any) => {
+      if (!n.isRead && n.channelId) {
+        counts[n.channelId] = (counts[n.channelId] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [notifications]);
   const [showChannelModal, setShowChannelModal] = useState(false);
   const [showDMModal, setShowDMModal] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
@@ -24,9 +42,6 @@ export const WorkspaceLayout = () => {
   const [isCreatingChannel, setIsCreatingChannel] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
-  const [isEditingStatus, setIsEditingStatus] = useState(false);
-  const [statusText, setStatusText] = useState('');
-  const [statusEmoji, setStatusEmoji] = useState('💬');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const currentUserMember = members.find(m => m.userId === user?.userId);
@@ -101,38 +116,40 @@ export const WorkspaceLayout = () => {
       setIsDefaultChannel(false);
       setIsAnnouncementOnly(false);
       fetchWorkspaceData(slug);
-    } catch (err: any) {
-      alert(err.message || 'Failed to create channel.');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to create channel.');
     } finally {
       setIsCreatingChannel(false);
     }
   };
 
-  const handleSaveStatus = async () => {
+  const handleSelectStatus = async (newStatusText: string, presenceMode: 'online' | 'offline' = 'online') => {
+    if (user?.userId) {
+      updateMemberPresence(user.userId, { statusText: newStatusText, presence: presenceMode });
+    }
     try {
       const { apiFetch } = await import('../../lib/api.js');
       await apiFetch(`/auth/status`, {
         method: 'POST',
-        body: JSON.stringify({ statusText, statusEmoji }),
+        body: JSON.stringify({ statusText: newStatusText, presence: presenceMode }),
       });
-      setIsEditingStatus(false);
-    } catch (err: any) {
-      alert(err.message || 'Failed to update status.');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to update status.');
     }
   };
 
   const handleClearStatus = async () => {
+    if (user?.userId) {
+      updateMemberPresence(user.userId, { statusText: '' });
+    }
     try {
       const { apiFetch } = await import('../../lib/api.js');
       await apiFetch(`/auth/status`, {
         method: 'POST',
-        body: JSON.stringify({ statusText: '', statusEmoji: '' }),
+        body: JSON.stringify({ statusText: '' }),
       });
-      setIsEditingStatus(false);
-      setStatusText('');
-      setStatusEmoji('💬');
-    } catch (err: any) {
-      alert(err.message || 'Failed to clear status.');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to clear status.');
     }
   };
 
@@ -163,8 +180,8 @@ export const WorkspaceLayout = () => {
       setShowDMModal(false);
       setSelectedDMMemberId('');
       fetchWorkspaceData(slug);
-    } catch (err: any) {
-      alert(err.message || 'Failed to create DM.');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to create DM.');
     } finally {
       setIsCreatingChannel(false);
     }
@@ -265,7 +282,12 @@ export const WorkspaceLayout = () => {
                   ) : (
                     <Hash className="w-4 h-4 mr-2 opacity-60" />
                   )}
-                  <span className="truncate">{ch.name}</span>
+                  <span className={clsx("truncate flex-1", channelUnreadCounts[ch.channelId] && "text-gray-200 font-bold")}>{ch.name}</span>
+                  {channelUnreadCounts[ch.channelId] ? (
+                    <span className="ml-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center min-w-[16px] h-[16px]">
+                      {channelUnreadCounts[ch.channelId]}
+                    </span>
+                  ) : null}
                 </NavLink>
               ))}
             </div>
@@ -312,7 +334,12 @@ export const WorkspaceLayout = () => {
                           ) : (
                             <Hash className="w-3.5 h-3.5 mr-2 opacity-60" />
                           )}
-                          <span className="truncate">{ch.name}</span>
+                          <span className={clsx("truncate flex-1", channelUnreadCounts[ch.channelId] && "text-gray-200 font-bold")}>{ch.name}</span>
+                          {channelUnreadCounts[ch.channelId] ? (
+                            <span className="ml-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center min-w-[16px] h-[16px]">
+                              {channelUnreadCounts[ch.channelId]}
+                            </span>
+                          ) : null}
                         </NavLink>
                       ))}
                     </div>
@@ -355,13 +382,16 @@ export const WorkspaceLayout = () => {
                         <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-gray-700 to-gray-500 flex items-center justify-center text-[8px] text-white font-bold shrink-0">
                           {ch.name?.charAt(0).toUpperCase() || '?'}
                         </div>
-                        {dmMember?.presence === 'online' && (
-                          <div className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 bg-green-500 border border-gray-950 rounded-full"></div>
-                        )}
+                        <div className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 ${getStatusDotClass(dmMember?.presence, dmMember?.statusText)} border border-gray-950 rounded-full`}></div>
                       </div>
-                      <span className="truncate flex-1">{ch.name}</span>
-                      {dmMember?.statusEmoji && (
-                        <span className="text-[10px] ml-1 opacity-60 group-hover:opacity-100 transition-opacity" title={dmMember.statusText || ''}>{dmMember.statusEmoji}</span>
+                      <span className={clsx("truncate flex-1", channelUnreadCounts[ch.channelId] && "text-gray-200 font-bold")}>{ch.name}</span>
+                      {channelUnreadCounts[ch.channelId] ? (
+                        <span className="ml-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center min-w-[16px] h-[16px]">
+                          {channelUnreadCounts[ch.channelId]}
+                        </span>
+                      ) : null}
+                      {dmMember?.statusText && (
+                        <span className="text-[10px] text-gray-500 ml-1 truncate max-w-[80px]" title={dmMember.statusText}>{dmMember.statusText}</span>
                       )}
                     </NavLink>
                   );
@@ -408,15 +438,8 @@ export const WorkspaceLayout = () => {
            </div>
 
           <div className="flex items-center space-x-4">
-            {/* Notifications Bell */}
-            <button onClick={() => navigate(`/w/${slug}/notifications`)} className="text-gray-400 hover:text-white transition-colors relative">
-              <Bell className="w-5 h-5" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[16px] h-[16px] px-1 bg-red-500 rounded-full text-[9px] font-bold text-white border border-gray-950 shadow-sm">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </button>
+            {/* Notifications Dropdown */}
+            <NotificationDropdown />
 
             {/* User Dropdown */}
             <div className="relative" ref={dropdownRef}>
@@ -428,15 +451,13 @@ export const WorkspaceLayout = () => {
                   <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-gray-600 to-gray-500 flex items-center justify-center text-white text-xs font-bold border border-gray-700">
                     {user?.fullName?.[0]?.toUpperCase() || 'U'}
                   </div>
-                  {currentUserMember?.presence === 'online' && (
-                    <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-gray-950 rounded-full"></div>
-                  )}
+                  <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${getStatusDotClass(currentUserMember?.presence, currentUserMember?.statusText)} rounded-full border-2 border-gray-950`} />
                 </div>
                 <div className="flex flex-col items-start hidden sm:flex">
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center space-x-1.5">
                     <span className="text-sm font-medium text-gray-300">{user?.fullName?.split(' ')[0]}</span>
-                    {currentUserMember?.statusEmoji && (
-                      <span className="text-xs" title={currentUserMember.statusText || ''}>{currentUserMember.statusEmoji}</span>
+                    {currentUserMember?.statusText && (
+                      <span className="text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded font-normal" title={currentUserMember.statusText}>{currentUserMember.statusText}</span>
                     )}
                   </div>
                 </div>
@@ -453,53 +474,62 @@ export const WorkspaceLayout = () => {
                     </span>
                   </div>
                   
-                  {/* Status Section */}
-                  <div className="border-b border-gray-800 p-2">
-                    {isEditingStatus ? (
-                      <div className="flex flex-col space-y-2 p-2">
-                        <div className="flex space-x-2">
-                          <input 
-                            type="text" 
-                            className="w-10 bg-gray-800 border border-gray-700 rounded text-center text-sm outline-none"
-                            value={statusEmoji}
-                            onChange={(e) => setStatusEmoji(e.target.value)}
-                            maxLength={2}
-                          />
-                          <input 
-                            type="text" 
-                            className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 text-sm text-gray-200 outline-none"
-                            placeholder="What's your status?"
-                            value={statusText}
-                            onChange={(e) => setStatusText(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') handleSaveStatus(); }}
-                          />
-                        </div>
-                        <div className="flex space-x-2 justify-end">
-                          <button className="text-xs text-gray-500 hover:text-gray-300" onClick={() => setIsEditingStatus(false)}>Cancel</button>
-                          <button className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded" onClick={handleSaveStatus}>Save</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button 
+                  {/* Status Section — Slack-like Presets */}
+                  <div className="border-b border-gray-800 p-2 space-y-1">
+                    <div className="px-2 py-1 flex items-center justify-between text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                      <span>Status</span>
+                      {currentUserMember?.statusText && (
+                        <button 
+                          onClick={() => handleClearStatus()} 
+                          className="text-gray-500 hover:text-gray-300 normal-case font-normal text-xs"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Active / Away Presence Toggle */}
+                    <button
+                      onClick={() => handleSelectStatus(currentUserMember?.presence === 'online' ? 'Away' : 'Active', currentUserMember?.presence === 'online' ? 'offline' : 'online')}
+                      className="w-full flex items-center px-2 py-1.5 text-xs text-gray-300 hover:bg-gray-800 rounded transition-colors"
+                    >
+                      <span className={`w-2 h-2 rounded-full mr-2 ${currentUserMember?.presence === 'online' ? 'bg-green-500' : 'bg-gray-500'}`} />
+                      <span>Set as {currentUserMember?.presence === 'online' ? 'Away' : 'Active'}</span>
+                    </button>
+
+                    <div className="border-t border-gray-800/60 my-1" />
+
+                    {/* Preset Slack Statuses with Colored Dots */}
+                    {[
+                      { label: 'Active', presence: 'online' as const, color: 'bg-green-500' },
+                      { label: 'In a meeting', presence: 'online' as const, color: 'bg-red-500' },
+                      { label: 'Focusing', presence: 'online' as const, color: 'bg-red-500' },
+                      { label: 'Commuting', presence: 'online' as const, color: 'bg-amber-500' },
+                      { label: 'Out sick', presence: 'offline' as const, color: 'bg-amber-500' },
+                      { label: 'Vacationing', presence: 'offline' as const, color: 'bg-amber-500' },
+                    ].map((preset) => (
+                      <button
+                        key={preset.label}
                         onClick={() => {
-                          setStatusText(currentUserMember?.statusText || '');
-                          setStatusEmoji(currentUserMember?.statusEmoji || '💬');
-                          setIsEditingStatus(true);
+                          handleSelectStatus(preset.label, preset.presence);
+                          setShowUserDropdown(false);
                         }}
-                        className="w-full flex items-center px-2 py-2 text-sm text-gray-300 hover:bg-gray-800/60 rounded transition-colors group"
+                        className={clsx(
+                          "w-full flex items-center justify-between px-2 py-1.5 text-xs rounded transition-colors text-left",
+                          currentUserMember?.statusText === preset.label 
+                            ? "bg-indigo-600/20 text-indigo-300 font-medium" 
+                            : "text-gray-300 hover:bg-gray-800"
+                        )}
                       >
-                        <span className="mr-2">{currentUserMember?.statusEmoji || '💬'}</span>
-                        <span className="flex-1 text-left truncate">{currentUserMember?.statusText || 'Update your status'}</span>
-                        {currentUserMember?.statusText && (
-                          <div
-                            className="text-gray-500 hover:text-gray-300 ml-2 opacity-0 group-hover:opacity-100 transition-opacity" 
-                            onClick={(e) => { e.stopPropagation(); handleClearStatus(); }}
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </div>
+                        <div className="flex items-center space-x-2">
+                          <span className={`w-2 h-2 rounded-full ${preset.color}`} />
+                          <span>{preset.label}</span>
+                        </div>
+                        {currentUserMember?.statusText === preset.label && (
+                          <span className="text-[10px] text-indigo-400 font-bold">✓</span>
                         )}
                       </button>
-                    )}
+                    ))}
                   </div>
 
                   {isOwner() && (

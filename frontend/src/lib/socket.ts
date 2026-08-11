@@ -6,16 +6,11 @@ class SocketClient {
   private socket: Socket | null = null;
 
   connect() {
-    if (!this.socket) {
-      // Retrieve the token from Zustand's persisted store
-      let token = '';
-      try {
-        const authStorage = localStorage.getItem('auth-storage');
-        if (authStorage) {
-          const parsed = JSON.parse(authStorage);
-          token = parsed.state?.token || '';
-        }
-      } catch (err) {}
+    const token = localStorage.getItem('accessToken') || '';
+    if (!this.socket || !this.socket.connected) {
+      if (this.socket) {
+        this.socket.disconnect();
+      }
 
       this.socket = io(SOCKET_URL, {
         withCredentials: true,
@@ -28,6 +23,10 @@ class SocketClient {
         console.log('[Socket] Connected:', this.socket?.id);
       });
 
+      this.socket.on('connect_error', (err) => {
+        console.error('[Socket] Connection Error:', err.message);
+      });
+
       this.socket.on('disconnect', () => {
         console.log('[Socket] Disconnected');
       });
@@ -36,7 +35,8 @@ class SocketClient {
   }
 
   getSocket() {
-    if (!this.socket) {
+    const currentToken = localStorage.getItem('accessToken') || '';
+    if (!this.socket || !this.socket.connected || (this.socket.auth as any)?.token !== currentToken) {
       return this.connect();
     }
     return this.socket;

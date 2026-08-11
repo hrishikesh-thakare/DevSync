@@ -10,5 +10,11 @@ export function renderMessageContent(html: string): string {
     return `<span data-task-key="${taskKey.toUpperCase()}" class="text-blue-400 bg-blue-500/10 px-1 rounded font-medium cursor-pointer hover:underline" title="Go to task ${taskKey.toUpperCase()}">${fullMatch}</span>`;
   });
 
+  // Replace @username and @everyone/@channel/@all mentions with blue mention pills
+  processed = processed.replace(/(?<!["'\w])@([a-zA-Z0-9_-]+)/g, (fullMatch, name) => {
+    if (/^[A-Za-z]+-\d+$/i.test(name)) return fullMatch; // Skip task mentions handled above
+    return `<span class="bg-blue-500/20 text-blue-300 border border-blue-500/40 px-1.5 py-0.5 rounded font-medium">${fullMatch}</span>`;
+  });
+
   return processed;
 }

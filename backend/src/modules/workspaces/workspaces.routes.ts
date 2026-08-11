@@ -13,6 +13,7 @@ import {
   updateMemberRole,
   removeMember,
 } from './workspaces.controller.js';
+import { unfurlUrl } from './unfurl.controller.js';
 import { resolveSlug } from '../../middleware/slugs.js';
 
 const router = Router();
@@ -22,6 +23,9 @@ router.param('slug', resolveSlug);
 
 // All workspace routes require authentication
 router.use(requireAuth);
+
+// ─── Workspace Utilities ───────────────────────────────────────────────────────
+router.get('/:slug/unfurl', requireWorkspaceRole(['owner', 'admin', 'member']), unfurlUrl);
 
 // ─── Workspace CRUD ──────────────────────────────────────────────────────────
 router.post('/', createWorkspace);

@@ -6,7 +6,7 @@ import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { AutoFocusPlugin } from '@lexical/react/LexicalAutoFocusPlugin';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { $getRoot, $getSelection, COMMAND_PRIORITY_LOW, KEY_ENTER_COMMAND, FORMAT_TEXT_COMMAND, TextNode, EditorState, $isRangeSelection, SELECTION_CHANGE_COMMAND, $createParagraphNode } from 'lexical';
+import { $getRoot, $getSelection, COMMAND_PRIORITY_LOW, COMMAND_PRIORITY_CRITICAL, KEY_ENTER_COMMAND, FORMAT_TEXT_COMMAND, TextNode, EditorState, $isRangeSelection, SELECTION_CHANGE_COMMAND, $createParagraphNode } from 'lexical';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { HeadingNode, QuoteNode, $createQuoteNode } from '@lexical/rich-text';
 import { ListItemNode, ListNode, INSERT_UNORDERED_LIST_COMMAND, REMOVE_LIST_COMMAND } from '@lexical/list';
@@ -164,11 +164,6 @@ function ToolbarPlugin({ isSending, onUploadClick }: ToolbarPluginProps) {
           <List className="w-4 h-4" />
         </ToolBtn>
       </div>
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] text-gray-600 hidden md:block">
-          Enter to send · Shift+Enter for newline
-        </span>
-      </div>
     </div>
   );
 }
@@ -228,19 +223,54 @@ function SubmitPlugin({ onSubmit, isSending, setIsEmpty, submitTrigger, onSubmit
   }, [editor, setIsEmpty]);
 
   useEffect(() => {
-    return editor.registerCommand(
-      KEY_ENTER_COMMAND,
-      (event: KeyboardEvent) => {
-        if (isSendingRef.current) return true;
-        if (event.shiftKey) return false;
-        
-        // Prevent default newline insertion
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        if (isSendingRef.current) return;
         event.preventDefault();
+        event.stopPropagation();
+        doSubmit();
+      }
+    };
+
+    let cleanupListener: (() => void) | null = null;
+
+    const addListener = (element: HTMLElement | null) => {
+      if (cleanupListener) {
+        cleanupListener();
+        cleanupListener = null;
+      }
+      if (element) {
+        element.addEventListener('keydown', handleKeyDown, true);
+        cleanupListener = () => element.removeEventListener('keydown', handleKeyDown, true);
+      }
+    };
+
+    addListener(editor.getRootElement());
+
+    const unregisterRoot = editor.registerRootListener((rootElement) => {
+      addListener(rootElement);
+    });
+
+    const unregisterCommand = editor.registerCommand<KeyboardEvent | null>(
+      KEY_ENTER_COMMAND,
+      (event) => {
+        if (isSendingRef.current) return true;
+        if (event && event.shiftKey) return false;
+        if (event) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
         doSubmit();
         return true;
       },
-      COMMAND_PRIORITY_LOW
+      COMMAND_PRIORITY_CRITICAL
     );
+
+    return () => {
+      if (cleanupListener) cleanupListener();
+      unregisterRoot();
+      unregisterCommand();
+    };
   }, [editor, doSubmit]);
   
   return null;
@@ -250,14 +280,19 @@ interface WorkspaceMember {
   userId: string;
   fullName: string;
   displayName?: string;
-  [key: string]: unknown;
+}
+
+interface TaskItem {
+  id: string;
+  taskKey?: string;
+  title: string;
 }
 
 // ── Mentions Plugin ────────────────────────────────────────────────────────
-function MentionsPlugin({ members }: { members: WorkspaceMember[] }) {
+function MentionsPlugin({ members, tasks = [] }: { members: WorkspaceMember[]; tasks?: TaskItem[] }) {
   const [editor] = useLexicalComposerContext();
   const [query, setQuery] = useState<string | null>(null);
-  const [coords, setCoords] = useState<{ x: number, y: number } | null>(null);
+  const [coords, setCoords] = useState<{ x: number, y: number, topY: number } | null>(null);
   
   useEffect(() => {
     return editor.registerUpdateListener(({ editorState }) => {
@@ -285,8 +320,7 @@ function MentionsPlugin({ members }: { members: WorkspaceMember[] }) {
           if (domSelection && domSelection.rangeCount > 0) {
             const range = domSelection.getRangeAt(0);
             const rect = range.getBoundingClientRect();
-            // Get coordinates relative to the nearest positioned ancestor
-            setCoords({ x: rect.left, y: rect.bottom });
+            setCoords({ x: rect.left, y: rect.bottom, topY: rect.top });
           }
         } else {
           setQuery(null);
@@ -296,10 +330,17 @@ function MentionsPlugin({ members }: { members: WorkspaceMember[] }) {
   }, [editor]);
 
   const filteredMembers = query !== null 
-    ? members.filter(m => m.fullName.toLowerCase().startsWith(query) || m.displayName?.toLowerCase().startsWith(query))
+    ? members.filter(m => m.fullName.toLowerCase().includes(query) || m.displayName?.toLowerCase().includes(query))
     : [];
 
-  const handleSelect = (username: string) => {
+  const filteredTasks = query !== null && tasks.length > 0
+    ? tasks.filter(t => 
+        (t.taskKey && t.taskKey.toLowerCase().includes(query)) ||
+        (t.title && t.title.toLowerCase().includes(query))
+      )
+    : [];
+
+  const handleSelect = (mentionTextStr: string) => {
     editor.update(() => {
       const selection = $getSelection();
       if (!$isRangeSelection(selection) || !selection.isCollapsed()) return;
@@ -317,7 +358,7 @@ function MentionsPlugin({ members }: { members: WorkspaceMember[] }) {
         const splitNodes = node.splitText(startOffset, endOffset);
         const textToReplace = splitNodes.length > 1 ? splitNodes[1] : splitNodes[0];
         
-        const mentionText = `@${username} `;
+        const mentionText = `@${mentionTextStr} `;
         textToReplace.setTextContent(mentionText);
         textToReplace.selectNext();
       }
@@ -325,26 +366,53 @@ function MentionsPlugin({ members }: { members: WorkspaceMember[] }) {
     setQuery(null);
   };
 
-  if (query === null || filteredMembers.length === 0 || !coords) return null;
+  if (query === null || (filteredMembers.length === 0 && filteredTasks.length === 0) || !coords) return null;
+
+  const openUpward = window.innerHeight - coords.y < 240;
 
   return (
     <div 
-      className="fixed z-50 bg-gray-900 border border-gray-700 rounded-lg shadow-xl w-64 overflow-hidden"
-      style={{ top: coords.y + 4, left: coords.x }}
+      className="fixed z-50 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-72 overflow-hidden"
+      style={{ 
+        left: Math.max(16, Math.min(coords.x, window.innerWidth - 300)),
+        top: openUpward ? undefined : coords.y + 4,
+        bottom: openUpward ? (window.innerHeight - coords.topY + 6) : undefined
+      }}
     >
-      <div className="max-h-48 overflow-y-auto py-1">
-        {filteredMembers.map((m) => (
-          <div 
-            key={m.userId}
-            className="px-3 py-2 hover:bg-gray-800 cursor-pointer flex items-center space-x-2"
-            onMouseDown={(e) => { e.preventDefault(); handleSelect(m.fullName.replace(/\s+/g, '')); }}
-          >
-            <div className="w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center text-[10px] text-white">
-              {m.fullName[0]}
-            </div>
-            <span className="text-sm text-gray-200">{m.fullName}</span>
+      <div className="max-h-56 overflow-y-auto py-1">
+        {filteredMembers.length > 0 && (
+          <div>
+            <div className="px-3 py-1 text-[10px] font-bold text-gray-500 uppercase tracking-wider bg-gray-950/60">Members</div>
+            {filteredMembers.map((m) => (
+              <div 
+                key={m.userId}
+                className="px-3 py-1.5 hover:bg-gray-800 cursor-pointer flex items-center space-x-2"
+                onMouseDown={(e) => { e.preventDefault(); handleSelect(m.fullName.replace(/\s+/g, '')); }}
+              >
+                <div className="w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center text-[10px] text-white font-bold shrink-0">
+                  {m.fullName[0]}
+                </div>
+                <span className="text-sm text-gray-200 truncate">{m.fullName}</span>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
+
+        {filteredTasks.length > 0 && (
+          <div>
+            <div className="px-3 py-1 text-[10px] font-bold text-gray-500 uppercase tracking-wider bg-gray-950/60 border-t border-gray-800">Project Tasks</div>
+            {filteredTasks.map((t) => (
+              <div 
+                key={t.id}
+                className="px-3 py-1.5 hover:bg-gray-800 cursor-pointer flex items-center justify-between space-x-2"
+                onMouseDown={(e) => { e.preventDefault(); handleSelect(t.taskKey || t.id); }}
+              >
+                <span className="text-xs font-mono font-bold text-blue-400 shrink-0">{t.taskKey || t.id}</span>
+                <span className="text-xs text-gray-300 truncate flex-1 text-right">{t.title}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -402,6 +470,7 @@ interface LexicalEditorProps {
   placeholder?: string;
   isSending?: boolean;
   initialContent?: string;
+  tasks?: TaskItem[];
 }
 
 export const LexicalEditor = ({
@@ -409,6 +478,7 @@ export const LexicalEditor = ({
   placeholder = 'Type a message… Use @name to mention',
   isSending = false,
   initialContent = '',
+  tasks = [],
 }: LexicalEditorProps) => {
   const { uploadFile } = useUploadStore();
   const [isUploading, setIsUploading] = useState(false);
@@ -460,7 +530,7 @@ export const LexicalEditor = ({
             <SubmitPlugin onSubmit={onSubmit} isSending={isSending || isUploading} setIsEmpty={setIsEmpty} submitTrigger={submitTrigger} onSubmitted={() => setSubmitTrigger(0)} />
             <InitialContentPlugin initialContent={initialContent} />
             <InsertFilePlugin fileInfo={fileInfo} />
-            <MentionsPlugin members={members} />
+            <MentionsPlugin members={members} tasks={tasks} />
           </div>
           
           <ToolbarPlugin 

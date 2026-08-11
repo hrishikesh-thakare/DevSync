@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Bell, User, UserMinus, MessageSquare, AtSign, 
   ArrowRightLeft, Play, CheckCircle, Hash, 
-  Mail, GitCommit, XCircle, Briefcase, Building2
+  Mail, GitCommit, XCircle, Briefcase, Building2, Settings
 } from 'lucide-react';
+import { NotificationSettingsModal } from './NotificationSettingsModal';
 import { useNotificationStore, Notification } from '../../store/useNotificationStore';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace';
 import { socketClient } from '../../lib/socket';
@@ -48,6 +49,7 @@ const formatTimeAgo = (dateString: string) => {
 
 const NotificationDropdown: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { slug } = useCurrentWorkspaceStore();
@@ -86,19 +88,12 @@ const NotificationDropdown: React.FC = () => {
     }
     setIsOpen(false);
     
-    // Simplistic routing logic based on entityType
-    if (notif.entityType === 'task') {
-      navigate(`/w/${slug}/search`); // Ideally navigate to exact task details if project/key is known, but search works as a fallback
-    } else if (notif.entityType === 'sprint') {
-      navigate(`/w/${slug}/search`);
-    } else if (notif.entityType === 'message') {
-      navigate(`/w/${slug}/search`); // Assuming we have global search handling
-    } else if (notif.entityType === 'project') {
-      navigate(`/w/${slug}/search`);
-    } else if (notif.entityType === 'workspace' || notif.entityType === 'workspace_member') {
-      navigate(`/w/${slug}/members`);
-    } else {
-      navigate(`/w/${slug}`);
+    try {
+      const { apiFetch } = await import('../../lib/api.js');
+      const data = await apiFetch(`/notifications/${notif.notificationId}/resolve`);
+      if (data.url) navigate(data.url);
+    } catch (err) {
+      console.error('Failed to resolve notification', err);
     }
   };
 
@@ -129,14 +124,23 @@ const NotificationDropdown: React.FC = () => {
         <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-bg-elevated border border-border-default rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col">
           <div className="px-4 py-3 border-b border-border-default flex items-center justify-between bg-bg-tertiary">
             <h3 className="font-bold text-white text-sm">Notifications</h3>
-            {unreadCount > 0 && (
+            <div className="flex items-center gap-3">
+              {unreadCount > 0 && (
+                <button 
+                  onClick={() => markAllAsRead()}
+                  className="text-xs text-accent-purple hover:text-accent-purple/80 font-medium"
+                >
+                  Mark all as read
+                </button>
+              )}
               <button 
-                onClick={() => markAllAsRead()}
-                className="text-xs text-accent-purple hover:text-accent-purple/80 font-medium"
+                onClick={() => { setIsOpen(false); setIsSettingsOpen(true); }}
+                className="text-text-muted hover:text-white transition-colors"
+                title="Notification Settings"
               >
-                Mark all as read
+                <Settings size={14} />
               </button>
-            )}
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto max-h-[400px]">
@@ -187,6 +191,10 @@ const NotificationDropdown: React.FC = () => {
             </button>
           </div>
         </div>
+      )}
+      
+      {isSettingsOpen && (
+        <NotificationSettingsModal onClose={() => setIsSettingsOpen(false)} />
       )}
     </div>
   );

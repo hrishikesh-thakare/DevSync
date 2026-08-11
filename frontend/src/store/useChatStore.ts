@@ -3,11 +3,14 @@ import { apiFetch } from '../lib/api';
 import { useWorkspaceStore } from './workspaceStore';
 
 import { useCurrentWorkspaceStore } from './currentWorkspace.js';
-
-interface Channel {
-  id: string;
-  name: string;
-  type: 'public' | 'private' | 'dm';
+import { socketClient } from '../lib/socket.js';
+export interface MessageReaction {
+  reactionId?: string;
+  messageId: string;
+  userId: string;
+  emoji: string;
+  userName?: string;
+  createdAt?: string;
 }
 
 export interface Message {
@@ -20,71 +23,163 @@ export interface Message {
   senderId?: string;
   bodyText?: string;
   body?: string;
+  isSystem?: boolean;
+  systemType?: string;
   createdAt: string;
   replyCount: number;
   threadCount?: number;
   threadId: string | null;
   isDeleted?: boolean;
+  reactions?: MessageReaction[];
 }
 
 interface ChatState {
-  channels: Channel[];
-  activeChannel: Channel | null;
   messages: Message[];
   threads: Record<string, Message[]>;
+  searchResults: Message[];
+  isSearching: boolean;
+  activeChannelId: string | null;
   isLoading: boolean;
-  fetchChannels: () => Promise<void>;
-  setActiveChannel: (id: string) => void;
   fetchMessages: (channelId: string) => Promise<void>;
-  fetchThreadReplies: (channelId: string, messageId: string) => Promise<void>;
-  sendMessage: (channelId: string, body: string, threadId?: string) => Promise<void>;
-  uploadFile: (file: File) => Promise<{ fileId: string, filename: string } | null>;
-  joinChannel: (_slug?: string, channelId?: string) => void;
-  leaveChannel: (_slug?: string, _channelId?: string) => void;
-  removeMessage: (messageId: string, threadId?: string | null) => void;
-  updateMessage: (updatedMsg: Partial<Message> & { messageId: string }) => void;
+  fetchThreadReplies: (channelId: string, parentMessageId: string) => Promise<Message[]>;
+  sendMessage: (channelId: string, bodyText: string, threadId?: string | null) => Promise<void>;
+  updateMessage: (msg: Partial<Message> & { messageId: string }) => void;
+  removeMessage: (messageId: string) => void;
   addReactionToMessage: (messageId: string, rx: { userId: string; emoji: string; userName?: string }) => void;
   removeReactionFromMessage: (messageId: string, rx: { userId: string; emoji: string }) => void;
+  uploadFile: (file: File) => Promise<{ fileId: string, filename: string } | null>;
+  searchChannelMessages: (channelId: string, q: string) => Promise<void>;
+  clearSearch: () => void;
+  joinChannel: (channelId: string) => void;
+  leaveChannel: () => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
-  channels: [],
-  activeChannel: null,
   messages: [],
   threads: {},
+  searchResults: [],
+  isSearching: false,
+  activeChannelId: null,
   isLoading: false,
-  joinChannel: (_slug, channelId) => {
-    if (channelId) get().fetchMessages(channelId);
+
+  joinChannel: (channelId) => {
+    const socket = socketClient.getSocket();
+    socket.emit('join_room', `channel:${channelId}`);
+    get().fetchMessages(channelId);
   },
-  leaveChannel: () => {},
-  removeMessage: (messageId) => {
-    set((state) => {
-      const newMessages = state.messages.filter((m) => m.messageId !== messageId);
-      const newThreads = { ...state.threads };
-      delete newThreads[messageId];
-      for (const parentId in newThreads) {
-        newThreads[parentId] = newThreads[parentId].filter((m) => m.messageId !== messageId);
-      }
-      return { messages: newMessages, threads: newThreads };
+
+  leaveChannel: () => {
+    const socket = socketClient.getSocket();
+    const activeChannelId = get().activeChannelId;
+    if (activeChannelId) {
+      socket.emit('leave_room', `channel:${activeChannelId}`);
+    }
+    set({ activeChannelId: null });
+  },
+
+  fetchMessages: async (channelId: string) => {
+    if (get().activeChannelId !== channelId || get().messages.length === 0) {
+      set({ isLoading: true, activeChannelId: channelId });
+    } else {
+      set({ activeChannelId: channelId });
+    }
+    try {
+      const slug = useCurrentWorkspaceStore.getState().slug;
+      if (!slug) return;
+      const data = await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages`);
+      set({ messages: data.messages || [] });
+    } catch (error) {
+      console.error('Failed to fetch messages:', error);
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  searchChannelMessages: async (channelId: string, q: string) => {
+    set({ isSearching: true });
+    try {
+      const slug = useCurrentWorkspaceStore.getState().slug;
+      if (!slug) return;
+      const data = await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages?q=${encodeURIComponent(q)}`);
+      set({ searchResults: data.messages || [] });
+    } catch (error) {
+      console.error('Failed to search messages:', error);
+      set({ searchResults: [] });
+    } finally {
+      set({ isSearching: false });
+    }
+  },
+
+  clearSearch: () => {
+    set({ isSearching: false, searchResults: [] });
+  },
+
+  fetchThreadReplies: async (channelId, parentMessageId) => {
+    try {
+      const workspaceSlug = useCurrentWorkspaceStore.getState().slug || useWorkspaceStore.getState().currentWorkspace?.slug;
+      if (!workspaceSlug) return [];
+      const data = await apiFetch(`/workspaces/${workspaceSlug}/channels/${channelId}/messages?threadId=${parentMessageId}`);
+      const replies = data.messages || [];
+      set((state) => ({
+        threads: { ...state.threads, [parentMessageId]: replies },
+      }));
+      return replies;
+    } catch (err) {
+      console.error('Error fetching thread replies:', err);
+      return [];
+    }
+  },
+
+  sendMessage: async (channelId, bodyText, threadId = null) => {
+    const workspaceSlug = useCurrentWorkspaceStore.getState().slug || useWorkspaceStore.getState().currentWorkspace?.slug;
+    if (!workspaceSlug) return;
+
+    await apiFetch(`/workspaces/${workspaceSlug}/channels/${channelId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ bodyText, threadId }),
     });
+
+    if (!threadId) {
+      await get().fetchMessages(channelId);
+    }
   },
+
   updateMessage: (updatedMsg) => {
     set((state) => {
-      const newMessages = state.messages.map(m => m.messageId === updatedMsg.messageId ? { ...m, ...updatedMsg } : m);
-      const newThreads = { ...state.threads };
-      for (const parentId in newThreads) {
-        newThreads[parentId] = newThreads[parentId].map(m => m.messageId === updatedMsg.messageId ? { ...m, ...updatedMsg } : m);
+      const updateMsgList = (list: Message[]) =>
+        list.map((m) => (m.messageId === updatedMsg.messageId ? { ...m, ...updatedMsg } : m));
+
+      const newMessages = updateMsgList(state.messages);
+      const newThreads: Record<string, Message[]> = {};
+      for (const parentId in state.threads) {
+        newThreads[parentId] = updateMsgList(state.threads[parentId]);
       }
+
       return { messages: newMessages, threads: newThreads };
     });
   },
+
+  removeMessage: (messageId) => {
+    set((state) => {
+      const filterMsgList = (list: Message[]) => list.filter((m) => m.messageId !== messageId);
+
+      const newMessages = filterMsgList(state.messages);
+      const newThreads: Record<string, Message[]> = {};
+      for (const parentId in state.threads) {
+        newThreads[parentId] = filterMsgList(state.threads[parentId]);
+      }
+
+      return { messages: newMessages, threads: newThreads };
+    });
+  },
+
   addReactionToMessage: (messageId, rx) => {
     set((state) => {
       const updateMsgList = (list: Message[]) =>
         list.map((m) => {
           if (m.messageId !== messageId) return m;
-          const currentRx = (m as any).reactions || [];
-          const exists = currentRx.some((r: any) => r.userId === rx.userId && r.emoji === rx.emoji);
+          const currentRx = m.reactions || [];
+          const exists = currentRx.some((r) => r.userId === rx.userId && r.emoji === rx.emoji);
           if (exists) return m;
           return {
             ...m,
@@ -100,15 +195,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return { messages: newMessages, threads: newThreads };
     });
   },
+
   removeReactionFromMessage: (messageId, rx) => {
     set((state) => {
       const updateMsgList = (list: Message[]) =>
         list.map((m) => {
           if (m.messageId !== messageId) return m;
-          const currentRx = (m as any).reactions || [];
+          const currentRx = m.reactions || [];
           return {
             ...m,
-            reactions: currentRx.filter((r: any) => !(r.userId === rx.userId && r.emoji === rx.emoji))
+            reactions: currentRx.filter((r) => !(r.userId === rx.userId && r.emoji === rx.emoji))
           };
         });
 
@@ -119,91 +215,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       return { messages: newMessages, threads: newThreads };
     });
-  },
-
-  fetchChannels: async () => {
-    const slug = useWorkspaceStore.getState().currentWorkspace?.slug || useCurrentWorkspaceStore.getState().slug;
-    if (!slug) return;
-
-    set({ isLoading: true });
-    try {
-      const data = await apiFetch(`/workspaces/${slug}/channels`);
-      
-      const mappedChannels = data.channels.map((c: { channelId: string; name: string; type?: 'public' | 'private' | 'dm' }) => ({
-        id: c.channelId,
-        name: c.name,
-        type: c.type || 'public'
-      }));
-
-      set({ channels: mappedChannels, isLoading: false });
-      
-      if (mappedChannels.length > 0 && !get().activeChannel) {
-        set({ activeChannel: mappedChannels[0] });
-        get().fetchMessages(mappedChannels[0].id);
-      }
-    } catch (err) {
-      console.error('Failed to fetch channels:', err);
-      set({ isLoading: false });
-    }
-  },
-
-  setActiveChannel: (id) => {
-    const channel = get().channels.find(c => c.id === id);
-    if (channel) {
-      set({ activeChannel: channel });
-      get().fetchMessages(id);
-    }
-  },
-
-  fetchMessages: async (channelId) => {
-    const slug = useWorkspaceStore.getState().currentWorkspace?.slug || useCurrentWorkspaceStore.getState().slug;
-    if (!slug) return;
-
-    try {
-      const data = await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages`);
-      set({ messages: data.messages || [] });
-    } catch (err) {
-      console.error('Failed to fetch messages:', err);
-    }
-  },
-
-  fetchThreadReplies: async (channelId, messageId) => {
-    const slug = useWorkspaceStore.getState().currentWorkspace?.slug || useCurrentWorkspaceStore.getState().slug;
-    if (!slug) return;
-
-    try {
-      const data = await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages/${messageId}/thread`);
-      
-      set((state) => ({
-        threads: {
-          ...state.threads,
-          [messageId]: data.replies || []
-        }
-      }));
-    } catch (err) {
-      console.error('Failed to fetch thread replies:', err);
-    }
-  },
-
-  sendMessage: async (channelId, body, threadId) => {
-    const slug = useWorkspaceStore.getState().currentWorkspace?.slug || useCurrentWorkspaceStore.getState().slug;
-    if (!slug) return;
-
-    try {
-      await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({ bodyText: body, threadId }),
-      });
-      // Re-fetch messages or let websockets handle it
-      if (threadId) {
-        get().fetchThreadReplies(channelId, threadId);
-        get().fetchMessages(channelId); // Update parent reply count
-      } else {
-        get().fetchMessages(channelId);
-      }
-    } catch (err) {
-      console.error('Failed to send message:', err);
-    }
   },
 
   uploadFile: async (file: File) => {

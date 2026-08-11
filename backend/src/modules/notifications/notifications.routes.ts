@@ -4,6 +4,7 @@ import {
   getMyNotifications,
   markAsRead,
   markAllAsRead,
+  resolveNotification,
 } from './notifications.controller.js';
 
 const router = Router();
@@ -14,5 +15,6 @@ router.use(requireAuth);
 router.get('/', getMyNotifications);
 router.patch('/read-all', markAllAsRead); // Must be placed before /:notificationId
 router.patch('/:notificationId/read', markAsRead);
+router.get('/:notificationId/resolve', resolveNotification);
 
 export default router;

@@ -205,8 +205,8 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
                 recipientId,
                 actorId: userId,
                 type: 'task_mentioned',
-                entityType: 'task',
-                entityId: task.taskId,
+                entityType: 'message',
+                entityId: result.messageId,
                 title: `Task ${task.taskKey} was mentioned`,
                 body: `${author?.fullName || 'Someone'} mentioned it in #${channel.name || 'channel'}`,
               });
@@ -228,13 +228,27 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
 export const listMessages = async (req: Request, res: Response): Promise<void> => {
   try {
     const { channelId } = req.params as Record<string, string>;
-    const { limit = 50, cursor } = req.query;
+    const { limit = 50, cursor, q } = req.query;
 
     const parsedLimit = Math.min(parseInt(limit as string, 10) || 50, 100);
+    const searchQuery = typeof q === 'string' ? q.trim() : null;
 
-    // Basic cursor-based pagination (using createdAt) could be added,
-    // but for simplicity we fetch the latest N messages that are NOT in a thread.
-    // Thread replies are fetched separately.
+    // Conditions: always filter by channelId
+    const conditions = [eq(messages.channelId, channelId)];
+
+    if (searchQuery) {
+      // Search mode: search body text, do not restrict to threadId IS NULL (so replies are searchable)
+      conditions.push(
+        or(
+          sql`body_tsv @@ plainto_tsquery('english', ${searchQuery})`,
+          ilike(messages.bodyText, `%${searchQuery}%`)
+        )
+      );
+    } else {
+      // Normal mode: only fetch top-level messages (not in a thread)
+      conditions.push(sql`${messages.threadId} IS NULL`);
+    }
+
     const results = await db
       .select({
         messageId: messages.messageId,
@@ -251,16 +265,11 @@ export const listMessages = async (req: Request, res: Response): Promise<void> =
         authorId: users.userId,
         authorName: users.fullName,
         authorAvatar: users.avatarUrl,
+        threadId: messages.threadId,
       })
       .from(messages)
       .leftJoin(users, eq(messages.authorId, users.userId))
-      .where(
-        and(
-          eq(messages.channelId, channelId),
-          sql`${messages.threadId} IS NULL`
-        )
-      )
-
+      .where(and(...conditions))
       .orderBy(desc(messages.createdAt))
       .limit(parsedLimit);
 

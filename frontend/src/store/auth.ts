@@ -6,6 +6,12 @@ interface User {
   email: string;
   fullName: string;
   avatarUrl: string | null;
+  preferences?: {
+    notifyOnlyMentions?: boolean;
+    muteGithubBot?: boolean;
+    mutedChannels?: string[];
+    [key: string]: unknown;
+  };
 }
 
 export interface LoginCredentials {
@@ -27,6 +33,7 @@ export interface AuthState {
   register: (credentials: RegisterCredentials) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
+  updatePreferences: (prefs: Record<string, unknown>) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => {
@@ -75,8 +82,24 @@ export const useAuthStore = create<AuthState>((set) => {
       try {
         const data = await apiFetch('/auth/me');
         set({ user: data.user, isAuthenticated: true, isInitializing: false });
-      } catch {
+      } catch (err) {
+        console.error('Check auth error:', err);
         set({ user: null, isAuthenticated: false, isInitializing: false });
+      }
+    },
+
+    updatePreferences: async (prefs: Record<string, unknown>) => {
+      try {
+        const data = await apiFetch('/auth/preferences', {
+          method: 'PATCH',
+          body: JSON.stringify({ preferences: prefs })
+        });
+        set((state) => ({
+          user: state.user ? { ...state.user, preferences: data.preferences } : null
+        }));
+      } catch (err) {
+        console.error('Update preferences error:', err);
+        throw err;
       }
     },
   };

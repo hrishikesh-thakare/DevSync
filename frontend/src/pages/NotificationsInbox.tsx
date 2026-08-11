@@ -123,14 +123,15 @@ export const NotificationsInbox = () => {
               return (
                 <div 
                   key={notif.notificationId}
-                  onClick={() => {
+                  onClick={async () => {
                     markRead(notif.notificationId);
-                    if (notif.entityType === 'task') navigate(`/w/${slug}/search`);
-                    else if (notif.entityType === 'sprint') navigate(`/w/${slug}/search`);
-                    else if (notif.entityType === 'message') navigate(`/w/${slug}/search`);
-                    else if (notif.entityType === 'project') navigate(`/w/${slug}/search`);
-                    else if (notif.entityType === 'workspace' || notif.entityType === 'workspace_member') navigate(`/w/${slug}/members`);
-                    else navigate(`/w/${slug}`);
+                    try {
+                      const { apiFetch } = await import('../lib/api.js');
+                      const data = await apiFetch(`/notifications/${notif.notificationId}/resolve`);
+                      if (data.url) navigate(data.url);
+                    } catch (err) {
+                      console.error('Failed to resolve notification', err);
+                    }
                   }}
                   className={clsx(
                     "flex items-start p-5 hover:bg-gray-800/40 cursor-pointer transition-colors relative group",

@@ -24,6 +24,7 @@ export const users = pgTable('users', {
   presence:     varchar('presence', { length: 20 }).default('offline'),
   statusText:   varchar('status_text', { length: 100 }),
   statusEmoji:  varchar('status_emoji', { length: 20 }),
+  preferences:  jsonb('preferences').default({}),
   lastActiveAt: timestamp('last_active_at', { withTimezone: true }),
   createdAt:    timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt:    timestamp('updated_at', { withTimezone: true }).defaultNow(),

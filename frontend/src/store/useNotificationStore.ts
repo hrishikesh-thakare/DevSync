@@ -14,6 +14,7 @@ export interface Notification {
   actorId: string | null;
   actorName: string | null;
   actorAvatar: string | null;
+  channelId?: string | null;
 }
 
 interface NotificationState {

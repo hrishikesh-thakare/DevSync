@@ -4,10 +4,11 @@ import { tasks } from '../../db/schema/tasks.js';
 import { projects, projectMembers } from '../../db/schema/projects.js';
 import { sprints } from '../../db/schema/sprints.js';
 import { users } from '../../db/schema/auth.js';
-import { messages } from '../../db/schema/channels.js';
+import { messages, channels } from '../../db/schema/channels.js';
 import { eq, and, isNull, asc, desc, sql, or, ilike } from 'drizzle-orm';
 import { logAuditAction } from '../audit/audit.controller.js';
 import { createNotification } from '../notifications/notifications.controller.js';
+import { getIO } from '../../sockets/index.js';
 
 // ─── Lexorank helpers ────────────────────────────────────────────────────────
 // Simplified mid-string calculation for board ordering
@@ -26,6 +27,49 @@ const midRank = (a: string, b: string): string => {
 
 const RANK_FIRST = 'aaaaaa';
 const RANK_GAP = 'n';
+
+// ─── HELPER: Broadcast to Project Channels ───────────────────────────────────
+const broadcastToProjectChannels = async (tx: any, projectId: string, bodyText: string): Promise<void> => {
+  // Find all channels linked to this project
+  const projectChannels = await tx.select({ channelId: channels.channelId }).from(channels).where(eq(channels.projectId, projectId));
+  if (projectChannels.length === 0) return;
+
+  const now = new Date();
+  
+  for (const { channelId } of projectChannels) {
+    // Insert system message
+    const [msg] = await tx.insert(messages).values({
+      channelId,
+      isSystem: true,
+      systemType: 'project_update',
+      bodyText,
+      createdAt: now,
+      updatedAt: now,
+    }).returning();
+
+    // Broadcast to connected clients
+    const io = getIO();
+    if (io) {
+      // Create a hydrated message object similar to what the frontend expects
+      const populatedMessage = {
+        messageId: msg.messageId,
+        channelId: msg.channelId,
+        authorId: msg.authorId,
+        authorName: 'DevSync Bot',
+        authorAvatar: null,
+        isSystem: msg.isSystem,
+        systemType: msg.systemType,
+        bodyText: msg.bodyText,
+        threadId: msg.threadId,
+        replyCount: msg.replyCount,
+        isEdited: msg.isEdited,
+        createdAt: msg.createdAt,
+        updatedAt: msg.updatedAt,
+      };
+      io.to(`channel:${channelId}`).emit('new_message', populatedMessage);
+    }
+  }
+};
 
 // ─── CREATE TASK ─────────────────────────────────────────────────────────────
 // POST /api/projects/:projectId/tasks
@@ -135,6 +179,9 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
         newValues: { task_key: task.taskKey, title: task.title, type: task.issueType, status: task.status, priority: task.priority, reporter_id: task.reporterId, project_id: task.projectId },
         tx
       });
+
+      // 7. Broadcast to project channels
+      await broadcastToProjectChannels(tx, projectId, `✅ **${creator?.fullName || 'User'}** created task @${task.taskKey}: ${task.title}`);
 
       return task;
     });
@@ -418,6 +465,37 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
         }
       }
 
+      // --- BROADCAST TO CHANNELS ---
+      let broadcastMessage = '';
+      if (oldTask) {
+        const actorId = req.user!.userId;
+        const [actor] = await tx.select({ fullName: users.fullName }).from(users).where(eq(users.userId, actorId));
+        const actorName = actor?.fullName || 'User';
+
+        if (oldTask.status !== updated.status) {
+          broadcastMessage = `🔄 **${actorName}** moved @${updated.taskKey} to ${updated.status}`;
+          // Also add a system message to the task thread
+          await tx.insert(messages).values({
+            authorId: actorId,
+            isSystem: true,
+            systemType: 'task_status_changed',
+            bodyText: `${actorName} changed status to ${updated.status}`,
+            threadId: updated.discussionThreadId,
+          });
+        } else if (oldTask.assigneeId !== updated.assigneeId) {
+          if (updated.assigneeId) {
+            const [assignee] = await tx.select({ fullName: users.fullName }).from(users).where(eq(users.userId, updated.assigneeId));
+            broadcastMessage = `👤 **${actorName}** assigned @${updated.taskKey} to ${assignee?.fullName || 'Someone'}`;
+          } else {
+            broadcastMessage = `👤 **${actorName}** unassigned @${updated.taskKey}`;
+          }
+        }
+        
+        if (broadcastMessage && updated.projectId) {
+          await broadcastToProjectChannels(tx, updated.projectId, broadcastMessage);
+        }
+      }
+
       return updated;
     });
 
@@ -439,7 +517,7 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
             type: 'task_assigned',
             entityType: 'task',
             entityId: result.taskId,
-            title: `You were assigned ${result.taskKey}`,
+            title: `You were assigned @${result.taskKey}`,
             body: `${actor?.name || 'Someone'} assigned you to '${result.title}'`,
           });
         }
@@ -451,7 +529,7 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
             type: 'task_unassigned',
             entityType: 'task',
             entityId: result.taskId,
-            title: `You were unassigned from ${result.taskKey}`,
+            title: `You were unassigned from @${result.taskKey}`,
             body: `${actor?.name || 'Someone'} removed you from '${result.title}'`,
           });
         }
@@ -470,7 +548,7 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
               type: 'task_status_changed',
               entityType: 'task',
               entityId: result.taskId,
-              title: `${result.taskKey} moved to ${formatStatus(result.status as string)}`,
+              title: `@${result.taskKey} moved to ${formatStatus(result.status as string)}`,
               body: `${actor?.name || 'Someone'} changed '${result.title}' from ${formatStatus(oldTask.status as string)} to ${formatStatus(result.status as string)}`,
             });
           }
@@ -605,7 +683,7 @@ export const reorderTask = async (req: Request, res: Response): Promise<void> =>
             type: 'task_status_changed',
             entityType: 'task',
             entityId: result.updated.taskId,
-            title: `${result.taskKey} moved to ${formatStatus(result.updated.status as string)}`,
+            title: `@${result.taskKey} moved to ${formatStatus(result.updated.status as string)}`,
             body: `${actor?.name || 'Someone'} changed '${result.title}' from ${formatStatus(result.oldStatus as string)} to ${formatStatus(result.updated.status as string)}`,
           });
         }
