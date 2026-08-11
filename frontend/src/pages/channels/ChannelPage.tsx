@@ -10,6 +10,7 @@ import { LexicalEditor } from '../../components/chat/LexicalEditor.js';
 
 import { renderMessageContent } from '../../components/chat/renderMessageContent.js';
 import { LinkUnfurl } from '../../components/chat/LinkUnfurl.js';
+import { ReactionsModal } from '../../components/chat/ReactionsModal.js';
 
 import { Hash, Lock, Users, Loader2, Smile, MessageSquare, X, Edit2, Search } from 'lucide-react';
 import { format } from 'date-fns';
@@ -137,6 +138,12 @@ export const ChannelPage = () => {
   const [isThreadLoading, setIsThreadLoading] = useState(false);
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
   const [threadsCache, setThreadsCache] = useState<Record<string, Message[]>>({});
+  const [activeReactionMessageId, setActiveReactionMessageId] = useState<string | null>(null);
+
+  const openReactionsModal = (msg: Message) => {
+    if (!msg.reactions || msg.reactions.length === 0) return;
+    setActiveReactionMessageId(msg.messageId);
+  };
 
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [canChat, setCanChat] = useState(true);
@@ -740,7 +747,7 @@ export const ChannelPage = () => {
                 return (
                   <button
                     key={emoji}
-                    onClick={() => toggleReaction(msg.messageId, emoji)}
+                    onClick={() => openReactionsModal(msg)}
                     title={data.userNames.join(', ')}
                     className={`flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-xs font-medium border transition-colors ${
                       hasReacted 
@@ -753,17 +760,27 @@ export const ChannelPage = () => {
                   </button>
                 );
               })}
+
+              <ReactionsModal
+                isOpen={activeReactionMessageId === msg.messageId}
+                onClose={() => setActiveReactionMessageId(null)}
+                reactions={msg.reactions}
+                currentUserId={user?.userId || ''}
+                onRemoveReaction={async (emoji) => {
+                  await toggleReaction(msg.messageId, emoji);
+                }}
+              />
             </div>
           )}
         </div>
 
-        <div className="opacity-0 group-hover:opacity-100 flex items-center space-x-1 bg-gray-900 border border-gray-800 rounded-md p-1 shadow-sm absolute right-6 -mt-3 transition-opacity">
+        <div className="opacity-0 group-hover:opacity-100 flex items-center space-x-1 bg-gray-900 border border-gray-800 rounded-md p-1 shadow-sm absolute right-12 -mt-3 transition-opacity">
           
           <div className="relative group/react">
             <button className="p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-800 rounded">
               <Smile className="w-4 h-4" />
             </button>
-            <div className="absolute bottom-full right-0 pb-1 hidden group-hover/react:block z-50">
+            <div className="absolute right-full top-1/2 -translate-y-1/2 pr-2 hidden group-hover/react:block z-50">
               <div className="flex items-center space-x-1 bg-gray-900 p-1.5 rounded-full shadow-lg border border-gray-700">
                 {['👍', '❤️', '😂', '🎉', '👀'].map(emoji => (
                   <button 
