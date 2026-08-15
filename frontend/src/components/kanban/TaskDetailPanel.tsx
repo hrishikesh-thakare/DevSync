@@ -17,6 +17,7 @@ import { users } from '../../data/users';
 import { useTaskStore } from '../../store/useTaskStore';
 import { useSprintStore } from '../../store/useSprintStore';
 import { useEffect } from 'react';
+import { useConfirm } from '../../hooks/useConfirm.js';
 
 interface TaskDetailPanelProps {
   task: Task;
@@ -24,6 +25,7 @@ interface TaskDetailPanelProps {
 }
 
 const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ task, onClose }) => {
+  const confirm = useConfirm();
   const assignee = users.find(u => u.id === task.assigneeId);
   
   const { sprints, fetchSprints } = useSprintStore();
@@ -50,8 +52,8 @@ const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ task, onClose }) => {
                <div className="flex items-center gap-2">
                   <button className="text-text-muted hover:text-text-primary p-1 rounded-md hover:bg-bg-hover transition-colors"><Link2 size={18} /></button>
                   <button 
-                    onClick={() => {
-                      if (window.confirm('Are you sure you want to delete this task?')) {
+                    onClick={async () => {
+                      if (await confirm({ message: 'Are you sure you want to delete this task?', isDestructive: true })) {
                         useTaskStore.getState().deleteTask(task.id);
                         onClose();
                       }

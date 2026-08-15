@@ -39,7 +39,12 @@ import {
   TEST_PROJECT,
   TEST_PROJECT_2,
 } from '../helpers/constants.js';
-import { apiRequest, apiLogin } from '../helpers/api-helpers.js';
+import { apiRequest, apiLogin, getAuthToken } from '../helpers/api-helpers.js';
+
+// Build a reverse email → role map for cache lookups
+const EMAIL_TO_ROLE: Record<string, string> = Object.fromEntries(
+  Object.entries(TEST_USERS).map(([role, u]) => [u.email, role])
+);
 
 // ─── Utility Functions ──────────────────────────────────────────────────────
 
@@ -55,6 +60,7 @@ async function register(user: { email: string; name: string; password: string })
 
   if (status === 409 || status === 400) {
     console.log(`  ⏭️  User ${user.email} already exists, logging in...`);
+    // apiLogin() checks the cached token expiry — only hits the API if expired
     return apiLogin(user.email, user.password);
   }
 
@@ -65,6 +71,8 @@ async function register(user: { email: string; name: string; password: string })
   console.log(`  ✅ Registered ${user.email}`);
   return data;
 }
+
+
 
 async function createProjectIfNotExists(
   token: string,
@@ -142,13 +150,14 @@ async function seed() {
     }),
   });
 
-  if (wsStatus === 409 || wsStatus === 400 || wsStatus === 500) {
-    console.log(`  ⏭️  Workspace "${TEST_WORKSPACE.slug}" already exists`);
-  } else if (wsStatus >= 400) {
-    throw new Error(`Failed to create workspace: ${wsStatus} ${JSON.stringify(wsData)}`);
-  } else {
+  if (wsStatus === 409) {
+    console.log(`  ⏭️  Workspace "${TEST_WORKSPACE.slug}" already exists (slug conflict - slug owned by current user or another)`);
+  } else if (wsStatus === 201 || wsStatus === 200) {
     console.log(`  ✅ Created workspace "${TEST_WORKSPACE.slug}"`);
+  } else {
+    throw new Error(`Failed to create workspace: ${wsStatus} ${JSON.stringify(wsData)}`);
   }
+
 
   // ─── Step 3: Invite workspace members ────────────────────────────────────
   console.log('\n📋 Step 3: Inviting workspace members...\n');

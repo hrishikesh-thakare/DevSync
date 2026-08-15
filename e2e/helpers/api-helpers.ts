@@ -3,7 +3,7 @@
  * Direct API calls for test setup/teardown and assertion-level verification.
  * These bypass the UI to speed up test data setup.
  */
-import { API_URL, TEST_PASSWORD, authStatePath } from './constants.js';
+import { API_URL, TEST_PASSWORD, TEST_USERS, authStatePath } from './constants.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -18,9 +18,51 @@ interface LoginResponse {
 }
 
 /**
+ * Build a reverse map from email → role name so we can look up cached tokens.
+ */
+const EMAIL_TO_ROLE: Record<string, string> = Object.fromEntries(
+  Object.entries(TEST_USERS).map(([role, user]) => [user.email, role])
+);
+
+/**
  * Login via the API and return the access token + user info.
+ *
+ * If the email belongs to a known test user and a cached .auth/<role>.json
+ * file exists with a non-expired token, that token is returned directly —
+ * avoiding a real login request entirely.  This prevents the parallel test
+ * suite from triggering the auth rate-limiter (429).
  */
 export async function apiLogin(email: string, password: string = TEST_PASSWORD): Promise<LoginResponse> {
+  // Try to serve the token from the pre-cached auth state written by global-setup.
+  const role = EMAIL_TO_ROLE[email];
+  if (role) {
+    try {
+      const token = getAuthToken(role);
+
+      // Decode the JWT payload to check expiry (no crypto needed — just base64).
+      const payloadB64 = token.split('.')[1];
+      if (payloadB64) {
+        const payload = JSON.parse(Buffer.from(payloadB64, 'base64').toString('utf8'));
+        if (payload.exp && Date.now() / 1000 < payload.exp) {
+          // Token is still valid — build a synthetic LoginResponse without hitting the API.
+          return {
+            accessToken: token,
+            refreshToken: '',
+            user: {
+              userId: payload.userId || payload.sub || '',
+              email: payload.email || email,
+              fullName: payload.fullName || '',
+            },
+          };
+        }
+      }
+    } catch {
+      // Fall through to real login if anything goes wrong reading the cache.
+    }
+  }
+
+  // Fallback: perform an actual login (needed for dynamically created test users,
+  // or when the cache is absent / expired).
   const res = await fetch(`${API_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

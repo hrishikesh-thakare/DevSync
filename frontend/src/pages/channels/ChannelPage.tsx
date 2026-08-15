@@ -15,6 +15,8 @@ import { ReactionsModal } from '../../components/chat/ReactionsModal.js';
 import { Hash, Lock, Users, Loader2, Smile, MessageSquare, X, Edit2, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { apiFetch } from '../../lib/api.js';
+import { useToast } from '../../hooks/useToast.js';
+import { useConfirm } from '../../hooks/useConfirm.js';
 import { socketClient } from '../../lib/socket.js';
 
 
@@ -71,6 +73,8 @@ function FileImagePreview({ slug, fileId, fileName }: { slug: string; fileId: st
 
 export const ChannelPage = () => {
   const { slug, channelId } = useParams();
+  const toast = useToast();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const taskKeyQuery = searchParams.get('task');
@@ -168,7 +172,7 @@ export const ChannelPage = () => {
         body: JSON.stringify({ bodyText: newContent })
       });
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to edit message');
+      toast.error(err instanceof Error ? err.message : 'Failed to edit message');
     }
   };
 
@@ -406,7 +410,7 @@ export const ChannelPage = () => {
       setThreadReplies(data.replies || []);
     } catch (err) {
       console.error(err);
-      alert(err instanceof Error ? err.message : 'Failed to load thread');
+      toast.error(err instanceof Error ? err.message : 'Failed to load thread');
     } finally {
       setIsThreadLoading(false);
     }
@@ -440,10 +444,10 @@ export const ChannelPage = () => {
           targetProjectKey = projects[0].key;
           title = matchWithoutKey[2];
         } else if (projects.length > 1) {
-          alert('You are not in a project channel. Please specify a project key: /task create [ProjectKey] [Title]');
+          toast.error('You are not in a project channel. Please specify a project key: /task create [ProjectKey] [Title]');
           return;
         } else {
-          alert('No projects exist in this workspace. Please create a project first.');
+          toast.error('No projects exist in this workspace. Please create a project first.');
           return;
         }
       }
@@ -456,7 +460,7 @@ export const ChannelPage = () => {
           });
           return; // Do not send normal chat message
         } catch (err) {
-          alert(err instanceof Error ? err.message : 'Failed to create task via slash command');
+          toast.error(err instanceof Error ? err.message : 'Failed to create task via slash command');
           return;
         }
       }
@@ -474,13 +478,13 @@ export const ChannelPage = () => {
         });
         setThreadReplies([...threadReplies, data.data]);
       } catch (err) {
-        alert(err instanceof Error ? err.message : 'Failed to send reply');
+        toast.error(err instanceof Error ? err.message : 'Failed to send reply');
       }
     }
   };
 
   const deleteMessage = async (msgId: string) => {
-    if (!confirm('Delete message?')) return;
+    if (!(await confirm('Delete message?'))) return;
     try {
       await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages/${msgId}`, { method: 'DELETE' });
       removeMessage(msgId);
@@ -502,7 +506,7 @@ export const ChannelPage = () => {
         setActiveThreadMessageId(null);
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete message');
+      toast.error(err instanceof Error ? err.message : 'Failed to delete message');
     }
   };
 
@@ -510,13 +514,13 @@ export const ChannelPage = () => {
 
 
   const handleDeleteChannel = async () => {
-    if (!confirm('Are you sure you want to delete this channel?')) return;
+    if (!(await confirm('Are you sure you want to delete this channel?'))) return;
     try {
       await apiFetch(`/workspaces/${slug}/channels/${channelId}`, { method: 'DELETE' });
       fetchWorkspaceData(slug as string);
       navigate(`/w/${slug}`);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete channel');
+      toast.error(err instanceof Error ? err.message : 'Failed to delete channel');
     }
   };
 
@@ -533,7 +537,7 @@ export const ChannelPage = () => {
       });
       fetchWorkspaceData(slug as string);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update channel name');
+      toast.error(err instanceof Error ? err.message : 'Failed to update channel name');
     }
   };
 

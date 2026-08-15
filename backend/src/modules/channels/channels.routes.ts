@@ -14,6 +14,10 @@ import {
 
 import messagesRoutes from '../messages/messages.routes.js';
 
+import { requireChannelAccess } from '../../middleware/channelAccess.js';
+import { validate } from '../../middleware/validate.js';
+import { createChannelSchema, updateChannelSchema } from './channels.schemas.js';
+
 // Mounted at /api/workspaces/:workspaceId/channels
 const router = Router({ mergeParams: true });
 
@@ -22,16 +26,16 @@ router.use(requireAuth);
 router.use(requireWorkspaceRole(['owner', 'admin', 'member']));
 
 // ─── Channel Management ──────────────────────────────────────────────────────
-router.post('/', requireWorkspaceRole(['owner', 'admin']), createChannel);
+router.post('/', requireWorkspaceRole(['owner', 'admin']), validate(createChannelSchema), createChannel);
 router.get('/', listChannels);
-router.get('/:channelId', getChannel);
-router.post('/:channelId/join', joinChannel);
-router.delete('/:channelId/leave', leaveChannel);
-router.patch('/:channelId/archive', requireWorkspaceRole(['owner', 'admin']), archiveChannel);
-router.patch('/:channelId', requireWorkspaceRole(['owner', 'admin']), updateChannel);
-router.delete('/:channelId', requireWorkspaceRole(['owner', 'admin']), deleteChannel);
+router.get('/:channelId', requireChannelAccess, getChannel);
+router.post('/:channelId/join', requireChannelAccess, joinChannel);
+router.delete('/:channelId/leave', requireChannelAccess, leaveChannel);
+router.patch('/:channelId/archive', requireWorkspaceRole(['owner', 'admin']), requireChannelAccess, archiveChannel);
+router.patch('/:channelId', requireWorkspaceRole(['owner', 'admin']), requireChannelAccess, validate(updateChannelSchema), updateChannel);
+router.delete('/:channelId', requireWorkspaceRole(['owner', 'admin']), requireChannelAccess, deleteChannel);
 
 // ─── Messages (Nested) ───────────────────────────────────────────────────────
-router.use('/:channelId/messages', messagesRoutes);
+router.use('/:channelId/messages', requireChannelAccess, messagesRoutes);
 
 export default router;

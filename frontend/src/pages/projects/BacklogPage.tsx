@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useBoardStore } from '../../store/boardStore.js';
+import { useBoardStore, Task } from '../../store/boardStore.js';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useAuthStore } from '../../store/auth.js';
 import { apiFetch } from '../../lib/api.js';
@@ -45,7 +45,7 @@ export const BacklogPage = () => {
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc'|'desc' }>({ key: 'taskKey', direction: 'desc' });
 
-  const [sprints, setSprints] = useState<any[]>([]);
+  const [sprints, setSprints] = useState<{ sprintId: string; name: string }[]>([]);
   const [bulkAction, setBulkAction] = useState('');
   const [bulkValue, setBulkValue] = useState('');
   const [isApplyingBulk, setIsApplyingBulk] = useState(false);
@@ -97,7 +97,7 @@ export const BacklogPage = () => {
         const task = filteredTasks.find(t => t.taskId === taskId);
         if (!task) return Promise.resolve();
         
-        let body: any = {};
+        const body: Record<string, unknown> = {};
         if (bulkAction === 'sprint') body.sprintId = bulkValue === 'backlog' ? null : bulkValue;
         else if (bulkAction === 'status') body.status = bulkValue;
         else if (bulkAction === 'priority') body.priority = bulkValue;
@@ -113,7 +113,7 @@ export const BacklogPage = () => {
       setBulkAction('');
       setBulkValue('');
       fetchTasks(slug, key);
-    } catch (err) {
+    } catch {
       alert('Failed to apply bulk action');
     } finally {
       setIsApplyingBulk(false);
@@ -130,9 +130,10 @@ export const BacklogPage = () => {
     filteredTasks = filteredTasks.filter(t => !t.sprintId); // Backlog means it is not assigned to any sprint
   }
 
-  filteredTasks.sort((a: any, b: any) => {
-    let aVal = a[sortConfig.key];
-    let bVal = b[sortConfig.key];
+  filteredTasks.sort((a: Task, b: Task) => {
+    const key = sortConfig.key as keyof Task;
+    let aVal: string | number = String(a[key] || '');
+    let bVal: string | number = String(b[key] || '');
     if (sortConfig.key === 'taskKey') {
       // Parse numeric part for proper sorting
       aVal = parseInt(a.taskKey.split('-')[1]) || 0;
@@ -190,16 +191,16 @@ export const BacklogPage = () => {
                 <select value={bulkValue} onChange={e => setBulkValue(e.target.value)} className="bg-gray-900 text-sm text-gray-300 border border-gray-700 rounded px-2 py-1 focus:outline-none mr-2">
                   <option value="">Select Sprint...</option>
                   <option value="backlog">Backlog (Remove Sprint)</option>
-                  {sprints.map((s: any) => <option key={s.sprintId} value={s.sprintId}>{s.name}</option>)}
+                  {sprints.map((s: { sprintId: string; name: string }) => <option key={s.sprintId} value={s.sprintId}>{s.name}</option>)}
                 </select>
               )}
               {bulkAction === 'status' && (
                 <select value={bulkValue} onChange={e => setBulkValue(e.target.value)} className="bg-gray-900 text-sm text-gray-300 border border-gray-700 rounded px-2 py-1 focus:outline-none mr-2">
                   <option value="">Select Status...</option>
-                  <option value="TODO">To Do</option>
-                  <option value="IN_PROGRESS">In Progress</option>
-                  <option value="IN_REVIEW">In Review</option>
-                  <option value="DONE">Done</option>
+                  <option value="todo">To Do</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="in_review">In Review</option>
+                  <option value="done">Done</option>
                 </select>
               )}
               {bulkAction === 'priority' && (
@@ -296,7 +297,7 @@ export const BacklogPage = () => {
                     />
                   )}
                   <div className="flex items-center space-x-2">
-                    <IssueTypeIcon type={(task as any).type || 'task'} />
+                    <IssueTypeIcon type={task.type || task.issueType || 'task'} />
                     <span className="text-sm font-mono text-gray-500 group-hover:text-gray-300 transition-colors">
                       {task.taskKey}
                     </span>
@@ -312,9 +313,9 @@ export const BacklogPage = () => {
                 <div className="col-span-2">
                   <span className={clsx(
                     "text-[10px] font-bold px-2.5 py-1 rounded-sm uppercase tracking-wide",
-                    task.status === 'TODO' ? "bg-gray-800 text-gray-400" :
-                    task.status === 'IN_PROGRESS' ? "bg-blue-500/20 text-blue-400 border border-blue-500/20" :
-                    task.status === 'IN_REVIEW' ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/20" :
+                    task.status === 'todo' ? "bg-gray-800 text-gray-400" :
+                    task.status === 'in_progress' ? "bg-blue-500/20 text-blue-400 border border-blue-500/20" :
+                    task.status === 'in_review' ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/20" :
                     "bg-emerald-500/20 text-emerald-400 border border-emerald-500/20"
                   )}>
                     {task.status.replace('_', ' ')}
@@ -340,10 +341,10 @@ export const BacklogPage = () => {
 
                 {/* Due Date */}
                 <div className="col-span-1 text-xs text-gray-500 flex items-center">
-                  {(task as any).dueDate ? (
+                  {task.dueDate ? (
                     <>
                       <Calendar className="w-3.5 h-3.5 mr-1" />
-                      {format(new Date((task as any).dueDate), 'MMM d')}
+                      {format(new Date(task.dueDate), 'MMM d')}
                     </>
                   ) : '—'}
                 </div>

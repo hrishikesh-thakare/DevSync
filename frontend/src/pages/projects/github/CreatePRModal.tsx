@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Loader2, GitPullRequest, Search } from 'lucide-react';
+import { X, Loader2, GitPullRequest } from 'lucide-react';
 import { apiFetch } from '../../../lib/api.js';
 
 interface CreatePRModalProps {
@@ -19,7 +19,7 @@ export const CreatePRModal = ({ slug, keyStr, onClose, onCreated }: CreatePRModa
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<{ taskId: string; taskKey: string; title: string }[]>([]);
   const [branches, setBranches] = useState<string[]>([]);
   const [isLoadingMeta, setIsLoadingMeta] = useState(true);
 
@@ -33,7 +33,7 @@ export const CreatePRModal = ({ slug, keyStr, onClose, onCreated }: CreatePRModa
         setTasks(taskRes.tasks || []);
         
         // Extract branch names, handling duplicates
-        const branchNames = (branchRes.branches || []).map((b: any) => b.branchName);
+        const branchNames = (branchRes.branches || []).map((b: { branchName: string }) => b.branchName);
         setBranches(Array.from(new Set(branchNames)));
       } catch (err) {
         console.error('Failed to load metadata', err);
@@ -60,8 +60,8 @@ export const CreatePRModal = ({ slug, keyStr, onClose, onCreated }: CreatePRModa
         body: JSON.stringify({ title, body, head, base, taskId: taskId || undefined })
       });
       onCreated();
-    } catch (err: any) {
-      setError(err.message || 'Failed to create pull request');
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Failed to create pull request');
       setIsSubmitting(false);
     }
   };

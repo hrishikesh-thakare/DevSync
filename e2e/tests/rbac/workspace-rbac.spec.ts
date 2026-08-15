@@ -6,8 +6,8 @@
  * access to workspace features via both UI visibility and API responses.
  */
 import { test, expect } from '../../fixtures/test-fixtures.js';
-import { TEST_WORKSPACE, TEST_USERS, API_URL, ROUTES } from '../../helpers/constants.js';
-import { apiLogin, apiRequest } from '../../helpers/api-helpers.js';
+import { TEST_WORKSPACE, TEST_USERS, ROUTES } from '../../helpers/constants.js';
+import { apiRequest, getAuthToken } from '../../helpers/api-helpers.js';
 
 const SLUG = TEST_WORKSPACE.slug;
 
@@ -16,10 +16,8 @@ test.describe('Workspace RBAC — Settings Access @rbac', () => {
     await ownerPage.goto(ROUTES.workspaceSettings(SLUG));
     await ownerPage.waitForLoadState('networkidle');
 
-    // Settings page should render (look for settings-related content)
     const pageContent = await ownerPage.textContent('body');
     expect(pageContent).toBeTruthy();
-    // Should not be redirected away
     await expect(ownerPage).toHaveURL(new RegExp(`/w/${SLUG}/settings`));
   });
 
@@ -27,15 +25,14 @@ test.describe('Workspace RBAC — Settings Access @rbac', () => {
     await adminPage.goto(ROUTES.workspaceSettings(SLUG));
     await adminPage.waitForLoadState('networkidle');
 
-    // Settings page should render for admins
     await expect(adminPage).toHaveURL(new RegExp(`/w/${SLUG}/settings`));
 
     // But admin cannot delete workspace via API
-    const { accessToken } = await apiLogin(TEST_USERS.admin.email);
+    const accessToken = getAuthToken('admin');
     const { status } = await apiRequest(`/workspaces/${SLUG}`, accessToken, {
       method: 'DELETE',
     });
-    expect(status).toBe(403); // Admin cannot delete workspace
+    expect(status).toBe(403);
   });
 
   test('member CANNOT access workspace settings', async ({ viewerPage }) => {
@@ -49,7 +46,7 @@ test.describe('Workspace RBAC — Settings Access @rbac', () => {
     expect(isBlocked).toBe(true);
 
     // Verify API-level enforcement
-    const { accessToken } = await apiLogin(TEST_USERS.viewer.email);
+    const accessToken = getAuthToken('viewer');
     const { status } = await apiRequest(`/workspaces/${SLUG}`, accessToken, {
       method: 'PATCH',
       body: JSON.stringify({ name: 'Hacked Name' }),
@@ -84,7 +81,7 @@ test.describe('Workspace RBAC — Member Invitations @rbac', () => {
   });
 
   test('member CANNOT invite via API (403)', async () => {
-    const { accessToken } = await apiLogin(TEST_USERS.developer.email);
+    const accessToken = getAuthToken('developer');
     const { status } = await apiRequest(`/workspaces/${SLUG}/invite`, accessToken, {
       method: 'POST',
       body: JSON.stringify({ email: 'newinvite@test.com', role: 'member' }),
@@ -95,48 +92,42 @@ test.describe('Workspace RBAC — Member Invitations @rbac', () => {
 
 test.describe('Workspace RBAC — Role Management @rbac', () => {
   test('owner CAN change member roles (API)', async () => {
-    const { accessToken } = await apiLogin(TEST_USERS.owner.email);
-    const { data: members } = await apiRequest(`/workspaces/${SLUG}/members`, accessToken);
+    const ownerToken = getAuthToken('owner');
+    const { data: members } = await apiRequest(`/workspaces/${SLUG}/members`, ownerToken);
     const devMember = (members?.members || members || []).find(
       (m: any) => (m.email || m.user?.email) === TEST_USERS.developer.email
     );
     if (!devMember) { test.skip(); return; }
     const userId = devMember.userId || devMember.user?.userId;
 
-    const { status } = await apiRequest(`/workspaces/${SLUG}/members/${userId}`, accessToken, {
+    const { status } = await apiRequest(`/workspaces/${SLUG}/members/${userId}`, ownerToken, {
       method: 'PATCH',
       body: JSON.stringify({ role: 'admin' }),
     });
     expect(status).toBe(200);
 
-    const { data: after } = await apiRequest(`/workspaces/${SLUG}/members`, accessToken);
+    const { data: after } = await apiRequest(`/workspaces/${SLUG}/members`, ownerToken);
     const updated = (after?.members || after || []).find((m: any) => (m.userId || m.user?.userId) === userId);
     expect(updated?.role).toBe('admin');
 
-    await apiRequest(`/workspaces/${SLUG}/members/${userId}`, accessToken, {
+    // restore
+    await apiRequest(`/workspaces/${SLUG}/members/${userId}`, ownerToken, {
       method: 'PATCH', body: JSON.stringify({ role: 'member' }),
-    }); // restore
+    });
   });
 
   test('admin CANNOT change member roles (API 403)', async () => {
-    const ownerLogin = await apiLogin(TEST_USERS.owner.email);
-    const { data: members } = await apiRequest(`/workspaces/${SLUG}/members`, ownerLogin.accessToken);
+    const ownerToken = getAuthToken('owner');
+    const { data: members } = await apiRequest(`/workspaces/${SLUG}/members`, ownerToken);
 
-    // Find a member to try to modify
     const memberUser = members?.members?.find?.((m: any) => m.role === 'member');
-    if (!memberUser) {
-      test.skip();
-      return;
-    }
+    if (!memberUser) { test.skip(); return; }
 
-    const { accessToken } = await apiLogin(TEST_USERS.admin.email);
+    const adminToken = getAuthToken('admin');
     const { status } = await apiRequest(
       `/workspaces/${SLUG}/members/${memberUser.userId}`,
-      accessToken,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ role: 'admin' }),
-      }
+      adminToken,
+      { method: 'PATCH', body: JSON.stringify({ role: 'admin' }) }
     );
     expect(status).toBe(403);
   });
@@ -144,7 +135,7 @@ test.describe('Workspace RBAC — Role Management @rbac', () => {
 
 test.describe('Workspace RBAC — Workspace Deletion @rbac', () => {
   test('admin CANNOT delete workspace (API 403)', async () => {
-    const { accessToken } = await apiLogin(TEST_USERS.admin.email);
+    const accessToken = getAuthToken('admin');
     const { status } = await apiRequest(`/workspaces/${SLUG}`, accessToken, {
       method: 'DELETE',
     });
@@ -152,7 +143,7 @@ test.describe('Workspace RBAC — Workspace Deletion @rbac', () => {
   });
 
   test('member CANNOT delete workspace (API 403)', async () => {
-    const { accessToken } = await apiLogin(TEST_USERS.developer.email);
+    const accessToken = getAuthToken('developer');
     const { status } = await apiRequest(`/workspaces/${SLUG}`, accessToken, {
       method: 'DELETE',
     });
@@ -178,7 +169,7 @@ test.describe('Workspace RBAC — Project & Channel Creation Buttons @rbac', () 
   });
 
   test('member CANNOT create project via API (403)', async () => {
-    const { accessToken } = await apiLogin(TEST_USERS.developer.email);
+    const accessToken = getAuthToken('developer');
     const { status } = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken, {
       method: 'POST',
       body: JSON.stringify({ name: 'Unauthorized Project', key: 'HACK' }),
@@ -187,7 +178,7 @@ test.describe('Workspace RBAC — Project & Channel Creation Buttons @rbac', () 
   });
 
   test('member CANNOT create channel via API (403)', async () => {
-    const { accessToken } = await apiLogin(TEST_USERS.developer.email);
+    const accessToken = getAuthToken('developer');
     const { status } = await apiRequest(`/workspaces/${SLUG}/channels`, accessToken, {
       method: 'POST',
       body: JSON.stringify({ name: 'hacked-channel', type: 'public' }),
@@ -198,13 +189,13 @@ test.describe('Workspace RBAC — Project & Channel Creation Buttons @rbac', () 
 
 test.describe('Workspace RBAC — Non-Member Denial @rbac', () => {
   test('outsider CANNOT access workspace (API 403)', async () => {
-    const { accessToken } = await apiLogin(TEST_USERS.outsider.email);
+    const accessToken = getAuthToken('outsider');
     const { status } = await apiRequest(`/workspaces/${SLUG}`, accessToken);
     expect(status).toBe(403);
   });
 
   test('outsider CANNOT list workspace members (API 403)', async () => {
-    const { accessToken } = await apiLogin(TEST_USERS.outsider.email);
+    const accessToken = getAuthToken('outsider');
     const { status } = await apiRequest(`/workspaces/${SLUG}/members`, accessToken);
     expect(status).toBe(403);
   });

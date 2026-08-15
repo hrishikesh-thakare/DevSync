@@ -6,11 +6,12 @@ import {
 import clsx from 'clsx';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useChatStore as useUploadStore } from '../../store/useChatStore.js';
+import DOMPurify from 'dompurify';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Slack mrkdwn → HTML converter (used on submit + preview)
 // ─────────────────────────────────────────────────────────────────────────────
-export function mrkdwnToHtml(raw: string): string {
+function mrkdwnToHtml(raw: string): string {
   let text = raw;
 
   // Fenced code block  ```…```
@@ -70,7 +71,7 @@ function processInline(text: string): string {
   // Inline code  `text`
   text = text.replace(/`([^`\n]+?)`/g, '<code class="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-xs font-mono text-gray-200">$1</code>');
   // Hyperlinks  [label](url)
-  text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,
+  text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
     '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-400 underline">$1</a>'
   );
   // @mentions
@@ -134,7 +135,11 @@ export const ChatEditor = ({
   const { uploadFile } = useUploadStore();
 
   // Sync initial content (e.g. @task prefill)
-  useEffect(() => { setValue(initialContent); }, [initialContent]);
+  const [prevInitial, setPrevInitial] = useState(initialContent);
+  if (initialContent !== prevInitial) {
+    setPrevInitial(initialContent);
+    setValue(initialContent);
+  }
 
   // Auto-resize textarea
   useEffect(() => {
@@ -267,7 +272,7 @@ export const ChatEditor = ({
         {showPreview && (
           <div
             className="px-4 py-3 min-h-[60px] max-h-[300px] overflow-y-auto text-[15px] text-gray-200 leading-relaxed prose prose-invert max-w-none prose-p:my-0"
-            dangerouslySetInnerHTML={{ __html: value.trim() ? mrkdwnToHtml(value) : `<span class="text-gray-500">${placeholder}</span>` }}
+            dangerouslySetInnerHTML={{ __html: value.trim() ? DOMPurify.sanitize(mrkdwnToHtml(value)) : DOMPurify.sanitize(`<span class="text-gray-500">${placeholder}</span>`) }}
           />
         )}
 

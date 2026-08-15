@@ -6,6 +6,7 @@ import { supabase } from '../../config/supabase.js';
 import { env } from '../../config/env.js';
 import fs from 'fs';
 import path from 'path';
+import jwt from 'jsonwebtoken';
 
 const UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -141,7 +142,8 @@ export const getDownloadUrl = async (req: Request, res: Response): Promise<void>
 
     // If local file, return raw endpoint URL
     if (fileRecord.storagePath.startsWith('local:')) {
-      const rawUrl = `${env.BACKEND_URL || 'http://localhost:3001'}/api/workspaces/${fileRecord.workspaceId}/files/${fileRecord.fileId}/raw`;
+      const token = jwt.sign({ fileId: fileRecord.fileId }, env.JWT_SECRET, { expiresIn: '1h' });
+      const rawUrl = `${env.BACKEND_URL || 'http://localhost:3001'}/api/workspaces/${fileRecord.workspaceId}/files/${fileRecord.fileId}/raw?token=${token}`;
       res.json({ downloadUrl: rawUrl, fileRecord });
       return;
     }
@@ -159,7 +161,8 @@ export const getDownloadUrl = async (req: Request, res: Response): Promise<void>
     }
 
     // Fallback: raw endpoint
-    const rawUrl = `${env.BACKEND_URL || 'http://localhost:3001'}/api/workspaces/${fileRecord.workspaceId}/files/${fileRecord.fileId}/raw`;
+    const token = jwt.sign({ fileId: fileRecord.fileId }, env.JWT_SECRET, { expiresIn: '1h' });
+    const rawUrl = `${env.BACKEND_URL || 'http://localhost:3001'}/api/workspaces/${fileRecord.workspaceId}/files/${fileRecord.fileId}/raw?token=${token}`;
     res.json({ downloadUrl: rawUrl, fileRecord });
   } catch (err) {
     console.error('Get download URL error:', err);
@@ -172,6 +175,23 @@ export const getDownloadUrl = async (req: Request, res: Response): Promise<void>
 export const getRawFile = async (req: Request, res: Response): Promise<void> => {
   try {
     const { fileId } = req.params as Record<string, string>;
+    const { token } = req.query;
+
+    if (!token) {
+      res.status(401).send('Unauthorized: Missing access token.');
+      return;
+    }
+
+    try {
+      const decoded = jwt.verify(token as string, env.JWT_SECRET) as { fileId: string };
+      if (decoded.fileId !== fileId) {
+        res.status(403).send('Forbidden: Invalid token for this file.');
+        return;
+      }
+    } catch (err) {
+      res.status(401).send('Unauthorized: Invalid or expired token.');
+      return;
+    }
 
     const [fileRecord] = await db
       .select()

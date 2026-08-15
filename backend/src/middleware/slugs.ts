@@ -3,7 +3,7 @@ import { db } from '../config/db.js';
 import { workspaces } from '../db/schema/workspaces.js';
 import { projects } from '../db/schema/projects.js';
 import { tasks } from '../db/schema/tasks.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 
 /**
  * Resolves a workspace slug (e.g., 'acme-corp') to a workspace UUID.
@@ -17,7 +17,7 @@ export const resolveSlug = async (req: Request, res: Response, next: NextFunctio
     const [ws] = await db
       .select({ id: workspaces.workspaceId })
       .from(workspaces)
-      .where(condition)
+      .where(and(condition, isNull(workspaces.deletedAt)))
       .limit(1);
 
     if (!ws) {

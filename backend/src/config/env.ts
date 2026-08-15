@@ -20,8 +20,15 @@ export const env = {
   SUPABASE_URL: process.env.SUPABASE_URL || '',
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
 
-  // AI
   GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
+
+  // SMTP Email
+  SMTP_HOST: process.env.SMTP_HOST || '',
+  SMTP_PORT: process.env.SMTP_PORT || '',
+  SMTP_USER: process.env.SMTP_USER || '',
+  SMTP_PASS: process.env.SMTP_PASS || '',
+  SMTP_SECURE: process.env.SMTP_SECURE || '',
+  SMTP_FROM: process.env.SMTP_FROM || '',
 
   // Encryption (for GitHub tokens, secrets)
   ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || '',

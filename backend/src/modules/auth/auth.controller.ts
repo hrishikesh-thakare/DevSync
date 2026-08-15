@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
 import { db } from '../../config/db.js';
 import { users, refreshTokens } from '../../db/schema/auth.js';
+import { workspaceInvites, workspaceMembers } from '../../db/schema/workspaces.js';
 import { env } from '../../config/env.js';
 import { eq, and } from 'drizzle-orm';
 import { supabase } from '../../config/supabase.js';
@@ -51,11 +52,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password, fullName, displayName } = req.body;
 
-    if (!email || !password || !fullName) {
-      res.status(400).json({ error: 'Email, password, and full name are required.' });
-      return;
-    }
-
     // Check if email already exists
     const [existingUser] = await db
       .select({ userId: users.userId })
@@ -66,6 +62,16 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     if (existingUser) {
       res.status(400).json({ error: 'A user with this email already exists.' });
       return;
+    }
+
+    let inviteRecord = null;
+    if (req.body.inviteToken) {
+      const [invite] = await db.select().from(workspaceInvites).where(eq(workspaceInvites.token, req.body.inviteToken)).limit(1);
+      if (!invite || new Date() > new Date(invite.expiresAt) || invite.email.toLowerCase() !== email.toLowerCase().trim()) {
+        res.status(400).json({ error: 'Invalid or expired invite token, or email mismatch.' });
+        return;
+      }
+      inviteRecord = invite;
     }
 
     // Hash password
@@ -93,6 +99,22 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         actorId: u.userId, action: 'user.registered', entityType: 'user', entityId: u.userId,
         newValues: { email: u.email, full_name: u.fullName, auth_method: 'email' }, tx
       });
+
+      if (inviteRecord) {
+        await tx.insert(workspaceMembers).values({
+          workspaceId: inviteRecord.workspaceId,
+          userId: u.userId,
+          role: inviteRecord.role,
+          invitedBy: inviteRecord.invitedBy,
+          state: 'active',
+        });
+        await tx.delete(workspaceInvites).where(eq(workspaceInvites.inviteId, inviteRecord.inviteId));
+        await logAuditAction({
+          actorId: u.userId, action: 'workspace_member.invite_accepted', entityType: 'workspace_member', entityId: u.userId, workspaceId: inviteRecord.workspaceId ?? undefined,
+          newValues: { state: 'active' }, oldValues: { state: 'invited' }, tx
+        });
+      }
+
       return u;
     });
 
@@ -122,11 +144,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
-
-    if (!email || !password) {
-      res.status(400).json({ error: 'Email and password are required.' });
-      return;
-    }
 
     // Find user
     const [user] = await db

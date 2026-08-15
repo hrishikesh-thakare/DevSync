@@ -3,11 +3,12 @@ import { Outlet, useParams, NavLink, useNavigate } from 'react-router-dom';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useAuthStore } from '../../store/auth.js';
 import { useNotificationStore, Notification } from '../../store/useNotificationStore.js';
-import { Hash, Lock, Search, Bell, Settings, Plus, FolderKanban, Loader2, Home, X, LogOut, ChevronDown as ChevronDownIcon, Command } from 'lucide-react';
+import { Hash, Lock, Search, Settings, Plus, FolderKanban, Loader2, Home, X, LogOut, ChevronDown as ChevronDownIcon, Command } from 'lucide-react';
 import { CommandPalette } from '../../components/layout/CommandPalette.js';
 import NotificationDropdown from '../../components/layout/NotificationDropdown.js';
 import clsx from 'clsx';
 import { socketClient } from '../../lib/socket.js';
+import { useToast } from '../../hooks/useToast.js';
 
 const getStatusDotClass = (presence?: string, statusText?: string) => {
   if (presence === 'offline' || statusText === 'Away') return 'bg-gray-500';
@@ -20,12 +21,13 @@ export const WorkspaceLayout = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
-  const { notifications, unreadCount, fetchNotifications, addNotification } = useNotificationStore();
+  const { notifications, fetchNotifications, addNotification } = useNotificationStore();
   const { name, projects, channels, members, isLoading, error, myRole, isAdmin, isOwner, fetchWorkspaceData, updateMemberPresence } = useCurrentWorkspaceStore();
+  const toast = useToast();
 
   const channelUnreadCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    notifications.forEach((n: any) => {
+    notifications.forEach((n) => {
       if (!n.isRead && n.channelId) {
         counts[n.channelId] = (counts[n.channelId] || 0) + 1;
       }
@@ -117,7 +119,7 @@ export const WorkspaceLayout = () => {
       setIsAnnouncementOnly(false);
       fetchWorkspaceData(slug);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to create channel.');
+      toast.error(err instanceof Error ? err.message : 'Failed to create channel.');
     } finally {
       setIsCreatingChannel(false);
     }
@@ -134,7 +136,7 @@ export const WorkspaceLayout = () => {
         body: JSON.stringify({ statusText: newStatusText, presence: presenceMode }),
       });
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to update status.');
+      toast.error(err instanceof Error ? err.message : 'Failed to update status.');
     }
   };
 
@@ -149,7 +151,7 @@ export const WorkspaceLayout = () => {
         body: JSON.stringify({ statusText: '' }),
       });
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to clear status.');
+      toast.error(err instanceof Error ? err.message : 'Failed to clear status.');
     }
   };
 
@@ -181,7 +183,7 @@ export const WorkspaceLayout = () => {
       setSelectedDMMemberId('');
       fetchWorkspaceData(slug);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to create DM.');
+      toast.error(err instanceof Error ? err.message : 'Failed to create DM.');
     } finally {
       setIsCreatingChannel(false);
     }

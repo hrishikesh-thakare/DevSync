@@ -5,6 +5,8 @@ import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { Loader2, AlertCircle, Plus, X, Bug, BookOpen, Zap, CheckSquare, Layers, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuthStore } from '../../store/auth.js';
+import { useToast } from '../../hooks/useToast.js';
+import { useConfirm } from '../../hooks/useConfirm.js';
 import {
   DndContext,
   closestCorners,
@@ -14,17 +16,16 @@ import {
   useSensors,
   DragOverlay,
   DragStartEvent,
-  DragOverEvent,
   DragEndEvent,
 } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
 const COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
-  { id: 'TODO', title: 'To Do', color: 'bg-gray-500' },
-  { id: 'IN_PROGRESS', title: 'In Progress', color: 'bg-blue-500' },
-  { id: 'IN_REVIEW', title: 'In Review', color: 'bg-yellow-500' },
-  { id: 'DONE', title: 'Done', color: 'bg-emerald-500' },
+  { id: 'todo', title: 'To Do', color: 'bg-gray-500' },
+  { id: 'in_progress', title: 'In Progress', color: 'bg-blue-500' },
+  { id: 'in_review', title: 'In Review', color: 'bg-yellow-500' },
+  { id: 'done', title: 'Done', color: 'bg-emerald-500' },
 ];
 
 const ISSUE_TYPES = [
@@ -51,6 +52,7 @@ const IssueTypeIcon = ({ type, className = '' }: { type: string; className?: str
 
 export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
   const { slug, key } = useParams();
+  const toast = useToast();
   const { tasks, members, isLoading, fetchTasks, fetchMembers, updateTaskOptimistic, moveTask } = useBoardStore();
   const { isAdmin } = useCurrentWorkspaceStore();
   const currentUser = useAuthStore(state => state.user);
@@ -61,7 +63,7 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskStatus, setNewTaskStatus] = useState<TaskStatus>('TODO');
+  const [newTaskStatus, setNewTaskStatus] = useState<TaskStatus>('todo');
   const [newTaskType, setNewTaskType] = useState('task');
   const [newTaskPriority, setNewTaskPriority] = useState('medium');
   const [newTaskDescription, setNewTaskDescription] = useState('');
@@ -69,7 +71,7 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
   const [newTaskSprintId, setNewTaskSprintId] = useState<string>(sprintId || '');
   const [isCreatingTask, setIsCreatingTask] = useState(false);
 
-  const [sprints, setSprints] = useState<any[]>([]);
+  const [sprints, setSprints] = useState<{ sprintId: string; name: string }[]>([]);
 
   // Filters
   const [filterPriority, setFilterPriority] = useState('all');
@@ -88,9 +90,7 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
     }
   }, [slug, key, fetchTasks, fetchMembers]);
   
-  useEffect(() => {
-    setNewTaskSprintId(sprintId || '');
-  }, [sprintId]);
+  // removed useEffect to prevent cascading renders
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,8 +118,8 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
       setNewTaskType('task');
       setNewTaskPriority('medium');
       setNewTaskSprintId(sprintId || '');
-    } catch (err: any) {
-      alert(err.message || 'Failed to create task.');
+    } catch (err: unknown) {
+      toast.error((err as Error).message || 'Failed to create task.');
     } finally {
       setIsCreatingTask(false);
     }
@@ -139,7 +139,7 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
     filteredTasks = filteredTasks.filter(t => t.priority === filterPriority);
   }
   if (filterType !== 'all') {
-    filteredTasks = filteredTasks.filter(t => (t as any).type === filterType);
+    filteredTasks = filteredTasks.filter(t => (t.type || t.issueType || 'task') === filterType);
   }
 
   if (isLoading) {
@@ -157,7 +157,7 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
     if (task) setActiveTask(task);
   };
 
-  const handleDragOver = (_event: DragOverEvent) => {
+  const handleDragOver = () => {
     // Handled in DragEnd for simplicity
   };
 
@@ -235,7 +235,7 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
         <div className="flex items-center space-x-3">
           {canEditTask && (
             <button 
-              onClick={() => { setNewTaskStatus('TODO'); setShowTaskModal(true); }}
+              onClick={() => { setNewTaskStatus('todo'); setShowTaskModal(true); }}
               className="flex items-center px-3 py-2 bg-white hover:bg-gray-200 text-gray-950 text-sm font-semibold rounded-lg transition-colors"
             >
               <Plus className="w-4 h-4 mr-1.5" />
@@ -344,7 +344,7 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
                     className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white transition-colors"
                   >
                     <option value="">Backlog</option>
-                    {sprints.map((s: any) => <option key={s.sprintId} value={s.sprintId}>{s.name}</option>)}
+                    {sprints.map((s: { sprintId: string; name: string }) => <option key={s.sprintId} value={s.sprintId}>{s.name}</option>)}
                   </select>
                 </div>
               </div>
@@ -389,7 +389,7 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
 };
 
 // --- Column Component ---
-const KanbanColumn = ({ column, tasks, onAddClick }: { column: any, tasks: Task[], onAddClick: () => void }) => {
+const KanbanColumn = ({ column, tasks, onAddClick }: { column: { id: string; title: string; color: string }, tasks: Task[], onAddClick: () => void }) => {
   return (
     <div className="flex flex-col w-80 shrink-0 bg-gray-900/50 rounded-xl border border-gray-800 max-h-full overflow-hidden" id={column.id}>
       <div className="p-4 flex items-center justify-between border-b border-gray-800/60 bg-gray-900/80 group">
@@ -435,6 +435,7 @@ const SortableTaskCard = ({ task }: { task: Task }) => {
 const KanbanCard = ({ task, isOverlay = false }: { task: Task, isOverlay?: boolean }) => {
   const { slug, key } = useParams();
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const members = useBoardStore(state => state.members);
 
   return (
@@ -458,7 +459,7 @@ const KanbanCard = ({ task, isOverlay = false }: { task: Task, isOverlay?: boole
       <div className="pl-2">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center space-x-1.5">
-            <IssueTypeIcon type={(task as any).type || 'task'} />
+            <IssueTypeIcon type={task.type || task.issueType || 'task'} />
             <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-400 transition-colors">
               {task.taskKey}
             </span>
@@ -474,9 +475,9 @@ const KanbanCard = ({ task, isOverlay = false }: { task: Task, isOverlay?: boole
           {!isOverlay && slug && key && (
             <button
               className="ml-auto opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 p-1 rounded-md transition-all hover:bg-red-500/10"
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
-                if (window.confirm('Are you sure you want to delete this task?')) {
+                if (await confirm({ message: 'Are you sure you want to delete this task?', isDestructive: true })) {
                   useBoardStore.getState().deleteTask(slug, key, task.taskKey);
                 }
               }}

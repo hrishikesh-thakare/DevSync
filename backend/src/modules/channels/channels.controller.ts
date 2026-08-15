@@ -19,18 +19,9 @@ export const createChannel = async (req: Request, res: Response): Promise<void> 
     const userId = req.user!.userId;
     const { name, description, type, projectId, isAnnouncementOnly, isDefault, memberIds } = req.body;
 
-    if (!name) {
-      res.status(400).json({ error: 'Channel name is required.' });
-      return;
-    }
-
+    const channelName = name ? name.trim() : null;
     const channelType = type || 'public';
-    if (!['public', 'private', 'dm', 'group_dm'].includes(channelType)) {
-      res.status(400).json({ error: 'Type must be "public", "private", "dm", or "group_dm".' });
-      return;
-    }
-
-    const slug = channelSlug(name);
+    const slug = channelName ? channelSlug(channelName) : '';
 
     const result = await db.transaction(async (tx) => {
       const [channel] = await tx
@@ -38,7 +29,7 @@ export const createChannel = async (req: Request, res: Response): Promise<void> 
         .values({
           workspaceId,
           projectId: projectId || null,
-          name: name.trim(),
+          name: channelName,
           slug,
           description: description || null,
           type: channelType,
@@ -82,7 +73,7 @@ export const createChannel = async (req: Request, res: Response): Promise<void> 
       res.status(409).json({ error: 'Channel with this name already exists.' });
       return;
     }
-    res.status(500).json({ error: 'Server error creating channel.', details: errStr });
+    res.status(500).json({ error: 'Server error creating channel.' });
   }
 };
 
@@ -207,7 +198,7 @@ export const joinChannel = async (req: Request, res: Response): Promise<void> =>
     res.status(201).json({ message: 'Joined channel' });
   } catch (err: any) {
     console.error('Join channel error:', err);
-    res.status(500).json({ error: 'Server error joining channel.', details: err?.message || String(err) });
+    res.status(500).json({ error: 'Server error joining channel.' });
   }
 };
 

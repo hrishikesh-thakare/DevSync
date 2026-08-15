@@ -94,8 +94,8 @@ const Sidebar: React.FC = () => {
           {!isCollapsed && <span className="font-medium text-sm">Settings</span>}
         </NavLink>
         <div className="flex items-center gap-3 p-3 mt-2 rounded-2xl bg-bg-tertiary/50 border border-border-default">
-          {user?.avatar ? (
-             <img src={user.avatar} alt={user.fullName} className="w-8 h-8 rounded-full border border-white/30" />
+          {user?.avatarUrl ? (
+             <img src={user.avatarUrl || undefined} alt={user.fullName} className="w-8 h-8 rounded-full border border-white/30" />
           ) : (
              <div className="w-8 h-8 rounded-full bg-white/20 border border-white/30 flex items-center justify-center text-xs font-bold">
                {user?.fullName?.charAt(0) || 'U'}

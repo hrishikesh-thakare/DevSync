@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useWorkspaceStore } from '../../store/workspaceStore.js';
 import { useAuthStore } from '../../store/auth.js';
 import { Plus, Briefcase, ChevronRight, LogOut, Loader2, ServerCrash } from 'lucide-react';
+import { useToast } from '../../hooks/useToast.js';
 
 export const WorkspaceList = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const { workspaces, isLoading, fetchWorkspaces, createWorkspace, acceptInvite } = useWorkspaceStore();
   const [acceptingSlug, setAcceptingSlug] = useState<string | null>(null);
+  const toast = useToast();
 
   const [isCreating, setIsCreating] = useState(false);
   const [newWsName, setNewWsName] = useState('');
@@ -186,7 +188,7 @@ export const WorkspaceList = () => {
                           await acceptInvite(ws.slug);
                           navigate(`/w/${ws.slug}`);
                         } catch (err: any) {
-                          alert(err.message || 'Failed to accept invite');
+                          toast.error(err.message || 'Failed to accept invite');
                           setAcceptingSlug(null);
                         }
                       }}

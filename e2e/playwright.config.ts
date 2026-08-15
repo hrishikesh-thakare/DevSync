@@ -52,7 +52,7 @@ export default defineConfig({
   // Auto-start frontend + backend dev servers before tests
   webServer: [
     {
-      command: 'npm run dev',
+      command: 'cross-env NODE_ENV=test npm run dev',
       cwd: '../backend',
       port: 3001,
       reuseExistingServer: true,

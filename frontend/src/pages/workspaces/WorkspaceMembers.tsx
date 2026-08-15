@@ -6,6 +6,8 @@ import { useAuthStore } from '../../store/auth.js';
 import { Shield, User, UserPlus, MoreHorizontal, Mail, Loader2, X, Search } from 'lucide-react';
 import clsx from 'clsx';
 import { format } from 'date-fns';
+import { useToast } from '../../hooks/useToast.js';
+import { useConfirm } from '../../hooks/useConfirm.js';
 
 interface Member {
   userId: string;
@@ -20,6 +22,8 @@ export const WorkspaceMembers = () => {
   const { slug } = useParams();
   const { myRole, isAdmin, isOwner } = useCurrentWorkspaceStore();
   const { user: currentUser } = useAuthStore();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [members, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -63,7 +67,7 @@ export const WorkspaceMembers = () => {
       setInviteEmail('');
       fetchMembers();
     } catch (err: any) {
-      alert(err.message || 'Failed to invite member.');
+      toast.error(err.message || 'Failed to invite member.');
     } finally {
       setIsInviting(false);
     }
@@ -77,18 +81,18 @@ export const WorkspaceMembers = () => {
       });
       fetchMembers();
     } catch (err: any) {
-      alert(err.message || 'Failed to update role.');
+      toast.error(err.message || 'Failed to update role.');
     }
     setActiveDropdown(null);
   };
 
   const handleRemove = async (userId: string) => {
-    if (!confirm('Remove this member from the workspace?')) return;
+    if (!(await confirm('Remove this member from the workspace?'))) return;
     try {
       await apiFetch(`/workspaces/${slug}/members/${userId}`, { method: 'DELETE' });
       fetchMembers();
     } catch (err: any) {
-      alert(err.message || 'Failed to remove member.');
+      toast.error(err.message || 'Failed to remove member.');
     }
     setActiveDropdown(null);
   };

@@ -3,12 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { Save, AlertTriangle, Image as ImageIcon, X } from 'lucide-react';
 import { apiFetch } from '../../lib/api.js';
+import { useToast } from '../../hooks/useToast.js';
 import { WorkspaceAuditLogs } from './WorkspaceAuditLogs.js';
 
 export const WorkspaceSettings = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { name, isOwner, isAdmin } = useCurrentWorkspaceStore();
+  const toast = useToast();
 
   // RBAC Guard: admin or owner
   useEffect(() => {
@@ -31,9 +33,9 @@ export const WorkspaceSettings = () => {
         method: 'PUT',
         body: JSON.stringify({ name: wsName, description }),
       });
-      alert('Workspace updated successfully.');
+      toast.success('Workspace updated successfully.');
     } catch (err: any) {
-      alert(err.message || 'Failed to update workspace.');
+      toast.error(err.message || 'Failed to update workspace.');
     } finally {
       setIsSaving(false);
     }
@@ -45,7 +47,7 @@ export const WorkspaceSettings = () => {
       await apiFetch(`/workspaces/${slug}`, { method: 'DELETE' });
       navigate('/workspaces');
     } catch (err: any) {
-      alert(err.message || 'Failed to delete workspace.');
+      toast.error(err.message || 'Failed to delete workspace.');
       setIsDeleting(false);
     }
   };

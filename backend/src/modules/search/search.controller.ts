@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { db } from '../../config/db.js';
 import { sql } from 'drizzle-orm';
-import { workspaceMembers } from '../../db/schema/workspaces.js';
+import { workspaces, workspaceMembers } from '../../db/schema/workspaces.js';
 import { projectMembers, projects } from '../../db/schema/projects.js';
 import { channelMembers, channels, messages } from '../../db/schema/channels.js';
 import { users } from '../../db/schema/auth.js';
@@ -15,9 +15,21 @@ import { tasks } from '../../db/schema/tasks.js';
 export const globalSearch = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user!.userId;
+    let workspaceId = req.params.workspaceId || res.locals.workspaceId;
+    const slug = req.params.slug;
+
+    if (!workspaceId && slug) {
+      const [ws] = await db
+        .select({ workspaceId: workspaces.workspaceId })
+        .from(workspaces)
+        .where(eq(workspaces.slug, slug as string))
+        .limit(1);
+      if (ws) {
+        workspaceId = ws.workspaceId;
+      }
+    }
     const {
       q,
-      workspaceId,
       type = 'all',
       limit: limitStr = '25',
       offset: offsetStr = '0',
@@ -62,17 +74,27 @@ export const globalSearch = async (req: Request, res: Response): Promise<void> =
     }
 
     // 2. Fetch accessible Project IDs for Tasks
+    const projectConditions = [eq(projectMembers.userId, userId)];
+    if (workspaceId) {
+      projectConditions.push(eq(projects.workspaceId, workspaceId));
+    }
     const projectRecords = await db
       .select({ projectId: projectMembers.projectId })
       .from(projectMembers)
-      .where(eq(projectMembers.userId, userId));
+      .leftJoin(projects, eq(projectMembers.projectId, projects.projectId))
+      .where(and(...projectConditions));
     const projectIds = projectRecords.map(p => p.projectId).filter((id): id is string => id !== null);
 
     // 3. Fetch accessible Channel IDs for Messages
+    const channelConditions = [eq(channelMembers.userId, userId)];
+    if (workspaceId) {
+      channelConditions.push(eq(channels.workspaceId, workspaceId));
+    }
     const channelRecords = await db
       .select({ channelId: channelMembers.channelId })
       .from(channelMembers)
-      .where(eq(channelMembers.userId, userId));
+      .leftJoin(channels, eq(channelMembers.channelId, channels.channelId))
+      .where(and(...channelConditions));
     const channelIds = channelRecords.map(c => c.channelId).filter((id): id is string => id !== null);
 
     let taskResults: any[] = [];

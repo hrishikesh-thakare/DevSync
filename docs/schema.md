@@ -383,6 +383,79 @@ erDiagram
 
 ---
 
+## Table: `github_issues`
+**File:** `schema/github.ts`  
+**Purpose:** Syncs GitHub Issues associated with a project.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | `uuid` | PK, default random | Row identifier |
+| `project_id` | `uuid` | FK → `projects` ON DELETE CASCADE | Parent project |
+| `task_id` | `uuid` | FK → `tasks` ON DELETE SET NULL, nullable | Linked task |
+| `github_issue_number` | `integer` | NOT NULL | GitHub issue number |
+| `github_issue_id` | `bigint` | nullable | GitHub internal issue ID |
+| `title` | `varchar(500)` | NOT NULL | Issue title |
+| `body` | `text` | nullable | Issue body |
+| `state` | `varchar(20)` | default `'open'` | `open` \| `closed` |
+| `html_url` | `text` | nullable | Link to issue on GitHub |
+| `author_github_login` | `varchar(100)` | nullable | GitHub username |
+| `author_user_id` | `uuid` | FK → `users` ON DELETE SET NULL, nullable | Mapped DevSync user |
+| `labels` | `jsonb` | default `[]` | Issue labels |
+| `closed_at` | `timestamptz` | nullable | When issue was closed |
+| `created_at` | `timestamptz` | default now | Record creation date |
+| `updated_at` | `timestamptz` | default now | Record update date |
+
+**Unique Constraint:** `(project_id, github_issue_number)`
+
+---
+
+## Table: `github_pull_requests`
+**File:** `schema/github.ts`  
+**Purpose:** Syncs GitHub Pull Requests associated with a project.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | `uuid` | PK, default random | Row identifier |
+| `project_id` | `uuid` | FK → `projects` ON DELETE CASCADE | Parent project |
+| `task_id` | `uuid` | FK → `tasks` ON DELETE SET NULL, nullable | Linked task |
+| `pr_number` | `integer` | NOT NULL | GitHub PR number |
+| `github_pr_id` | `bigint` | nullable | GitHub internal PR ID |
+| `title` | `varchar(500)` | NOT NULL | PR title |
+| `body` | `text` | nullable | PR body |
+| `state` | `varchar(20)` | default `'open'` | `open` \| `closed` \| `merged` |
+| `html_url` | `text` | nullable | Link to PR on GitHub |
+| `head_branch` | `varchar(200)` | nullable | Branch being merged from |
+| `base_branch` | `varchar(200)` | nullable | Branch being merged into |
+| `author_github_login` | `varchar(100)` | nullable | GitHub username |
+| `author_user_id` | `uuid` | FK → `users` ON DELETE SET NULL, nullable | Mapped DevSync user |
+| `merged_at` | `timestamptz` | nullable | When PR was merged |
+| `closed_at` | `timestamptz` | nullable | When PR was closed |
+| `created_at` | `timestamptz` | default now | Record creation date |
+| `updated_at` | `timestamptz` | default now | Record update date |
+
+**Unique Constraint:** `(project_id, pr_number)`
+
+---
+
+## Table: `github_branches`
+**File:** `schema/github.ts`  
+**Purpose:** Tracks GitHub branches associated with a project.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | `uuid` | PK, default random | Row identifier |
+| `project_id` | `uuid` | FK → `projects` ON DELETE CASCADE | Parent project |
+| `task_id` | `uuid` | FK → `tasks` ON DELETE SET NULL, nullable | Linked task |
+| `branch_name` | `varchar(200)` | NOT NULL | Name of the branch |
+| `is_deleted` | `boolean` | default `false` | Whether branch was deleted |
+| `created_by_user_id` | `uuid` | FK → `users` ON DELETE SET NULL, nullable | Who created it |
+| `html_url` | `text` | nullable | Link to branch on GitHub |
+| `created_at` | `timestamptz` | default now | Record creation date |
+
+**Unique Constraint:** `(project_id, branch_name)`
+
+---
+
 ## Table: `notifications`
 **File:** `schema/notifications.ts`  
 **Purpose:** In-app notifications for task assignments, mentions, sprint events, CI status, etc.

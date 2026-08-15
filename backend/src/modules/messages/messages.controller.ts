@@ -238,12 +238,11 @@ export const listMessages = async (req: Request, res: Response): Promise<void> =
 
     if (searchQuery) {
       // Search mode: search body text, do not restrict to threadId IS NULL (so replies are searchable)
-      conditions.push(
-        or(
-          sql`body_tsv @@ plainto_tsquery('english', ${searchQuery})`,
-          ilike(messages.bodyText, `%${searchQuery}%`)
-        )
+      const searchCondition = or(
+        sql`body_tsv @@ plainto_tsquery('english', ${searchQuery})`,
+        ilike(messages.bodyText, `%${searchQuery}%`)
       );
+      if (searchCondition) conditions.push(searchCondition);
     } else {
       // Normal mode: only fetch top-level messages (not in a thread)
       conditions.push(sql`${messages.threadId} IS NULL`);

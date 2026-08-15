@@ -4,6 +4,8 @@ import { apiFetch } from '../../lib/api.js';
 import { Play, CheckCircle2, Calendar, Target, Loader2, Plus, X, Trash2 } from 'lucide-react';
 
 import { format } from 'date-fns';
+import { useToast } from '../../hooks/useToast.js';
+import { useConfirm } from '../../hooks/useConfirm.js';
 
 interface Sprint {
   sprintId: string;
@@ -18,6 +20,8 @@ interface Sprint {
 export const SprintList = () => {
   const { slug, key } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [canManageSprint, setCanManageSprint] = useState(false);
@@ -88,7 +92,7 @@ export const SprintList = () => {
       setNewGoal('');
       fetchSprintsAndMembers();
     } catch (err: any) {
-      alert(err.message || 'Failed to create sprint.');
+      toast.error(err.message || 'Failed to create sprint.');
     } finally {
       setIsCreating(false);
     }
@@ -108,7 +112,7 @@ export const SprintList = () => {
       setShowStartModal(null);
       fetchSprintsAndMembers();
     } catch (err: any) {
-      alert(err.message || 'Failed to start sprint.');
+      toast.error(err.message || 'Failed to start sprint.');
     } finally {
       setIsStarting(false);
     }
@@ -124,19 +128,19 @@ export const SprintList = () => {
       setShowCloseModal(null);
       fetchSprintsAndMembers();
     } catch (err: any) {
-      alert(err.message || 'Failed to close sprint.');
+      toast.error(err.message || 'Failed to close sprint.');
     } finally {
       setIsClosing(false);
     }
   };
 
   const handleDelete = async (sprintId: string) => {
-    if (!confirm('Delete this sprint? This action cannot be undone.')) return;
+    if (!(await confirm({ message: 'Delete this sprint? This action cannot be undone.', isDestructive: true }))) return;
     try {
       await apiFetch(`/workspaces/${slug}/projects/${key}/sprints/${sprintId}`, { method: 'DELETE' });
       fetchSprintsAndMembers();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete sprint.');
+      toast.error(err.message || 'Failed to delete sprint.');
     }
   };
 

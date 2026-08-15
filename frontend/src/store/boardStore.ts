@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { apiFetch } from '../lib/api.js';
 
-export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE';
+export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done';
 
 export interface Task {
   taskId: string;
@@ -15,11 +15,21 @@ export interface Task {
   priority: 'low' | 'medium' | 'high' | 'critical';
   points: number | null;
   labels: string[];
+  type?: string;
+  issueType?: string;
+  dueDate?: string | Date | null;
+}
+
+export interface ProjectMember {
+  userId: string;
+  fullName: string;
+  role: string;
+  avatarUrl?: string | null;
 }
 
 interface BoardState {
   tasks: Task[];
-  members: any[];
+  members: ProjectMember[];
   isLoading: boolean;
   error: string | null;
   fetchTasks: (slug: string, projectKey: string) => Promise<void>;
@@ -44,8 +54,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       // Sort tasks by rank natively just to be safe
       const sorted = (data.tasks || []).sort((a: Task, b: Task) => a.rank.localeCompare(b.rank));
       set({ tasks: sorted, isLoading: false });
-    } catch (err: any) {
-      set({ error: err.message, isLoading: false });
+    } catch (err: unknown) {
+      set({ error: (err as Error).message, isLoading: false });
     }
   },
 

@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env.js';
+import { globalLimiter } from './middleware/rateLimit.js';
 
 const app = express();
 
@@ -14,6 +15,7 @@ app.use(cors({
   credentials: true,
 }));
 app.use(morgan('dev'));
+app.use(globalLimiter);
 // ─── Webhooks (Must be before express.json) ────────────────────────────────
 import { githubWebhookRouter } from './modules/github/github.routes.js';
 app.use('/api/webhooks/github', githubWebhookRouter);

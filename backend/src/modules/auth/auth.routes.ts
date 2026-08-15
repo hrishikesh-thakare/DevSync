@@ -1,12 +1,15 @@
 import { Router } from 'express';
 import { register, login, refresh, logout, oauthCallback, updateStatus, updatePresence, updatePreferences } from './auth.controller.js';
 import { requireAuth } from '../../middleware/auth.js';
+import { authLimiter } from '../../middleware/rateLimit.js';
+import { validate } from '../../middleware/validate.js';
+import { registerSchema, loginSchema } from './auth.schemas.js';
 
 const router = Router();
 
 // Public routes
-router.post('/register', register);
-router.post('/login', login);
+router.post('/register', authLimiter, validate(registerSchema), register);
+router.post('/login', authLimiter, validate(loginSchema), login);
 router.post('/refresh', refresh);
 router.post('/logout', logout);
 

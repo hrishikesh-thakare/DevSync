@@ -10,23 +10,7 @@ import { logAuditAction } from '../audit/audit.controller.js';
 import { createNotification } from '../notifications/notifications.controller.js';
 import { getIO } from '../../sockets/index.js';
 
-// ─── Lexorank helpers ────────────────────────────────────────────────────────
-// Simplified mid-string calculation for board ordering
-const midRank = (a: string, b: string): string => {
-  const pad = Math.max(a.length, b.length);
-  const aa = a.padEnd(pad, 'a');
-  const bb = b.padEnd(pad, 'z');
-  let result = '';
-  for (let i = 0; i < pad; i++) {
-    const mid = Math.floor((aa.charCodeAt(i) + bb.charCodeAt(i)) / 2);
-    result += String.fromCharCode(mid);
-  }
-  if (result === aa) result += 'n'; // midpoint between identical strings
-  return result;
-};
-
-const RANK_FIRST = 'aaaaaa';
-const RANK_GAP = 'n';
+import { generateKeyBetween } from 'fractional-indexing';
 
 // ─── HELPER: Broadcast to Project Channels ───────────────────────────────────
 const broadcastToProjectChannels = async (tx: any, projectId: string, bodyText: string): Promise<void> => {
@@ -71,6 +55,26 @@ const broadcastToProjectChannels = async (tx: any, projectId: string, bodyText: 
   }
 };
 
+// ─── HELPER: Validate Task Relations ─────────────────────────────────────────
+const validateTaskRelations = async (tx: any, projectId: string, relations: { assigneeId?: string | null, parentTaskId?: string | null, epicId?: string | null, sprintId?: string | null }) => {
+  if (relations.assigneeId) {
+    const [member] = await tx.select().from(projectMembers).where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, relations.assigneeId))).limit(1);
+    if (!member) throw new Error('INVALID_ASSIGNEE');
+  }
+  if (relations.parentTaskId) {
+    const [parent] = await tx.select().from(tasks).where(and(eq(tasks.taskId, relations.parentTaskId), eq(tasks.projectId, projectId))).limit(1);
+    if (!parent) throw new Error('INVALID_PARENT_TASK');
+  }
+  if (relations.epicId) {
+    const [epic] = await tx.select().from(tasks).where(and(eq(tasks.taskId, relations.epicId), eq(tasks.projectId, projectId), eq(tasks.issueType, 'epic'))).limit(1);
+    if (!epic) throw new Error('INVALID_EPIC');
+  }
+  if (relations.sprintId) {
+    const [sprint] = await tx.select().from(sprints).where(and(eq(sprints.sprintId, relations.sprintId), eq(sprints.projectId, projectId))).limit(1);
+    if (!sprint) throw new Error('INVALID_SPRINT');
+  }
+};
+
 // ─── CREATE TASK ─────────────────────────────────────────────────────────────
 // POST /api/projects/:projectId/tasks
 export const createTask = async (req: Request, res: Response): Promise<void> => {
@@ -83,11 +87,6 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
       parentTaskId, epicId, sprintId,
     } = req.body;
 
-    if (!title || title.trim().length < 1) {
-      res.status(400).json({ error: 'Task title is required.' });
-      return;
-    }
-
     const result = await db.transaction(async (tx) => {
       // 1. Atomically increment the project's issue counter to generate task key
       const [project] = await tx
@@ -99,6 +98,8 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
       if (!project) {
         throw new Error('PROJECT_NOT_FOUND');
       }
+
+      await validateTaskRelations(tx, projectId, { assigneeId, parentTaskId, epicId, sprintId });
 
       const taskKey = `${project.key}-${project.issueCounter}`;
 
@@ -119,9 +120,9 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
 
       let rank: string;
       if (!lastTask || !lastTask.rank) {
-        rank = RANK_FIRST;
+        rank = generateKeyBetween(null, null);
       } else {
-        rank = lastTask.rank + RANK_GAP;
+        rank = generateKeyBetween(lastTask.rank, null);
       }
 
       // 3. Create the root message for the task's discussion thread
@@ -205,10 +206,12 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
 
     res.status(201).json({ message: 'Task created', task: result });
   } catch (err: any) {
-    if (err.message === 'PROJECT_NOT_FOUND') {
-      res.status(404).json({ error: 'Project not found.' });
-      return;
-    }
+    if (err.message === 'PROJECT_NOT_FOUND') { res.status(404).json({ error: 'Project not found.' }); return; }
+    if (err.message === 'INVALID_ASSIGNEE') { res.status(400).json({ error: 'Assignee is not a member of this project.' }); return; }
+    if (err.message === 'INVALID_PARENT_TASK') { res.status(400).json({ error: 'Parent task does not exist in this project.' }); return; }
+    if (err.message === 'INVALID_EPIC') { res.status(400).json({ error: 'Epic does not exist in this project or is not an epic.' }); return; }
+    if (err.message === 'INVALID_SPRINT') { res.status(400).json({ error: 'Sprint does not exist in this project.' }); return; }
+
     console.error('Create task error:', err);
     res.status(500).json({ error: 'Server error creating task.' });
   }
@@ -332,6 +335,8 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
     if (sprintId !== undefined) updateData.sprintId = sprintId || null;
 
     const result = await db.transaction(async (tx) => {
+      await validateTaskRelations(tx, oldTask.projectId as string, { assigneeId, parentTaskId, epicId, sprintId });
+
       const [updated] = await tx
         .update(tasks)
         .set(updateData)
@@ -566,7 +571,12 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
     }
 
     res.json({ message: 'Task updated', task: result });
-  } catch (err) {
+  } catch (err: any) {
+    if (err.message === 'INVALID_ASSIGNEE') { res.status(400).json({ error: 'Assignee is not a member of this project.' }); return; }
+    if (err.message === 'INVALID_PARENT_TASK') { res.status(400).json({ error: 'Parent task does not exist in this project.' }); return; }
+    if (err.message === 'INVALID_EPIC') { res.status(400).json({ error: 'Epic does not exist in this project or is not an epic.' }); return; }
+    if (err.message === 'INVALID_SPRINT') { res.status(400).json({ error: 'Sprint does not exist in this project.' }); return; }
+
     console.error('Update task error:', err);
     res.status(500).json({ error: 'Server error updating task.' });
   }
@@ -601,16 +611,9 @@ export const reorderTask = async (req: Request, res: Response): Promise<void> =>
       if (before?.rank) beforeRank = before.rank;
     }
 
-    let newRank: string;
-    if (afterRank && beforeRank) {
-      newRank = midRank(afterRank, beforeRank);
-    } else if (afterRank) {
-      newRank = afterRank + RANK_GAP;
-    } else if (beforeRank) {
-      newRank = midRank(RANK_FIRST, beforeRank);
-    } else {
-      newRank = RANK_FIRST;
-    }
+    // Generate new rank using fractional-indexing (true LexoRank)
+    // afterRank is the task above it, beforeRank is the task below it
+    const newRank = generateKeyBetween(afterRank || null, beforeRank || null);
 
     const updateData: Record<string, any> = { rank: newRank, updatedAt: new Date() };
     if (status) updateData.status = status;
@@ -741,7 +744,7 @@ export const deleteTask = async (req: Request, res: Response): Promise<void> => 
     res.json({ message: 'Task deleted' });
   } catch (err) {
     console.error('Delete task error:', err);
-    res.status(500).json({ error: 'Server error deleting task.', details: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined });
+    res.status(500).json({ error: 'Server error deleting task.' });
   }
 };
 

@@ -1,3 +1,5 @@
+import DOMPurify from 'dompurify';
+
 export function renderMessageContent(html: string): string {
   let processed = html.replace(/\[(.*?)\]\(file:([a-zA-Z0-9-]+)\)/g, (_, name, id) => {
     // Strip HTML tags and escape double quotes to prevent breaking attributes
@@ -16,5 +18,9 @@ export function renderMessageContent(html: string): string {
     return `<span class="bg-blue-500/20 text-blue-300 border border-blue-500/40 px-1.5 py-0.5 rounded font-medium">${fullMatch}</span>`;
   });
 
-  return processed;
+  // Sanitize the processed HTML with DOMPurify
+  return DOMPurify.sanitize(processed, {
+    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p', 'br', 'ul', 'ol', 'li', 'span', 'div', 'code', 'pre', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 's', 'u'],
+    ALLOWED_ATTR: ['href', 'target', 'class', 'data-file-id', 'data-file-name', 'data-task-key', 'title', 'data-id', 'data-type'],
+  });
 }

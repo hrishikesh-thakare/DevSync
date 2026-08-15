@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { env } from '../config/env.js';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 96 bits for GCM
@@ -6,12 +7,11 @@ const TAG_LENGTH = 16; // 128 bits
 
 /**
  * Get the encryption key from env. Must be a 64-char hex string (32 bytes).
- * Falls back to JWT_SECRET if ENCRYPTION_KEY is not set.
  */
 function getKey(): Buffer {
-  const keyHex = process.env.ENCRYPTION_KEY || process.env.JWT_SECRET;
+  const keyHex = env.ENCRYPTION_KEY;
   if (!keyHex || keyHex.length < 32) {
-    throw new Error('ENCRYPTION_KEY or JWT_SECRET must be at least 32 chars.');
+    throw new Error('ENCRYPTION_KEY must be set and at least 32 chars.');
   }
   // If key is hex, decode it; otherwise hash it to get 32 bytes
   if (/^[0-9a-f]{64}$/i.test(keyHex)) {

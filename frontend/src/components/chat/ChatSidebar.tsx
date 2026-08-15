@@ -54,8 +54,8 @@ const ChatSidebar: React.FC = () => {
           <div className="space-y-0.5">
             {publicChannels.map(channel => (
               <NavLink 
-                key={channel.id}
-                to={`/chat/${channel.id}`}
+                key={channel.channelId}
+                to={`/chat/${channel.channelId}`}
                 className={({ isActive }) => 
                   `flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
                     isActive ? 'bg-white/10 text-white font-medium border border-white/10' : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary'
@@ -78,8 +78,8 @@ const ChatSidebar: React.FC = () => {
           <div className="space-y-0.5">
             {privateChannels.map(channel => (
               <NavLink 
-                key={channel.id}
-                to={`/chat/${channel.id}`}
+                key={channel.channelId}
+                to={`/chat/${channel.channelId}`}
                 className={({ isActive }) => 
                   `flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
                     isActive ? 'bg-white/10 text-white font-medium border border-white/10' : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary'
@@ -104,8 +104,8 @@ const ChatSidebar: React.FC = () => {
               const user = users.find(u => u.fullName === dm.name);
               return (
                 <NavLink 
-                  key={dm.id}
-                  to={`/chat/${dm.id}`}
+                  key={dm.channelId}
+                  to={`/chat/${dm.channelId}`}
                   className={({ isActive }) => 
                     `flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
                       isActive ? 'bg-white/10 text-white font-medium border border-white/10' : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary'

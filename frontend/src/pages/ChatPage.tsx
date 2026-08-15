@@ -38,13 +38,13 @@ const ChatPage: React.FC = () => {
     if (id && channels.length > 0) {
       setActiveChannel(id);
     } else if (!id && activeChannel) {
-      navigate(`/chat/${activeChannel.id}`, { replace: true });
+      navigate(`/chat/${activeChannel.channelId}`, { replace: true });
     }
   }, [id, channels, activeChannel, setActiveChannel, navigate]);
 
   const handleSend = () => {
     if (inputText.trim() && activeChannel) {
-      sendMessage(activeChannel.id, inputText.trim(), replyingTo?.id);
+      sendMessage(activeChannel.channelId, inputText.trim(), replyingTo?.id);
       setInputText('');
       setReplyingTo(null);
     }
@@ -179,7 +179,8 @@ const ChatPage: React.FC = () => {
               <button className="hover:text-text-primary px-1"><Info size={18} /></button>
               <button className="hover:text-text-primary px-1"><MoreVertical size={18} /></button>
            </div>
-        </header>         {/* Message Area */}
+        </header>
+         {/* Message Area */}
         <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
            {messages.map(msg => {
               const msgKey = msg.id || msg.messageId;
@@ -225,7 +226,7 @@ const ChatPage: React.FC = () => {
                              } else {
                                 newExpanded.add(msgKey);
                                 if (activeChannel && !threads[msgKey]) {
-                                   fetchThreadReplies(activeChannel.id, msgKey);
+                                   fetchThreadReplies(activeChannel.channelId, msgKey);
                                 }
                              }
                              setExpandedThreads(newExpanded);

@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
 import { db } from '../../config/db.js';
-import { workspaces, workspaceMembers } from '../../db/schema/workspaces.js';
+import { workspaces, workspaceMembers, workspaceInvites } from '../../db/schema/workspaces.js';
 import { users } from '../../db/schema/auth.js';
 import { eq, and, isNull } from 'drizzle-orm';
 import { logAuditAction } from '../audit/audit.controller.js';
 import { createNotification } from '../notifications/notifications.controller.js';
+import { sendInviteEmail } from '../../services/email.service.js';
+import crypto from 'crypto';
 
 // ─── Helper: generate a URL-safe slug from a workspace name ──────────────────
 const generateSlug = (name: string): string => {
@@ -21,17 +23,10 @@ const generateSlug = (name: string): string => {
 // POST /api/workspaces
 export const createWorkspace = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, description, iconUrl, slug: requestedSlug } = req.body;
+    const { name, description, iconUrl } = req.body;
     const userId = req.user!.userId;
 
-    if (!name || name.trim().length < 2) {
-      res.status(400).json({ error: 'Workspace name is required (min 2 characters).' });
-      return;
-    }
-
-    // Generate a unique slug or use the provided one
-    const baseSlug = generateSlug(name);
-    const slug = requestedSlug || `${baseSlug}-${Date.now().toString(36)}`;
+    const slug = generateSlug(name);
 
     const result = await db.transaction(async (tx) => {
       // 1. Create the workspace
@@ -78,7 +73,7 @@ export const createWorkspace = async (req: Request, res: Response): Promise<void
       res.status(409).json({ error: 'Workspace with this slug already exists.' });
       return;
     }
-    res.status(500).json({ error: 'Server error creating workspace.', details: errStr });
+    res.status(500).json({ error: 'Server error creating workspace.' });
   }
 };
 
@@ -196,11 +191,14 @@ export const listWorkspaceMembers = async (req: Request, res: Response): Promise
 // PATCH /api/workspaces/:workspaceId
 export const updateWorkspace = async (req: Request, res: Response): Promise<void> => {
   try {
-    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
+    const workspaceId = req.params.workspaceId as string;
     const { name, description, iconUrl } = req.body;
 
     const updateData: Record<string, any> = { updatedAt: new Date() };
-    if (name !== undefined) updateData.name = name.trim();
+    if (name !== undefined) {
+      updateData.name = name.trim();
+      updateData.slug = generateSlug(name);
+    }
     if (description !== undefined) updateData.description = description;
     if (iconUrl !== undefined) updateData.iconUrl = iconUrl;
 
@@ -293,20 +291,11 @@ export const deleteWorkspace = async (req: Request, res: Response): Promise<void
 // POST /api/workspaces/:workspaceId/invite
 export const inviteMember = async (req: Request, res: Response): Promise<void> => {
   try {
-    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
-    const { email, role } = req.body;
+    const workspaceId = req.params.workspaceId as string;
     const inviterId = req.user!.userId;
-
-    if (!email) {
-      res.status(400).json({ error: 'Email is required to invite a member.' });
-      return;
-    }
+    const { email, role } = req.body;
 
     const memberRole = role || 'member';
-    if (!['admin', 'member'].includes(memberRole)) {
-      res.status(400).json({ error: 'Role must be "admin" or "member".' });
-      return;
-    }
 
     // Find the user by email
     const [targetUser] = await db
@@ -315,8 +304,38 @@ export const inviteMember = async (req: Request, res: Response): Promise<void> =
       .where(eq(users.email, email.toLowerCase().trim()))
       .limit(1);
 
+    const [actor] = await db.select({ name: users.fullName }).from(users).where(eq(users.userId, inviterId));
+    const [workspace] = await db.select({ name: workspaces.name }).from(workspaces).where(eq(workspaces.workspaceId, workspaceId));
+
     if (!targetUser) {
-      res.status(404).json({ error: 'No user found with that email. They must register first.' });
+      // User doesn't exist. Create a pending invite and send email.
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // Invite valid for 7 days
+
+      await db.transaction(async (tx) => {
+        // Delete any existing invite for this email in this workspace
+        await tx.delete(workspaceInvites).where(and(eq(workspaceInvites.workspaceId, workspaceId), eq(workspaceInvites.email, email.toLowerCase().trim())));
+        
+        await tx.insert(workspaceInvites).values({
+          workspaceId,
+          email: email.toLowerCase().trim(),
+          role: memberRole,
+          token,
+          invitedBy: inviterId,
+          expiresAt,
+        });
+
+        await logAuditAction({
+          actorId: inviterId, action: 'workspace_invite.created', entityType: 'workspace_invite', entityId: email.toLowerCase().trim(), workspaceId,
+          newValues: { email: email.toLowerCase().trim(), role: memberRole, invited_by: inviterId }, tx
+        });
+      });
+
+      // Send the email
+      await sendInviteEmail(email.toLowerCase().trim(), workspace?.name || 'Workspace', token, actor?.name || 'Someone');
+
+      res.status(201).json({ message: 'Invitation email sent successfully.' });
       return;
     }
 
@@ -371,9 +390,6 @@ export const inviteMember = async (req: Request, res: Response): Promise<void> =
         newValues: { user_id: targetUser.userId, email: targetUser.email, role: memberRole, invited_by: inviterId }, tx
       });
     });
-
-    const [actor] = await db.select({ name: users.fullName }).from(users).where(eq(users.userId, inviterId));
-    const [workspace] = await db.select({ name: workspaces.name }).from(workspaces).where(eq(workspaces.workspaceId, workspaceId));
 
     await createNotification({
       recipientId: targetUser.userId,
@@ -437,26 +453,22 @@ export const acceptInvite = async (req: Request, res: Response): Promise<void> =
 // PATCH /api/workspaces/:workspaceId/members/:userId
 export const updateMemberRole = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { userId } = req.params as Record<string, string>;
-    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
+    const { userId } = req.params;
     const { role } = req.body;
-    const currentUserId = req.user!.userId;
+    const actorId = req.user!.userId;
+    const workspaceId = req.params.workspaceId as string;
 
-    if (!role || !['owner', 'admin', 'member'].includes(role)) {
-      res.status(400).json({ error: 'Role must be "owner", "admin", or "member".' });
-      return;
-    }
+    const targetUserId = req.params.userId as string;
 
-    // Prevent self-demotion
-    if (userId === currentUserId) {
-      res.status(400).json({ error: 'You cannot change your own role.' });
+    if (actorId === targetUserId) {
+      res.status(400).json({ error: 'Cannot change your own role' });
       return;
     }
 
     const result = await db.transaction(async (tx) => {
       const [oldMember] = await tx.select().from(workspaceMembers).where(and(
         eq(workspaceMembers.workspaceId, workspaceId),
-        eq(workspaceMembers.userId, userId),
+        eq(workspaceMembers.userId, targetUserId),
         eq(workspaceMembers.state, 'active')
       )).limit(1);
 
@@ -469,7 +481,7 @@ export const updateMemberRole = async (req: Request, res: Response): Promise<voi
         .returning();
 
       await logAuditAction({
-        actorId: currentUserId, action: 'workspace_member.role_changed', entityType: 'workspace_member', entityId: updated.id, workspaceId,
+        actorId, action: 'workspace_member.role_changed', entityType: 'workspace_member', entityId: updated.id, workspaceId,
         newValues: { role: updated.role, user_id: updated.userId }, oldValues: { role: oldMember.role, user_id: oldMember.userId }, tx
       });
 
@@ -477,7 +489,7 @@ export const updateMemberRole = async (req: Request, res: Response): Promise<voi
       if (role === 'owner') {
         await tx
           .update(workspaces)
-          .set({ ownerId: userId, updatedAt: new Date() })
+          .set({ ownerId: targetUserId, updatedAt: new Date() })
           .where(eq(workspaces.workspaceId, workspaceId));
 
         // Demote current owner to admin
@@ -487,13 +499,13 @@ export const updateMemberRole = async (req: Request, res: Response): Promise<voi
           .where(
             and(
               eq(workspaceMembers.workspaceId, workspaceId),
-              eq(workspaceMembers.userId, currentUserId)
+              eq(workspaceMembers.userId, actorId)
             )
           ).returning();
 
         if (demoted) {
           await logAuditAction({
-            actorId: currentUserId, action: 'workspace_member.role_changed', entityType: 'workspace_member', entityId: demoted.id, workspaceId,
+            actorId, action: 'workspace_member.role_changed', entityType: 'workspace_member', entityId: demoted.id, workspaceId,
             newValues: { role: demoted.role, user_id: demoted.userId }, oldValues: { role: 'owner', user_id: demoted.userId }, tx
           });
         }

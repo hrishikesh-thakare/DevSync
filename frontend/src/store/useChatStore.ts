@@ -33,7 +33,19 @@ export interface Message {
   reactions?: MessageReaction[];
 }
 
+export interface Channel {
+  channelId: string;
+  name?: string;
+  slug: string;
+  type: string;
+  description?: string;
+}
+
 interface ChatState {
+  channels: Channel[];
+  activeChannel: Channel | null;
+  fetchChannels: () => Promise<void>;
+  setActiveChannel: (channelId: string) => void;
   messages: Message[];
   threads: Record<string, Message[]>;
   searchResults: Message[];
@@ -55,12 +67,30 @@ interface ChatState {
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
+  channels: [],
+  activeChannel: null,
   messages: [],
   threads: {},
   searchResults: [],
   isSearching: false,
   activeChannelId: null,
   isLoading: false,
+
+  setActiveChannel: (channelId: string) => {
+    const channel = get().channels.find(c => c.channelId === channelId) || null;
+    set({ activeChannel: channel, activeChannelId: channelId });
+  },
+
+  fetchChannels: async () => {
+    try {
+      const slug = useCurrentWorkspaceStore.getState().slug;
+      if (!slug) return;
+      const data = await apiFetch(`/workspaces/${slug}/channels`);
+      set({ channels: data.channels || [] });
+    } catch (error) {
+      console.error('Failed to fetch channels:', error);
+    }
+  },
 
   joinChannel: (channelId) => {
     const socket = socketClient.getSocket();

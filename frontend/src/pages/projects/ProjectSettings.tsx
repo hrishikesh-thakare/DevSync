@@ -3,11 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Save, AlertTriangle, GitBranch, Loader2, CheckCircle2 } from 'lucide-react';
 import { apiFetch } from '../../lib/api.js';
 import { supabase } from '../../lib/supabase.js';
-
-
+import { useToast } from '../../hooks/useToast.js';
+import { useConfirm } from '../../hooks/useConfirm.js';
 export const ProjectSettings = () => {
   const { slug, key } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
+  const confirm = useConfirm();
   
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -90,21 +92,21 @@ export const ProjectSettings = () => {
         method: 'PUT',
         body: JSON.stringify({ name, description }),
       });
-      alert('Project updated successfully.');
+      toast.success('Project updated successfully.');
     } catch (err: any) {
-      alert(err.message || 'Failed to update project.');
+      toast.error(err.message || 'Failed to update project.');
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleArchive = async () => {
-    if (!confirm('This project will be read-only. Members can still view but not edit. Proceed?')) return;
+    if (!(await confirm('This project will be read-only. Members can still view but not edit. Proceed?'))) return;
     try {
       await apiFetch(`/workspaces/${slug}/projects/${key}/archive`, { method: 'PATCH' });
       navigate(`/w/${slug}`);
     } catch (err: any) {
-      alert(err.message || 'Failed to archive project.');
+      toast.error(err.message || 'Failed to archive project.');
     }
   };
 
@@ -122,13 +124,13 @@ export const ProjectSettings = () => {
       });
       if (error) throw error;
     } catch (err: any) {
-      alert(err.message || 'Failed to start GitHub authorization');
+      toast.error(err.message || 'Failed to start GitHub authorization');
     }
   };
 
   const handleConnectGithub = async () => {
     if (!selectedRepo) {
-      alert('Please select a repository.');
+      toast.error('Please select a repository.');
       return;
     }
     const repo = userRepos.find(r => r.fullName === selectedRepo);
@@ -146,14 +148,14 @@ export const ProjectSettings = () => {
       setGithubConnection(res.connection);
       setSelectedRepo('');
     } catch (err: any) {
-      alert(err.message || 'Failed to connect repository.');
+      toast.error(err.message || 'Failed to connect repository.');
     } finally {
       setIsConnecting(false);
     }
   };
 
   const handleDisconnectGithub = async () => {
-    if (!confirm('This will delete the webhook from GitHub and stop tracking new commits and CI runs. Existing data will be preserved. Proceed?')) return;
+    if (!(await confirm('This will delete the webhook from GitHub and stop tracking new commits and CI runs. Existing data will be preserved. Proceed?'))) return;
     setIsDisconnecting(true);
     try {
       await apiFetch(`/workspaces/${slug}/projects/${key}/github/disconnect`, {
@@ -161,20 +163,20 @@ export const ProjectSettings = () => {
       });
       setGithubConnection(null);
     } catch (err: any) {
-      alert(err.message || 'Failed to disconnect repository.');
+      toast.error(err.message || 'Failed to disconnect repository.');
     } finally {
       setIsDisconnecting(false);
     }
   };
 
   const handleDisconnectUserGithub = async () => {
-    if (!confirm('This will disconnect your personal GitHub account from DevSync. Proceed?')) return;
+    if (!(await confirm('This will disconnect your personal GitHub account from DevSync. Proceed?'))) return;
     try {
       await apiFetch(`/github/user/disconnect`, { method: 'DELETE' });
       setIsGithubAuthorized(false);
       setUserRepos([]);
     } catch (err: any) {
-      alert(err.message || 'Failed to disconnect personal GitHub account.');
+      toast.error(err.message || 'Failed to disconnect personal GitHub account.');
     }
   };
 

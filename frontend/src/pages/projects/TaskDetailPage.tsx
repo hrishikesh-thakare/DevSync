@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api.js';
 import { Loader2, ArrowLeft, AlignLeft, Trash2, X, GitCommit } from 'lucide-react';
 import { format } from 'date-fns';
+import { useToast } from '../../hooks/useToast.js';
+import { useConfirm } from '../../hooks/useConfirm.js';
 import clsx from 'clsx';
 import { useAuthStore } from '../../store/auth.js';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
@@ -11,10 +13,10 @@ import { CreatePRModal } from './github/CreatePRModal.js';
 import { TaskComments } from './TaskComments.js';
 
 const STATUSES = [
-  { value: 'TODO', label: 'To Do' },
-  { value: 'IN_PROGRESS', label: 'In Progress' },
-  { value: 'IN_REVIEW', label: 'In Review' },
-  { value: 'DONE', label: 'Done' },
+  { value: 'todo', label: 'To Do' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'in_review', label: 'In Review' },
+  { value: 'done', label: 'Done' },
 ];
 
 const PRIORITIES = [
@@ -101,6 +103,8 @@ interface GithubActivityBranch {
 export const TaskDetailPage = () => {
   const { slug, key, taskKey } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [task, setTask] = useState<TaskItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [members, setMembers] = useState<ProjectMember[]>([]);
@@ -200,7 +204,7 @@ export const TaskDetailPage = () => {
   };
 
   const handleDeleteTask = async () => {
-    if (!window.confirm('Are you sure you want to delete this task?')) return;
+    if (!(await confirm({ message: 'Are you sure you want to delete this task?', isDestructive: true }))) return;
     try {
       await apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}`, {
         method: 'DELETE',
@@ -251,7 +255,7 @@ export const TaskDetailPage = () => {
     if (projectChannel) {
       navigate(`/w/${slug}/channels/${projectChannel.channelId}?task=${taskKey}`);
     } else {
-      alert("No channel found to discuss this task.");
+      toast.error("No channel found to discuss this task.");
     }
   };
 

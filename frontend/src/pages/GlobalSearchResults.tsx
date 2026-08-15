@@ -4,6 +4,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../lib/api.js';
 import { useCurrentWorkspaceStore } from '../store/currentWorkspace.js';
 import { formatDistanceToNow, format } from 'date-fns';
+import DOMPurify from 'dompurify';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface TaskResult {
@@ -173,8 +174,8 @@ export const GlobalSearchResults = () => {
 
       const data = await apiFetch(`/workspaces/${slug}/search?${params.toString()}`);
 
-      setTasks((data.tasks || []).map((t: any) => ({ ...t, type: 'task' })));
-      setMessages((data.messages || []).map((m: any) => ({ ...m, type: 'message' })));
+      setTasks((data.tasks || []).map((t: Record<string, unknown>) => ({ ...t, type: 'task' as const } as unknown as TaskResult)));
+      setMessages((data.messages || []).map((m: Record<string, unknown>) => ({ ...m, type: 'message' as const } as unknown as MessageResult)));
       setTaskCount(data.taskCount || 0);
       setMessageCount(data.messageCount || 0);
 
@@ -190,15 +191,24 @@ export const GlobalSearchResults = () => {
   }, [debouncedQuery, slug, filterType, page, filterProjectId, filterStatus, filterAssigneeId, filterPriority, filterChannelId, filterDateFrom, filterDateTo]);
 
   useEffect(() => {
-    fetchResults();
+    setTimeout(() => {
+      fetchResults();
+    }, 0);
   }, [fetchResults]);
 
   // Reset page when filters change
-  useEffect(() => {
+  const [prevFilters, setPrevFilters] = useState({ filterType, filterProjectId, filterStatus, filterAssigneeId, filterPriority, filterChannelId, filterDateFrom, filterDateTo });
+  if (
+    filterType !== prevFilters.filterType || filterProjectId !== prevFilters.filterProjectId ||
+    filterStatus !== prevFilters.filterStatus || filterAssigneeId !== prevFilters.filterAssigneeId ||
+    filterPriority !== prevFilters.filterPriority || filterChannelId !== prevFilters.filterChannelId ||
+    filterDateFrom !== prevFilters.filterDateFrom || filterDateTo !== prevFilters.filterDateTo
+  ) {
+    setPrevFilters({ filterType, filterProjectId, filterStatus, filterAssigneeId, filterPriority, filterChannelId, filterDateFrom, filterDateTo });
     setPage(0);
     setShowAllTasks(false);
     setShowAllMessages(false);
-  }, [filterType, filterProjectId, filterStatus, filterAssigneeId, filterPriority, filterChannelId, filterDateFrom, filterDateTo]);
+  }
 
   const clearAllFilters = () => {
     setFilterProjectId('');
@@ -265,7 +275,7 @@ export const GlobalSearchResults = () => {
         {task.snippet && (
           <p
             className="mt-2 text-sm text-gray-500 line-clamp-2 leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: task.snippet }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(task.snippet) }}
           />
         )}
       </div>
@@ -306,7 +316,7 @@ export const GlobalSearchResults = () => {
 
         <p
           className="text-sm text-gray-400 line-clamp-2 leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: `"${msg.snippet || msg.bodyText?.substring(0, 150) || ''}"` }}
+          dangerouslySetInnerHTML={{ __html: `"${DOMPurify.sanitize(msg.snippet || msg.bodyText?.substring(0, 150) || '')}"` }}
         />
       </div>
     </div>
@@ -411,7 +421,7 @@ export const GlobalSearchResults = () => {
                   className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-gray-600 transition-colors cursor-pointer"
                 >
                   <option value="">All Assignees</option>
-                  {members.map((m: any) => (
+                  {members.map((m: { userId: string; fullName: string }) => (
                     <option key={m.userId} value={m.userId}>{m.fullName}</option>
                   ))}
                 </select>

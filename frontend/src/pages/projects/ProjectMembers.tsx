@@ -5,6 +5,8 @@ import clsx from 'clsx';
 
 import { useAuthStore } from '../../store/auth.js';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
+import { useToast } from '../../hooks/useToast.js';
+import { useConfirm } from '../../hooks/useConfirm.js';
 
 export const ProjectMembers = () => {
   const { slug, key } = useParams();
@@ -18,6 +20,8 @@ export const ProjectMembers = () => {
 
   const currentUser = useAuthStore(state => state.user);
   const { isAdmin } = useCurrentWorkspaceStore();
+  const toast = useToast();
+  const confirm = useConfirm();
   
   const myMembership = members.find(m => m.userId === currentUser?.userId);
   const isProjectAdmin = myMembership?.role === 'project_admin';
@@ -45,9 +49,8 @@ export const ProjectMembers = () => {
       // First fetch workspace members to find the userId by email
       const wsData = await apiFetch(`/workspaces/${slug}/members`);
       const targetUser = wsData.members?.find((m: any) => m.email.toLowerCase() === targetEmail.toLowerCase());
-      
       if (!targetUser) {
-        alert("User not found in this workspace. Invite them to the workspace first.");
+        toast.error("User not found in this workspace. Invite them to the workspace first.");
         setIsAdding(false);
         return;
       }
@@ -64,21 +67,21 @@ export const ProjectMembers = () => {
       const data = await apiFetch(`/workspaces/${slug}/projects/${key}/members`);
       setMembers(data.members || []);
     } catch (err: any) {
-      alert(err.message || 'Failed to add project member.');
+      toast.error(err.message || 'Failed to add project member.');
     } finally {
       setIsAdding(false);
     }
   };
 
   const handleRemove = async (userId: string) => {
-    if (!confirm('Remove this member from the project?')) return;
+    if (!(await confirm('Remove this member from the project?'))) return;
     try {
       const { apiFetch } = await import('../../lib/api.js');
       await apiFetch(`/workspaces/${slug}/projects/${key}/members/${userId}`, { method: 'DELETE' });
       const data = await apiFetch(`/workspaces/${slug}/projects/${key}/members`);
       setMembers(data.members || []);
     } catch (err: any) {
-      alert(err.message || 'Failed to remove member.');
+      toast.error(err.message || 'Failed to remove member.');
     }
     setActiveDropdown(null);
   };
@@ -93,7 +96,7 @@ export const ProjectMembers = () => {
       const data = await apiFetch(`/workspaces/${slug}/projects/${key}/members`);
       setMembers(data.members || []);
     } catch (err: any) {
-      alert(err.message || 'Failed to update role.');
+      toast.error(err.message || 'Failed to update role.');
     }
     setActiveDropdown(null);
   };

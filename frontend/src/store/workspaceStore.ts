@@ -7,6 +7,7 @@ export interface Workspace {
   slug: string;
   createdAt: string;
   role: 'owner' | 'admin' | 'member';
+  state?: 'active' | 'invited';
 }
 
 interface WorkspaceState {
@@ -16,9 +17,10 @@ interface WorkspaceState {
   fetchWorkspaces: () => Promise<void>;
   createWorkspace: (name: string, slug: string) => Promise<Workspace>;
   setCurrentWorkspace: (workspace: Workspace) => void;
+  acceptInvite: (workspaceId: string) => Promise<void>;
 }
 
-export const useWorkspaceStore = create<WorkspaceState>((set) => ({
+export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   workspaces: [],
   currentWorkspace: null,
   isLoading: false,
@@ -60,5 +62,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
 
   setCurrentWorkspace: (workspace) => {
     set({ currentWorkspace: workspace });
+  },
+
+  acceptInvite: async (slug: string) => {
+    await apiFetch(`/workspaces/${slug}/invites/accept`, { method: 'POST' });
+    // Refetch workspaces after accepting
+    await get().fetchWorkspaces();
   },
 }));

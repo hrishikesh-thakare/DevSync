@@ -1,6 +1,6 @@
-
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthGuard, GuestGuard } from './components/auth/AuthGuard.js';
+import { ToastProvider } from './components/ui/ToastProvider.js';
 import {
   LandingPage,
   LoginPage,
@@ -33,6 +33,7 @@ import {
 function App() {
   return (
     <BrowserRouter>
+      <ToastProvider />
       <Routes>
         {/* --- Auth & Public Screens (3 + Landing) --- */}
         <Route path="/" element={<LandingPage />} />

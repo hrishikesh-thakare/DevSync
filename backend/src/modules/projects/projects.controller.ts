@@ -16,16 +16,7 @@ export const createProject = async (req: Request, res: Response): Promise<void> 
     const { name, key, description, iconUrl } = req.body;
     const userId = req.user!.userId;
 
-    if (!name || !key) {
-      res.status(400).json({ error: 'Project name and key are required.' });
-      return;
-    }
-
-    const projectKey = key.toUpperCase().trim().slice(0, 10);
-    if (!/^[A-Z][A-Z0-9]{1,9}$/.test(projectKey)) {
-      res.status(400).json({ error: 'Key must start with a letter, contain only A-Z and 0-9, and be 2-10 characters.' });
-      return;
-    }
+    const projectKey = key; // Zod handles upper case and constraints
 
     // Check for duplicate key in this workspace
     const [existing] = await db
@@ -191,10 +182,6 @@ export const updateProject = async (req: Request, res: Response): Promise<void> 
     if (description !== undefined) updateData.description = description;
     if (iconUrl !== undefined) updateData.iconUrl = iconUrl;
     if (status !== undefined) {
-      if (!['active', 'archived'].includes(status)) {
-        res.status(400).json({ error: 'Status must be "active" or "archived".' });
-        return;
-      }
       updateData.status = status;
     }
 
@@ -258,16 +245,7 @@ export const addProjectMember = async (req: Request, res: Response): Promise<voi
     const { userId: targetUserId, role } = req.body;
     const addedBy = req.user!.userId;
 
-    if (!targetUserId) {
-      res.status(400).json({ error: 'userId is required.' });
-      return;
-    }
-
     const memberRole = role || 'developer';
-    if (!['project_admin', 'developer', 'viewer'].includes(memberRole)) {
-      res.status(400).json({ error: 'Role must be "project_admin", "developer", or "viewer".' });
-      return;
-    }
 
     // Verify the target user is a member of the workspace
     const [wsMember] = await db
@@ -445,11 +423,6 @@ export const updateProjectMemberRole = async (req: Request, res: Response): Prom
   try {
     const { projectId, userId } = req.params as Record<string, string>;
     const { role } = req.body;
-
-    if (!role || !['project_admin', 'developer', 'viewer'].includes(role)) {
-      res.status(400).json({ error: 'Role must be "project_admin", "developer", or "viewer".' });
-      return;
-    }
 
     // Check if trying to demote the last project admin
     if (role !== 'project_admin') {

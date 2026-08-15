@@ -3,11 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, Check, MessageSquare, CheckCircle2, User, UserMinus, AtSign, ArrowRightLeft, Play, Hash, Mail, Briefcase, Building2, GitBranch } from 'lucide-react';
 import clsx from 'clsx';
 import { useNotificationStore } from '../store/useNotificationStore';
-import { useCurrentWorkspaceStore } from '../store/currentWorkspace';
+
 
 export const NotificationsInbox = () => {
   const { notifications, isLoading, fetchNotifications, markAsRead, markAllAsRead } = useNotificationStore();
-  const { slug } = useCurrentWorkspaceStore();
   const [viewMode, setViewMode] = useState<'all' | 'unread'>('all');
   const [filterType, setFilterType] = useState('all');
   const navigate = useNavigate();
