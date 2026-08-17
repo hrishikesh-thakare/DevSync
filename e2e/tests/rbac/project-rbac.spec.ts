@@ -234,7 +234,7 @@ test.describe('Project RBAC — Project Settings & Archive @rbac', () => {
     const { status } = await apiRequest(
       `/workspaces/${SLUG}/projects/${KEY}`,
       accessToken,
-      { method: 'PUT', body: JSON.stringify({ description: 'Hacked description' }) }
+      { method: 'PATCH', body: JSON.stringify({ description: 'Hacked description' }) }
     );
     expect(status).toBe(403);
   });

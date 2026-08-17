@@ -25,7 +25,7 @@ export const TEST_PROJECT_2 = {
 };
 
 // ─── Global Test Password ───────────────────────────────────────────────────
-export const TEST_PASSWORD = 'password123';
+export const TEST_PASSWORD = 'Password123!';
 
 // ─── Test Users (role assignments set up by the seed script) ────────────────
 export const TEST_USERS = {

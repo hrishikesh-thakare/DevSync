@@ -100,20 +100,22 @@ test.describe('Workspace RBAC — Role Management @rbac', () => {
     if (!devMember) { test.skip(); return; }
     const userId = devMember.userId || devMember.user?.userId;
 
-    const { status } = await apiRequest(`/workspaces/${SLUG}/members/${userId}`, ownerToken, {
-      method: 'PATCH',
-      body: JSON.stringify({ role: 'admin' }),
-    });
-    expect(status).toBe(200);
+    try {
+      const { status } = await apiRequest(`/workspaces/${SLUG}/members/${userId}`, ownerToken, {
+        method: 'PATCH',
+        body: JSON.stringify({ role: 'admin' }),
+      });
+      expect(status).toBe(200);
 
-    const { data: after } = await apiRequest(`/workspaces/${SLUG}/members`, ownerToken);
-    const updated = (after?.members || after || []).find((m: any) => (m.userId || m.user?.userId) === userId);
-    expect(updated?.role).toBe('admin');
-
-    // restore
-    await apiRequest(`/workspaces/${SLUG}/members/${userId}`, ownerToken, {
-      method: 'PATCH', body: JSON.stringify({ role: 'member' }),
-    });
+      const { data: after } = await apiRequest(`/workspaces/${SLUG}/members`, ownerToken);
+      const updated = (after?.members || after || []).find((m: any) => (m.userId || m.user?.userId) === userId);
+      expect(updated?.role).toBe('admin');
+    } finally {
+      // restore
+      await apiRequest(`/workspaces/${SLUG}/members/${userId}`, ownerToken, {
+        method: 'PATCH', body: JSON.stringify({ role: 'member' }),
+      });
+    }
   });
 
   test('admin CANNOT change member roles (API 403)', async () => {

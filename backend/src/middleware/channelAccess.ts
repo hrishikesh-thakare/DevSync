@@ -2,18 +2,20 @@ import { Request, Response, NextFunction } from 'express';
 import { db } from '../config/db.js';
 import { channels, channelMembers } from '../db/schema/channels.js';
 import { projectMembers } from '../db/schema/projects.js';
+import { workspaceMembers } from '../db/schema/workspaces.js';
 import { eq, and } from 'drizzle-orm';
 
 /**
  * Middleware to restrict access based on Channel membership.
  * Requires requireAuth to run first to populate req.user.
- * Also requires requireWorkspaceRole to run first so req.workspaceRole is set.
+ *
+ * Mirrors the access logic enforced on socket room subscriptions
+ * (see canAccessChannel in sockets/index.ts).
  */
 export const requireChannelAccess = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
     const channelId = req.params?.channelId || req.body?.channelId || req.query?.channelId;
-    const workspaceRole = req.workspaceRole; // from requireWorkspaceRole
 
     if (!userId) {
       res.status(401).json({ error: 'Unauthorized. Auth context missing.' });
@@ -41,15 +43,36 @@ export const requireChannelAccess = async (req: Request, res: Response, next: Ne
       return;
     }
 
-    // 2. Determine access based on channel scope and type
+    if (!channel.workspaceId) {
+      res.status(403).json({ error: 'Forbidden. Channel has no workspace.' });
+      return;
+    }
+
+    // 2. Every channel requires active membership in its workspace
+    const [membership] = await db
+      .select({ role: workspaceMembers.role, state: workspaceMembers.state })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, channel.workspaceId),
+          eq(workspaceMembers.userId, userId)
+        )
+      )
+      .limit(1);
+
+    if (!membership || membership.state !== 'active') {
+      res.status(403).json({ error: 'Forbidden. You are not a member of this workspace.' });
+      return;
+    }
+
+    // 3. Workspace owners/admins get implicit access to all channels
+    if (membership.role === 'owner' || membership.role === 'admin') {
+      return next();
+    }
+
     if (channel.projectId) {
       // --- Project-Scoped Channel ---
-      // Workspace admins/owners get implicit access to all project channels
-      if (workspaceRole === 'owner' || workspaceRole === 'admin') {
-        return next();
-      }
-
-      // Otherwise, the user MUST be a member of the project
+      // Regular users must be members of the project
       const [pMember] = await db
         .select({ id: projectMembers.id })
         .from(projectMembers)
@@ -65,15 +88,13 @@ export const requireChannelAccess = async (req: Request, res: Response, next: Ne
         res.status(403).json({ error: 'Forbidden. You do not have access to this project channel.' });
         return;
       }
-      
-      // If it's a private project channel (if those exist), we might need an explicit channelMember check here too.
-      // But currently it seems project channels are public to the project, so project membership is enough.
+
       return next();
 
     } else {
       // --- Workspace-Scoped Channel ---
-      
-      // Public workspace channels are accessible to all workspace members
+
+      // Public workspace channels are accessible to all active workspace members
       if (channel.type === 'public') {
         return next();
       }

@@ -3,7 +3,7 @@
  * @tags @auth
  */
 import { test, expect } from '@playwright/test';
-import { ROUTES, TEST_USERS, API_URL } from '../../helpers/constants.js';
+import { ROUTES, TEST_USERS, API_URL, TEST_PASSWORD } from '../../helpers/constants.js';
 import { apiRequest } from '../../helpers/api-helpers.js';
 
 test.describe('Session Management @auth', () => {
@@ -53,7 +53,7 @@ test.describe('Session Management @auth', () => {
     // We need to login via raw fetch to get the access token
     const loginRes = await fetch(`${API_URL}/auth/login`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: TEST_USERS.owner.email, password: 'password123' })
+      body: JSON.stringify({ email: TEST_USERS.owner.email, password: TEST_PASSWORD })
     });
     const { accessToken } = await loginRes.json();
 
@@ -65,7 +65,7 @@ test.describe('Session Management @auth', () => {
   test('refresh rotates token', async () => {
     const loginRes = await fetch(`${API_URL}/auth/login`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: TEST_USERS.owner.email, password: 'password123' })
+      body: JSON.stringify({ email: TEST_USERS.owner.email, password: TEST_PASSWORD })
     });
     const { accessToken: oldToken } = await loginRes.json();
     const cookies = loginRes.headers.get('set-cookie');
@@ -87,7 +87,7 @@ test.describe('Session Management @auth', () => {
   test('logout revokes refresh token', async () => {
     const loginRes = await fetch(`${API_URL}/auth/login`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: TEST_USERS.owner.email, password: 'password123' })
+      body: JSON.stringify({ email: TEST_USERS.owner.email, password: TEST_PASSWORD })
     });
     const cookies = loginRes.headers.get('set-cookie');
     if (!cookies) throw new Error('No set-cookie header');

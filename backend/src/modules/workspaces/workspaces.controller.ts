@@ -23,10 +23,12 @@ const generateSlug = (name: string): string => {
 // POST /api/workspaces
 export const createWorkspace = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, description, iconUrl } = req.body;
+    const { name, description, iconUrl, slug: customSlug } = req.body;
     const userId = req.user!.userId;
 
-    const slug = generateSlug(name);
+    const slug = customSlug && typeof customSlug === 'string' && customSlug.trim().length > 0
+      ? generateSlug(customSlug)
+      : generateSlug(name);
 
     const result = await db.transaction(async (tx) => {
       // 1. Create the workspace
@@ -192,12 +194,14 @@ export const listWorkspaceMembers = async (req: Request, res: Response): Promise
 export const updateWorkspace = async (req: Request, res: Response): Promise<void> => {
   try {
     const workspaceId = req.params.workspaceId as string;
-    const { name, description, iconUrl } = req.body;
+    const { name, description, iconUrl, slug } = req.body;
 
     const updateData: Record<string, any> = { updatedAt: new Date() };
     if (name !== undefined) {
       updateData.name = name.trim();
-      updateData.slug = generateSlug(name);
+    }
+    if (slug !== undefined) {
+      updateData.slug = generateSlug(slug);
     }
     if (description !== undefined) updateData.description = description;
     if (iconUrl !== undefined) updateData.iconUrl = iconUrl;

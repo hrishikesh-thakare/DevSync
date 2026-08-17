@@ -2,7 +2,7 @@
  * Project Members Management Tests
  */
 import { test, expect } from '../../fixtures/test-fixtures.js';
-import { TEST_WORKSPACE, TEST_PROJECT, TEST_USERS, ROUTES } from '../../helpers/constants.js';
+import { TEST_WORKSPACE, TEST_PROJECT, TEST_USERS, ROUTES, TEST_PASSWORD } from '../../helpers/constants.js';
 import { apiLogin, apiRequest } from '../../helpers/api-helpers.js';
 
 const SLUG = TEST_WORKSPACE.slug;
@@ -31,7 +31,7 @@ test.describe('Project Members', () => {
     const regRes = await fetch(`${process.env.API_URL || 'http://localhost:3001/api'}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: tempEmail, fullName: 'PM Test', password: 'password123' }),
+      body: JSON.stringify({ email: tempEmail, fullName: 'PM Test', password: TEST_PASSWORD }),
     });
 
     if (!regRes.ok) {
@@ -53,7 +53,7 @@ test.describe('Project Members', () => {
     const tempLogin = await fetch(`${process.env.API_URL || 'http://localhost:3001/api'}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: tempEmail, password: 'password123' }),
+      body: JSON.stringify({ email: tempEmail, password: TEST_PASSWORD }),
     });
     if (tempLogin.ok) {
       const tempData = await tempLogin.json();
@@ -120,7 +120,7 @@ test.describe('Project Members', () => {
     const tempEmail = `rm-proj-${Date.now()}@demo.com`;
     const regRes = await fetch(`${process.env.API_URL || 'http://localhost:3001/api'}/auth/register`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: tempEmail, fullName: 'RM Proj Test', password: 'password123' }),
+      body: JSON.stringify({ email: tempEmail, fullName: 'RM Proj Test', password: TEST_PASSWORD }),
     });
     expect(regRes.ok).toBe(true);
     const { user: { userId } } = await regRes.json();
@@ -134,7 +134,7 @@ test.describe('Project Members', () => {
 
     const tempLogin = await fetch(`${process.env.API_URL || 'http://localhost:3001/api'}/auth/login`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: tempEmail, password: 'password123' }),
+      body: JSON.stringify({ email: tempEmail, password: TEST_PASSWORD }),
     });
     const { accessToken: tempToken } = await tempLogin.json();
     await apiRequest(`/workspaces/${SLUG}/invites/accept`, tempToken, { method: 'POST' });

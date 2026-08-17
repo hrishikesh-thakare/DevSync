@@ -412,14 +412,16 @@ export const addTaskToSprint = async (req: Request, res: Response): Promise<void
     const projectId = req.params.projectId || res.locals.projectId;
     const { taskId } = req.body;
 
-    // Verify the task exists and sprint belongs to project
-    // Add to sprint_tasks junction and update task.sprint_id
+    // Verify the task exists, belongs to the same project as the sprint,
+    // and the sprint belongs to the URL's project
     const result = await db.transaction(async (tx) => {
       const [sprint] = await tx.select().from(sprints).where(and(eq(sprints.sprintId, sprintId), eq(sprints.projectId, projectId))).limit(1);
       if (!sprint) return null;
 
-      const [task] = await tx.select({ taskId: tasks.taskId, taskKey: tasks.taskKey }).from(tasks).where(eq(tasks.taskId, taskId)).limit(1);
+      const [task] = await tx.select({ taskId: tasks.taskId, taskKey: tasks.taskKey, projectId: tasks.projectId }).from(tasks).where(eq(tasks.taskId, taskId)).limit(1);
       if (!task) return null;
+
+      if (task.projectId !== projectId) return 'cross-project';
 
       await tx.insert(sprintTasks).values({
         sprintId,
@@ -449,6 +451,10 @@ export const addTaskToSprint = async (req: Request, res: Response): Promise<void
       res.status(404).json({ error: 'Sprint or task not found.' });
       return;
     }
+    if (result === 'cross-project') {
+      res.status(400).json({ error: 'Task does not belong to this project.' });
+      return;
+    }
 
     res.status(201).json({ message: 'Task added to sprint' });
   } catch (err) {
@@ -468,8 +474,10 @@ export const removeTaskFromSprint = async (req: Request, res: Response): Promise
       const [sprint] = await tx.select().from(sprints).where(and(eq(sprints.sprintId, sprintId), eq(sprints.projectId, projectId))).limit(1);
       if (!sprint) return null;
 
-      const [task] = await tx.select({ taskId: tasks.taskId, taskKey: tasks.taskKey }).from(tasks).where(eq(tasks.taskId, taskId)).limit(1);
+      const [task] = await tx.select({ taskId: tasks.taskId, taskKey: tasks.taskKey, projectId: tasks.projectId }).from(tasks).where(eq(tasks.taskId, taskId)).limit(1);
       if (!task) return null;
+
+      if (task.projectId !== projectId) return 'cross-project';
 
       await tx
         .delete(sprintTasks)
@@ -496,6 +504,10 @@ export const removeTaskFromSprint = async (req: Request, res: Response): Promise
 
     if (!result) {
       res.status(404).json({ error: 'Sprint or task not found.' });
+      return;
+    }
+    if (result === 'cross-project') {
+      res.status(400).json({ error: 'Task does not belong to this project.' });
       return;
     }
 

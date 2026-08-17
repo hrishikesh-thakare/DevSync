@@ -2,6 +2,11 @@ import { Request, Response } from 'express';
 import { db } from '../../config/db.js';
 import { auditLogs } from '../../db/schema/audit.js';
 import { users } from '../../db/schema/auth.js';
+import { workspaceMembers, workspaceInvites } from '../../db/schema/workspaces.js';
+import { projects } from '../../db/schema/projects.js';
+import { channels, messages } from '../../db/schema/channels.js';
+import { tasks } from '../../db/schema/tasks.js';
+import { sprints } from '../../db/schema/sprints.js';
 import { eq, and, desc } from 'drizzle-orm';
 
 // ─── INTERNAL HELPER: Log an Action ──────────────────────────────────────────
@@ -31,6 +36,102 @@ export const logAuditAction = async (params: {
   }
 };
 
+/**
+ * Resolves the owning workspace of an entity directly from its own table.
+ * Deterministic by design — access is never derived from the shape of the
+ * audit log rows themselves. Returns null for unknown/unresolvable entities.
+ */
+const resolveEntityWorkspaceId = async (entityType: string, entityId: string): Promise<string | null> => {
+  switch (entityType) {
+    case 'workspace':
+      return entityId;
+
+    case 'project': {
+      const [row] = await db
+        .select({ workspaceId: projects.workspaceId })
+        .from(projects)
+        .where(eq(projects.projectId, entityId))
+        .limit(1);
+      return row?.workspaceId ?? null;
+    }
+
+    case 'channel': {
+      const [row] = await db
+        .select({ workspaceId: channels.workspaceId })
+        .from(channels)
+        .where(eq(channels.channelId, entityId))
+        .limit(1);
+      return row?.workspaceId ?? null;
+    }
+
+    case 'task': {
+      const [row] = await db
+        .select({ projectId: tasks.projectId })
+        .from(tasks)
+        .where(eq(tasks.taskId, entityId))
+        .limit(1);
+      if (!row?.projectId) return null;
+      const [proj] = await db
+        .select({ workspaceId: projects.workspaceId })
+        .from(projects)
+        .where(eq(projects.projectId, row.projectId))
+        .limit(1);
+      return proj?.workspaceId ?? null;
+    }
+
+    case 'sprint': {
+      const [row] = await db
+        .select({ projectId: sprints.projectId })
+        .from(sprints)
+        .where(eq(sprints.sprintId, entityId))
+        .limit(1);
+      if (!row?.projectId) return null;
+      const [proj] = await db
+        .select({ workspaceId: projects.workspaceId })
+        .from(projects)
+        .where(eq(projects.projectId, row.projectId))
+        .limit(1);
+      return proj?.workspaceId ?? null;
+    }
+
+    case 'message': {
+      const [row] = await db
+        .select({ channelId: messages.channelId })
+        .from(messages)
+        .where(eq(messages.messageId, entityId))
+        .limit(1);
+      if (!row?.channelId) return null;
+      const [ch] = await db
+        .select({ workspaceId: channels.workspaceId })
+        .from(channels)
+        .where(eq(channels.channelId, row.channelId))
+        .limit(1);
+      return ch?.workspaceId ?? null;
+    }
+
+    case 'workspace_member': {
+      const [row] = await db
+        .select({ workspaceId: workspaceMembers.workspaceId })
+        .from(workspaceMembers)
+        .where(eq(workspaceMembers.id, entityId))
+        .limit(1);
+      return row?.workspaceId ?? null;
+    }
+
+    case 'workspace_invite': {
+      const [row] = await db
+        .select({ workspaceId: workspaceInvites.workspaceId })
+        .from(workspaceInvites)
+        .where(eq(workspaceInvites.inviteId, entityId))
+        .limit(1);
+      return row?.workspaceId ?? null;
+    }
+
+    default:
+      return null;
+  }
+};
+
 // ─── GET AUDIT LOGS BY ENTITY ────────────────────────────────────────────────
 // GET /api/audit/:entityType/:entityId
 export const getEntityAuditLogs = async (req: Request, res: Response): Promise<void> => {
@@ -41,33 +142,24 @@ export const getEntityAuditLogs = async (req: Request, res: Response): Promise<v
 
     const parsedLimit = Math.min(parseInt(limit as string, 10) || 50, 100);
 
-    // 1. Authorization: Fetch the workspace for this entity to verify membership
-    let workspaceIdToCheck: string | null = null;
-    
-    // Quick check to get the workspace ID from the logs themselves first
-    const [sampleLog] = await db
-      .select({ workspaceId: auditLogs.workspaceId })
-      .from(auditLogs)
-      .where(
-        entityType === 'workspace' 
-          ? eq(auditLogs.workspaceId, entityId)
-          : and(
-              eq(auditLogs.entityType, entityType),
-              eq(auditLogs.entityId, entityId)
-            )
-      )
-      .limit(1);
+    // ── Path 1: User logs are PII — ownership only ──
+    // Login/logout/registration events are global (no workspace), so they are
+    // visible exclusively to the user who generated them. Workspace-scoped
+    // activity is audited via /api/audit/workspace/:workspaceId instead.
+    if (entityType === 'user') {
+      if (userId !== entityId) {
+        res.status(403).json({ error: 'Forbidden. You can only view your own audit logs.' });
+        return;
+      }
+    } else {
+      // ── Path 2: Workspace-scoped entities — resolve workspace deterministically ──
+      const workspaceIdToCheck = await resolveEntityWorkspaceId(entityType, entityId);
 
-    if (sampleLog && sampleLog.workspaceId) {
-      workspaceIdToCheck = sampleLog.workspaceId;
-    } else if (entityType === 'workspace') {
-      workspaceIdToCheck = entityId;
-    }
-    
-    if (workspaceIdToCheck) {
-      // Import workspaceMembers dynamically or ensure it's available
-      const { workspaceMembers } = await import('../../db/schema/workspaces.js');
-      
+      if (!workspaceIdToCheck) {
+        res.status(403).json({ error: 'Forbidden. Cannot resolve access for this audit entity.' });
+        return;
+      }
+
       const [membership] = await db
         .select({ role: workspaceMembers.role })
         .from(workspaceMembers)
@@ -81,12 +173,9 @@ export const getEntityAuditLogs = async (req: Request, res: Response): Promise<v
         .limit(1);
 
       if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
-         res.status(403).json({ error: 'Forbidden. Only workspace owners and admins can view audit logs.' });
-         return;
+        res.status(403).json({ error: 'Forbidden. Only workspace owners and admins can view audit logs.' });
+        return;
       }
-    } else {
-        // If we can't determine the workspace, and no logs exist, it's safer to just return empty 
-        // to avoid leaking existence, or we can just proceed and return empty logs.
     }
 
     const logs = await db

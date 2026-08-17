@@ -2,7 +2,7 @@
  * Workspace Members Management Tests
  */
 import { test, expect } from '../../fixtures/test-fixtures.js';
-import { TEST_WORKSPACE, TEST_USERS, ROUTES } from '../../helpers/constants.js';
+import { TEST_WORKSPACE, TEST_USERS, ROUTES, TEST_PASSWORD } from '../../helpers/constants.js';
 import { apiLogin, apiRequest } from '../../helpers/api-helpers.js';
 
 const SLUG = TEST_WORKSPACE.slug;
@@ -30,7 +30,7 @@ test.describe('Workspace Members', () => {
     const regRes = await fetch(`${process.env.API_URL || 'http://localhost:3001/api'}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: testEmail, fullName: 'Invite Test', password: 'password123' }),
+      body: JSON.stringify({ email: testEmail, fullName: 'Invite Test', password: TEST_PASSWORD }),
     });
 
     expect(regRes.ok).toBe(true);
@@ -45,7 +45,7 @@ test.describe('Workspace Members', () => {
     const email = `remove-test-${Date.now()}@demo.com`;
     const regRes = await fetch(`${process.env.API_URL || 'http://localhost:3001/api'}/auth/register`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, fullName: 'Remove Test', password: 'password123' }),
+      body: JSON.stringify({ email, fullName: 'Remove Test', password: TEST_PASSWORD }),
     });
     expect(regRes.ok).toBe(true);
     const { user } = await regRes.json();
@@ -56,7 +56,7 @@ test.describe('Workspace Members', () => {
     });
     const tempLoginRes = await fetch(`${process.env.API_URL || 'http://localhost:3001/api'}/auth/login`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: 'password123' }),
+      body: JSON.stringify({ email, password: TEST_PASSWORD }),
     });
     const { accessToken: tempToken } = await tempLoginRes.json();
     await apiRequest(`/workspaces/${SLUG}/invites/accept`, tempToken, { method: 'POST' });
