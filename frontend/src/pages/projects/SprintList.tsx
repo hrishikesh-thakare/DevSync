@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api.js';
-import { Play, CheckCircle2, Calendar, Target, Loader2, Plus, X, Trash2 } from 'lucide-react';
+import { Play, CheckCircle2, Calendar, Target, Loader2, Plus, X, Trash2, Sparkles } from 'lucide-react';
 
 import { format } from 'date-fns';
 import { useToast } from '../../hooks/useToast.js';
@@ -15,6 +15,8 @@ interface Sprint {
   endDate: string | null;
   status: 'future' | 'active' | 'closed';
   taskCount: number;
+  aiSummary?: { summary: string; highlights?: string[]; generatedAt?: string } | null;
+  aiContributionReport?: Array<{ userId?: string | null; fullName: string; summary: string; tasksCompleted: number }> | null;
 }
 
 export const SprintList = () => {
@@ -277,33 +279,65 @@ export const SprintList = () => {
           <h3 className="text-lg font-bold text-gray-200 mb-4">Completed Sprints</h3>
           <div className="space-y-4">
             {closedSprints.map(sprint => (
-              <div key={sprint.sprintId} className="flex items-center justify-between p-5 bg-gray-900/50 border border-gray-800/60 rounded-xl">
-                <div>
-                  <div className="flex items-center space-x-3 mb-1.5">
-                    <h4 className="text-base font-bold text-gray-200">{sprint.name}</h4>
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm bg-gray-800 text-gray-500">
-                      closed
-                    </span>
+              <div key={sprint.sprintId} className="p-5 bg-gray-900/50 border border-gray-800/60 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center space-x-3 mb-1.5">
+                      <h4 className="text-base font-bold text-gray-200">{sprint.name}</h4>
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm bg-gray-800 text-gray-500">
+                        closed
+                      </span>
+                    </div>
+                    <div className="flex items-center text-xs text-gray-500 space-x-4">
+                      <span className="flex items-center"><Calendar className="w-3.5 h-3.5 mr-1.5" /> 
+                        {sprint.startDate ? format(new Date(sprint.startDate), 'MMM d') : 'N/A'} – {sprint.endDate ? format(new Date(sprint.endDate), 'MMM d') : 'N/A'}
+                      </span>
+                      <span className="font-mono bg-gray-950 px-1.5 py-0.5 rounded border border-gray-800">{sprint.taskCount} tasks</span>
+                    </div>
                   </div>
-                  <div className="flex items-center text-xs text-gray-500 space-x-4">
-                    <span className="flex items-center"><Calendar className="w-3.5 h-3.5 mr-1.5" /> 
-                      {sprint.startDate ? format(new Date(sprint.startDate), 'MMM d') : 'N/A'} – {sprint.endDate ? format(new Date(sprint.endDate), 'MMM d') : 'N/A'}
-                    </span>
-                    <span className="font-mono bg-gray-950 px-1.5 py-0.5 rounded border border-gray-800">{sprint.taskCount} tasks</span>
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center text-sm font-medium text-gray-500">
+                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                      Completed
+                    </div>
+                    <button 
+                      onClick={() => navigate(`/w/${slug}/projects/${key}/sprints/${sprint.sprintId}`)}
+                      className="text-xs font-semibold bg-gray-800 text-gray-300 px-3 py-1.5 rounded hover:bg-gray-700 transition-colors border border-gray-700"
+                    >
+                      View Details
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center text-sm font-medium text-gray-500">
-                    <CheckCircle2 className="w-4 h-4 mr-2" />
-                    Completed
+
+                {sprint.aiSummary && (
+                  <div className="mt-4 bg-gradient-to-br from-purple-900/20 to-gray-900/40 border border-purple-500/20 rounded-lg p-4">
+                    <div className="flex items-center text-xs text-purple-400 font-semibold uppercase tracking-wider mb-2">
+                      <Sparkles className="w-3.5 h-3.5 mr-1.5" /> AI Sprint Summary
+                    </div>
+                    <p className="text-sm text-gray-300 leading-relaxed">{sprint.aiSummary.summary}</p>
+                    {sprint.aiSummary.highlights && sprint.aiSummary.highlights.length > 0 && (
+                      <ul className="mt-2 space-y-1">
+                        {sprint.aiSummary.highlights.map((h, idx) => (
+                          <li key={idx} className="text-xs text-gray-400 flex items-start">
+                            <span className="text-purple-400 mr-1.5">•</span>
+                            {h}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {sprint.aiContributionReport && sprint.aiContributionReport.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-purple-500/10 space-y-1.5">
+                        {sprint.aiContributionReport.map((c, idx) => (
+                          <div key={idx} className="flex items-start text-xs">
+                            <span className="text-gray-300 font-medium w-32 flex-shrink-0 truncate">{c.fullName}</span>
+                            <span className="text-gray-500 flex-1">{c.summary}</span>
+                            <span className="text-purple-400 flex-shrink-0 ml-2 font-mono">{c.tasksCompleted} done</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <button 
-                    onClick={() => navigate(`/w/${slug}/projects/${key}/sprints/${sprint.sprintId}`)}
-                    className="text-xs font-semibold bg-gray-800 text-gray-300 px-3 py-1.5 rounded hover:bg-gray-700 transition-colors border border-gray-700"
-                  >
-                    View Details
-                  </button>
-                </div>
+                )}
               </div>
             ))}
           </div>

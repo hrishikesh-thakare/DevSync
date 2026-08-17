@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { BoardPage } from './BoardPage.js';
-import { Target, Calendar } from 'lucide-react';
+import { Target, Calendar, Sparkles } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 import { useAuthStore } from '../../store/auth.js';
@@ -87,6 +87,26 @@ export const ActiveSprintBoard = () => {
         </div>
         )}
       </div>
+      )}
+
+      {/* AI Summary for closed sprints */}
+      {activeSprint?.status === 'closed' && activeSprint.aiSummary && (
+        <div className="bg-gradient-to-br from-purple-900/20 to-gray-900/40 border-b border-purple-500/20 px-6 py-4 shrink-0">
+          <div className="flex items-center text-xs text-purple-400 font-semibold uppercase tracking-wider mb-1.5">
+            <Sparkles className="w-3.5 h-3.5 mr-1.5" /> AI Sprint Summary
+          </div>
+          <p className="text-sm text-gray-300 leading-relaxed">{activeSprint.aiSummary.summary}</p>
+          {activeSprint.aiSummary.highlights && activeSprint.aiSummary.highlights.length > 0 && (
+            <ul className="mt-1.5 space-y-0.5">
+              {activeSprint.aiSummary.highlights.map((h: string, idx: number) => (
+                <li key={idx} className="text-xs text-gray-400 flex items-start">
+                  <span className="text-purple-400 mr-1.5">•</span>
+                  {h}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       {/* The actual Kanban Board component reused inside this container */}

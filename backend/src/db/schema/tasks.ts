@@ -57,6 +57,8 @@ export const tasks = pgTable('tasks', {
 // ─── Relations ───────────────────────────────────────────────────────────────
 export const tasksRelations = relations(tasks, ({ one, many }) => ({
   project:    one(projects, { fields: [tasks.projectId], references: [projects.projectId] }),
+  // NOTE: reverse relation to workspace_files omitted to avoid a circular
+  // import (channels.ts -> tasks.ts). FK lives on workspace_files.task_id.
   reporter:   one(users, { fields: [tasks.reporterId], references: [users.userId] }),
   assignee:   one(users, { fields: [tasks.assigneeId], references: [users.userId] }),
   parentTask: one(tasks, { fields: [tasks.parentTaskId], references: [tasks.taskId], relationName: 'subtasks' }),

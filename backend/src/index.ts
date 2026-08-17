@@ -76,12 +76,16 @@ app.use('/api/audit', auditRoutes);
 
 import { createServer } from 'http';
 import { initSocket } from './sockets/index.js';
+import { registerWorkers } from './workers/index.js';
 
 // ─── Start Server ────────────────────────────────────────────────────────────
 const httpServer = createServer(app);
 
 // Initialize Socket.io
 initSocket(httpServer);
+
+// Register background job workers (email delivery, GitHub webhook events)
+registerWorkers();
 
 httpServer.listen(env.PORT, () => {
   console.log(`🚀 DevSync backend running on http://localhost:${env.PORT}`);

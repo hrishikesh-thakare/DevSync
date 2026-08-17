@@ -4,11 +4,17 @@ import { tasks } from '../../db/schema/tasks.js';
 import { projects, projectMembers } from '../../db/schema/projects.js';
 import { sprints } from '../../db/schema/sprints.js';
 import { users } from '../../db/schema/auth.js';
-import { messages, channels } from '../../db/schema/channels.js';
+import { messages, channels, workspaceFiles } from '../../db/schema/channels.js';
 import { eq, and, isNull, asc, desc, sql, or, ilike } from 'drizzle-orm';
 import { logAuditAction } from '../audit/audit.controller.js';
 import { createNotification } from '../notifications/notifications.controller.js';
 import { getIO } from '../../sockets/index.js';
+import { createFileRecord } from '../files/files.controller.js';
+import { estimateTaskDuration } from '../../services/ai.service.js';
+import { supabase } from '../../config/supabase.js';
+import { env } from '../../config/env.js';
+import fs from 'fs';
+import path from 'path';
 
 import { generateKeyBetween } from 'fractional-indexing';
 
@@ -203,6 +209,24 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
     if (result.descriptionText) {
       await notifyTaskMentions(result.descriptionText, userId, result.taskId, result.taskKey, projectId);
     }
+
+    // ─── AI Duration Estimate (fire-and-forget, never blocks creation) ───
+    estimateTaskDuration({
+      taskKey: result.taskKey,
+      title: result.title,
+      issueType: result.issueType,
+      descriptionText: result.descriptionText,
+    })
+      .then(hours => {
+        if (hours !== null) {
+          return db
+            .update(tasks)
+            .set({ aiDurationEstimate: hours.toString() })
+            .where(eq(tasks.taskId, result.taskId));
+        }
+        return undefined;
+      })
+      .catch(err => console.warn('AI duration estimate failed:', err));
 
     res.status(201).json({ message: 'Task created', task: result });
   } catch (err: any) {
@@ -890,5 +914,128 @@ const notifyTaskMentions = async (text: string, actorId: string, taskId: string,
         body: `'${(text || '').replace(/<[^>]*>?/gm, '').substring(0, 100)}...'`,
       });
     }
+  }
+};
+
+// ─── TASK ATTACHMENTS ────────────────────────────────────────────────────────
+const UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
+
+// GET /api/workspaces/:slug/projects/:key/tasks/:taskKey/attachments
+export const listTaskAttachments = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const taskId = res.locals.taskId as string;
+
+    const attachments = await db
+      .select({
+        fileId: workspaceFiles.fileId,
+        filename: workspaceFiles.filename,
+        mimetype: workspaceFiles.mimetype,
+        sizeBytes: workspaceFiles.sizeBytes,
+        filetype: workspaceFiles.filetype,
+        createdAt: workspaceFiles.createdAt,
+        uploaderId: workspaceFiles.uploaderId,
+        uploaderName: users.fullName,
+        uploaderAvatar: users.avatarUrl,
+      })
+      .from(workspaceFiles)
+      .leftJoin(users, eq(workspaceFiles.uploaderId, users.userId))
+      .where(eq(workspaceFiles.taskId, taskId))
+      .orderBy(desc(workspaceFiles.createdAt));
+
+    res.json({ attachments });
+  } catch (err) {
+    console.error('List task attachments error:', err);
+    res.status(500).json({ error: 'Server error listing task attachments.' });
+  }
+};
+
+// POST /api/workspaces/:slug/projects/:key/tasks/:taskKey/attachments
+export const addTaskAttachment = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const taskId = res.locals.taskId as string;
+    const workspaceId = req.params.workspaceId as string;
+    const userId = req.user!.userId;
+    const { filename, mimetype, sizeBytes, filetype, fileBase64 } = req.body;
+
+    if (!filename || !fileBase64) {
+      res.status(400).json({ error: 'filename and fileBase64 are required.' });
+      return;
+    }
+
+    const fileRecord = await createFileRecord({
+      workspaceId,
+      userId,
+      filename,
+      mimetype,
+      sizeBytes,
+      filetype,
+      fileBase64,
+      taskId,
+    });
+
+    await logAuditAction({
+      actorId: userId,
+      action: 'task.attachment_added',
+      entityType: 'task',
+      entityId: taskId,
+      workspaceId,
+      newValues: { file_id: fileRecord.fileId, filename: fileRecord.filename },
+    });
+
+    res.status(201).json({ attachment: fileRecord });
+  } catch (err) {
+    console.error('Add task attachment error:', err);
+    res.status(500).json({ error: 'Server error adding task attachment.' });
+  }
+};
+
+// DELETE /api/workspaces/:slug/projects/:key/tasks/:taskKey/attachments/:fileId
+export const deleteTaskAttachment = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const taskId = res.locals.taskId as string;
+    const { fileId } = req.params as Record<string, string>;
+    const userId = req.user!.userId;
+    const workspaceId = req.params.workspaceId as string;
+
+    const [fileRecord] = await db
+      .select()
+      .from(workspaceFiles)
+      .where(and(eq(workspaceFiles.fileId, fileId), eq(workspaceFiles.taskId, taskId)))
+      .limit(1);
+
+    if (!fileRecord) {
+      res.status(404).json({ error: 'Attachment not found.' });
+      return;
+    }
+
+    // Best-effort storage cleanup
+    if (fileRecord.storagePath.startsWith('local:')) {
+      try {
+        const fileNameOnDisk = fileRecord.storagePath.replace('local:', '');
+        const filePath = path.join(UPLOADS_DIR, fileNameOnDisk);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch (err) {
+        console.warn('Failed to remove local attachment file:', err);
+      }
+    } else if (env.SUPABASE_URL && !env.SUPABASE_URL.includes('placeholder')) {
+      const { error } = await supabase.storage.from('workspace-files').remove([fileRecord.storagePath]);
+      if (error) console.warn('Failed to remove Supabase attachment:', error.message);
+    }
+
+    await db.delete(workspaceFiles).where(eq(workspaceFiles.fileId, fileId));
+
+    await logAuditAction({
+      actorId: userId,
+      action: 'task.attachment_removed',
+      entityType: 'task',
+      entityId: taskId,
+      workspaceId,
+      oldValues: { file_id: fileRecord.fileId, filename: fileRecord.filename },
+    });
+
+    res.json({ message: 'Attachment removed' });
+  } catch (err) {
+    console.error('Delete task attachment error:', err);
+    res.status(500).json({ error: 'Server error removing task attachment.' });
   }
 };

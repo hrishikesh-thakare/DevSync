@@ -40,3 +40,13 @@ export const reorderTaskSchema = z.object({
   afterTaskId: z.string().uuid().optional().nullable(),
   beforeTaskId: z.string().uuid().optional().nullable(),
 }).strict();
+
+const FiletypeEnum = z.enum(['image', 'pdf', 'code', 'video', 'audio', 'other']);
+
+export const addTaskAttachmentSchema = z.object({
+  filename: z.string().min(1).max(255),
+  mimetype: z.string().max(100).optional(),
+  sizeBytes: z.number().int().nonnegative().optional(),
+  filetype: FiletypeEnum.optional(),
+  fileBase64: z.string().min(1, 'fileBase64 is required'),
+}).strict();

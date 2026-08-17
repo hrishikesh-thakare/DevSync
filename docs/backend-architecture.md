@@ -38,11 +38,15 @@ backend/src/
 │   ├── notifications/
 │   ├── search/
 │   ├── audit/
-│   ├── ai/                # 🔮 Future: AI-powered features
-│   └── storage/           # Supabase Storage helper routes
+│   ├── services/           # ✅ ai.service.ts — Gemini client (sprint reports, duration estimates)
+│   └── storage/            # Supabase Storage helper routes
 ├── sockets/
 │   └── index.ts           # Socket.io server init + JWT auth middleware
-├── workers/               # 🔮 Future: BullMQ background job processors
+├── workers/
+│   ├── queue.ts            # In-process job queue (concurrency, retry, backoff)
+│   ├── email.jobs.ts       # email.send_invite worker
+│   ├── github.jobs.ts      # github.webhook_event worker
+│   └── index.ts            # registerWorkers() — wired into index.ts on boot
 └── index.ts               # Express app entry point + route mounting
 ```
 
@@ -158,6 +162,7 @@ POST /api/workspaces/:slug/projects/:key/tasks
 | POST | `/invite` | ✅ | W: owner/admin | Invite a user by email |
 | POST | `/invites/accept` | ✅ | — | Accept workspace invite |
 | PATCH | `/members/:userId` | ✅ | W: owner | Change a member's workspace role |
+| DELETE | `/members/me` | ✅ | W: any | Self-service leave workspace (owner blocked) |
 | DELETE | `/members/:userId` | ✅ | W: owner/admin | Remove a member from workspace |
 
 ---
@@ -318,24 +323,23 @@ POST /api/workspaces/:slug/projects/:key/tasks
 
 ## 🔮 Future Scope
 
-### AI Module (`modules/ai/`)
-The `ai/` module directory exists but is **not yet mounted** in the Express app. Planned features include:
-- AI-powered sprint summaries on sprint close
-- AI contribution reports per team member
-- AI task duration estimation
-- Smart task suggestions based on project context
+### AI Integration (`services/ai.service.ts`)
+AI features are implemented via a thin Gemini client in `services/ai.service.ts` (REST `generateContent` on `gemini-2.0-flash`, JSON-mode output). Features:
+- **AI sprint summaries on sprint close** — after `closeSprint` commits, a fire-and-forget job generates a retrospective summary + per-member contribution report, persists them to `sprints.ai_summary` / `sprints.ai_contribution_report`, posts the summary to the project's first channel as a system message (`systemType: 'ai_sprint_summary'`), and records `sprints.summary_message_id`.
+- **AI task duration estimation** — on task creation, a fire-and-forget job estimates hours and stores `tasks.ai_duration_estimate`.
 
-The database schema already has fields reserved for AI output:
+Both calls fail gracefully: if `GEMINI_API_KEY` is unset or the API errors, the feature is silently skipped and never blocks the underlying request. The database fields used are:
 - `sprints.ai_summary` (jsonb)
 - `sprints.ai_contribution_report` (jsonb)
+- `sprints.summary_message_id` (uuid → messages)
 - `tasks.ai_duration_estimate` (numeric)
 
-### Background Workers (`workers/`)
-The `workers/` directory is **empty**. BullMQ and ioredis are installed in `package.json` but not wired up. Planned use cases:
-- Email notification delivery
-- Heavy webhook payload processing
-- Scheduled sprint reminders
-- AI processing jobs (long-running LLM calls)
+### Background Jobs (`workers/`)
+A lightweight in-process job queue (`workers/queue.ts`) processes slow work off the request path with a concurrency pool (4), retries, and exponential backoff. Registered jobs:
+- `email.send_invite` — SMTP invite delivery (enqueued by `inviteMember`; the invite row is committed first, so SMTP latency/failure never blocks the response)
+- `github.webhook_event` — GitHub webhook payload processing (push, workflow_run, pull_request, issues, branch create/delete). Signature verification stays in the request handler; the event is enqueued after verification and the webhook returns `200` immediately.
+
+Failures are retried up to 3 times with backoff, then logged as permanently failed. Jobs are in-memory (lost on process exit) — swap `queue.ts` for BullMQ/ioredis if durable queues are needed. AI generation uses the same fire-and-forget pattern directly in the sprint/task controllers.
 
 ### Storage Module (`modules/storage/`)
 Mounted at `/api/storage` but overlaps with the `files` module. May be consolidated in a future refactor.

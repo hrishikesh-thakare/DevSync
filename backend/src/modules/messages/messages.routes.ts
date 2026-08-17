@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { requireAuth } from '../../middleware/auth.js';
-// Note: You could add a channel member check middleware here if needed,
-// but for simplicity we rely on the workspace/project guards on higher routes
-// or basic authentication. If a user shouldn't access a channel, they shouldn't
-// have the channelId. In a fully secure app, you'd verify channel membership.
+// Channel membership is enforced by requireChannelAccess, which runs one
+// level up in channels.routes.ts (router.use('/:channelId/messages', requireChannelAccess, messagesRoutes)).
+// It verifies workspace membership, workspace owner/admin privileges, project
+// membership for project-scoped channels, and explicit channel membership for
+// private channels/DMs.
 
 import {
   sendMessage,

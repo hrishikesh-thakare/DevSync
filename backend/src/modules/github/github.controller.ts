@@ -10,6 +10,7 @@ import { eq, and, sql, inArray, or, desc, isNull, isNotNull, count } from 'drizz
 import { logAuditAction } from '../audit/audit.controller.js';
 import { createNotification } from '../notifications/notifications.controller.js';
 import { encrypt, decrypt } from '../../lib/encryption.js';
+import { enqueueJob } from '../../workers/queue.js';
 
 // ─── HELPER: Verify GitHub Webhook Signature ─────────────────────────────────
 function verifyGitHubSignature(rawBody: Buffer, signatureHeader: string | undefined, webhookSecret: string): boolean {
@@ -355,24 +356,49 @@ export const handleGithubWebhook = async (req: Request, res: Response): Promise<
       return;
     }
 
-    // Route to correct handler
-    if (event === 'push') {
-      await handlePushEvent(connection.projectId, payload);
-    } else if (event === 'workflow_run') {
-      await handleWorkflowRunEvent(connection.projectId, payload);
-    } else if (event === 'pull_request') {
-      await handlePullRequestEvent(connection.projectId, payload, connection.defaultBranch);
-    } else if (event === 'issues') {
-      await handleIssuesEvent(connection.projectId, payload);
-    } else if (event === 'create' || event === 'delete') {
-      await handleBranchEvent(connection.projectId, payload, event);
-    }
+    // Enqueue the event for background processing — returns immediately so
+    // heavy payloads never block the webhook response. GitHub retries
+    // non-2xx deliveries itself; the queue also retries with backoff.
+    enqueueJob(
+      'github.webhook_event',
+      {
+        projectId: connection.projectId,
+        event,
+        payload,
+        defaultBranch: connection.defaultBranch,
+      },
+      { maxAttempts: 3, backoffMs: 5000 }
+    );
 
-    // Always return 200 quickly — GitHub retries on non-2xx
     res.status(200).send('ok');
   } catch (err) {
     console.error('Webhook error:', err);
     res.status(500).send('Server error processing webhook.');
+  }
+};
+
+/**
+ * Runs a verified GitHub webhook event in the background (invoked by the
+ * worker queue). Kept here because the event handlers share the module's
+ * private helpers.
+ */
+export const processGithubWebhookEvent = async (
+  projectId: string,
+  event: string,
+  payload: any,
+  defaultBranch: string | null
+): Promise<void> => {
+  // Route to correct handler
+  if (event === 'push') {
+    await handlePushEvent(projectId, payload);
+  } else if (event === 'workflow_run') {
+    await handleWorkflowRunEvent(projectId, payload);
+  } else if (event === 'pull_request') {
+    await handlePullRequestEvent(projectId, payload, defaultBranch);
+  } else if (event === 'issues') {
+    await handleIssuesEvent(projectId, payload);
+  } else if (event === 'create' || event === 'delete') {
+    await handleBranchEvent(projectId, payload, event);
   }
 };
 

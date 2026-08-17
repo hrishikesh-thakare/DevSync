@@ -15,6 +15,13 @@
       "when": 1782218751326,
       "tag": "0001_happy_lockheed",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786986528932,
+      "tag": "0002_swift_roland_deschain",
+      "breakpoints": true
     }
   ]
 }

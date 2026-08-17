@@ -13,6 +13,72 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
+/**
+ * Stores a file (Supabase Storage with local disk fallback) and creates its
+ * workspace_files record. Used by the generic file upload and by task
+ * attachment uploads.
+ */
+export const createFileRecord = async (params: {
+  workspaceId: string;
+  userId: string;
+  filename: string;
+  mimetype?: string;
+  sizeBytes?: number;
+  filetype?: string;
+  fileBase64: string;
+  taskId?: string;
+}): Promise<typeof workspaceFiles.$inferSelect> => {
+  const { workspaceId, userId, filename, mimetype, sizeBytes, filetype, fileBase64, taskId } = params;
+
+  const safeName = filename.replace(/[^a-zA-Z0-9-_\.]/g, '');
+  const uniqueName = `${Date.now()}_${safeName}`;
+  const storagePath = `workspaces/${workspaceId}/${uniqueName}`;
+  const fileBuffer = Buffer.from(fileBase64, 'base64');
+
+  let isSupabaseUploaded = false;
+
+  // Try Supabase Storage if configured
+  if (env.SUPABASE_URL && !env.SUPABASE_URL.includes('placeholder')) {
+    const { error: uploadError } = await supabase.storage
+      .from('workspace-files')
+      .upload(storagePath, fileBuffer, {
+        contentType: mimetype || 'application/octet-stream',
+        upsert: false,
+      });
+
+    if (!uploadError) {
+      isSupabaseUploaded = true;
+    } else {
+      console.warn('Supabase upload failed, using local disk fallback:', uploadError.message);
+    }
+  }
+
+  let finalStoragePath = storagePath;
+  if (!isSupabaseUploaded) {
+    // Local disk fallback
+    const localFilePath = path.join(UPLOADS_DIR, uniqueName);
+    fs.writeFileSync(localFilePath, fileBuffer);
+    finalStoragePath = `local:${uniqueName}`;
+  }
+
+  // Create record in DB
+  const [fileRecord] = await db
+    .insert(workspaceFiles)
+    .values({
+      workspaceId,
+      uploaderId: userId,
+      taskId: taskId || null,
+      filename,
+      storagePath: finalStoragePath,
+      mimetype: mimetype || null,
+      sizeBytes: sizeBytes || null,
+      filetype: filetype || 'other',
+    })
+    .returning();
+
+  return fileRecord;
+};
+
 // ─── DIRECT FILE UPLOAD (Server-side) ────────────────────────────────────────
 // POST /api/workspaces/:workspaceId/files/upload
 export const uploadFile = async (req: Request, res: Response): Promise<void> => {
@@ -26,50 +92,15 @@ export const uploadFile = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    const safeName = filename.replace(/[^a-zA-Z0-9-_\.]/g, '');
-    const uniqueName = `${Date.now()}_${safeName}`;
-    const storagePath = `workspaces/${workspaceId}/${uniqueName}`;
-    const fileBuffer = Buffer.from(fileBase64, 'base64');
-
-    let isSupabaseUploaded = false;
-
-    // Try Supabase Storage if configured
-    if (env.SUPABASE_URL && !env.SUPABASE_URL.includes('placeholder')) {
-      const { error: uploadError } = await supabase.storage
-        .from('workspace-files')
-        .upload(storagePath, fileBuffer, {
-          contentType: mimetype || 'application/octet-stream',
-          upsert: false,
-        });
-
-      if (!uploadError) {
-        isSupabaseUploaded = true;
-      } else {
-        console.warn('Supabase upload failed, using local disk fallback:', uploadError.message);
-      }
-    }
-
-    let finalStoragePath = storagePath;
-    if (!isSupabaseUploaded) {
-      // Local disk fallback
-      const localFilePath = path.join(UPLOADS_DIR, uniqueName);
-      fs.writeFileSync(localFilePath, fileBuffer);
-      finalStoragePath = `local:${uniqueName}`;
-    }
-
-    // Create record in DB
-    const [fileRecord] = await db
-      .insert(workspaceFiles)
-      .values({
-        workspaceId,
-        uploaderId: userId,
-        filename,
-        storagePath: finalStoragePath,
-        mimetype: mimetype || null,
-        sizeBytes: sizeBytes || null,
-        filetype: filetype || 'other',
-      })
-      .returning();
+    const fileRecord = await createFileRecord({
+      workspaceId,
+      userId,
+      filename,
+      mimetype,
+      sizeBytes,
+      filetype,
+      fileBase64,
+    });
 
     res.status(200).json({ fileRecord });
   } catch (err) {

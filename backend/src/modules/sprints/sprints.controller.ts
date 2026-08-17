@@ -2,12 +2,15 @@ import { Request, Response } from 'express';
 import { db } from '../../config/db.js';
 import { sprints, sprintTasks } from '../../db/schema/sprints.js';
 import { tasks } from '../../db/schema/tasks.js';
+import { channels, messages } from '../../db/schema/channels.js';
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import { logAuditAction } from '../audit/audit.controller.js';
 import { createNotification } from '../notifications/notifications.controller.js';
 import { users } from '../../db/schema/auth.js';
 import { projectMembers } from '../../db/schema/projects.js';
 import { projects } from '../../db/schema/projects.js';
+import { getIO } from '../../sockets/index.js';
+import { generateSprintReport, SprintReport } from '../../services/ai.service.js';
 
 // ─── CREATE SPRINT ───────────────────────────────────────────────────────────
 // POST /api/projects/:projectId/sprints
@@ -278,6 +281,10 @@ export const closeSprint = async (req: Request, res: Response): Promise<void> =>
         incomplete: sprintTaskList.length - completedCount,
       },
     });
+
+    // ─── AI Sprint Report (fire-and-forget, never blocks the close) ───
+    generateSprintReportAndPost({ sprintId, projectId })
+      .catch(err => console.error('AI sprint report generation failed:', err));
   } catch (err) {
     console.error('Close sprint error:', err);
     res.status(500).json({ error: 'Server error closing sprint.' });
@@ -516,4 +523,151 @@ export const removeTaskFromSprint = async (req: Request, res: Response): Promise
     console.error('Remove task from sprint error:', err);
     res.status(500).json({ error: 'Server error removing task from sprint.' });
   }
+};
+
+// ─── AI SPRINT REPORT GENERATION ─────────────────────────────────────────────
+const buildSummaryMessage = (sprintName: string, projectName: string | undefined, report: SprintReport): string => {
+  const lines = [
+    `AI Sprint Summary — ${sprintName}${projectName ? ` (${projectName})` : ''}`,
+    '',
+    report.summary,
+    '',
+  ];
+
+  if (report.highlights.length > 0) {
+    lines.push('Highlights:', ...report.highlights.map(h => `- ${h}`), '');
+  }
+
+  if (report.contributionReport.length > 0) {
+    lines.push('Contributions:');
+    for (const c of report.contributionReport) {
+      lines.push(`- ${c.fullName}: ${c.summary} (${c.tasksCompleted} tasks completed)`);
+    }
+  }
+
+  return lines.join('\n');
+};
+
+/**
+ * Generates the AI sprint retrospective (summary + per-member contribution
+ * report), persists it on the sprint row, and posts it to the project's
+ * first channel as a system message. Fails silently on any error.
+ */
+const generateSprintReportAndPost = async (params: { sprintId: string; projectId: string }): Promise<void> => {
+  const { sprintId, projectId } = params;
+
+  const [sprint] = await db
+    .select()
+    .from(sprints)
+    .where(eq(sprints.sprintId, sprintId))
+    .limit(1);
+  if (!sprint) return;
+
+  const taskList = await db
+    .select({
+      taskKey: tasks.taskKey,
+      title: tasks.title,
+      issueType: tasks.issueType,
+      status: tasks.status,
+      assigneeId: tasks.assigneeId,
+      assigneeName: users.fullName,
+    })
+    .from(tasks)
+    .leftJoin(users, eq(tasks.assigneeId, users.userId))
+    .where(eq(tasks.sprintId, sprintId));
+
+  const [project] = await db
+    .select({ name: projects.name, workspaceId: projects.workspaceId })
+    .from(projects)
+    .where(eq(projects.projectId, projectId))
+    .limit(1);
+
+  const report = await generateSprintReport({
+    sprintName: sprint.name,
+    goal: sprint.goal,
+    startDate: sprint.startDate,
+    endDate: sprint.endDate,
+    completedCount: taskList.filter(t => t.status?.toUpperCase() === 'DONE').length,
+    totalCount: taskList.length,
+    tasks: taskList.map(t => ({
+      taskKey: t.taskKey,
+      title: t.title,
+      issueType: t.issueType,
+      status: t.status,
+      assigneeName: t.assigneeName,
+      assigneeId: t.assigneeId,
+    })),
+  });
+
+  if (!report) return;
+
+  // Post the summary to the project's first channel as a system message
+  const [channel] = await db
+    .select({ channelId: channels.channelId })
+    .from(channels)
+    .where(eq(channels.projectId, projectId))
+    .limit(1);
+
+  let summaryMessageId: string | null = null;
+
+  if (channel) {
+    const bodyText = buildSummaryMessage(sprint.name, project?.name, report);
+    const now = new Date();
+
+    const [msg] = await db
+      .insert(messages)
+      .values({
+        channelId: channel.channelId,
+        isSystem: true,
+        systemType: 'ai_sprint_summary',
+        bodyText,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+
+    summaryMessageId = msg.messageId;
+
+    const io = getIO();
+    if (io) {
+      io.to(`channel:${channel.channelId}`).emit('new_message', {
+        messageId: msg.messageId,
+        channelId: msg.channelId,
+        authorId: null,
+        authorName: 'DevSync AI',
+        authorAvatar: null,
+        isSystem: true,
+        systemType: 'ai_sprint_summary',
+        bodyText,
+        threadId: null,
+        replyCount: 0,
+        isEdited: false,
+        isDeleted: false,
+        createdAt: msg.createdAt,
+      });
+    }
+  }
+
+  await db
+    .update(sprints)
+    .set({
+      aiSummary: {
+        summary: report.summary,
+        highlights: report.highlights,
+        generatedAt: new Date().toISOString(),
+      },
+      aiContributionReport: report.contributionReport,
+      summaryMessageId,
+      updatedAt: new Date(),
+    })
+    .where(eq(sprints.sprintId, sprintId));
+
+  await logAuditAction({
+    actorId: null,
+    action: 'sprint.ai_report_generated',
+    entityType: 'sprint',
+    entityId: sprintId,
+    workspaceId: project?.workspaceId ?? undefined,
+    newValues: { has_summary: true, has_contribution_report: true, posted_to_channel: Boolean(summaryMessageId) },
+  });
 };

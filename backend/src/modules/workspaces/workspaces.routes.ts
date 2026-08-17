@@ -12,6 +12,7 @@ import {
   acceptInvite,
   updateMemberRole,
   removeMember,
+  leaveWorkspace,
 } from './workspaces.controller.js';
 import { unfurlUrl } from './unfurl.controller.js';
 import { resolveSlug } from '../../middleware/slugs.js';
@@ -41,6 +42,8 @@ router.get('/:slug/members', requireWorkspaceRole(['owner', 'admin', 'member']),
 router.post('/:slug/invite', requireWorkspaceRole(['owner', 'admin']), validate(inviteMemberSchema), inviteMember);
 router.post('/:slug/invites/accept', acceptInvite); // No workspace role required, just auth
 router.patch('/:slug/members/:userId', requireWorkspaceRole(['owner']), validate(updateMemberRoleSchema), updateMemberRole);
+// Self-service leave — must be registered before members/:userId
+router.delete('/:slug/members/me', leaveWorkspace);
 router.delete('/:slug/members/:userId', requireWorkspaceRole(['owner', 'admin']), removeMember);
 
 export default router;

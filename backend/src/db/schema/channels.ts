@@ -9,11 +9,13 @@ import {
   timestamp,
   jsonb,
   unique,
+  index,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { users } from './auth.js';
 import { workspaces } from './workspaces.js';
 import { projects } from './projects.js';
+import { tasks } from './tasks.js';
 import { customType } from 'drizzle-orm/pg-core';
 
 const tsvector = customType<{ data: string }>({
@@ -76,13 +78,16 @@ export const workspaceFiles = pgTable('workspace_files', {
   fileId:      uuid('file_id').primaryKey().defaultRandom(),
   workspaceId: uuid('workspace_id').references(() => workspaces.workspaceId, { onDelete: 'cascade' }),
   uploaderId:  uuid('uploader_id').references(() => users.userId, { onDelete: 'set null' }),
+  taskId:      uuid('task_id').references(() => tasks.taskId, { onDelete: 'cascade' }), // NULL = chat attachment, set = task attachment
   filename:    varchar('filename', { length: 255 }).notNull(),
   storagePath: text('storage_path').notNull(), // Supabase Storage bucket path
   mimetype:    varchar('mimetype', { length: 100 }),
   sizeBytes:   bigint('size_bytes', { mode: 'number' }),
   filetype:    varchar('filetype', { length: 20 }), // image|pdf|code|video|audio|other
   createdAt:   timestamp('created_at', { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+  index('workspace_files_task_id_idx').on(table.taskId),
+]);
 
 // ─── Relations ───────────────────────────────────────────────────────────────
 export const channelsRelations = relations(channels, ({ one, many }) => ({
@@ -109,6 +114,7 @@ export const messagesRelations = relations(messages, ({ one, many }) => ({
 export const workspaceFilesRelations = relations(workspaceFiles, ({ one }) => ({
   workspace: one(workspaces, { fields: [workspaceFiles.workspaceId], references: [workspaces.workspaceId] }),
   uploader:  one(users, { fields: [workspaceFiles.uploaderId], references: [users.userId] }),
+  task:      one(tasks, { fields: [workspaceFiles.taskId], references: [tasks.taskId] }),
 }));
 
 // ─── message_reactions ───────────────────────────────────────────────────────

@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api.js';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useAuthStore } from '../../store/auth.js';
-import { Shield, User, UserPlus, MoreHorizontal, Mail, Loader2, X, Search } from 'lucide-react';
+import { Shield, User, UserPlus, MoreHorizontal, Mail, Loader2, X, Search, LogOut } from 'lucide-react';
 import clsx from 'clsx';
 import { format } from 'date-fns';
 import { useToast } from '../../hooks/useToast.js';
@@ -20,6 +20,7 @@ interface Member {
 
 export const WorkspaceMembers = () => {
   const { slug } = useParams();
+  const navigate = useNavigate();
   const { myRole, isAdmin, isOwner } = useCurrentWorkspaceStore();
   const { user: currentUser } = useAuthStore();
   const toast = useToast();
@@ -97,6 +98,17 @@ export const WorkspaceMembers = () => {
     setActiveDropdown(null);
   };
 
+  const handleLeave = async () => {
+    if (!(await confirm('Leave this workspace? You can only rejoin if an owner or admin invites you again.'))) return;
+    try {
+      await apiFetch(`/workspaces/${slug}/members/me`, { method: 'DELETE' });
+      toast.success('You have left the workspace.');
+      navigate('/workspaces');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to leave workspace.');
+    }
+  };
+
   // Can the current user take actions on a given member?
   const canActOn = (member: Member) => {
     if (member.userId === currentUser?.userId) return false; // Can't act on yourself
@@ -123,15 +135,26 @@ export const WorkspaceMembers = () => {
           <p className="text-sm text-gray-400">Manage access and roles for your team. {members.length} total members.</p>
         </div>
         {/* Only admin+ can invite */}
-        {isAdmin() && (
-          <button 
-            onClick={() => setShowModal(true)}
-            className="flex items-center px-4 py-2 bg-white hover:bg-gray-300 text-gray-950 font-bold rounded-lg transition-colors"
-          >
-            <UserPlus className="w-4 h-4 mr-2" />
-            Invite Members
-          </button>
-        )}
+        <div className="flex items-center space-x-3">
+          {!isOwner() && (
+            <button 
+              onClick={handleLeave}
+              className="flex items-center px-4 py-2 border border-red-500/40 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors font-semibold"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Leave Workspace
+            </button>
+          )}
+          {isAdmin() && (
+            <button 
+              onClick={() => setShowModal(true)}
+              className="flex items-center px-4 py-2 bg-white hover:bg-gray-300 text-gray-950 font-bold rounded-lg transition-colors"
+            >
+              <UserPlus className="w-4 h-4 mr-2" />
+              Invite Members
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filters Row */}

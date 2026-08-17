@@ -60,5 +60,5 @@ DevSync uses a **monolithic backend** (Node.js/Express) communicating with a **S
 
 The following technologies are present in the `package.json` and directory structure but are reserved for future phases:
 
-*   **BullMQ & ioRedis:** Planned for background job processing (e.g., sending emails, long-running AI tasks) inside the `workers/` directory.
-*   **AI Integration:** The `modules/ai` directory is scaffolded to eventually integrate with LLMs (like OpenAI or Anthropic) for generating sprint summaries and task duration estimates.
+*   **Background Jobs:** In-process queue in `workers/queue.ts` — SMTP invite emails and GitHub webhook event processing run off the request path with retry + exponential backoff. No external broker required.
+*   **AI Integration:** Gemini-powered features live in `services/ai.service.ts` — sprint retrospective summaries + per-member contribution reports (posted to the project channel on sprint close) and task duration estimates. Disabled gracefully when `GEMINI_API_KEY` is unset.

@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api.js';
-import { Loader2, ArrowLeft, AlignLeft, Trash2, X, GitCommit } from 'lucide-react';
+import { Loader2, ArrowLeft, AlignLeft, Trash2, X, GitCommit, Paperclip, Download, File, FileImage, FileText, FileCode2, FileVideo2, FileAudio2, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '../../hooks/useToast.js';
 import { useConfirm } from '../../hooks/useConfirm.js';
@@ -46,6 +46,35 @@ interface SprintItem {
   name: string;
 }
 
+interface TaskAttachment {
+  fileId: string;
+  filename: string;
+  mimetype?: string | null;
+  sizeBytes?: number | null;
+  filetype?: string | null;
+  createdAt?: string;
+  uploaderId?: string | null;
+  uploaderName?: string | null;
+  uploaderAvatar?: string | null;
+}
+
+const formatBytes = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const attachmentIcon = (filetype?: string | null) => {
+  switch (filetype) {
+    case 'image': return <FileImage className="w-4 h-4 text-purple-400 flex-shrink-0" />;
+    case 'pdf': return <FileText className="w-4 h-4 text-red-400 flex-shrink-0" />;
+    case 'code': return <FileCode2 className="w-4 h-4 text-blue-400 flex-shrink-0" />;
+    case 'video': return <FileVideo2 className="w-4 h-4 text-green-400 flex-shrink-0" />;
+    case 'audio': return <FileAudio2 className="w-4 h-4 text-yellow-400 flex-shrink-0" />;
+    default: return <File className="w-4 h-4 text-gray-400 flex-shrink-0" />;
+  }
+};
+
 interface TaskItem {
   taskId: string;
   taskKey: string;
@@ -63,6 +92,7 @@ interface TaskItem {
   points?: number | null;
   dueDate?: string | null;
   labels?: string[];
+  aiDurationEstimate?: string | number | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -135,6 +165,81 @@ export const TaskDetailPage = () => {
   const [showCreatePR, setShowCreatePR] = useState(false);
   const [copiedBranch, setCopiedBranch] = useState(false);
   const { channels } = useCurrentWorkspaceStore();
+  const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchAttachments = async () => {
+    try {
+      const data = await apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}/attachments`);
+      setAttachments(data.attachments || []);
+    } catch (err: unknown) {
+      console.debug('Failed to fetch task attachments:', err);
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !canEditTask) return;
+
+    setIsUploading(true);
+    try {
+      const fileBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      await apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}/attachments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          filename: file.name,
+          mimetype: file.type,
+          sizeBytes: file.size,
+          filetype: file.type.startsWith('image/') ? 'image' :
+                   file.type.startsWith('video/') ? 'video' :
+                   file.type === 'application/pdf' ? 'pdf' : 'other',
+          fileBase64,
+        }),
+      });
+      await fetchAttachments();
+    } catch (err: unknown) {
+      console.error('Failed to upload attachment:', err);
+      toast.error('Failed to upload attachment.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDownload = async (fileId: string) => {
+    try {
+      const data = await apiFetch(`/workspaces/${slug}/files/${fileId}/download`);
+      if (data.downloadUrl) {
+        window.open(data.downloadUrl, '_blank');
+      }
+    } catch (err: unknown) {
+      console.error('Failed to get attachment download URL:', err);
+      toast.error('Failed to download attachment.');
+    }
+  };
+
+  const handleDeleteAttachment = async (fileId: string) => {
+    if (!(await confirm({ message: 'Remove this attachment?', isDestructive: true }))) return;
+    try {
+      await apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}/attachments/${fileId}`, {
+        method: 'DELETE',
+      });
+      setAttachments(prev => prev.filter(a => a.fileId !== fileId));
+    } catch (err: unknown) {
+      console.error('Failed to remove attachment:', err);
+      toast.error('Failed to remove attachment.');
+    }
+  };
 
   const fetchGithubActivity = async () => {
     try {
@@ -154,11 +259,12 @@ export const TaskDetailPage = () => {
     const fetchTask = async () => {
       setIsLoading(true);
       try {
-        const [taskData, membersData, sprintsData, allTasksData] = await Promise.all([
+        const [taskData, membersData, sprintsData, allTasksData, attachmentsData] = await Promise.all([
           apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}`),
           apiFetch(`/workspaces/${slug}/projects/${key}/members`),
           apiFetch(`/workspaces/${slug}/projects/${key}/sprints`),
           apiFetch(`/workspaces/${slug}/projects/${key}/tasks`),
+          apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}/attachments`),
         ]);
 
         try {
@@ -174,6 +280,7 @@ export const TaskDetailPage = () => {
         }
         setTask(taskData.task);
         setEditTitle(taskData.task.title);
+        setAttachments(attachmentsData.attachments || []);
         const descVal = typeof taskData.task.description === 'string' ? taskData.task.description : taskData.task.descriptionText || '';
         setEditDesc(descVal);
         setMembers(membersData.members || []);
@@ -375,6 +482,66 @@ export const TaskDetailPage = () => {
             )}
           </div>
 
+          {/* Attachments */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-2 text-gray-300 font-semibold">
+                <Paperclip className="w-5 h-5" />
+                <h3>Attachments</h3>
+                {attachments.length > 0 && <span className="text-xs text-gray-500 font-normal">{attachments.length}</span>}
+              </div>
+              {canEditTask && (
+                <>
+                  <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="text-xs text-gray-500 hover:text-white transition-colors flex items-center disabled:opacity-50"
+                  >
+                    {isUploading
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                      : <Plus className="w-3.5 h-3.5 mr-1" />}
+                    {isUploading ? 'Uploading...' : 'Attach'}
+                  </button>
+                </>
+              )}
+            </div>
+            {attachments.length === 0 ? (
+              <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-center">
+                <p className="text-xs text-gray-500">No attachments yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {attachments.map(att => (
+                  <div key={att.fileId} className="flex items-center justify-between bg-gray-900/50 border border-gray-800 rounded-lg px-3 py-2 hover:border-gray-700 transition-colors">
+                    <button
+                      onClick={() => handleDownload(att.fileId)}
+                      className="flex items-center min-w-0 text-left"
+                      title="Download"
+                    >
+                      {attachmentIcon(att.filetype)}
+                      <span className="ml-2 text-sm text-gray-300 truncate">{att.filename}</span>
+                      {att.sizeBytes ? <span className="ml-2 text-xs text-gray-600 flex-shrink-0">{formatBytes(att.sizeBytes)}</span> : null}
+                    </button>
+                    <div className="flex items-center flex-shrink-0 ml-3">
+                      <span className="text-[10px] text-gray-600 mr-2 hidden sm:inline">
+                        {att.uploaderName || 'Unknown'}{att.createdAt ? ` · ${format(new Date(att.createdAt), 'MMM d')}` : ''}
+                      </span>
+                      <button onClick={() => handleDownload(att.fileId)} className="text-gray-500 hover:text-white" title="Download">
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                      {canEditTask && (
+                        <button onClick={() => handleDeleteAttachment(att.fileId)} className="text-gray-500 hover:text-red-400 ml-2" title="Remove">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Discussion */}
           <div>
             <div className="flex items-center space-x-2 text-gray-300 font-semibold mb-4 border-b border-gray-800 pb-2">
@@ -526,6 +693,17 @@ export const TaskDetailPage = () => {
                   placeholder="—"
                 />
               </div>
+
+              {/* AI Estimate */}
+              {task.aiDurationEstimate != null && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-500">AI Estimate</span>
+                  <span className="flex items-center text-sm text-purple-400 font-medium">
+                    <Sparkles className="w-3 h-3 mr-1" />
+                    {Number(task.aiDurationEstimate)}h
+                  </span>
+                </div>
+              )}
 
               {/* Labels */}
               <div>

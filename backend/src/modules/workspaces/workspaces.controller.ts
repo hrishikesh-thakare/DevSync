@@ -5,7 +5,7 @@ import { users } from '../../db/schema/auth.js';
 import { eq, and, isNull } from 'drizzle-orm';
 import { logAuditAction } from '../audit/audit.controller.js';
 import { createNotification } from '../notifications/notifications.controller.js';
-import { sendInviteEmail } from '../../services/email.service.js';
+import { enqueueJob } from '../../workers/queue.js';
 import crypto from 'crypto';
 
 // ─── Helper: generate a URL-safe slug from a workspace name ──────────────────
@@ -321,23 +321,33 @@ export const inviteMember = async (req: Request, res: Response): Promise<void> =
         // Delete any existing invite for this email in this workspace
         await tx.delete(workspaceInvites).where(and(eq(workspaceInvites.workspaceId, workspaceId), eq(workspaceInvites.email, email.toLowerCase().trim())));
         
-        await tx.insert(workspaceInvites).values({
+        const [invite] = await tx.insert(workspaceInvites).values({
           workspaceId,
           email: email.toLowerCase().trim(),
           role: memberRole,
           token,
           invitedBy: inviterId,
           expiresAt,
-        });
+        }).returning({ inviteId: workspaceInvites.inviteId });
 
         await logAuditAction({
-          actorId: inviterId, action: 'workspace_invite.created', entityType: 'workspace_invite', entityId: email.toLowerCase().trim(), workspaceId,
+          actorId: inviterId, action: 'workspace_invite.created', entityType: 'workspace_invite', entityId: invite.inviteId, workspaceId,
           newValues: { email: email.toLowerCase().trim(), role: memberRole, invited_by: inviterId }, tx
         });
       });
 
-      // Send the email
-      await sendInviteEmail(email.toLowerCase().trim(), workspace?.name || 'Workspace', token, actor?.name || 'Someone');
+      // Queue the email for background delivery — the invite row is already
+      // committed, so SMTP latency/failures never block this response.
+      enqueueJob(
+        'email.send_invite',
+        {
+          toEmail: email.toLowerCase().trim(),
+          workspaceName: workspace?.name || 'Workspace',
+          inviteToken: token,
+          inviterName: actor?.name || 'Someone',
+        },
+        { maxAttempts: 3, backoffMs: 3000 }
+      );
 
       res.status(201).json({ message: 'Invitation email sent successfully.' });
       return;
@@ -591,5 +601,69 @@ export const removeMember = async (req: Request, res: Response): Promise<void> =
   } catch (err) {
     console.error('Remove member error:', err);
     res.status(500).json({ error: 'Server error removing member.' });
+  }
+};
+
+// ─── LEAVE WORKSPACE (self-service) ──────────────────────────────────────────
+// DELETE /api/workspaces/:slug/members/me
+export const leaveWorkspace = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
+    const userId = req.user!.userId;
+
+    // Owners cannot leave — they must transfer ownership or delete the workspace
+    const [workspace] = await db
+      .select({ ownerId: workspaces.ownerId })
+      .from(workspaces)
+      .where(eq(workspaces.workspaceId, workspaceId))
+      .limit(1);
+
+    if (workspace && workspace.ownerId === userId) {
+      res.status(400).json({ error: 'Owners cannot leave the workspace. Transfer ownership or delete the workspace instead.' });
+      return;
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [oldMember] = await tx
+        .select()
+        .from(workspaceMembers)
+        .where(and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, userId),
+          eq(workspaceMembers.state, 'active')
+        ))
+        .limit(1);
+
+      if (!oldMember) return null;
+
+      const [deactivated] = await tx
+        .update(workspaceMembers)
+        .set({ state: 'deactivated' })
+        .where(eq(workspaceMembers.id, oldMember.id))
+        .returning({ id: workspaceMembers.id, userId: workspaceMembers.userId, role: workspaceMembers.role });
+
+      await logAuditAction({
+        actorId: userId,
+        action: 'workspace_member.left',
+        entityType: 'workspace_member',
+        entityId: deactivated.id,
+        workspaceId,
+        newValues: { state: 'deactivated' },
+        oldValues: { state: 'active' },
+        tx
+      });
+
+      return deactivated;
+    });
+
+    if (!result) {
+      res.status(404).json({ error: 'You are not a member of this workspace.' });
+      return;
+    }
+
+    res.json({ message: 'You have left the workspace' });
+  } catch (err) {
+    console.error('Leave workspace error:', err);
+    res.status(500).json({ error: 'Server error leaving workspace.' });
   }
 };
