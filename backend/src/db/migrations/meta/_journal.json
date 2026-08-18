@@ -22,6 +22,34 @@
       "when": 1786986528932,
       "tag": "0002_swift_roland_deschain",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787060951753,
+      "tag": "0003_left_gunslinger",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787062375124,
+      "tag": "0004_graceful_stryfe",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787063635989,
+      "tag": "0005_glossy_skreet",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787064016291,
+      "tag": "0006_wealthy_typhoid_mary",
+      "breakpoints": true
     }
   ]
 }

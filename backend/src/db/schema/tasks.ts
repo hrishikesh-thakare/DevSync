@@ -44,6 +44,7 @@ export const tasks = pgTable('tasks', {
   dueDate:            timestamp('due_date', { mode: 'date', withTimezone: false }),
   labels:             jsonb('labels').default([]),           // flat array: ["frontend", "bug"]
   rank:               varchar('rank', { length: 255 }),     // Lexorank string
+  storyPoints:        integer('story_points'),               // manual Scrum estimate (null = unestimated)
   aiDurationEstimate: numeric('ai_duration_estimate', { precision: 6, scale: 2 }),
   linkedCommitsCount: integer('linked_commits_count').default(0),
   discussionThreadId: uuid('discussion_thread_id'),         // FK to messages, added in migration

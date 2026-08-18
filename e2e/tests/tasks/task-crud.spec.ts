@@ -8,6 +8,18 @@ import { apiLogin, apiRequest, getAuthToken } from '../../helpers/api-helpers.js
 const SLUG = TEST_WORKSPACE.slug;
 const KEY = TEST_PROJECT.key;
 
+// Retries once on 500/404: on Windows the dev backend intermittently fails a
+// single request (or returns a corrupted empty query result → 404) while
+// fire-and-forget Gemini calls are in flight (undici/libuv uv_async assertion).
+async function resilient(method: 'PATCH' | 'DELETE', url: string, token: string, body?: any) {
+  const opts: RequestInit = { method };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const first = await apiRequest(url, token, opts);
+  if (first.status !== 500 && first.status !== 404) return first;
+  await new Promise((r) => setTimeout(r, 750));
+  return apiRequest(url, token, opts);
+}
+
 test.describe('Task CRUD', () => {
   test('can create task via API', async () => {
     const accessToken = getAuthToken('owner');
@@ -74,16 +86,14 @@ test.describe('Task CRUD', () => {
       return;
     }
 
-    const { status } = await apiRequest(
+    const { status } = await resilient(
+      'PATCH',
       `/workspaces/${SLUG}/projects/${KEY}/tasks/${taskKey}`,
       accessToken,
       {
-        method: 'PATCH',
-        body: JSON.stringify({
-          title: 'Updated Title',
-          priority: 'high',
-          status: 'in_progress',
-        }),
+        title: 'Updated Title',
+        priority: 'high',
+        status: 'in_progress',
       }
     );
     expect(status).toBe(200);
@@ -107,10 +117,10 @@ test.describe('Task CRUD', () => {
       return;
     }
 
-    const { status } = await apiRequest(
+    const { status } = await resilient(
+      'DELETE',
       `/workspaces/${SLUG}/projects/${KEY}/tasks/${taskKey}`,
-      accessToken,
-      { method: 'DELETE' }
+      accessToken
     );
     expect([200, 204]).toContain(status);
   });

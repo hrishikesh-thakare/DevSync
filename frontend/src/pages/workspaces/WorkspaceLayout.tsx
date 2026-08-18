@@ -3,12 +3,14 @@ import { Outlet, useParams, NavLink, useNavigate } from 'react-router-dom';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useAuthStore } from '../../store/auth.js';
 import { useNotificationStore, Notification } from '../../store/useNotificationStore.js';
-import { Hash, Lock, Search, Settings, Plus, FolderKanban, Loader2, Home, X, LogOut, ChevronDown as ChevronDownIcon, Command } from 'lucide-react';
+import { Hash, Lock, Search, Settings, Plus, FolderKanban, Loader2, Home, X, LogOut, ChevronDown as ChevronDownIcon, Command, ShieldAlert, Smartphone, Monitor } from 'lucide-react';
 import { CommandPalette } from '../../components/layout/CommandPalette.js';
 import NotificationDropdown from '../../components/layout/NotificationDropdown.js';
 import clsx from 'clsx';
 import { socketClient } from '../../lib/socket.js';
 import { useToast } from '../../hooks/useToast.js';
+import { useConfirm } from '../../hooks/useConfirm.js';
+import { apiFetch } from '../../lib/api.js';
 
 const getStatusDotClass = (presence?: string, statusText?: string) => {
   if (presence === 'offline' || statusText === 'Away') return 'bg-gray-500';
@@ -192,6 +194,65 @@ export const WorkspaceLayout = () => {
   const handleLogout = async () => {
     await logout();
     navigate('/login');
+  };
+
+  // ─── Session / Device Management ─────────────────────────────────────────
+  const confirm = useConfirm();
+  const [showSessionsModal, setShowSessionsModal] = useState(false);
+  const [sessions, setSessions] = useState<Array<{
+    tokenId: string;
+    deviceInfo: { userAgent?: string; ip?: string } | null;
+    issuedAt: string;
+    expiresAt: string;
+    isCurrent: boolean;
+  }>>([]);
+  const [isSessionsLoading, setIsSessionsLoading] = useState(false);
+
+  const getDeviceLabel = (ua?: string) => {
+    if (!ua) return 'Unknown device';
+    const os = ua.includes('Windows') ? 'Windows'
+      : ua.includes('Mac') ? 'macOS'
+      : ua.includes('Android') ? 'Android'
+      : ua.includes('iPhone') || ua.includes('iPad') ? 'iOS'
+      : ua.includes('Linux') ? 'Linux' : 'Unknown OS';
+    const browser = ua.includes('Edg/') ? 'Edge'
+      : ua.includes('Chrome/') ? 'Chrome'
+      : ua.includes('Firefox/') ? 'Firefox'
+      : ua.includes('Safari/') ? 'Safari' : 'Browser';
+    return `${browser} · ${os}`;
+  };
+
+  const fetchSessions = async () => {
+    setIsSessionsLoading(true);
+    try {
+      const data = await apiFetch('/auth/sessions');
+      setSessions(data.sessions || []);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to load sessions.');
+    } finally {
+      setIsSessionsLoading(false);
+    }
+  };
+
+  const handleRevokeSession = async (tokenId: string) => {
+    try {
+      await apiFetch(`/auth/sessions/${tokenId}/revoke`, { method: 'POST' });
+      toast.success('Session logged out.');
+      setSessions(s => s.filter(x => x.tokenId !== tokenId));
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to revoke session.');
+    }
+  };
+
+  const handleRevokeOthers = async () => {
+    if (!(await confirm({ message: 'Log out all other devices? You will stay signed in on this one.', isDestructive: true }))) return;
+    try {
+      await apiFetch('/auth/sessions/revoke-others', { method: 'POST' });
+      toast.success('All other sessions logged out.');
+      setSessions(s => s.filter(x => x.isCurrent));
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to revoke sessions.');
+    }
   };
 
   if (isLoading) {
@@ -416,6 +477,20 @@ export const WorkspaceLayout = () => {
             </div>
           </div>
         )}
+
+        {/* Audit Logs — only visible to owner */}
+        {isOwner() && (
+          <div className="px-4 pb-4" onClick={() => navigate(`/w/${slug}/audit-logs`)}>
+            <div className="flex items-center justify-between cursor-pointer group">
+              <div className="flex items-center space-x-2">
+                <div className="w-7 h-7 rounded bg-gray-900 border border-gray-800 flex items-center justify-center">
+                  <ShieldAlert className="w-4 h-4 text-gray-500 group-hover:text-gray-300 transition-colors" />
+                </div>
+                <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">Audit Logs</span>
+              </div>
+            </div>
+          </div>
+        )}
       </aside>
 
       {/* ─── MAIN CONTENT OUTLET ────────────────────────────────────────────── */}
@@ -543,6 +618,13 @@ export const WorkspaceLayout = () => {
                       Workspace Settings
                     </button>
                   )}
+                  <button 
+                    onClick={() => { setShowUserDropdown(false); setShowSessionsModal(true); fetchSessions(); }}
+                    className="w-full flex items-center px-4 py-3 text-sm text-gray-300 hover:bg-gray-800/60 transition-colors"
+                  >
+                    <Monitor className="w-4 h-4 mr-3 text-gray-500" />
+                    Manage Sessions
+                  </button>
                   <button 
                     onClick={() => { setShowUserDropdown(false); handleLogout(); }}
                     className="w-full flex items-center px-4 py-3 text-sm text-red-400 hover:bg-gray-800/60 transition-colors border-t border-gray-800"
@@ -686,6 +768,84 @@ export const WorkspaceLayout = () => {
 
       {/* Command Palette Modal */}
       <CommandPalette isOpen={showCommandPalette} onClose={() => setShowCommandPalette(false)} />
+
+      {/* SESSIONS MODAL */}
+      {showSessionsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b border-gray-800 shrink-0">
+              <div>
+                <h3 className="text-xl font-bold text-white">Active Sessions</h3>
+                <p className="text-sm text-gray-500 mt-0.5">Devices currently signed in to your account.</p>
+              </div>
+              <button onClick={() => setShowSessionsModal(false)} className="text-gray-500 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-3 overflow-y-auto flex-1">
+              {isSessionsLoading ? (
+                <div className="flex justify-center py-10">
+                  <Loader2 className="w-6 h-6 animate-spin text-white" />
+                </div>
+              ) : sessions.length === 0 ? (
+                <p className="text-center text-gray-500 py-10">No active sessions.</p>
+              ) : (
+                sessions.map((session) => (
+                  <div key={session.tokenId} className="flex items-center justify-between p-4 bg-gray-950 border border-gray-800 rounded-xl">
+                    <div className="flex items-center space-x-3 min-w-0">
+                      <div className="w-10 h-10 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center shrink-0">
+                        {session.deviceInfo?.userAgent?.match(/Android|iPhone|iPad/i) ? (
+                          <Smartphone className="w-4 h-4 text-gray-400" />
+                        ) : (
+                          <Monitor className="w-4 h-4 text-gray-400" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium text-gray-200 truncate">
+                            {getDeviceLabel(session.deviceInfo?.userAgent)}
+                          </span>
+                          {session.isCurrent && (
+                            <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-1.5 py-0.5 rounded">
+                              This device
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {session.deviceInfo?.ip && <span className="font-mono">{session.deviceInfo.ip}</span>}
+                          <span className="mx-1.5">·</span>
+                          Signed in {new Date(session.issuedAt).toLocaleString()}
+                          <span className="mx-1.5">·</span>
+                          expires {new Date(session.expiresAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+                    {!session.isCurrent && (
+                      <button
+                        onClick={() => handleRevokeSession(session.tokenId)}
+                        className="ml-3 shrink-0 text-xs font-semibold bg-gray-800 text-gray-300 px-3 py-1.5 rounded hover:bg-red-500/10 hover:text-red-400 transition-colors border border-gray-700"
+                      >
+                        Log Out
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="p-6 pt-0 border-t border-gray-800/60 shrink-0">
+              <button
+                onClick={handleRevokeOthers}
+                disabled={sessions.filter(s => !s.isCurrent).length === 0}
+                className="w-full px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed border border-gray-700"
+              >
+                Log Out All Other Devices
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

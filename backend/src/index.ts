@@ -8,6 +8,12 @@ import { globalLimiter } from './middleware/rateLimit.js';
 
 const app = express();
 
+// Trust the configured number of reverse proxies so req.ip reflects the real
+// client IP (X-Forwarded-For) instead of the proxy's internal address. Rate
+// limiters and audit-log IPs depend on this; without it, every user behind a
+// proxy shares one bucket and a single burst can lock out everyone.
+app.set('trust proxy', env.TRUST_PROXY_HOPS);
+
 // ─── Global Middleware ───────────────────────────────────────────────────────
 app.use(helmet());
 app.use(cors({
@@ -51,6 +57,9 @@ app.use('/api/workspaces/:slug/projects/:key/tasks', tasksRoutes);
 
 import sprintsRoutes from './modules/sprints/sprints.routes.js';
 app.use('/api/workspaces/:slug/projects/:key/sprints', sprintsRoutes);
+
+import labelsRoutes from './modules/labels/labels.routes.js';
+app.use('/api/workspaces/:slug/projects/:key/labels', labelsRoutes);
 
 import channelsRoutes from './modules/channels/channels.routes.js';
 app.use('/api/workspaces/:slug/channels', channelsRoutes);

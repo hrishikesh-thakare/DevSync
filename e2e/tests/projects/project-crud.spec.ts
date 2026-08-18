@@ -19,7 +19,7 @@ test.describe('Project CRUD', () => {
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test('can create project via API', async () => {
+  test('can create project via API and read it back', async () => {
     const accessToken = getAuthToken('owner');
     const uniqueKey = `T${Date.now().toString().slice(-4)}`;
     const { status, data } = await apiRequest(
@@ -33,7 +33,23 @@ test.describe('Project CRUD', () => {
         }),
       }
     );
-    expect([200, 201]).toContain(status);
+    expect(status).toBe(201);
+    expect(data.project.key).toBe(uniqueKey);
+    expect(data.project.projectId).toBeTruthy();
+
+    const fetched = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, accessToken);
+    expect(fetched.status).toBe(200);
+    expect(fetched.data.project.name).toBe(`CRUD Test Project ${uniqueKey}`);
+  });
+
+  test('duplicate project key is rejected with 409', async () => {
+    const accessToken = getAuthToken('owner');
+    const { status, data } = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Duplicate Key', key: KEY }),
+    });
+    expect(status).toBe(409);
+    expect(data.error).toContain('already exists');
   });
 
   test('can get project details via API', async () => {
@@ -43,19 +59,24 @@ test.describe('Project CRUD', () => {
       accessToken
     );
     expect(status).toBe(200);
+    expect(data.project.key).toBe(KEY);
   });
 
   test('can update project description via API', async () => {
     const accessToken = getAuthToken('owner');
+    const newDescription = `Updated by E2E test ${Date.now()}`;
     const { status } = await apiRequest(
       `/workspaces/${SLUG}/projects/${KEY}`,
       accessToken,
       {
         method: 'PATCH',
-        body: JSON.stringify({ description: 'Updated by E2E test' }),
+        body: JSON.stringify({ description: newDescription }),
       }
     );
     expect(status).toBe(200);
+
+    const fetched = await apiRequest(`/workspaces/${SLUG}/projects/${KEY}`, accessToken);
+    expect(fetched.data.project.description).toBe(newDescription);
   });
   test('archive project succeeds via API', async () => {
     const accessToken = getAuthToken('owner');
@@ -65,10 +86,14 @@ test.describe('Project CRUD', () => {
     const { data: newProj, status: createStatus } = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken, {
       method: 'POST', body: JSON.stringify({ name: 'To Archive', key: uniqueKey })
     });
-    if (createStatus !== 201) { test.skip(); return; }
+    expect(createStatus).toBe(201);
 
-    const { status } = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}/archive`, accessToken, { method: 'PATCH' });
+    const { status, data } = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}/archive`, accessToken, { method: 'PATCH' });
     expect(status).toBe(200);
+    expect(data.project.status).toBe('archived');
+
+    const fetched = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, accessToken);
+    expect(fetched.data.project.status).toBe('archived');
   });
 
   test('can view project board (UI)', async ({ ownerPage }) => {

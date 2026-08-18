@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Save, AlertTriangle, GitBranch, Loader2, CheckCircle2 } from 'lucide-react';
+import { Save, AlertTriangle, GitBranch, Loader2, CheckCircle2, Tag, Plus, Trash2 } from 'lucide-react';
 import { apiFetch } from '../../lib/api.js';
 import { supabase } from '../../lib/supabase.js';
 import { useToast } from '../../hooks/useToast.js';
 import { useConfirm } from '../../hooks/useConfirm.js';
+import { useLabelStore } from '../../store/labelStore.js';
 export const ProjectSettings = () => {
   const { slug, key } = useParams();
   const navigate = useNavigate();
@@ -28,6 +29,18 @@ export const ProjectSettings = () => {
   
   const [isConnecting, setIsConnecting] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+
+  // Label management state
+  const labels = useLabelStore(state => state.labels);
+  const fetchLabels = useLabelStore(state => state.fetchLabels);
+  const createLabel = useLabelStore(state => state.createLabel);
+  const updateLabel = useLabelStore(state => state.updateLabel);
+  const deleteLabel = useLabelStore(state => state.deleteLabel);
+  const [newLabelName, setNewLabelName] = useState('');
+  const [newLabelColor, setNewLabelColor] = useState('#64748b');
+  const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [isCreatingLabel, setIsCreatingLabel] = useState(false);
 
   useEffect(() => {
     const loadProject = async () => {
@@ -82,8 +95,11 @@ export const ProjectSettings = () => {
         setIsLoading(false);
       }
     };
-    if (slug && key) loadProject();
-  }, [slug, key, navigate]);
+    if (slug && key) {
+      loadProject();
+      fetchLabels(slug, key);
+    }
+  }, [slug, key, navigate, fetchLabels]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -177,6 +193,53 @@ export const ProjectSettings = () => {
       setUserRepos([]);
     } catch (err: any) {
       toast.error(err.message || 'Failed to disconnect personal GitHub account.');
+    }
+  };
+
+  const handleCreateLabel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newLabelName.trim() || !slug || !key) return;
+    setIsCreatingLabel(true);
+    try {
+      await createLabel(slug, key, newLabelName.trim(), newLabelColor);
+      setNewLabelName('');
+      setNewLabelColor('#64748b');
+      toast.success('Label created.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create label.');
+    } finally {
+      setIsCreatingLabel(false);
+    }
+  };
+
+  const handleRenameLabel = async (labelId: string) => {
+    if (!editingName.trim() || !slug || !key) return;
+    try {
+      await updateLabel(slug, key, labelId, { name: editingName.trim() });
+      setEditingLabelId(null);
+      toast.success('Label renamed across all tasks.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to rename label.');
+    }
+  };
+
+  const handleRecolorLabel = async (labelId: string, color: string) => {
+    if (!slug || !key) return;
+    try {
+      await updateLabel(slug, key, labelId, { color });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update label color.');
+    }
+  };
+
+  const handleDeleteLabel = async (labelId: string) => {
+    if (!slug || !key) return;
+    if (!(await confirm({ message: 'Delete this label? It will be removed from every task that uses it.', isDestructive: true }))) return;
+    try {
+      await deleteLabel(slug, key, labelId);
+      toast.success('Label deleted.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete label.');
     }
   };
 
@@ -339,6 +402,102 @@ export const ProjectSettings = () => {
               )}
             </div>
           )}
+        </div>
+
+        <div className="border border-gray-800 bg-gray-950/50 rounded-xl p-6">
+          <h2 className="text-lg font-bold text-gray-100 mb-2 flex items-center">
+            <Tag className="w-5 h-5 mr-2" />
+            Labels
+          </h2>
+          <p className="text-gray-400 text-sm mb-6">
+            Labels are shared across the project. Renaming a label updates every task that uses it; colors apply everywhere a label appears.
+          </p>
+
+          <form onSubmit={handleCreateLabel} className="flex items-center gap-2 mb-5">
+            <input
+              type="text"
+              value={newLabelName}
+              onChange={(e) => setNewLabelName(e.target.value)}
+              placeholder="New label name"
+              maxLength={50}
+              className="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-white/50"
+            />
+            <input
+              type="color"
+              value={newLabelColor}
+              onChange={(e) => setNewLabelColor(e.target.value)}
+              className="w-9 h-9 rounded-lg bg-gray-900 border border-gray-800 cursor-pointer p-1"
+              title="Label color"
+            />
+            <button
+              type="submit"
+              disabled={isCreatingLabel || !newLabelName.trim()}
+              className="flex items-center px-4 py-2 bg-white text-gray-950 hover:bg-gray-200 text-sm font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isCreatingLabel ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+              Add
+            </button>
+          </form>
+
+          <div className="space-y-2">
+            {labels.length === 0 ? (
+              <p className="text-sm text-gray-500">No labels yet. Labels can also be added directly when creating or editing tasks.</p>
+            ) : (
+              labels.map((label) => (
+                <div key={label.labelId} className="flex items-center gap-3 p-3 bg-gray-900 border border-gray-800 rounded-lg">
+                  <input
+                    type="color"
+                    value={label.color}
+                    onChange={(e) => handleRecolorLabel(label.labelId, e.target.value)}
+                    className="w-8 h-8 rounded-lg bg-transparent border border-gray-800 cursor-pointer p-0.5"
+                    title="Change color"
+                  />
+                  {editingLabelId === label.labelId ? (
+                    <div className="flex items-center gap-2 flex-1">
+                      <input
+                        type="text"
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        maxLength={50}
+                        autoFocus
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleRenameLabel(label.labelId); if (e.key === 'Escape') setEditingLabelId(null); }}
+                        className="flex-1 bg-gray-950 border border-gray-700 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none"
+                      />
+                      <button onClick={() => handleRenameLabel(label.labelId)} className="text-xs text-gray-300 hover:text-white font-semibold">
+                        Save
+                      </button>
+                      <button onClick={() => setEditingLabelId(null)} className="text-xs text-gray-500 hover:text-gray-300">
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span
+                        className="inline-flex items-center text-xs px-2 py-0.5 rounded border font-medium"
+                        style={{ backgroundColor: `${label.color}22`, borderColor: `${label.color}66`, color: label.color }}
+                      >
+                        {label.name}
+                      </span>
+                      <span className="text-xs text-gray-500">{label.usageCount} task{label.usageCount === 1 ? '' : 's'}</span>
+                      <div className="flex-1" />
+                      <button
+                        onClick={() => { setEditingLabelId(label.labelId); setEditingName(label.name); }}
+                        className="text-xs text-gray-400 hover:text-gray-200 font-semibold"
+                      >
+                        Rename
+                      </button>
+                      <button
+                        onClick={() => handleDeleteLabel(label.labelId)}
+                        className="text-xs text-red-500/80 hover:text-red-400 font-semibold flex items-center"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
         <div className="border border-red-500/20 bg-red-500/5 rounded-xl p-6">

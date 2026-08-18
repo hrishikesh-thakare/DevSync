@@ -4,6 +4,7 @@ import {
   varchar,
   text,
   boolean,
+  integer,
   timestamp,
   jsonb,
 } from 'drizzle-orm/pg-core';
@@ -25,6 +26,8 @@ export const users = pgTable('users', {
   statusText:   varchar('status_text', { length: 100 }),
   statusEmoji:  varchar('status_emoji', { length: 20 }),
   preferences:  jsonb('preferences').default({}),
+  failedLoginAttempts: integer('failed_login_attempts').default(0),
+  lockoutUntil: timestamp('lockout_until', { withTimezone: true }),
   lastActiveAt: timestamp('last_active_at', { withTimezone: true }),
   createdAt:    timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt:    timestamp('updated_at', { withTimezone: true }).defaultNow(),

@@ -11,6 +11,7 @@ import { createNotification } from '../notifications/notifications.controller.js
 import { getIO } from '../../sockets/index.js';
 import { createFileRecord } from '../files/files.controller.js';
 import { estimateTaskDuration } from '../../services/ai.service.js';
+import { ensureProjectLabels } from '../labels/labels.controller.js';
 import { supabase } from '../../config/supabase.js';
 import { env } from '../../config/env.js';
 import fs from 'fs';
@@ -90,7 +91,7 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
     const {
       title, description, descriptionText, issueType,
       status, priority, assigneeId, dueDate, labels,
-      parentTaskId, epicId, sprintId,
+      parentTaskId, epicId, sprintId, storyPoints,
     } = req.body;
 
     const result = await db.transaction(async (tx) => {
@@ -106,6 +107,9 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
       }
 
       await validateTaskRelations(tx, projectId, { assigneeId, parentTaskId, epicId, sprintId });
+
+      // Register + normalize labels (case-insensitive reconciliation)
+      const canonicalLabels = await ensureProjectLabels(tx, projectId, labels || []);
 
       const taskKey = `${project.key}-${project.issueCounter}`;
 
@@ -167,11 +171,12 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
           reporterId: userId,
           assigneeId: assigneeId || null,
           dueDate: dueDate ? new Date(dueDate) : null,
-          labels: labels || [],
+          labels: canonicalLabels,
           rank,
           parentTaskId: parentTaskId || null,
           epicId: epicId || null,
           sprintId: sprintId || null,
+          storyPoints: storyPoints ?? null,
           discussionThreadId: rootMessage.messageId,
         })
         .returning();
@@ -286,6 +291,7 @@ export const listTasks = async (req: Request, res: Response): Promise<void> => {
         rank: tasks.rank,
         dueDate: tasks.dueDate,
         labels: tasks.labels,
+        storyPoints: tasks.storyPoints,
         sprintId: tasks.sprintId,
         assigneeId: tasks.assigneeId,
         assigneeName: users.fullName,
@@ -338,7 +344,7 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
     const {
       title, description, descriptionText, issueType,
       status, priority, assigneeId, dueDate, labels,
-      parentTaskId, epicId, sprintId,
+      parentTaskId, epicId, sprintId, storyPoints,
     } = req.body;
 
     const [oldTask] = await db.select().from(tasks).where(eq(tasks.taskId, taskId)).limit(1);
@@ -357,9 +363,15 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
     if (parentTaskId !== undefined) updateData.parentTaskId = parentTaskId || null;
     if (epicId !== undefined) updateData.epicId = epicId || null;
     if (sprintId !== undefined) updateData.sprintId = sprintId || null;
+    if (storyPoints !== undefined) updateData.storyPoints = storyPoints ?? null;
 
     const result = await db.transaction(async (tx) => {
       await validateTaskRelations(tx, oldTask.projectId as string, { assigneeId, parentTaskId, epicId, sprintId });
+
+      // Register + normalize labels (case-insensitive reconciliation)
+      if (labels !== undefined) {
+        updateData.labels = await ensureProjectLabels(tx, oldTask.projectId as string, labels);
+      }
 
       const [updated] = await tx
         .update(tasks)
@@ -490,6 +502,13 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
             entityType: eType, entityId: eId, workspaceId,
             newValues: { epic_id: updated.epicId, epic_key: newEpicKey },
             oldValues: { epic_id: oldTask.epicId, epic_key: oldEpicKey }, tx
+          });
+        }
+      if (oldTask.storyPoints !== updated.storyPoints) {
+          await logAuditAction({
+            actorId, action: updated.storyPoints != null ? 'task.story_points_changed' : 'task.story_points_removed',
+            entityType: eType, entityId: eId, workspaceId,
+            newValues: { story_points: updated.storyPoints }, oldValues: { story_points: oldTask.storyPoints }, tx
           });
         }
       }
@@ -953,7 +972,7 @@ export const listTaskAttachments = async (req: Request, res: Response): Promise<
 export const addTaskAttachment = async (req: Request, res: Response): Promise<void> => {
   try {
     const taskId = res.locals.taskId as string;
-    const workspaceId = req.params.workspaceId as string;
+    const workspaceId = (req.params.workspaceId || res.locals.workspaceId) as string;
     const userId = req.user!.userId;
     const { filename, mimetype, sizeBytes, filetype, fileBase64 } = req.body;
 
@@ -995,7 +1014,7 @@ export const deleteTaskAttachment = async (req: Request, res: Response): Promise
     const taskId = res.locals.taskId as string;
     const { fileId } = req.params as Record<string, string>;
     const userId = req.user!.userId;
-    const workspaceId = req.params.workspaceId as string;
+    const workspaceId = (req.params.workspaceId || res.locals.workspaceId) as string;
 
     const [fileRecord] = await db
       .select()

@@ -41,7 +41,8 @@ export const WorkspaceAuditLogs = () => {
   };
 
   return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-xl overflow-hidden mt-8">
+    <div className="h-full overflow-y-auto custom-scrollbar p-8 bg-gray-950 font-sans">
+    <div className="bg-gray-900/50 border border-gray-800 rounded-xl overflow-hidden">
       <div className="p-6 border-b border-gray-800 flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 rounded-lg bg-gray-950 border border-gray-800 flex items-center justify-center">
@@ -122,6 +123,7 @@ export const WorkspaceAuditLogs = () => {
           </tbody>
         </table>
       </div>
+    </div>
     </div>
   );
 };

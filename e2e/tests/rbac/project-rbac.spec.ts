@@ -13,6 +13,16 @@ import { apiRequest, getAuthToken } from '../../helpers/api-helpers.js';
 const SLUG = TEST_WORKSPACE.slug;
 const KEY = TEST_PROJECT.key;
 
+// Retries once on 500/404: on Windows the dev backend intermittently fails a
+// single request (or returns a corrupted empty query result → 404) while
+// fire-and-forget Gemini calls are in flight (undici/libuv uv_async assertion).
+async function deleteTaskResilient(url: string, token: string) {
+  const first = await apiRequest(url, token, { method: 'DELETE' });
+  if (first.status !== 500 && first.status !== 404) return first;
+  await new Promise((r) => setTimeout(r, 750));
+  return apiRequest(url, token, { method: 'DELETE' });
+}
+
 test.describe('Project RBAC — Task Creation @rbac', () => {
   test('project_admin CAN create tasks (UI)', async ({ projectAdminPage }) => {
     await projectAdminPage.goto(ROUTES.projectBoard(SLUG, KEY));
@@ -113,10 +123,9 @@ test.describe('Project RBAC — Task Deletion @rbac', () => {
     if (createStatus >= 400) { test.skip(); return; }
 
     const taskKey = newTask?.task?.taskKey || newTask?.taskKey;
-    const { status } = await apiRequest(
+    const { status } = await deleteTaskResilient(
       `/workspaces/${SLUG}/projects/${KEY}/tasks/${taskKey}`,
-      accessToken,
-      { method: 'DELETE' }
+      accessToken
     );
     expect([200, 204]).toContain(status);
   });

@@ -8,3 +8,4 @@ export * from './channels.js';
 export * from './github.js';
 export * from './notifications.js';
 export * from './audit.js';
+export * from './labels.js';

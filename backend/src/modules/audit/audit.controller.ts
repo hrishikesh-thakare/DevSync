@@ -7,6 +7,7 @@ import { projects } from '../../db/schema/projects.js';
 import { channels, messages } from '../../db/schema/channels.js';
 import { tasks } from '../../db/schema/tasks.js';
 import { sprints } from '../../db/schema/sprints.js';
+import { projectLabels } from '../../db/schema/labels.js';
 import { eq, and, desc } from 'drizzle-orm';
 
 // ─── INTERNAL HELPER: Log an Action ──────────────────────────────────────────
@@ -84,6 +85,21 @@ const resolveEntityWorkspaceId = async (entityType: string, entityId: string): P
         .select({ projectId: sprints.projectId })
         .from(sprints)
         .where(eq(sprints.sprintId, entityId))
+        .limit(1);
+      if (!row?.projectId) return null;
+      const [proj] = await db
+        .select({ workspaceId: projects.workspaceId })
+        .from(projects)
+        .where(eq(projects.projectId, row.projectId))
+        .limit(1);
+      return proj?.workspaceId ?? null;
+    }
+
+    case 'project_label': {
+      const [row] = await db
+        .select({ projectId: projectLabels.projectId })
+        .from(projectLabels)
+        .where(eq(projectLabels.labelId, entityId))
         .limit(1);
       if (!row?.projectId) return null;
       const [proj] = await db

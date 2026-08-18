@@ -11,6 +11,11 @@ import { apiRequest, getAuthToken } from '../../helpers/api-helpers.js';
 
 const SLUG = TEST_WORKSPACE.slug;
 
+test.describe('Workspace RBAC', () => {
+  // Role-management tests mutate shared user roles (Dave promoted to admin and
+  // back) — every suite must run as one ordered sequence in a single worker.
+  test.describe.configure({ mode: 'serial' });
+
 test.describe('Workspace RBAC — Settings Access @rbac', () => {
   test('owner CAN access workspace settings page', async ({ ownerPage }) => {
     await ownerPage.goto(ROUTES.workspaceSettings(SLUG));
@@ -201,4 +206,5 @@ test.describe('Workspace RBAC — Non-Member Denial @rbac', () => {
     const { status } = await apiRequest(`/workspaces/${SLUG}/members`, accessToken);
     expect(status).toBe(403);
   });
+});
 });

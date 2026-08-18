@@ -17,7 +17,7 @@ import { generateSprintReport, SprintReport } from '../../services/ai.service.js
 export const createSprint = async (req: Request, res: Response): Promise<void> => {
   try {
     const projectId = req.params.projectId || res.locals.projectId;
-    const { name, goal, startDate, endDate } = req.body;
+    const { name, goal, capacityPoints, startDate, endDate } = req.body;
 
     // Auto-generate sequence number
     const [lastSprint] = await db
@@ -36,6 +36,7 @@ export const createSprint = async (req: Request, res: Response): Promise<void> =
           projectId,
           name: name.trim(),
           goal: goal || null,
+          capacityPoints: capacityPoints ?? null,
           startDate: startDate ? new Date(startDate) : null,
           endDate: endDate ? new Date(endDate) : null,
           sequenceNumber,
@@ -83,7 +84,54 @@ export const listSprints = async (req: Request, res: Response): Promise<void> =>
       .where(eq(sprints.projectId, projectId))
       .orderBy(sql`sequence_number ASC`);
 
-    res.json({ sprints: results });
+    const sprintIds = results.map(s => s.sprintId);
+
+    const statsMap: Record<string, { taskCount: number; totalPoints: number; completedPoints: number; completedCount: number }> = {};
+
+    if (sprintIds.length > 0) {
+      // Active/future sprints: compute live from tasks.sprint_id
+      const liveAgg = await db
+        .select({
+          sprintId: tasks.sprintId,
+          taskCount: sql<number>`count(*)::int`,
+          totalPoints: sql<number>`coalesce(sum(coalesce(story_points, 0)), 0)::int`,
+          completedPoints: sql<number>`coalesce(sum(case when status = 'done' then coalesce(story_points, 0) else 0 end), 0)::int`,
+          completedCount: sql<number>`coalesce(sum(case when status = 'done' then 1 else 0 end), 0)::int`,
+        })
+        .from(tasks)
+        .where(inArray(tasks.sprintId, sprintIds))
+        .groupBy(tasks.sprintId);
+
+      for (const row of liveAgg) {
+        statsMap[row.sprintId!] = { taskCount: row.taskCount, totalPoints: row.totalPoints, completedPoints: row.completedPoints, completedCount: row.completedCount };
+      }
+
+      // Closed sprints: incomplete tasks were unlinked from the sprint on close,
+      // so compute from the sprint_tasks junction instead.
+      const closedAgg = await db
+        .select({
+          sprintId: sprintTasks.sprintId,
+          taskCount: sql<number>`count(*)::int`,
+          totalPoints: sql<number>`coalesce(sum(coalesce(${tasks.storyPoints}, 0)), 0)::int`,
+          completedPoints: sql<number>`coalesce(sum(case when ${sprintTasks.wasCompletedInSprint} then coalesce(${tasks.storyPoints}, 0) else 0 end), 0)::int`,
+          completedCount: sql<number>`coalesce(sum(case when ${sprintTasks.wasCompletedInSprint} then 1 else 0 end), 0)::int`,
+        })
+        .from(sprintTasks)
+        .leftJoin(tasks, eq(sprintTasks.taskId, tasks.taskId))
+        .where(inArray(sprintTasks.sprintId, sprintIds))
+        .groupBy(sprintTasks.sprintId);
+
+      for (const row of closedAgg) {
+        statsMap[row.sprintId!] = { taskCount: row.taskCount, totalPoints: row.totalPoints, completedPoints: row.completedPoints, completedCount: row.completedCount };
+      }
+    }
+
+    const sprintsWithStats = results.map(s => ({
+      ...s,
+      stats: statsMap[s.sprintId] || { taskCount: 0, totalPoints: 0, completedPoints: 0, completedCount: 0 },
+    }));
+
+    res.json({ sprints: sprintsWithStats });
   } catch (err) {
     console.error('List sprints error:', err);
     res.status(500).json({ error: 'Server error listing sprints.' });
@@ -297,11 +345,12 @@ export const updateSprint = async (req: Request, res: Response): Promise<void> =
   try {
     const { sprintId } = req.params as Record<string, string>;
     const projectId = req.params.projectId || res.locals.projectId;
-    const { name, goal, startDate, endDate } = req.body;
+    const { name, goal, capacityPoints, startDate, endDate } = req.body;
 
     const updateData: Record<string, any> = { updatedAt: new Date() };
     if (name !== undefined) updateData.name = name.trim();
     if (goal !== undefined) updateData.goal = goal;
+    if (capacityPoints !== undefined) updateData.capacityPoints = capacityPoints ?? null;
     if (startDate !== undefined) updateData.startDate = startDate ? new Date(startDate) : null;
     if (endDate !== undefined) updateData.endDate = endDate ? new Date(endDate) : null;
 
@@ -333,6 +382,12 @@ export const updateSprint = async (req: Request, res: Response): Promise<void> =
         await logAuditAction({
           actorId, action: 'sprint.goal_changed', entityType: eType, entityId: eId, workspaceId,
           newValues: { goal: updated.goal }, oldValues: { goal: oldSprint.goal }, tx
+        });
+      }
+      if (oldSprint.capacityPoints !== updated.capacityPoints) {
+        await logAuditAction({
+          actorId, action: 'sprint.capacity_changed', entityType: eType, entityId: eId, workspaceId,
+          newValues: { capacity_points: updated.capacityPoints }, oldValues: { capacity_points: oldSprint.capacityPoints }, tx
         });
       }
       const oldStart = oldSprint.startDate?.toISOString().split('T')[0];

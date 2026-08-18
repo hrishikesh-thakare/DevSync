@@ -70,8 +70,9 @@ export const createWorkspace = async (req: Request, res: Response): Promise<void
     });
   } catch (err: any) {
     console.error('Create workspace error:', err);
-    const errStr = String(err?.message || err);
-    if (err?.code === '23505' || errStr.includes('unique constraint') || errStr.includes('duplicate key')) {
+    const cause = err?.cause || err;
+    const errStr = String(cause?.message || err?.message || err);
+    if (cause?.code === '23505' || err?.code === '23505' || errStr.includes('unique constraint') || errStr.includes('duplicate key')) {
       res.status(409).json({ error: 'Workspace with this slug already exists.' });
       return;
     }

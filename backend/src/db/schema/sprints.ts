@@ -26,6 +26,7 @@ export const sprints = pgTable('sprints', {
   closedAt:              timestamp('closed_at', { withTimezone: true }),
   closedBy:              uuid('closed_by').references(() => users.userId, { onDelete: 'set null' }),
   velocityIssues:        integer('velocity_issues'),
+  capacityPoints:        integer('capacity_points'),   // story-point capacity for the sprint (Jira-style)
   sequenceNumber:        integer('sequence_number').notNull(),
   aiSummary:             jsonb('ai_summary'),
   aiContributionReport:  jsonb('ai_contribution_report'),

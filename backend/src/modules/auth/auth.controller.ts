@@ -6,7 +6,7 @@ import { db } from '../../config/db.js';
 import { users, refreshTokens } from '../../db/schema/auth.js';
 import { workspaceInvites, workspaceMembers } from '../../db/schema/workspaces.js';
 import { env } from '../../config/env.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull, gt, ne } from 'drizzle-orm';
 import { supabase } from '../../config/supabase.js';
 import { logAuditAction } from '../audit/audit.controller.js';
 import { getIO } from '../../sockets/index.js';
@@ -141,6 +141,14 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+// ─── Per-account lockout (production only) ───────────────────────────────────
+// Complements the IP-based authLimiter: this catches slow/distributed credential
+// stuffing against a single account, which the IP limiter cannot see. Disabled
+// outside production so e2e tests and local dev never hit a lockout.
+const ACCOUNT_LOCKOUT_THRESHOLD = 5;          // failed attempts before lockout
+const ACCOUNT_LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+const isLockoutEnabled = () => env.NODE_ENV === 'production';
+
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
@@ -165,11 +173,37 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Per-account lockout: reject before the expensive bcrypt compare
+    if (isLockoutEnabled() && user.lockoutUntil && user.lockoutUntil.getTime() > Date.now()) {
+      const minutesLeft = Math.ceil((user.lockoutUntil.getTime() - Date.now()) / 60000);
+      res.status(423).json({
+        error: `Account temporarily locked due to too many failed login attempts. Try again in ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}.`,
+      });
+      return;
+    }
+
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
+      if (isLockoutEnabled()) {
+        const nextAttempts = (user.failedLoginAttempts ?? 0) + 1;
+        const update: Record<string, any> = { failedLoginAttempts: nextAttempts };
+        if (nextAttempts >= ACCOUNT_LOCKOUT_THRESHOLD) {
+          update.lockoutUntil = new Date(Date.now() + ACCOUNT_LOCKOUT_DURATION_MS);
+          update.failedLoginAttempts = 0;
+        }
+        await db.update(users).set(update).where(eq(users.userId, user.userId));
+      }
       await logAuditAction({ actorId: user.userId, action: 'user.login_failed', entityType: 'user', entityId: user.userId, newValues: { reason: 'invalid_password' } });
       res.status(401).json({ error: 'Invalid email or password.' });
       return;
+    }
+
+    // Success: clear any lockout state
+    if (isLockoutEnabled()) {
+      await db
+        .update(users)
+        .set({ failedLoginAttempts: 0, lockoutUntil: null })
+        .where(eq(users.userId, user.userId));
     }
 
     // Generate tokens
@@ -422,6 +456,102 @@ export const oauthCallback = async (req: Request, res: Response): Promise<void> 
   } catch (err) {
     console.error('OAuth Callback Error:', err);
     res.status(500).json({ error: 'Server error during OAuth processing.' });
+  }
+};
+
+// ─── Session / Device Management ─────────────────────────────────────────────
+
+const currentTokenHash = (req: Request): string | null => {
+  const token = req.cookies?.refreshToken || req.body?.refreshToken || null;
+  if (!token) return null;
+  return crypto.createHash('sha256').update(token).digest('hex');
+};
+
+// GET /auth/sessions — list the user's active sessions
+export const listSessions = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+    const currentHash = currentTokenHash(req);
+
+    const sessions = await db
+      .select({
+        tokenId: refreshTokens.tokenId,
+        deviceInfo: refreshTokens.deviceInfo,
+        issuedAt: refreshTokens.issuedAt,
+        expiresAt: refreshTokens.expiresAt,
+        tokenHash: refreshTokens.tokenHash,
+      })
+      .from(refreshTokens)
+      .where(and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt), gt(refreshTokens.expiresAt, new Date())))
+      .orderBy(refreshTokens.issuedAt);
+
+    res.json({
+      sessions: sessions.map((s) => ({
+        tokenId: s.tokenId,
+        deviceInfo: s.deviceInfo,
+        issuedAt: s.issuedAt,
+        expiresAt: s.expiresAt,
+        isCurrent: currentHash !== null && s.tokenHash === currentHash,
+      })),
+    });
+  } catch (err) {
+    console.error('List sessions error:', err);
+    res.status(500).json({ error: 'Server error listing sessions.' });
+  }
+};
+
+// POST /auth/sessions/:tokenId/revoke — log out one device
+export const revokeSession = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+    const { tokenId } = req.params as Record<string, string>;
+
+    const [token] = await db
+      .select({ tokenId: refreshTokens.tokenId })
+      .from(refreshTokens)
+      .where(and(eq(refreshTokens.tokenId, tokenId), eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt)))
+      .limit(1);
+
+    if (!token) {
+      res.status(404).json({ error: 'Session not found.' });
+      return;
+    }
+
+    await db
+      .update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(eq(refreshTokens.tokenId, tokenId));
+
+    await logAuditAction({ actorId: userId, action: 'user.session_revoked', entityType: 'user', entityId: userId, newValues: { token_id: tokenId } });
+
+    res.json({ message: 'Session revoked.' });
+  } catch (err) {
+    console.error('Revoke session error:', err);
+    res.status(500).json({ error: 'Server error revoking session.' });
+  }
+};
+
+// POST /auth/sessions/revoke-others — log out every other device
+export const revokeOtherSessions = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+    const currentHash = currentTokenHash(req);
+
+    const where = and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt));
+    if (currentHash) {
+      // Revoke every session EXCEPT the one used for this request.
+      await db
+        .update(refreshTokens)
+        .set({ revokedAt: new Date() })
+        .where(and(where, ne(refreshTokens.tokenHash, currentHash)));
+    }
+
+    await logAuditAction({ actorId: userId, action: 'user.sessions_revoked_others', entityType: 'user', entityId: userId });
+
+    res.json({ message: 'All other sessions revoked.' });
+  } catch (err) {
+    console.error('Revoke other sessions error:', err);
+    res.status(500).json({ error: 'Server error revoking sessions.' });
   }
 };
 

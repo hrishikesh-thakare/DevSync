@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const createSprintSchema = z.object({
   name: z.string().min(1, 'Sprint name is required'),
   goal: z.string().optional().nullable(),
+  capacityPoints: z.number().int().min(0).max(10000).optional().nullable(),
   startDate: z.string().datetime().optional().nullable().or(z.date().optional()),
   endDate: z.string().datetime().optional().nullable().or(z.date().optional()),
 }).strict();
@@ -10,6 +11,7 @@ export const createSprintSchema = z.object({
 export const updateSprintSchema = z.object({
   name: z.string().min(1, 'Sprint name cannot be empty').optional(),
   goal: z.string().optional().nullable(),
+  capacityPoints: z.number().int().min(0).max(10000).optional().nullable(),
   startDate: z.string().datetime().optional().nullable().or(z.date().optional()),
   endDate: z.string().datetime().optional().nullable().or(z.date().optional()),
 }).strict();

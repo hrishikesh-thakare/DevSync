@@ -4,6 +4,8 @@ import { useBoardStore, Task } from '../../store/boardStore.js';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useAuthStore } from '../../store/auth.js';
 import { apiFetch } from '../../lib/api.js';
+import { LabelChip } from '../../components/projects/LabelChip.js';
+import { useLabelStore } from '../../store/labelStore.js';
 import { Search, Loader2, MoreHorizontal, CheckSquare, Zap, BookOpen, Bug, Layers, ArrowUpDown, Calendar, Plus } from 'lucide-react';
 import clsx from 'clsx';
 import { format } from 'date-fns';
@@ -39,6 +41,7 @@ export const BacklogPage = () => {
   const { tasks, members, isLoading, fetchTasks, fetchMembers } = useBoardStore();
   const { isAdmin } = useCurrentWorkspaceStore();
   const currentUser = useAuthStore(state => state.user);
+  const fetchLabels = useLabelStore(state => state.fetchLabels);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showOnlyBacklog, setShowOnlyBacklog] = useState(true);
@@ -57,11 +60,12 @@ export const BacklogPage = () => {
     if (slug && key) {
       fetchTasks(slug, key);
       fetchMembers(slug, key);
+      fetchLabels(slug, key);
       apiFetch(`/workspaces/${slug}/projects/${key}/sprints`)
         .then(data => setSprints(data.sprints || []))
         .catch(err => console.error('Failed to load sprints', err));
     }
-  }, [slug, key, fetchTasks, fetchMembers]);
+  }, [slug, key, fetchTasks, fetchMembers, fetchLabels]);
 
   const toggleSelectAll = () => {
     if (!canEditTask) return;
@@ -101,6 +105,8 @@ export const BacklogPage = () => {
         if (bulkAction === 'sprint') body.sprintId = bulkValue === 'backlog' ? null : bulkValue;
         else if (bulkAction === 'status') body.status = bulkValue;
         else if (bulkAction === 'priority') body.priority = bulkValue;
+        else if (bulkAction === 'points') body.storyPoints = bulkValue !== '' ? parseInt(bulkValue) : null;
+        else if (bulkAction === 'clearPoints') body.storyPoints = null;
 
         return apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${task.taskKey}`, {
           method: 'PATCH',
@@ -185,6 +191,8 @@ export const BacklogPage = () => {
                 <option value="status">Change Status</option>
                 <option value="priority">Change Priority</option>
                 <option value="sprint">Assign Sprint</option>
+                <option value="points">Set Story Points</option>
+                <option value="clearPoints">Clear Story Points</option>
               </select>
               
               {bulkAction === 'sprint' && (
@@ -212,10 +220,21 @@ export const BacklogPage = () => {
                   <option value="low">Low</option>
                 </select>
               )}
+              {bulkAction === 'points' && (
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={bulkValue}
+                  onChange={e => setBulkValue(e.target.value)}
+                  placeholder="Points (empty = clear)"
+                  className="bg-gray-900 text-sm text-gray-300 border border-gray-700 rounded px-2 py-1 focus:outline-none mr-2 w-32"
+                />
+              )}
 
               <button 
                 onClick={handleBulkApply} 
-                disabled={isApplyingBulk || !bulkAction || !bulkValue} 
+                disabled={isApplyingBulk || !bulkAction || (bulkAction !== 'clearPoints' && !bulkValue)} 
                 className="text-xs bg-white text-gray-900 font-bold px-3 py-1 rounded disabled:opacity-50"
               >
                 {isApplyingBulk ? <Loader2 className="w-3 h-3 animate-spin text-gray-900" /> : 'Apply'}
@@ -249,7 +268,7 @@ export const BacklogPage = () => {
               Key <ArrowUpDown className="w-3 h-3 ml-1" />
             </button>
           </div>
-          <div className="col-span-4">
+          <div className="col-span-3">
             <button onClick={() => handleSort('title')} className="flex items-center hover:text-gray-300">
               Summary <ArrowUpDown className="w-3 h-3 ml-1" />
             </button>
@@ -257,6 +276,11 @@ export const BacklogPage = () => {
           <div className="col-span-2">
             <button onClick={() => handleSort('status')} className="flex items-center hover:text-gray-300">
               Status <ArrowUpDown className="w-3 h-3 ml-1" />
+            </button>
+          </div>
+          <div className="col-span-1">
+            <button onClick={() => handleSort('storyPoints')} className="flex items-center hover:text-gray-300">
+              Points <ArrowUpDown className="w-3 h-3 ml-1" />
             </button>
           </div>
           <div className="col-span-1">Priority</div>
@@ -305,8 +329,15 @@ export const BacklogPage = () => {
                 </div>
                 
                 {/* Title */}
-                <div className="col-span-4 text-sm font-medium text-gray-200 truncate pr-4">
+                <div className="col-span-3 text-sm font-medium text-gray-200 truncate pr-4">
                   {task.title}
+                  {task.labels && task.labels.length > 0 && (
+                    <span className="flex flex-wrap gap-1 mt-1">
+                      {task.labels.map((label, idx) => (
+                        <LabelChip key={idx} name={label} />
+                      ))}
+                    </span>
+                  )}
                 </div>
 
                 {/* Status */}
@@ -320,6 +351,17 @@ export const BacklogPage = () => {
                   )}>
                     {task.status.replace('_', ' ')}
                   </span>
+                </div>
+
+                {/* Story Points */}
+                <div className="col-span-1">
+                  {task.storyPoints != null ? (
+                    <span className="inline-flex text-xs font-bold bg-purple-500/10 border border-purple-500/30 text-purple-400 px-2 py-0.5 rounded" title="Story Points">
+                      {task.storyPoints}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-gray-600">—</span>
+                  )}
                 </div>
 
                 {/* Priority */}

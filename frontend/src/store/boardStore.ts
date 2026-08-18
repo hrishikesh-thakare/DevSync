@@ -13,7 +13,7 @@ export interface Task {
   reporterId?: string;
   sprintId?: string | null;
   priority: 'low' | 'medium' | 'high' | 'critical';
-  points: number | null;
+  storyPoints: number | null;
   labels: string[];
   type?: string;
   issueType?: string;

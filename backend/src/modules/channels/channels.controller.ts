@@ -69,7 +69,7 @@ export const createChannel = async (req: Request, res: Response): Promise<void> 
   } catch (err: any) {
     console.error('Create channel error:', err);
     const errStr = String(err?.message || err);
-    if (err?.code === '23505' || errStr.includes('unique constraint') || errStr.includes('duplicate key')) {
+    if (err?.code === '23505' || err?.cause?.code === '23505' || errStr.includes('unique constraint') || errStr.includes('duplicate key')) {
       res.status(409).json({ error: 'Channel with this name already exists.' });
       return;
     }

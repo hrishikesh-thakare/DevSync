@@ -18,6 +18,7 @@ export const createTaskSchema = z.object({
   parentTaskId: z.string().uuid().optional().nullable(),
   epicId: z.string().uuid().optional().nullable(),
   sprintId: z.string().uuid().optional().nullable(),
+  storyPoints: z.number().int().min(0).max(100).optional().nullable(),
 }).strict(); // Strip out extra fields
 
 export const updateTaskSchema = z.object({
@@ -33,6 +34,7 @@ export const updateTaskSchema = z.object({
   parentTaskId: z.string().uuid().optional().nullable(),
   epicId: z.string().uuid().optional().nullable(),
   sprintId: z.string().uuid().optional().nullable(),
+  storyPoints: z.number().int().min(0).max(100).optional().nullable(),
 }).strict();
 
 export const reorderTaskSchema = z.object({

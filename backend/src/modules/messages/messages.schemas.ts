@@ -1,0 +1,41 @@
+import { z } from 'zod';
+
+// Message text can contain sanitized HTML and is broadcast in real time to
+// every channel member — cap it so one message can't bloat the DB or freeze
+// clients. 10,000 chars is far beyond any legitimate chat message.
+const MessageText = z
+  .string({ required_error: 'Message text must be a string' })
+  .min(1, 'Message cannot be empty')
+  .max(10000, 'Message must be 10,000 characters or less');
+
+// Rich-text message blocks (optional, server-authored only for now)
+const MessageBlocks = z
+  .array(z.record(z.unknown()))
+  .max(200, 'Message cannot contain more than 200 blocks')
+  .nullable()
+  .optional();
+
+export const sendMessageSchema = z.object({
+  bodyText: MessageText.optional(),
+  bodyBlocks: MessageBlocks,
+  threadId: z.string().uuid('Invalid thread ID format').nullable().optional(),
+  isSystem: z.boolean().optional(),
+  systemType: z.string().max(50, 'System type must be 50 characters or less').nullable().optional(),
+}).strict()
+  .refine((data) => data.bodyText !== undefined || data.bodyBlocks !== undefined, {
+    message: 'Message content is required (bodyText or bodyBlocks)',
+    path: ['bodyText'],
+  });
+
+export const editMessageSchema = z.object({
+  bodyText: MessageText.optional(),
+  bodyBlocks: MessageBlocks,
+  isPinned: z.boolean().optional(),
+}).strict()
+  .refine((data) => data.bodyText !== undefined || data.bodyBlocks !== undefined || data.isPinned !== undefined, {
+    message: 'At least one field (bodyText, bodyBlocks, isPinned) is required',
+  });
+
+export const addReactionSchema = z.object({
+  emoji: z.string().min(1, 'Emoji cannot be empty').max(20, 'Emoji must be 20 characters or less'),
+}).strict();

@@ -13,6 +13,16 @@ import { TEST_WORKSPACE, TEST_PROJECT, TEST_USERS, ROUTES } from '../../helpers/
 import { apiLogin, apiRequest } from '../../helpers/api-helpers.js';
 
 const SLUG = TEST_WORKSPACE.slug;
+
+// Retries once on 500/404: on Windows the dev backend intermittently fails a
+// single request (or returns a corrupted empty query result → 404) while
+// fire-and-forget Gemini calls are in flight (undici/libuv uv_async assertion).
+async function deleteTaskResilient(url: string, token: string) {
+  const first = await apiRequest(url, token, { method: 'DELETE' });
+  if (first.status !== 500 && first.status !== 404) return first;
+  await new Promise((r) => setTimeout(r, 750));
+  return apiRequest(url, token, { method: 'DELETE' });
+}
 const KEY = TEST_PROJECT.key;
 
 test.describe('Implicit Elevation — Workspace Owner → Project Admin @rbac', () => {
@@ -97,10 +107,9 @@ test.describe('Implicit Elevation — Workspace Admin → Project Admin @rbac', 
       return;
     }
 
-    const { status } = await apiRequest(
+    const { status } = await deleteTaskResilient(
       `/workspaces/${SLUG}/projects/${KEY}/tasks/${taskKey}`,
-      accessToken,
-      { method: 'DELETE' }
+      accessToken
     );
     expect([200, 204]).toContain(status);
   });

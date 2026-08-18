@@ -13,6 +13,7 @@ import {
   WorkspaceHome,
   WorkspaceMembers,
   WorkspaceSettings,
+  WorkspaceAuditLogs,
   ChannelPage,
   ProjectList,
   CreateProjectPage,
@@ -58,6 +59,7 @@ function App() {
           <Route index element={<WorkspaceHome />} />
           <Route path="members" element={<WorkspaceMembers />} />
           <Route path="settings" element={<WorkspaceSettings />} />
+          <Route path="audit-logs" element={<WorkspaceAuditLogs />} />
 
           {/* Global Features (2) */}
           <Route path="notifications" element={<NotificationsInbox />} />

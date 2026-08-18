@@ -14,7 +14,8 @@ interface Sprint {
   startDate: string | null;
   endDate: string | null;
   status: 'future' | 'active' | 'closed';
-  taskCount: number;
+  capacityPoints: number | null;
+  stats?: { taskCount: number; totalPoints: number; completedPoints: number };
   aiSummary?: { summary: string; highlights?: string[]; generatedAt?: string } | null;
   aiContributionReport?: Array<{ userId?: string | null; fullName: string; summary: string; tasksCompleted: number }> | null;
 }
@@ -34,6 +35,7 @@ export const SprintList = () => {
   const [newGoal, setNewGoal] = useState('');
   const [newStartDate, setNewStartDate] = useState('');
   const [newEndDate, setNewEndDate] = useState('');
+  const [newCapacityPoints, setNewCapacityPoints] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
   // Start modal
@@ -45,6 +47,24 @@ export const SprintList = () => {
   // Close modal
   const [showCloseModal, setShowCloseModal] = useState<Sprint | null>(null);
   const [isClosing, setIsClosing] = useState(false);
+
+  // Inline capacity editing
+  const [capacityDrafts, setCapacityDrafts] = useState<Record<string, string>>({});
+
+  const saveCapacity = async (sprintId: string) => {
+    const value = capacityDrafts[sprintId];
+    if (value === undefined) return;
+    try {
+      await apiFetch(`/workspaces/${slug}/projects/${key}/sprints/${sprintId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ capacityPoints: value !== '' ? parseInt(value) : null }),
+      });
+      toast.success('Sprint capacity updated.');
+      fetchSprintsAndMembers();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update capacity.');
+    }
+  };
 
   const fetchSprintsAndMembers = async () => {
     setIsLoading(true);
@@ -85,6 +105,7 @@ export const SprintList = () => {
         body: JSON.stringify({
           name: newName,
           goal: newGoal || null,
+          capacityPoints: newCapacityPoints !== '' ? parseInt(newCapacityPoints) : null,
           startDate: newStartDate || null,
           endDate: newEndDate || null,
         }),
@@ -92,6 +113,7 @@ export const SprintList = () => {
       setShowCreateModal(false);
       setNewName('');
       setNewGoal('');
+      setNewCapacityPoints('');
       fetchSprintsAndMembers();
     } catch (err: any) {
       toast.error(err.message || 'Failed to create sprint.');
@@ -218,8 +240,30 @@ export const SprintList = () => {
               <Calendar className="w-4 h-4 mr-2 text-gray-500" />
               {activeSprint.startDate ? format(new Date(activeSprint.startDate), 'MMM d') : '-'} – {activeSprint.endDate ? format(new Date(activeSprint.endDate), 'MMM d, yyyy') : '-'}
             </div>
-            <div className="flex items-center font-mono bg-gray-900 px-2 py-1 border border-gray-800 rounded">
-              {activeSprint.taskCount} tasks
+            <div className="flex items-center gap-2 text-xs font-mono">
+              <span className="bg-gray-900 px-2 py-1 border border-gray-800 rounded">{activeSprint.stats?.taskCount ?? 0} tasks</span>
+              <span className="bg-purple-500/10 border border-purple-500/30 text-purple-400 px-2 py-1 rounded">
+                {activeSprint.stats?.completedPoints ?? 0} / {activeSprint.stats?.totalPoints ?? 0} pts
+              </span>
+              {canManageSprint ? (
+                <label className="flex items-center gap-1.5 bg-gray-900 px-2 py-1 border border-gray-800 rounded text-gray-400">
+                  capacity
+                  <input
+                    type="number"
+                    min="0"
+                    value={capacityDrafts[activeSprint.sprintId] ?? activeSprint.capacityPoints ?? ''}
+                    onChange={e => setCapacityDrafts(d => ({ ...d, [activeSprint.sprintId]: e.target.value }))}
+                    onBlur={() => saveCapacity(activeSprint.sprintId)}
+                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                    className="w-14 bg-transparent border border-gray-700 rounded px-1 py-0.5 text-gray-300 focus:outline-none focus:border-white"
+                  />
+                  pts
+                </label>
+              ) : activeSprint.capacityPoints != null ? (
+                <span className="bg-gray-900 px-2 py-1 border border-gray-800 rounded text-gray-400">
+                  capacity {activeSprint.capacityPoints} pts
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
@@ -241,7 +285,24 @@ export const SprintList = () => {
                   </div>
                   <div className="flex items-center text-xs text-gray-500 space-x-4">
                     {sprint.goal && <span>{sprint.goal}</span>}
-                    <span className="font-mono bg-gray-950 px-1.5 py-0.5 rounded border border-gray-800">{sprint.taskCount} tasks</span>
+                    <span className="font-mono bg-gray-950 px-1.5 py-0.5 rounded border border-gray-800">{sprint.stats?.taskCount ?? 0} tasks</span>
+                    <span className="font-mono bg-gray-950 px-1.5 py-0.5 rounded border border-gray-800 text-purple-400/80">{sprint.stats?.totalPoints ?? 0} pts</span>
+                    {canManageSprint ? (
+                      <label className="flex items-center gap-1 bg-gray-950 px-1.5 py-0.5 rounded border border-gray-800 text-gray-500">
+                        cap
+                        <input
+                          type="number"
+                          min="0"
+                          value={capacityDrafts[sprint.sprintId] ?? sprint.capacityPoints ?? ''}
+                          onChange={e => setCapacityDrafts(d => ({ ...d, [sprint.sprintId]: e.target.value }))}
+                          onBlur={() => saveCapacity(sprint.sprintId)}
+                          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                          className="w-12 bg-transparent border border-gray-700 rounded px-1 py-0 text-gray-300 focus:outline-none focus:border-white"
+                        />
+                      </label>
+                    ) : sprint.capacityPoints != null ? (
+                      <span className="font-mono bg-gray-950 px-1.5 py-0.5 rounded border border-gray-800">cap {sprint.capacityPoints}</span>
+                    ) : null}
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -292,7 +353,10 @@ export const SprintList = () => {
                       <span className="flex items-center"><Calendar className="w-3.5 h-3.5 mr-1.5" /> 
                         {sprint.startDate ? format(new Date(sprint.startDate), 'MMM d') : 'N/A'} – {sprint.endDate ? format(new Date(sprint.endDate), 'MMM d') : 'N/A'}
                       </span>
-                      <span className="font-mono bg-gray-950 px-1.5 py-0.5 rounded border border-gray-800">{sprint.taskCount} tasks</span>
+                      <span className="font-mono bg-gray-950 px-1.5 py-0.5 rounded border border-gray-800">{sprint.stats?.taskCount ?? 0} tasks</span>
+                      <span className="font-mono bg-purple-500/10 border border-purple-500/30 text-purple-400 px-1.5 py-0.5 rounded" title="Velocity: story points completed">
+                        {sprint.stats?.completedPoints ?? 0} pts done
+                      </span>
                     </div>
                   </div>
                   <div className="flex items-center space-x-4">
@@ -380,6 +444,12 @@ export const SprintList = () => {
                   <input type="date" value={newEndDate} onChange={e => setNewEndDate(e.target.value)}
                     className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white" />
                 </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Capacity (story points, optional)</label>
+                <input type="number" min="0" max="10000" value={newCapacityPoints} onChange={e => setNewCapacityPoints(e.target.value)}
+                  placeholder="e.g. 40 — your team's estimated velocity"
+                  className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white" />
               </div>
               <div className="pt-4 flex justify-end space-x-3">
                 <button type="button" onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-gray-400 hover:text-white font-medium">Cancel</button>

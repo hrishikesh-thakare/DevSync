@@ -11,6 +11,8 @@ import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { MessageSquare, GitPullRequest, AlertCircle, GitBranch, ExternalLink, Plus, Copy, Check } from 'lucide-react';
 import { CreatePRModal } from './github/CreatePRModal.js';
 import { TaskComments } from './TaskComments.js';
+import { LabelChip } from '../../components/projects/LabelChip.js';
+import { useLabelStore } from '../../store/labelStore.js';
 
 const STATUSES = [
   { value: 'todo', label: 'To Do' },
@@ -89,7 +91,7 @@ interface TaskItem {
   reporterId?: string | null;
   sprintId?: string | null;
   parentTaskId?: string | null;
-  points?: number | null;
+  storyPoints?: number | null;
   dueDate?: string | null;
   labels?: string[];
   aiDurationEstimate?: string | number | null;
@@ -153,6 +155,10 @@ export const TaskDetailPage = () => {
   const [editDesc, setEditDesc] = useState('');
   const [labelInput, setLabelInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  const labels = useLabelStore(state => state.labels);
+  const fetchLabels = useLabelStore(state => state.fetchLabels);
+  const labelNames = labels.map(l => l.name);
 
   // New feature states
   const [allTasks, setAllTasks] = useState<TaskItem[]>([]);
@@ -259,6 +265,7 @@ export const TaskDetailPage = () => {
     const fetchTask = async () => {
       setIsLoading(true);
       try {
+        fetchLabels(slug || '', key || '');
         const [taskData, membersData, sprintsData, allTasksData, attachmentsData] = await Promise.all([
           apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}`),
           apiFetch(`/workspaces/${slug}/projects/${key}/members`),
@@ -293,7 +300,7 @@ export const TaskDetailPage = () => {
       }
     };
     if (slug && key && taskKey) fetchTask();
-  }, [slug, key, taskKey]);
+  }, [slug, key, taskKey, fetchLabels]);
 
   const patchTask = async (fields: Record<string, unknown>) => {
     setIsSaving(true);
@@ -686,8 +693,8 @@ export const TaskDetailPage = () => {
                   type="number"
                   min="0"
                   max="100"
-                  value={task.points || ''}
-                  onChange={e => patchTask({ points: e.target.value ? parseInt(e.target.value) : null })}
+                  value={task.storyPoints ?? ''}
+                  onChange={e => patchTask({ storyPoints: e.target.value !== '' ? parseInt(e.target.value) : null })}
                   disabled={!canEditTask}
                   className="bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-1 text-sm focus:outline-none w-16 text-right disabled:opacity-50"
                   placeholder="—"
@@ -710,8 +717,8 @@ export const TaskDetailPage = () => {
                 <span className="text-sm text-gray-500 block mb-2">Labels</span>
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {(task.labels || []).map((label: string, idx: number) => (
-                    <span key={idx} className="flex items-center bg-white/10 border border-white/20 text-gray-300 text-xs px-2 py-0.5 rounded">
-                      {label}
+                    <span key={idx} className="flex items-center">
+                      <LabelChip name={label} />
                       {canEditTask && (
                         <button onClick={() => removeLabel(label)} className="ml-1.5 text-gray-500 hover:text-white">
                           <X className="w-3 h-3" />
@@ -727,9 +734,13 @@ export const TaskDetailPage = () => {
                       value={labelInput}
                       onChange={e => setLabelInput(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addLabel(); } }}
+                      list={`label-suggestions-${key}`}
                       className="flex-1 bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-1 text-xs focus:outline-none"
                       placeholder="Add label..."
                     />
+                    <datalist id={`label-suggestions-${key}`}>
+                      {labelNames.map(name => <option key={name} value={name} />)}
+                    </datalist>
                     <button onClick={addLabel} className="text-xs text-gray-400 hover:text-white">Add</button>
                   </div>
                 )}

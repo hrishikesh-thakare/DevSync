@@ -30,22 +30,21 @@ test.describe('Channel CRUD', () => {
   test('member can join a channel via API', async () => {
     const { accessToken: ownerToken } = await apiLogin(TEST_USERS.owner.email);
 
-    // Get channels
-    const { data: channelsData } = await apiRequest(
-      `/workspaces/${SLUG}/channels`,
-      ownerToken
-    );
-    const channels = channelsData?.channels || channelsData || [];
-    const channel = channels[0];
-
-    if (!channel) {
+    // Create a fresh channel: taking channels[0] races other tests that delete
+    // residue channels and can hit a deleted channel → 500 (FK violation).
+    const { data: created } = await apiRequest(`/workspaces/${SLUG}/channels`, ownerToken, {
+      method: 'POST',
+      body: JSON.stringify({ name: `e2e-join-${Date.now()}`, type: 'public' }),
+    });
+    const channelId = created?.channel?.channelId || created?.channelId;
+    if (!channelId) {
       test.skip();
       return;
     }
 
     const { accessToken } = await apiLogin(TEST_USERS.developer.email);
     const { status } = await apiRequest(
-      `/workspaces/${SLUG}/channels/${channel.channelId}/join`,
+      `/workspaces/${SLUG}/channels/${channelId}/join`,
       accessToken,
       { method: 'POST' }
     );

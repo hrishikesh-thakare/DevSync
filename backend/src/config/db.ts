@@ -10,6 +10,7 @@ import * as channelsSchema from '../db/schema/channels.js';
 import * as githubSchema from '../db/schema/github.js';
 import * as notificationsSchema from '../db/schema/notifications.js';
 import * as auditSchema from '../db/schema/audit.js';
+import * as labelsSchema from '../db/schema/labels.js';
 
 const schema = {
   ...authSchema,
@@ -21,6 +22,7 @@ const schema = {
   ...githubSchema,
   ...notificationsSchema,
   ...auditSchema,
+  ...labelsSchema,
 };
 
 // Connection for queries (pool mode)

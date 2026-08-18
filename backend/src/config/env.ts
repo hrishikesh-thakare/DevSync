@@ -38,4 +38,10 @@ export const env = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
   BACKEND_URL: process.env.BACKEND_URL || 'http://localhost:3001',
+
+  // Reverse proxy hop count (Nginx, Load Balancer, Render/Railway, Cloudflare, etc.).
+  // Express uses this to derive req.ip from X-Forwarded-For so rate limiting
+  // and audit-log IPs see the real client, not the proxy. Set to the number of
+  // trusted proxies in front of the app (1 = single proxy, the common case).
+  TRUST_PROXY_HOPS: parseInt(process.env.TRUST_PROXY_HOPS || '1', 10),
 } as const;

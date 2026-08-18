@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../../middleware/auth.js';
+import { validate } from '../../middleware/validate.js';
+import { sendMessageSchema, editMessageSchema, addReactionSchema } from './messages.schemas.js';
 // Channel membership is enforced by requireChannelAccess, which runs one
 // level up in channels.routes.ts (router.use('/:channelId/messages', requireChannelAccess, messagesRoutes)).
 // It verifies workspace membership, workspace owner/admin privileges, project
@@ -22,12 +24,12 @@ const router = Router({ mergeParams: true });
 // All message routes require authentication
 router.use(requireAuth);
 
-router.post('/', sendMessage);
+router.post('/', validate(sendMessageSchema), sendMessage);
 router.get('/', listMessages);
 router.get('/:messageId/thread', getThreadReplies);
-router.patch('/:messageId', editMessage);
+router.patch('/:messageId', validate(editMessageSchema), editMessage);
 router.delete('/:messageId', deleteMessage);
-router.post('/:messageId/reactions', addReaction);
+router.post('/:messageId/reactions', validate(addReactionSchema), addReaction);
 router.delete('/:messageId/reactions/:emoji', removeReaction);
 
 export default router;

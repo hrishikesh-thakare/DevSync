@@ -7,6 +7,8 @@ import clsx from 'clsx';
 import { useAuthStore } from '../../store/auth.js';
 import { useToast } from '../../hooks/useToast.js';
 import { useConfirm } from '../../hooks/useConfirm.js';
+import { LabelChip } from '../../components/projects/LabelChip.js';
+import { useLabelStore } from '../../store/labelStore.js';
 import {
   DndContext,
   closestCorners,
@@ -69,9 +71,14 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newTaskLabels, setNewTaskLabels] = useState('');
   const [newTaskSprintId, setNewTaskSprintId] = useState<string>(sprintId || '');
+  const [newTaskPoints, setNewTaskPoints] = useState('');
   const [isCreatingTask, setIsCreatingTask] = useState(false);
 
   const [sprints, setSprints] = useState<{ sprintId: string; name: string }[]>([]);
+
+  const labels = useLabelStore(state => state.labels);
+  const fetchLabels = useLabelStore(state => state.fetchLabels);
+  const labelNames = labels.map(l => l.name);
 
   // Filters
   const [filterPriority, setFilterPriority] = useState('all');
@@ -82,13 +89,14 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
     if (slug && key) {
       fetchTasks(slug, key);
       fetchMembers(slug, key);
+      fetchLabels(slug, key);
       import('../../lib/api.js').then(({ apiFetch }) => {
         apiFetch(`/workspaces/${slug}/projects/${key}/sprints`)
           .then(data => setSprints(data.sprints || []))
           .catch(err => console.error('Failed to load sprints', err));
       });
     }
-  }, [slug, key, fetchTasks, fetchMembers]);
+  }, [slug, key, fetchTasks, fetchMembers, fetchLabels]);
   
   // removed useEffect to prevent cascading renders
 
@@ -103,11 +111,12 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
         body: JSON.stringify({
           title: newTaskTitle,
           status: newTaskStatus,
-          type: newTaskType,
+          issueType: newTaskType,
           priority: newTaskPriority,
           description: newTaskDescription || undefined,
           labels: newTaskLabels ? newTaskLabels.split(',').map(l => l.trim()).filter(Boolean) : [],
           sprintId: newTaskSprintId || undefined,
+          storyPoints: newTaskPoints !== '' ? parseInt(newTaskPoints) : null,
         }),
       });
       await useBoardStore.getState().fetchTasks(slug, key);
@@ -118,6 +127,7 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
       setNewTaskType('task');
       setNewTaskPriority('medium');
       setNewTaskSprintId(sprintId || '');
+      setNewTaskPoints('');
     } catch (err: unknown) {
       toast.error((err as Error).message || 'Failed to create task.');
     } finally {
@@ -324,7 +334,7 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
                 </div>
               </div>
 
-              {/* Status and Sprint Row */}
+              {/* Status, Sprint and Story Points Row */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1">Status</label>
@@ -347,6 +357,18 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
                     {sprints.map((s: { sprintId: string; name: string }) => <option key={s.sprintId} value={s.sprintId}>{s.name}</option>)}
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">Story Points</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={newTaskPoints}
+                    onChange={e => setNewTaskPoints(e.target.value)}
+                    className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white transition-colors"
+                    placeholder="e.g. 5"
+                  />
+                </div>
               </div>
 
               {/* Description */}
@@ -368,9 +390,13 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
                   type="text" 
                   value={newTaskLabels}
                   onChange={e => setNewTaskLabels(e.target.value)}
+                  list={`label-suggestions-${key}`}
                   className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white transition-colors"
                   placeholder="frontend, auth, urgent (comma separated)"
                 />
+                <datalist id={`label-suggestions-${key}`}>
+                  {labelNames.map(name => <option key={name} value={name} />)}
+                </datalist>
               </div>
 
               <div className="pt-4 flex justify-end space-x-3">
@@ -463,6 +489,11 @@ const KanbanCard = ({ task, isOverlay = false }: { task: Task, isOverlay?: boole
             <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-400 transition-colors">
               {task.taskKey}
             </span>
+            {task.storyPoints != null && (
+              <span className="text-[10px] font-bold bg-purple-500/10 border border-purple-500/30 text-purple-400 px-1.5 py-0 rounded" title="Story Points">
+                {task.storyPoints}
+              </span>
+            )}
           </div>
           {task.priority && (
             <span className={clsx(
@@ -495,7 +526,7 @@ const KanbanCard = ({ task, isOverlay = false }: { task: Task, isOverlay?: boole
         <div className="flex items-center justify-between">
           <div className="flex flex-wrap gap-1">
             {task.labels?.map((label, idx) => (
-              <span key={idx} className="text-[10px] bg-white/5 border border-white/10 text-gray-400 px-1.5 py-0 rounded" title={label}>{label}</span>
+              <LabelChip key={idx} name={label} />
             ))}
           </div>
 

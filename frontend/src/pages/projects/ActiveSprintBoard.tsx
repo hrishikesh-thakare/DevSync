@@ -65,27 +65,48 @@ export const ActiveSprintBoard = () => {
               {activeSprint.status === 'closed' ? 'Ended' : 'Ends'} {formatDistanceToNow(new Date(activeSprint.endDate), { addSuffix: true })}
             </span>
             )}
+            {activeSprint.status === 'closed' && (
+            <span className="flex items-center text-purple-400 font-mono text-xs">
+              {activeSprint.stats?.completedPoints ?? 0} pts completed
+            </span>
+            )}
           </div>
         </div>
 
-        {activeSprint.status !== 'closed' && (
-        <div className="mt-4 sm:mt-0 flex items-center space-x-6">
-          <div className="flex flex-col items-end">
-            <div className="text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Sprint Progress</div>
-            <div className="flex items-center space-x-3">
-              <div className="w-32 h-2.5 bg-gray-800 rounded-full overflow-hidden">
-                <div className="h-full bg-white rounded-full" style={{ width: '65%' }}></div>
+        {activeSprint.status !== 'closed' && (() => {
+          const totalPoints = activeSprint.stats?.totalPoints ?? 0;
+          const completedPoints = activeSprint.stats?.completedPoints ?? 0;
+          const taskCount = activeSprint.stats?.taskCount ?? 0;
+          const completedCount = activeSprint.stats?.completedCount ?? 0;
+          const hasPoints = totalPoints > 0;
+          const pct = hasPoints
+            ? Math.round((completedPoints / totalPoints) * 100)
+            : taskCount > 0
+              ? Math.round((completedCount / taskCount) * 100)
+              : 0;
+          return (
+          <div className="mt-4 sm:mt-0 flex items-center space-x-6">
+            <div className="flex flex-col items-end">
+              <div className="text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Sprint Progress</div>
+              <div className="flex items-center space-x-3">
+                <div className="w-32 h-2.5 bg-gray-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-white rounded-full transition-all" style={{ width: `${pct}%` }}></div>
+                </div>
+                <span className="text-sm font-mono text-gray-300">{pct}%</span>
               </div>
-              <span className="text-sm font-mono text-gray-300">65%</span>
+              <div className="text-xs text-gray-500 mt-1 font-mono">
+                {hasPoints ? `${completedPoints} / ${totalPoints} pts` : `${completedCount} / ${taskCount} tasks`}
+                {activeSprint.capacityPoints != null && hasPoints && ` · capacity ${activeSprint.capacityPoints}`}
+              </div>
             </div>
+            {canManageSprint && (
+              <button className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium rounded-lg transition-colors border border-gray-700">
+                Complete Sprint
+              </button>
+            )}
           </div>
-          {canManageSprint && (
-            <button className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium rounded-lg transition-colors border border-gray-700">
-              Complete Sprint
-            </button>
-          )}
-        </div>
-        )}
+          );
+        })()}
       </div>
       )}
 
