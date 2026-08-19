@@ -4,10 +4,10 @@
  */
 import { test, expect } from '@playwright/test';
 import { API_URL, TEST_USERS, TEST_PASSWORD } from '../../helpers/constants.js';
-import { apiRequest } from '../../helpers/api-helpers.js';
+import { apiRequest, verifyEmail } from '../../helpers/api-helpers.js';
 
 const OWNER = TEST_USERS.owner;
-const testEmail = `sessions-${Date.now()}@demo.com`;
+const testEmail = `sessions-${process.pid}-${Date.now()}@demo.com`;
 
 async function realLogin(email: string, password: string = TEST_PASSWORD) {
   const res = await fetch(`${API_URL}/auth/login`, {
@@ -45,6 +45,7 @@ test.describe('Session Management — API @auth', () => {
       body: JSON.stringify({ email: testEmail, fullName: 'Sessions Tester', password: TEST_PASSWORD }),
     });
     expect([200, 201]).toContain(reg.status);
+    await verifyEmail(await reg.json());
   });
 
   test('GET /auth/sessions returns session records with expected fields', async () => {

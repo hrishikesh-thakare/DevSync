@@ -1,5 +1,5 @@
 import { test, expect } from '../../fixtures/test-fixtures.js';
-import { TEST_WORKSPACE, TEST_PROJECT, TEST_USERS } from '../../helpers/constants.js';
+import { TEST_WORKSPACE, TEST_PROJECT, TEST_USERS, TEST_PASSWORD } from '../../helpers/constants.js';
 import { apiLogin, apiRequest } from '../../helpers/api-helpers.js';
 
 const SLUG = TEST_WORKSPACE.slug;
@@ -12,6 +12,14 @@ test.describe('Notifications', () => {
   test.beforeAll(async () => {
     ownerToken = (await apiLogin(TEST_USERS.owner.email)).accessToken;
     devToken = (await apiLogin(TEST_USERS.developer.email)).accessToken;
+
+    // Guarantee dave has a task_assigned notification regardless of what
+    // parallel specs do, so no test below skips for missing data.
+    const devLogin = await apiLogin(TEST_USERS.developer.email);
+    await apiRequest(`/workspaces/${SLUG}/projects/${KEY}/tasks`, ownerToken, {
+      method: 'POST',
+      body: JSON.stringify({ title: `Guaranteed ${Date.now()}`, issueType: 'task', assigneeId: devLogin.user.userId || devLogin.user.id }),
+    });
   });
 
   test('assigning a task notifies the assignee', async () => {
@@ -70,11 +78,33 @@ test.describe('Notifications', () => {
   });
 
   test('can mark all notifications as read', async () => {
-    const { status } = await apiRequest('/notifications/read-all', devToken, { method: 'PATCH' });
+    // Use a dedicated fresh user: parallel specs keep assigning dave new
+    // tasks mid-run, so asserting on dave's queue can never be deterministic.
+    const email = `readall-${Date.now()}@demo.com`;
+    const { status: regStatus, data: regData } = await apiRequest('/auth/register', '', {
+      method: 'POST',
+      body: JSON.stringify({ email, fullName: 'ReadAll Tester', password: TEST_PASSWORD }),
+    });
+    expect([200, 201]).toContain(regStatus);
+    const freshToken = regData.accessToken;
+
+    // Give them exactly one notification: inviting an existing user creates a
+    // workspace_invited notification for them (no membership chain needed,
+    // and no other spec can create notifications for a fresh user).
+    const { status: inviteStatus } = await apiRequest(`/workspaces/${SLUG}/invite`, ownerToken, {
+      method: 'POST',
+      body: JSON.stringify({ email, role: 'member' }),
+    });
+    expect(inviteStatus).toBe(201);
+
+    const { data: before } = await apiRequest('/notifications?unreadOnly=true', freshToken);
+    expect(before.notifications.length).toBeGreaterThan(0);
+
+    const { status } = await apiRequest('/notifications/read-all', freshToken, { method: 'PATCH' });
     expect(status).toBe(200);
 
-    const { data } = await apiRequest('/notifications?unreadOnly=true', devToken);
-    expect(data.notifications).toEqual([]);
+    const { data: after } = await apiRequest('/notifications?unreadOnly=true', freshToken);
+    expect(after.notifications).toEqual([]);
   });
 
   test('resolve returns a deep link for own notification, 404 otherwise', async () => {

@@ -14,3 +14,21 @@ export const loginSchema = z.object({
   email: z.string().email('Invalid email format'),
   password: z.string().min(1, 'Password is required'),
 }).strict();
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().regex(passwordRegex, 'New password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a number, and a special character.'),
+}).strict();
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email('Invalid email format'),
+}).strict();
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, 'Reset token is required'),
+  newPassword: z.string().regex(passwordRegex, 'New password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a number, and a special character.'),
+}).strict();
+
+export const verifyEmailSchema = z.object({
+  token: z.string().min(1, 'Verification token is required'),
+}).strict();

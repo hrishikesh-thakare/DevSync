@@ -88,9 +88,9 @@ export const LoginPage = () => {
               <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider">
                 Password
               </label>
-              <a href="#" className="text-xs text-primary-400 hover:text-primary-300 transition-colors">
+              <Link to="/forgot-password" className="text-xs text-primary-400 hover:text-primary-300 transition-colors">
                 Forgot password?
-              </a>
+              </Link>
             </div>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

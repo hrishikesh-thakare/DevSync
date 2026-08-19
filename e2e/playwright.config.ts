@@ -56,15 +56,28 @@ export default defineConfig({
       cwd: '../backend',
       env: {
         NODE_ENV: 'test',
+        // Never send real emails from test runs — the backend falls back to
+        // mock-logging the "sent" mail (and returns dev-only links in
+        // responses), which is exactly what the recovery e2e tests need.
+        SMTP_HOST: '',
+        SMTP_USER: '',
+        SMTP_PASS: '',
+        // Turn on email-verification enforcement so CI covers the blocked
+        // login path (specs that register then sign in verify first).
+        REQUIRE_EMAIL_VERIFICATION: 'true',
       },
       port: 3001,
-      reuseExistingServer: true,
+      // Never reuse a server on 3001: a leftover dev/other backend would
+      // silently run the suite with the wrong env (no enforcement, real
+      // SMTP). Fail fast instead of testing the wrong thing.
+      reuseExistingServer: false,
       timeout: 30_000,
     },
     {
       command: 'npm run dev',
       cwd: '../frontend',
       port: 5173,
+      // The frontend has no test-specific env, so a running dev server is fine.
       reuseExistingServer: true,
       timeout: 30_000,
     },

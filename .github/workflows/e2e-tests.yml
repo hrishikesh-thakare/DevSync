@@ -89,7 +89,7 @@ jobs:
 
       - name: Run database migrations
         working-directory: backend
-        run: npx drizzle-kit push
+        run: npx drizzle-kit migrate
 
       # ─── Start Services ─────────────────────────────────────────────────
       - name: Start backend server

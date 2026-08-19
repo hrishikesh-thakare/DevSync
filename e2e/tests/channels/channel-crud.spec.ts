@@ -192,9 +192,14 @@ test.describe('Messaging', () => {
   });
   test('edit own message via API', async () => {
     const { accessToken: ownerToken } = await apiLogin(TEST_USERS.owner.email);
-    const { data: channelsData } = await apiRequest(`/workspaces/${SLUG}/channels`, ownerToken);
-    const channel = (channelsData?.channels || channelsData || []).find((c: any) => !c.isArchived) || (channelsData?.channels || channelsData || [])[0];
-    const channelId = channel?.channelId || channel?.id || channel?.channel_id;
+
+    // Create a fresh channel: channels[0] races other parallel tests that
+    // leave/delete the first channel mid-run.
+    const { data: created } = await apiRequest(`/workspaces/${SLUG}/channels`, ownerToken, {
+      method: 'POST',
+      body: JSON.stringify({ name: `e2e-edit-${Date.now()}`, type: 'public' }),
+    });
+    const channelId = created?.channel?.channelId || created?.channelId;
     if (!channelId) { test.skip(); return; }
 
     await apiRequest(`/workspaces/${SLUG}/channels/${channelId}/join`, ownerToken, { method: 'POST' });
@@ -218,9 +223,14 @@ test.describe('Messaging', () => {
 
   test('delete message via API', async () => {
     const { accessToken: devToken } = await apiLogin(TEST_USERS.developer.email);
-    const { data: channelsData } = await apiRequest(`/workspaces/${SLUG}/channels`, devToken);
-    const channel = (channelsData?.channels || channelsData || []).find((c: any) => !c.isArchived) || (channelsData?.channels || channelsData || [])[0];
-    const channelId = channel?.channelId || channel?.id || channel?.channel_id;
+
+    // Create a fresh channel: channels[0] races other parallel tests that
+    // leave/delete the first channel mid-run.
+    const { data: created } = await apiRequest(`/workspaces/${SLUG}/channels`, devToken, {
+      method: 'POST',
+      body: JSON.stringify({ name: `e2e-del-${Date.now()}`, type: 'public' }),
+    });
+    const channelId = created?.channel?.channelId || created?.channelId;
     if (!channelId) { test.skip(); return; }
 
     await apiRequest(`/workspaces/${SLUG}/channels/${channelId}/join`, devToken, { method: 'POST' });

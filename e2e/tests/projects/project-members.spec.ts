@@ -3,7 +3,7 @@
  */
 import { test, expect } from '../../fixtures/test-fixtures.js';
 import { TEST_WORKSPACE, TEST_PROJECT, TEST_USERS, ROUTES, TEST_PASSWORD } from '../../helpers/constants.js';
-import { apiLogin, apiRequest } from '../../helpers/api-helpers.js';
+import { apiLogin, apiRequest, verifyEmail } from '../../helpers/api-helpers.js';
 
 const SLUG = TEST_WORKSPACE.slug;
 const KEY = TEST_PROJECT.key;
@@ -41,6 +41,7 @@ test.describe('Project Members', () => {
 
     const regData = await regRes.json();
     const userId = regData.user?.userId || regData.userId;
+    await verifyEmail(regData);
 
     // First invite to workspace
     const ownerLogin = await apiLogin(TEST_USERS.owner.email);
@@ -123,7 +124,9 @@ test.describe('Project Members', () => {
       body: JSON.stringify({ email: tempEmail, fullName: 'RM Proj Test', password: TEST_PASSWORD }),
     });
     expect(regRes.ok).toBe(true);
-    const { user: { userId } } = await regRes.json();
+    const regData = await regRes.json();
+    const { userId } = regData.user;
+    await verifyEmail(regData);
 
     const ownerLogin = await apiLogin(TEST_USERS.owner.email);
     

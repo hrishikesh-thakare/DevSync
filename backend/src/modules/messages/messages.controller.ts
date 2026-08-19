@@ -451,6 +451,12 @@ export const deleteMessage = async (req: Request, res: Response): Promise<void> 
     const { channelId, messageId } = req.params as Record<string, string>;
     const userId = req.user!.userId;
 
+    const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+    if (!isUuid(messageId) || !isUuid(channelId)) {
+      res.status(400).json({ error: 'Invalid message or channel id.' });
+      return;
+    }
+
     // Verify ownership & fetch replyCount
     const [msg] = await db
       .select({ authorId: messages.authorId, threadId: messages.threadId, replyCount: messages.replyCount, bodyText: messages.bodyText })
@@ -466,7 +472,11 @@ export const deleteMessage = async (req: Request, res: Response): Promise<void> 
     let isDeletedByAdmin = false;
     if (msg.authorId !== userId) {
       const [channel] = await db.select({ workspaceId: channels.workspaceId }).from(channels).where(eq(channels.channelId, channelId)).limit(1);
-      const [member] = await db.select({ role: workspaceMembers.role }).from(workspaceMembers).where(and(eq(workspaceMembers.workspaceId, channel!.workspaceId!), eq(workspaceMembers.userId, userId)));
+      if (!channel) {
+        res.status(404).json({ error: 'Channel not found.' });
+        return;
+      }
+      const [member] = await db.select({ role: workspaceMembers.role }).from(workspaceMembers).where(and(eq(workspaceMembers.workspaceId, channel.workspaceId!), eq(workspaceMembers.userId, userId)));
       
       if (!member || !['owner', 'admin'].includes(member.role)) {
         res.status(403).json({ error: 'You can only delete your own messages.' });

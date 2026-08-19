@@ -9,6 +9,10 @@ import {
   GithubCallbackPage,
   WorkspaceList,
   InviteAcceptancePage,
+  ForgotPasswordPage,
+  ResetPasswordPage,
+  VerifyEmailPage,
+  AccountSettingsPage,
   WorkspaceLayout,
   WorkspaceHome,
   WorkspaceMembers,
@@ -41,6 +45,12 @@ function App() {
         
         <Route path="/login" element={<GuestGuard><LoginPage /></GuestGuard>} />
         <Route path="/register" element={<GuestGuard><RegisterPage /></GuestGuard>} />
+        <Route path="/forgot-password" element={<GuestGuard><ForgotPasswordPage /></GuestGuard>} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+
+        {/* --- Account (outside the workspace shell) --- */}
+        <Route path="/account" element={<AuthGuard><AccountSettingsPage /></AuthGuard>} />
         
         {/* --- OAuth Callback --- */}
         <Route path="/auth/callback" element={<OAuthCallbackPage />} />

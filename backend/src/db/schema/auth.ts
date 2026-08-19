@@ -22,6 +22,7 @@ export const users = pgTable('users', {
   githubAccessToken: text('github_access_token'),
   googleId:     varchar('google_id', { length: 64 }).unique(),
   passwordHash: text('password_hash'),
+  emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
   presence:     varchar('presence', { length: 20 }).default('offline'),
   statusText:   varchar('status_text', { length: 100 }),
   statusEmoji:  varchar('status_emoji', { length: 20 }),
@@ -45,14 +46,35 @@ export const refreshTokens = pgTable('refresh_tokens', {
   revokedAt:  timestamp('revoked_at', { withTimezone: true }),
 });
 
+// ─── auth_tokens ─────────────────────────────────────────────────────────────
+// Single-use, time-limited tokens for password resets and email verification.
+// Only the SHA-256 hash is stored, never the raw token.
+export const authTokens = pgTable('auth_tokens', {
+  tokenId:    uuid('token_id').primaryKey().defaultRandom(),
+  userId:     uuid('user_id').references(() => users.userId, { onDelete: 'cascade' }).notNull(),
+  type:       varchar('type', { length: 30 }).notNull(), // password_reset | email_verify
+  tokenHash:  varchar('token_hash', { length: 64 }).unique().notNull(),
+  expiresAt:  timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt:     timestamp('used_at', { withTimezone: true }),
+  createdAt:  timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
 // ─── Relations ───────────────────────────────────────────────────────────────
 export const usersRelations = relations(users, ({ many }) => ({
   refreshTokens: many(refreshTokens),
+  authTokens: many(authTokens),
 }));
 
 export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
   user: one(users, {
     fields: [refreshTokens.userId],
+    references: [users.userId],
+  }),
+}));
+
+export const authTokensRelations = relations(authTokens, ({ one }) => ({
+  user: one(users, {
+    fields: [authTokens.userId],
     references: [users.userId],
   }),
 }));

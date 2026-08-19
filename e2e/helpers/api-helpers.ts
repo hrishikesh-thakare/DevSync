@@ -104,6 +104,31 @@ export async function apiRequest(
 }
 
 /**
+ * Verify a freshly registered user's email using the verificationUrl the
+ * register endpoint returns in dev/test. Needed whenever a spec registers
+ * a user and then signs in, since REQUIRE_EMAIL_VERIFICATION blocks
+ * unverified logins.
+ */
+export async function verifyEmail(regBody: any): Promise<void> {
+  const verificationUrl: string | undefined = regBody?.verificationUrl;
+  if (!verificationUrl) {
+    throw new Error('No verificationUrl in register response; cannot verify email.');
+  }
+  const token = new URL(verificationUrl).searchParams.get('token');
+  if (!token) {
+    throw new Error('verificationUrl is missing the token.');
+  }
+  const res = await fetch(`${API_URL}/auth/verify-email`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    throw new Error(`verify-email failed with status ${res.status}`);
+  }
+}
+
+/**
  * Gets the pre-authenticated JWT token for a specific role from the saved state on disk.
  * This avoids hitting the login API for every single API test.
  */

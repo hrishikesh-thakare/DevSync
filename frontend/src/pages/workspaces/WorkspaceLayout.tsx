@@ -3,7 +3,7 @@ import { Outlet, useParams, NavLink, useNavigate } from 'react-router-dom';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useAuthStore } from '../../store/auth.js';
 import { useNotificationStore, Notification } from '../../store/useNotificationStore.js';
-import { Hash, Lock, Search, Settings, Plus, FolderKanban, Loader2, Home, X, LogOut, ChevronDown as ChevronDownIcon, Command, ShieldAlert, Smartphone, Monitor } from 'lucide-react';
+import { Hash, Lock, Search, Settings, Plus, FolderKanban, Loader2, Home, X, LogOut, ChevronDown as ChevronDownIcon, Command, ShieldAlert, Smartphone, Monitor, UserRound } from 'lucide-react';
 import { CommandPalette } from '../../components/layout/CommandPalette.js';
 import NotificationDropdown from '../../components/layout/NotificationDropdown.js';
 import clsx from 'clsx';
@@ -624,6 +624,13 @@ export const WorkspaceLayout = () => {
                   >
                     <Monitor className="w-4 h-4 mr-3 text-gray-500" />
                     Manage Sessions
+                  </button>
+                  <button 
+                    onClick={() => { setShowUserDropdown(false); navigate('/account'); }}
+                    className="w-full flex items-center px-4 py-3 text-sm text-gray-300 hover:bg-gray-800/60 transition-colors"
+                  >
+                    <UserRound className="w-4 h-4 mr-3 text-gray-500" />
+                    Account Settings
                   </button>
                   <button 
                     onClick={() => { setShowUserDropdown(false); handleLogout(); }}

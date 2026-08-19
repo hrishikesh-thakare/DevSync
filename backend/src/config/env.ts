@@ -44,4 +44,11 @@ export const env = {
   // and audit-log IPs see the real client, not the proxy. Set to the number of
   // trusted proxies in front of the app (1 = single proxy, the common case).
   TRUST_PROXY_HOPS: parseInt(process.env.TRUST_PROXY_HOPS || '1', 10),
+
+  // Block sign-in until the email address is verified. On by default in
+  // production (opt out with REQUIRE_EMAIL_VERIFICATION=false); opt in
+  // explicitly anywhere else (the e2e suite sets it to 'true').
+  REQUIRE_EMAIL_VERIFICATION:
+    process.env.REQUIRE_EMAIL_VERIFICATION === 'true' ||
+    (process.env.NODE_ENV === 'production' && process.env.REQUIRE_EMAIL_VERIFICATION !== 'false'),
 } as const;

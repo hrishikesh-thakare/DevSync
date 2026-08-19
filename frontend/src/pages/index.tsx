@@ -5,6 +5,10 @@ export { OAuthCallbackPage } from './auth/OAuthCallbackPage.js';
 export { GithubCallbackPage } from './projects/GithubCallbackPage.js';
 export { WorkspaceList } from './workspaces/WorkspaceList.js';
 export { InviteAcceptancePage } from './auth/InviteAcceptancePage.js';
+export { ForgotPasswordPage } from './auth/ForgotPasswordPage.js';
+export { ResetPasswordPage } from './auth/ResetPasswordPage.js';
+export { VerifyEmailPage } from './auth/VerifyEmailPage.js';
+export { AccountSettingsPage } from './AccountSettingsPage.js';
 
 export { WorkspaceLayout } from './workspaces/WorkspaceLayout.js';
 export { WorkspaceHome } from './workspaces/WorkspaceHome.js';

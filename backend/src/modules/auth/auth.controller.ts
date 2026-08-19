@@ -3,13 +3,14 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
 import { db } from '../../config/db.js';
-import { users, refreshTokens } from '../../db/schema/auth.js';
+import { users, refreshTokens, authTokens } from '../../db/schema/auth.js';
 import { workspaceInvites, workspaceMembers } from '../../db/schema/workspaces.js';
 import { env } from '../../config/env.js';
 import { eq, and, isNull, gt, ne } from 'drizzle-orm';
 import { supabase } from '../../config/supabase.js';
 import { logAuditAction } from '../audit/audit.controller.js';
 import { getIO } from '../../sockets/index.js';
+import { enqueueJob } from '../../workers/queue.js';
 
 // ─── Token Helpers ───────────────────────────────────────────────────────────
 
@@ -45,6 +46,28 @@ const createRefreshToken = async (userId: string, req: Request): Promise<string>
 
   return rawToken;
 };
+
+// ─── Auth tokens (password reset / email verification) ───────────────────────
+
+const PASSWORD_RESET_TOKEN_TTL_MS = 30 * 60 * 1000;  // 30 minutes
+const EMAIL_VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+const createAuthToken = async (userId: string, type: 'password_reset' | 'email_verify', ttlMs: number): Promise<string> => {
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  await db.insert(authTokens).values({
+    userId,
+    type,
+    tokenHash,
+    expiresAt: new Date(Date.now() + ttlMs),
+  });
+  return rawToken;
+};
+
+// In dev/test (no SMTP) the "email" is only logged; returning the link in the
+// response keeps the full flow usable locally and testable in CI. Production
+// never leaks the link — it only goes out via the email service.
+const exposeLinkInResponse = (): boolean => env.NODE_ENV !== 'production';
 
 // ─── Route Handlers ──────────────────────────────────────────────────────────
 
@@ -122,6 +145,10 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     const accessToken = generateAccessToken(newUser);
     const refreshToken = await createRefreshToken(newUser.userId, req);
 
+    // Send email verification link
+    const verificationToken = await createAuthToken(newUser.userId, 'email_verify', EMAIL_VERIFY_TOKEN_TTL_MS);
+    enqueueJob('email.send_verification', { toEmail: newUser.email, verificationToken });
+
     // Set refresh token in HTTP-only cookie
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
@@ -134,20 +161,28 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       message: 'Registration successful',
       accessToken,
       user: newUser,
+      verificationUrl: exposeLinkInResponse() ? `${env.FRONTEND_URL}/verify-email?token=${verificationToken}` : undefined,
     });
-  } catch (err) {
+  } catch (err: any) {
+    // Two concurrent registrations of the same email can both pass the
+    // pre-check above; the unique constraint then rejects the second one.
+    // Surface it as the same 409 the pre-check returns, not a 500.
+    if (err?.code === '23505') {
+      res.status(409).json({ error: 'A user with this email already exists.' });
+      return;
+    }
     console.error('Registration error:', err);
     res.status(500).json({ error: 'Server error during registration.' });
   }
 };
 
-// ─── Per-account lockout (production only) ───────────────────────────────────
+// ─── Per-account lockout ─────────────────────────────────────────────────────
 // Complements the IP-based authLimiter: this catches slow/distributed credential
-// stuffing against a single account, which the IP limiter cannot see. Disabled
-// outside production so e2e tests and local dev never hit a lockout.
+// stuffing against a single account, which the IP limiter cannot see. Always on;
+// it only triggers after 5 consecutive failed attempts, so dev/e2e flows that
+// log in correctly are unaffected.
 const ACCOUNT_LOCKOUT_THRESHOLD = 5;          // failed attempts before lockout
 const ACCOUNT_LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
-const isLockoutEnabled = () => env.NODE_ENV === 'production';
 
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -174,7 +209,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     // Per-account lockout: reject before the expensive bcrypt compare
-    if (isLockoutEnabled() && user.lockoutUntil && user.lockoutUntil.getTime() > Date.now()) {
+    if (user.lockoutUntil && user.lockoutUntil.getTime() > Date.now()) {
       const minutesLeft = Math.ceil((user.lockoutUntil.getTime() - Date.now()) / 60000);
       res.status(423).json({
         error: `Account temporarily locked due to too many failed login attempts. Try again in ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}.`,
@@ -184,27 +219,31 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
-      if (isLockoutEnabled()) {
-        const nextAttempts = (user.failedLoginAttempts ?? 0) + 1;
-        const update: Record<string, any> = { failedLoginAttempts: nextAttempts };
-        if (nextAttempts >= ACCOUNT_LOCKOUT_THRESHOLD) {
-          update.lockoutUntil = new Date(Date.now() + ACCOUNT_LOCKOUT_DURATION_MS);
-          update.failedLoginAttempts = 0;
-        }
-        await db.update(users).set(update).where(eq(users.userId, user.userId));
+      const nextAttempts = (user.failedLoginAttempts ?? 0) + 1;
+      const update: Record<string, any> = { failedLoginAttempts: nextAttempts };
+      if (nextAttempts >= ACCOUNT_LOCKOUT_THRESHOLD) {
+        update.lockoutUntil = new Date(Date.now() + ACCOUNT_LOCKOUT_DURATION_MS);
+        update.failedLoginAttempts = 0;
       }
+      await db.update(users).set(update).where(eq(users.userId, user.userId));
       await logAuditAction({ actorId: user.userId, action: 'user.login_failed', entityType: 'user', entityId: user.userId, newValues: { reason: 'invalid_password' } });
       res.status(401).json({ error: 'Invalid email or password.' });
       return;
     }
 
-    // Success: clear any lockout state
-    if (isLockoutEnabled()) {
-      await db
-        .update(users)
-        .set({ failedLoginAttempts: 0, lockoutUntil: null })
-        .where(eq(users.userId, user.userId));
+    // Email verification enforcement: the password is right, but the account
+    // must be verified before it can sign in (production default; the e2e
+    // suite opts in so CI covers this path).
+    if (env.REQUIRE_EMAIL_VERIFICATION && !user.emailVerifiedAt) {
+      res.status(403).json({ error: 'Please verify your email before signing in. Check your inbox for the verification link.' });
+      return;
     }
+
+    // Success: clear any lockout state
+    await db
+      .update(users)
+      .set({ failedLoginAttempts: 0, lockoutUntil: null })
+      .where(eq(users.userId, user.userId));
 
     // Generate tokens
     const accessToken = generateAccessToken(user);
@@ -401,7 +440,7 @@ export const oauthCallback = async (req: Request, res: Response): Promise<void> 
       await db.transaction(async (tx) => {
         const [newUser] = await tx
           .insert(users)
-          .values({ email, fullName, avatarUrl })
+          .values({ email, fullName, avatarUrl, emailVerifiedAt: new Date() })
           .returning();
         
         user = newUser;
@@ -635,6 +674,210 @@ export const updatePreferences = async (req: Request, res: Response): Promise<vo
   } catch (err) {
     console.error('Update preferences error:', err);
     res.status(500).json({ error: 'Server error updating preferences.' });
+  }
+};
+
+// ─── Password & Email Recovery ───────────────────────────────────────────────
+
+// POST /auth/change-password — change password while logged in; revokes every
+// other session so a stolen credential dies with the old password.
+export const changePassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+    const { currentPassword, newPassword } = req.body;
+
+    const [user] = await db
+      .select({ passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.userId, userId))
+      .limit(1);
+
+    if (!user?.passwordHash) {
+      res.status(400).json({ error: 'This account uses Google/GitHub login. There is no password to change.' });
+      return;
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isMatch) {
+      res.status(400).json({ error: 'Current password is incorrect.' });
+      return;
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const newHash = await bcrypt.hash(newPassword, salt);
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(users)
+        .set({ passwordHash: newHash, failedLoginAttempts: 0, lockoutUntil: null })
+        .where(eq(users.userId, userId));
+
+      // Revoke every OTHER session (keep the one making this request)
+      const currentHash = currentTokenHash(req);
+      if (currentHash) {
+        await tx
+          .update(refreshTokens)
+          .set({ revokedAt: new Date() })
+          .where(and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt), ne(refreshTokens.tokenHash, currentHash)));
+      }
+
+      await logAuditAction({ actorId: userId, action: 'user.password_changed', entityType: 'user', entityId: userId, tx });
+    });
+
+    res.json({ message: 'Password changed successfully.' });
+  } catch (err) {
+    console.error('Change password error:', err);
+    res.status(500).json({ error: 'Server error changing password.' });
+  }
+};
+
+// POST /auth/forgot-password — always 200 so the endpoint cannot be used to
+// enumerate which emails have accounts.
+export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+    const normalized = email.toLowerCase().trim();
+
+    const [user] = await db
+      .select({ userId: users.userId, passwordHash: users.passwordHash, deletedAt: users.deletedAt })
+      .from(users)
+      .where(eq(users.email, normalized))
+      .limit(1);
+
+    let resetToken: string | null = null;
+    if (user && user.passwordHash && !user.deletedAt) {
+      resetToken = await createAuthToken(user.userId, 'password_reset', PASSWORD_RESET_TOKEN_TTL_MS);
+      enqueueJob('email.send_password_reset', { toEmail: normalized, resetToken });
+
+      await logAuditAction({ actorId: user.userId, action: 'user.password_reset_requested', entityType: 'user', entityId: user.userId });
+    }
+
+    res.json({
+      message: 'If an account exists for this email, a password reset link has been sent.',
+      resetUrl: exposeLinkInResponse() && resetToken ? `${env.FRONTEND_URL}/reset-password?token=${resetToken}` : undefined,
+    });
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    res.status(500).json({ error: 'Server error requesting password reset.' });
+  }
+};
+
+// POST /auth/reset-password — complete the reset with the emailed token
+export const resetPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { token, newPassword } = req.body;
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const [record] = await db
+      .select({
+        tokenId: authTokens.tokenId,
+        userId: authTokens.userId,
+        expiresAt: authTokens.expiresAt,
+        usedAt: authTokens.usedAt,
+      })
+      .from(authTokens)
+      .where(and(eq(authTokens.tokenHash, tokenHash), eq(authTokens.type, 'password_reset')))
+      .limit(1);
+
+    if (!record || record.usedAt || new Date() > new Date(record.expiresAt)) {
+      res.status(400).json({ error: 'Invalid or expired reset token.' });
+      return;
+    }
+
+    const [user] = await db
+      .select({ deletedAt: users.deletedAt })
+      .from(users)
+      .where(eq(users.userId, record.userId))
+      .limit(1);
+
+    if (!user || user.deletedAt) {
+      res.status(400).json({ error: 'Invalid or expired reset token.' });
+      return;
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const newHash = await bcrypt.hash(newPassword, salt);
+
+    await db.transaction(async (tx) => {
+      // Resetting via the emailed link proves ownership of the inbox, so the
+      // email counts as verified from here on.
+      await tx
+        .update(users)
+        .set({ passwordHash: newHash, failedLoginAttempts: 0, lockoutUntil: null, emailVerifiedAt: new Date() })
+        .where(eq(users.userId, record.userId));
+
+      // A successful reset signs every device out
+      await tx
+        .update(refreshTokens)
+        .set({ revokedAt: new Date() })
+        .where(and(eq(refreshTokens.userId, record.userId), isNull(refreshTokens.revokedAt)));
+
+      await tx
+        .update(authTokens)
+        .set({ usedAt: new Date() })
+        .where(eq(authTokens.tokenId, record.tokenId));
+
+      await logAuditAction({ actorId: record.userId, action: 'user.password_reset', entityType: 'user', entityId: record.userId, tx });
+    });
+
+    res.json({ message: 'Password reset successfully. You can now log in with your new password.' });
+  } catch (err) {
+    console.error('Reset password error:', err);
+    res.status(500).json({ error: 'Server error resetting password.' });
+  }
+};
+
+// POST /auth/verify-email — confirm an email address with the emailed token
+export const verifyEmail = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { token } = req.body;
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const [record] = await db
+      .select({
+        tokenId: authTokens.tokenId,
+        userId: authTokens.userId,
+        expiresAt: authTokens.expiresAt,
+        usedAt: authTokens.usedAt,
+      })
+      .from(authTokens)
+      .where(and(eq(authTokens.tokenHash, tokenHash), eq(authTokens.type, 'email_verify')))
+      .limit(1);
+
+    if (!record || record.usedAt || new Date() > new Date(record.expiresAt)) {
+      res.status(400).json({ error: 'Invalid or expired verification token.' });
+      return;
+    }
+
+    const [user] = await db
+      .select({ deletedAt: users.deletedAt })
+      .from(users)
+      .where(eq(users.userId, record.userId))
+      .limit(1);
+
+    if (!user || user.deletedAt) {
+      res.status(400).json({ error: 'Invalid or expired verification token.' });
+      return;
+    }
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(users)
+        .set({ emailVerifiedAt: new Date() })
+        .where(eq(users.userId, record.userId));
+
+      await tx
+        .update(authTokens)
+        .set({ usedAt: new Date() })
+        .where(eq(authTokens.tokenId, record.tokenId));
+
+      await logAuditAction({ actorId: record.userId, action: 'user.email_verified', entityType: 'user', entityId: record.userId, tx });
+    });
+
+    res.json({ message: 'Email verified successfully.' });
+  } catch (err) {
+    console.error('Verify email error:', err);
+    res.status(500).json({ error: 'Server error verifying email.' });
   }
 };
 

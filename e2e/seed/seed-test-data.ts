@@ -39,7 +39,7 @@ import {
   TEST_PROJECT,
   TEST_PROJECT_2,
 } from '../helpers/constants.js';
-import { apiRequest, apiLogin, getAuthToken } from '../helpers/api-helpers.js';
+import { apiRequest, apiLogin, getAuthToken, verifyEmail } from '../helpers/api-helpers.js';
 
 // Build a reverse email → role map for cache lookups
 const EMAIL_TO_ROLE: Record<string, string> = Object.fromEntries(
@@ -59,7 +59,30 @@ async function register(user: { email: string; name: string; password: string })
   });
 
   if (status === 409 || status === 400) {
-    console.log(`  ⏭️  User ${user.email} already exists, logging in...`);
+    console.log(`  ⏭️  User ${user.email} already exists, verifying + logging in...`);
+    // Seeded users predate email-verification enforcement and may be
+    // unverified. Resetting the password via the emailed link proves inbox
+    // ownership and marks the email verified, which is exactly what sign-in
+    // needs. Password stays the same.
+    try {
+      const forgot = await fetch(`${process.env.API_URL || 'http://localhost:3001/api'}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email }),
+      });
+      const { resetUrl } = await forgot.json();
+      if (resetUrl) {
+        const token = new URL(resetUrl).searchParams.get('token');
+        await fetch(`${process.env.API_URL || 'http://localhost:3001/api'}/auth/reset-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, newPassword: user.password }),
+        });
+      }
+    } catch {
+      // If the reset link is unavailable the login below will surface the
+      // real problem (e.g. account still unverified).
+    }
     // apiLogin() checks the cached token expiry — only hits the API if expired
     return apiLogin(user.email, user.password);
   }
@@ -67,6 +90,10 @@ async function register(user: { email: string; name: string; password: string })
   if (status >= 400) {
     throw new Error(`Registration failed for ${user.email}: ${status} ${JSON.stringify(data)}`);
   }
+
+  // Seeded users must be able to sign in: verify their email (register
+  // returns the verificationUrl in dev/test).
+  await verifyEmail(data);
 
   console.log(`  ✅ Registered ${user.email}`);
   return data;

@@ -50,6 +50,20 @@
       "when": 1787064016291,
       "tag": "0006_wealthy_typhoid_mary",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787654400000,
+      "tag": "0007_missing_reactions_invites",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787125288422,
+      "tag": "0008_previous_magma",
+      "breakpoints": true
     }
   ]
 }

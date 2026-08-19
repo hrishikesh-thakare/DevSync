@@ -1,18 +1,18 @@
 # DevSync E2E Test Suite — Complete Test Reference
 
-The DevSync Playwright end-to-end suite contains **240 tests across 28 spec files**. It verifies the full product surface: authentication & sessions, workspace/project/channel/task/sprint/label CRUD, messaging (including threads and reactions), RBAC at workspace and project level, GitHub integration, search, notifications, file storage, WebSocket realtime events, and audit logging.
+The DevSync Playwright end-to-end suite contains **257 tests across 30 spec files**. It verifies the full product surface: authentication & sessions (including password recovery, email verification, and enforcement of verified emails on sign-in), workspace/project/channel/task/sprint/label CRUD, messaging (including threads and reactions), RBAC at workspace and project level, GitHub integration, search, notifications, file storage, WebSocket realtime events, and audit logging.
 
 ## Running the Suite
 
 | Command | Purpose |
 | :--- | :--- |
-| `npx playwright test` | Run the full suite (240 tests, 8 workers) |
+| `npx playwright test` | Run the full suite (257 tests, 8 workers) |
 | `npx playwright test tests/<dir>` | Run one module (e.g. `tests/rbac`) |
 | `npx playwright test tests/<dir>/<file>.spec.ts --workers 1` | Run one spec file serially |
 | `npm run test:rbac` / `test:auth` | Run tests tagged `@rbac` / `@auth` |
 | `npx playwright test --headed` / `--ui` | Interactive debugging |
 
-The suite runs automatically in CI on every push to `main`/`develop` and on every PR targeting them (`.github/workflows/e2e-tests.yml`): fresh Postgres 16, `drizzle-kit push`, seed, then the full run.
+The suite runs automatically in CI on every push to `main`/`develop` and on every PR targeting them (`.github/workflows/e2e-tests.yml`): fresh Postgres 16, `drizzle-kit migrate` (all 9 versioned migrations, 0000→0008), seed, then the full run.
 
 ## Test Infrastructure
 
@@ -54,9 +54,36 @@ The suite runs automatically in CI on every push to `main`/`develop` and on ever
 | cannot revoke another user's session (404) | Cross-user revoke is impossible |
 | revoking a session invalidates its refresh token | Revoked session's refresh cookie → 401 |
 | revoke-others keeps the current session and revokes the rest | `revoke-others` kills every session except the current one |
-| account is locked after 5 failed attempts (production only) | 6th attempt with correct password → 423 with lockout message (skipped outside `NODE_ENV=production`) |
+| account is locked after 5 failed attempts | 6th attempt with correct password → 423 with lockout message |
 | failed attempts report a generic error (no user enumeration) | Unknown email returns identical error to wrong password |
-| lockout also rejects the wrong password with 423 (production only) | Locked account rejects any attempt with 423 (skipped outside production) |
+| lockout also rejects the wrong password with 423 | Locked account rejects any attempt with 423 |
+
+## 🔑 Password Recovery & Email Verification (`tests/auth/password-recovery.spec.ts`)
+
+| Test | Verifies |
+| :--- | :--- |
+| change-password requires authentication | `POST /auth/change-password` without a token → 401 |
+| change-password rejects an incorrect current password | Wrong current password → 400 |
+| change-password rejects a weak new password | Zod password-strength validation → 400 |
+| change-password changes the password and invalidates the old one | New password logs in, old one → 401 |
+| forgot-password does not leak whether an email has an account | Unknown email → 200 with generic message, no `resetUrl` |
+| forgot-password issues a reset token for an existing account | Known email → 200 with `resetUrl` (dev/test only; prod sends it by email) |
+| reset-password rejects a garbage token | Fake token → 400 |
+| reset-password resets the password and signs out every session | Old password → 401, new → 200, pre-reset refresh cookie → 401 |
+| reset token is single-use | Second use of the same token → 400 |
+| registration issues a verification token | `POST /auth/register` returns a `verificationUrl` (dev/test only) |
+| verify-email rejects a garbage token | Fake token → 400 |
+| verify-email verifies the email address | Valid token → 200 |
+| verification token is single-use | Second use of the same token → 400 |
+| login is blocked until the email is verified, then succeeds | Unverified login → 403; after verify → 200 |
+
+## 🔑 Password Recovery — UI Flows (`tests/auth/password-recovery-ui.spec.ts`)
+
+| Test | Verifies |
+| :--- | :--- |
+| forgot-password shows a generic message and does not leak accounts | UI shows the generic "if an account exists" notice; no user-specific text |
+| full reset flow resets the password via the UI | Forgot → reset URL (dev/test) → new password → old password dead, new works |
+| account settings can change the password | `/account` → change password → old password dead, new works |
 
 ## 🧑 Account Status & Preferences (`tests/account/account-status.spec.ts`)
 
