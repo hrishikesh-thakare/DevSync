@@ -227,7 +227,7 @@ export const WorkspaceLayout = () => {
     try {
       const data = await apiFetch('/auth/sessions');
       setSessions(data.sessions || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(err.message || 'Failed to load sessions.');
     } finally {
       setIsSessionsLoading(false);
@@ -239,7 +239,7 @@ export const WorkspaceLayout = () => {
       await apiFetch(`/auth/sessions/${tokenId}/revoke`, { method: 'POST' });
       toast.success('Session logged out.');
       setSessions(s => s.filter(x => x.tokenId !== tokenId));
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(err.message || 'Failed to revoke session.');
     }
   };
@@ -250,7 +250,7 @@ export const WorkspaceLayout = () => {
       await apiFetch('/auth/sessions/revoke-others', { method: 'POST' });
       toast.success('All other sessions logged out.');
       setSessions(s => s.filter(x => x.isCurrent));
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(err.message || 'Failed to revoke sessions.');
     }
   };

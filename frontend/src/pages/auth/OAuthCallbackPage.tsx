@@ -37,9 +37,9 @@ export const OAuthCallbackPage = () => {
         // 4. Redirect into the app
         navigate('/workspaces', { replace: true });
         
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('OAuth Callback Error:', err);
-        setError(err.message || 'Authentication failed. Please try again.');
+        setError(err instanceof Error ? err.message : 'Authentication failed. Please try again.');
       }
     };
 

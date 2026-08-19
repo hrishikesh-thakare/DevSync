@@ -20,8 +20,8 @@ export const ForgotPasswordPage = () => {
         body: JSON.stringify({ email }),
       });
       setSent(true);
-    } catch (err: any) {
-      setError(err.message || 'Failed to request a password reset.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to request a password reset.');
     } finally {
       setIsLoading(false);
     }

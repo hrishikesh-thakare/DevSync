@@ -36,8 +36,8 @@ export const RegisterPage = () => {
     try {
       await register({ email, password, fullName });
       navigate('/workspaces', { replace: true });
-    } catch (err: any) {
-      setError(err.message || 'Failed to create account');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create account');
     } finally {
       setIsLoading(false);
     }

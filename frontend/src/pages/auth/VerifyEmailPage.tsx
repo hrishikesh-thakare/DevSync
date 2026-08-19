@@ -10,13 +10,12 @@ export const VerifyEmailPage = () => {
   const token = searchParams.get('token') || '';
 
   const [state, setState] = useState<VerifyState>(token ? 'verifying' : 'error');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(
+    token ? '' : 'This verification link is invalid. Please use the link from your email.'
+  );
 
   useEffect(() => {
-    if (!token) {
-      setError('This verification link is invalid. Please use the link from your email.');
-      return;
-    }
+    if (!token) return;
 
     let cancelled = false;
     (async () => {
@@ -26,10 +25,10 @@ export const VerifyEmailPage = () => {
           body: JSON.stringify({ token }),
         });
         if (!cancelled) setState('verified');
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!cancelled) {
           setState('error');
-          setError(err.message || 'Failed to verify your email.');
+          setError(err instanceof Error ? err.message : 'Failed to verify your email.');
         }
       }
     })();

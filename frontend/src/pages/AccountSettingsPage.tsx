@@ -33,8 +33,8 @@ export const AccountSettingsPage = () => {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to change password.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to change password.');
     } finally {
       setIsSaving(false);
     }
