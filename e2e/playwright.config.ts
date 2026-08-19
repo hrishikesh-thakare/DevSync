@@ -81,5 +81,24 @@ export default defineConfig({
       reuseExistingServer: true,
       timeout: 30_000,
     },
+    {
+      // Production-mode backend used by the rate-limit spec: the main test
+      // backend runs with NODE_ENV=test, where rate limiting is skipped.
+      // This instance exercises the real limiter behind a trusted proxy
+      // (TRUST_PROXY_HOPS=1) on a separate port.
+      command: 'npm run dev',
+      cwd: '../backend',
+      env: {
+        NODE_ENV: 'production',
+        PORT: '3002',
+        SMTP_HOST: '',
+        SMTP_USER: '',
+        SMTP_PASS: '',
+        TRUST_PROXY_HOPS: '1',
+      },
+      port: 3002,
+      reuseExistingServer: false,
+      timeout: 30_000,
+    },
   ],
 });

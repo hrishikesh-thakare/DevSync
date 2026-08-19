@@ -1,5 +1,5 @@
 import { test, expect } from '../../fixtures/test-fixtures.js';
-import { TEST_WORKSPACE, TEST_USERS } from '../../helpers/constants.js';
+import { TEST_WORKSPACE, TEST_USERS, BASE_URL } from '../../helpers/constants.js';
 import { apiLogin, apiRequest } from '../../helpers/api-helpers.js';
 
 const SLUG = TEST_WORKSPACE.slug;
@@ -299,5 +299,62 @@ test.describe('Messages — CRUD, threads, reactions', () => {
       body: JSON.stringify({ bodyText: 'x' }),
     });
     expect(post.status).toBe(401);
+  });
+});
+
+test.describe('XSS sanitization', () => {
+  test('malicious HTML in a message renders inert in the browser', async ({ developerPage }) => {
+    // Fresh channel: nothing else's messages can pollute the assertions.
+    const channel = await createChannel(ownerToken, { name: `xss-${ts}`, type: 'public' });
+    await apiRequest(`/workspaces/${SLUG}/channels/${channel.channelId}/join`, developerToken, { method: 'POST' });
+
+    // The backend stores bodyText verbatim (sanitization happens at render
+    // time), so every vector below reaches the browser exactly as written.
+    const payload = [
+      `<img src=x onerror="window.__xssExecuted = window.__xssExecuted || []; window.__xssExecuted.push('img')">`,
+      `<script>window.__xssExecuted = window.__xssExecuted || []; window.__xssExecuted.push('script')</script>`,
+      `<svg onload="window.__xssExecuted = window.__xssExecuted || []; window.__xssExecuted.push('svg')"></svg>`,
+      `<iframe src="javascript:window.__xssExecuted = window.__xssExecuted || []; window.__xssExecuted.push('iframe')"></iframe>`,
+      `<a href="javascript:window.__xssExecuted = window.__xssExecuted || []; window.__xssExecuted.push('href')">xss-link</a>`,
+      `plain text ${ts}`,
+    ].join('\n');
+
+    const { status, data } = await apiRequest(`/workspaces/${SLUG}/channels/${channel.channelId}/messages`, developerToken, {
+      method: 'POST',
+      body: JSON.stringify({ bodyText: payload }),
+    });
+    expect(status).toBe(201);
+    const messageId = data.data.messageId;
+    expect(messageId).toBeTruthy();
+
+    // Any alert/confirm/prompt triggered by the payload is an XSS signal.
+    const dialogs: string[] = [];
+    developerPage.on('dialog', (d) => dialogs.push(d.message()));
+
+    await developerPage.goto(`${BASE_URL}/w/${SLUG}/channels/${channel.channelId}`);
+    const messageEl = developerPage.locator(`[id="${messageId}"]`);
+    await expect(messageEl).toBeVisible();
+    await expect(messageEl.getByText('xss-link')).toBeVisible();
+
+    // Nothing executed: no window flag, no dialogs.
+    const executed = await developerPage.evaluate(() => (window as any).__xssExecuted);
+    expect(executed).toBeUndefined();
+    expect(dialogs).toEqual([]);
+
+    // Sanitization left no dangerous element/attribute inside the message.
+    // (Plain <svg> counts are excluded: the message row's own lucide icons
+    // render as svg — only svg carrying an event handler is dangerous.)
+    const dangerous = await messageEl.evaluate((el) => ({
+      imgs: el.querySelectorAll('img').length,
+      scripts: el.querySelectorAll('script').length,
+      svgHandlers: el.querySelectorAll('svg[onload],[onerror],[onclick],[onmouseover]').length,
+      iframes: el.querySelectorAll('iframe').length,
+      eventHandlers: el.querySelectorAll('[onerror],[onload],[onclick],[onmouseover],[onmouseenter],[onfocus]').length,
+      jsHrefs: Array.from(el.querySelectorAll('a[href]')).filter((a) => /^\s*javascript:/i.test(a.getAttribute('href') || '')).length,
+    }));
+    expect(dangerous).toEqual({ imgs: 0, scripts: 0, svgHandlers: 0, iframes: 0, eventHandlers: 0, jsHrefs: 0 });
+
+    // The plain-text content still renders for the reader.
+    await expect(messageEl.getByText(`plain text ${ts}`)).toBeVisible();
   });
 });});

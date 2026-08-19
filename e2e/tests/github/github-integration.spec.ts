@@ -249,32 +249,34 @@ test.describe('GitHub No-Connection Error Paths', () => {
     const token = regData.accessToken;
 
     const slug = `gh-connect-${Date.now()}`;
-    const ws = await apiRequest('/workspaces', token, {
-      method: 'POST',
-      body: JSON.stringify({ name: 'GitHub Connect Test', slug }),
-    });
-    expect(ws.status).toBeLessThan(400);
+    try {
+      const ws = await apiRequest('/workspaces', token, {
+        method: 'POST',
+        body: JSON.stringify({ name: 'GitHub Connect Test', slug }),
+      });
+      expect(ws.status).toBeLessThan(400);
 
-    const key = `GHC${Date.now().toString().slice(-4)}`;
-    const proj = await apiRequest(`/workspaces/${slug}/projects`, token, {
-      method: 'POST',
-      body: JSON.stringify({ name: 'GitHub Connect Project', key }),
-    });
-    expect(proj.status).toBeLessThan(400);
+      const key = `GHC${Date.now().toString().slice(-4)}`;
+      const proj = await apiRequest(`/workspaces/${slug}/projects`, token, {
+        method: 'POST',
+        body: JSON.stringify({ name: 'GitHub Connect Project', key }),
+      });
+      expect(proj.status).toBeLessThan(400);
 
-    const { status, data } = await apiRequest(`/workspaces/${slug}/projects/${key}/github/connect`, token, {
-      method: 'POST',
-      body: JSON.stringify(VALID_CONNECT_BODY),
-    });
-    expect(status).toBe(403);
-    expect(data.error).toContain('GitHub account is not connected');
+      const { status, data } = await apiRequest(`/workspaces/${slug}/projects/${key}/github/connect`, token, {
+        method: 'POST',
+        body: JSON.stringify(VALID_CONNECT_BODY),
+      });
+      expect(status).toBe(403);
+      expect(data.error).toContain('GitHub account is not connected');
 
-    // disconnect with no connection → 404
-    const disc = await apiRequest(`/workspaces/${slug}/projects/${key}/github/disconnect`, token, { method: 'DELETE' });
-    expect(disc.status).toBe(404);
-
-    // cleanup
-    await apiRequest(`/workspaces/${slug}`, token, { method: 'DELETE' });
+      // disconnect with no connection → 404
+      const disc = await apiRequest(`/workspaces/${slug}/projects/${key}/github/disconnect`, token, { method: 'DELETE' });
+      expect(disc.status).toBe(404);
+    } finally {
+      // cleanup even when an assertion fails, so failed runs don't leak workspaces
+      await apiRequest(`/workspaces/${slug}`, token, { method: 'DELETE' });
+    }
   });
 
   test('disconnect without a connection returns 404', async () => {

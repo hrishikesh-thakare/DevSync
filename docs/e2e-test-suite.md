@@ -1,12 +1,12 @@
 # DevSync E2E Test Suite — Complete Test Reference
 
-The DevSync Playwright end-to-end suite contains **257 tests across 30 spec files**. It verifies the full product surface: authentication & sessions (including password recovery, email verification, and enforcement of verified emails on sign-in), workspace/project/channel/task/sprint/label CRUD, messaging (including threads and reactions), RBAC at workspace and project level, GitHub integration, search, notifications, file storage, WebSocket realtime events, and audit logging.
+The DevSync Playwright end-to-end suite contains **260 tests across 31 spec files**. It verifies the full product surface: authentication & sessions (including password recovery, email verification, enforcement of verified emails on sign-in, and rate limiting behind a trusted proxy), workspace/project/channel/task/sprint/label CRUD (including soft-delete isolation of deleted workspaces), messaging (including threads and reactions), XSS sanitization of message HTML, RBAC at workspace and project level, GitHub integration, search, notifications, file storage, WebSocket realtime events, and audit logging.
 
 ## Running the Suite
 
 | Command | Purpose |
 | :--- | :--- |
-| `npx playwright test` | Run the full suite (257 tests, 8 workers) |
+| `npx playwright test` | Run the full suite (260 tests, 8 workers) |
 | `npx playwright test tests/<dir>` | Run one module (e.g. `tests/rbac`) |
 | `npx playwright test tests/<dir>/<file>.spec.ts --workers 1` | Run one spec file serially |
 | `npm run test:rbac` / `test:auth` | Run tests tagged `@rbac` / `@auth` |
@@ -58,6 +58,13 @@ The suite runs automatically in CI on every push to `main`/`develop` and on ever
 | failed attempts report a generic error (no user enumeration) | Unknown email returns identical error to wrong password |
 | lockout also rejects the wrong password with 423 | Locked account rejects any attempt with 423 |
 
+### `rate-limit.spec.ts`
+> Targets a second production-mode backend (port 3002, `TRUST_PROXY_HOPS=1`) that the playwright config starts alongside the test backend — rate limiting is skipped on the main test backend (`NODE_ENV=test`).
+
+| Test | Verifies |
+| :--- | :--- |
+| auth limiter keys on the forwarded IP and blocks at the limit | 10 attempts with the same `X-Forwarded-For` → 401s, 11th → 429; a different forwarded IP has its own untouched bucket (401) |
+
 ## 🔑 Password Recovery & Email Verification (`tests/auth/password-recovery.spec.ts`)
 
 | Test | Verifies |
@@ -104,6 +111,7 @@ The suite runs automatically in CI on every push to `main`/`develop` and on ever
 | duplicate workspace slug is rejected with 409 | Same slug → 409 "already exists" |
 | can update workspace name via API | PATCH persists the new name (restored afterwards) |
 | can list workspaces the user belongs to | GET `/workspaces` returns an array |
+| a deleted workspace becomes inaccessible to owner and members | Soft-delete returns 200; GET by owner and member → 404; both lists drop the slug; second DELETE → 404 |
 
 ### `workspace-members.spec.ts`
 | Test | Verifies |
@@ -190,6 +198,7 @@ The suite runs automatically in CI on every push to `main`/`develop` and on ever
 | edit: author-only for text, pin by any member | Owner can't edit viewer's text (403); any member can pin |
 | delete: author-only unless workspace admin | Viewer deletes own ✓; owner deletes developer's ✓; viewer can't delete owner's |
 | message endpoints require authentication (401) | List + post without token → 401 |
+| malicious HTML in a message renders inert in the browser | `<img onerror>`/`<script>`/`<svg onload>`/`javascript:` hrefs stored verbatim via API render with no executable element or handler, no dialog, no window flag; plain text still visible (DOMPurify regression test) |
 
 ## 🎯 Tasks (`tests/tasks/`)
 
