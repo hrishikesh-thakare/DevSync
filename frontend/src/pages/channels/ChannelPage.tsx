@@ -23,6 +23,19 @@ import { socketClient } from '@/lib/socket';
 import { initialsOf } from '@/lib/initials';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/types/api';
+import { Bubble, BubbleContent, BubbleReactions } from '@/components/ui/bubble';
+import { supabase } from '@/lib/supabase';
+import {
+  Attachment,
+  AttachmentAction,
+  AttachmentActions,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentMedia,
+  AttachmentTitle,
+  AttachmentGroup
+} from '@/components/ui/attachment';
+import { PaperclipIcon, FileTextIcon } from 'lucide-react';
 
 const QUICK_REACTIONS = ['👍', '🎉', '👀', '✅', '❤️', '🚀'];
 
@@ -89,12 +102,12 @@ export function ChannelPage() {
     bottomRef.current?.scrollIntoView({ block: 'end' });
   }, [messages.length]);
 
-  const submit = async (body: string, threadId: string | null, clear: () => void) => {
+  const submit = async (body: string, attachments: AttachmentPayload[], threadId: string | null, clear: () => void) => {
     const text = body.trim();
-    if (!text) return;
+    if (!text && attachments.length === 0) return;
     setSending(true);
     try {
-      await send(slug, channelId, text, threadId);
+      await send(slug, channelId, text, threadId, attachments);
       clear();
     } catch (err) {
       // 403 in an announcement-only channel when the sender is not an admin.
@@ -178,78 +191,85 @@ export function ChannelPage() {
           <div ref={bottomRef} />
         </div>
 
-        <Composer
-          value={draft}
-          onChange={setDraft}
-          disabled={sending}
-          placeholder={`Message #${channel.name}`}
-          onSubmit={() => void submit(draft, null, () => setDraft(''))}
-        />
-      </div>
-
-      {/* Thread panel */}
-      {threadRoot ? (
-        <aside className="flex w-96 min-w-0 shrink-0 flex-col border-l">
-          <header className="flex items-center gap-2 border-b px-4 py-3">
-            <MessageSquareIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-            <h2 className="font-medium text-foreground">Thread</h2>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="ml-auto"
-              aria-label="Close thread"
-              onClick={closeThread}
-            >
-              <XIcon className="size-4" aria-hidden="true" />
-            </Button>
-          </header>
-
-          <div className="flex-1 overflow-y-auto px-4 py-3">
-            <MessageRow
-              message={threadRoot}
-              currentUserId={me?.userId}
-              compact
-              onReact={(emoji) => void toggleReaction(threadRoot, emoji)}
-            />
-            <Separator className="my-3" />
-
-            {isThreadLoading ? (
-              <Skeleton className="h-16 w-full rounded-lg" />
-            ) : threadReplies.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">No replies yet.</p>
-            ) : (
-              <ul className="space-y-1">
-                {threadReplies.map((reply) => (
-                  <MessageRow
-                    key={reply.messageId}
-                    message={reply}
-                    currentUserId={me?.userId}
-                    compact
-                    onReact={(emoji) => void toggleReaction(reply, emoji)}
-                    onDelete={() => {
-                      void remove(slug, channelId, reply.messageId).catch((err: unknown) =>
-                        toast.error(err instanceof Error ? err.message : 'Could not delete.'),
-                      );
-                    }}
-                  />
-                ))}
-              </ul>
-            )}
-          </div>
-
           <Composer
-            value={replyDraft}
-            onChange={setReplyDraft}
+            value={draft}
+            onChange={setDraft}
             disabled={sending}
-            placeholder="Reply in thread"
-            onSubmit={() =>
-              void submit(replyDraft, threadRoot.messageId, () => setReplyDraft(''))
-            }
+            placeholder={`Message #${channel.name}`}
+            onSubmit={(attachments) => void submit(draft, attachments, null, () => setDraft(''))}
           />
-        </aside>
+        </div>
+
+        {/* Thread panel */}
+        {threadRoot ? (
+          <aside className="flex w-96 min-w-0 shrink-0 flex-col border-l">
+            <header className="flex items-center gap-2 border-b px-4 py-3">
+              <MessageSquareIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+              <h2 className="font-medium text-foreground">Thread</h2>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="ml-auto"
+                aria-label="Close thread"
+                onClick={closeThread}
+              >
+                <XIcon className="size-4" aria-hidden="true" />
+              </Button>
+            </header>
+
+            <div className="flex-1 overflow-y-auto px-4 py-3">
+              <MessageRow
+                message={threadRoot}
+                currentUserId={me?.userId}
+                compact
+                onReact={(emoji) => void toggleReaction(threadRoot, emoji)}
+              />
+              <Separator className="my-3" />
+
+              {isThreadLoading ? (
+                <Skeleton className="h-16 w-full rounded-lg" />
+              ) : threadReplies.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">No replies yet.</p>
+              ) : (
+                <ul className="space-y-1">
+                  {threadReplies.map((reply) => (
+                    <MessageRow
+                      key={reply.messageId}
+                      message={reply}
+                      currentUserId={me?.userId}
+                      compact
+                      onReact={(emoji) => void toggleReaction(reply, emoji)}
+                      onDelete={() => {
+                        void remove(slug, channelId, reply.messageId).catch((err: unknown) =>
+                          toast.error(err instanceof Error ? err.message : 'Could not delete.'),
+                        );
+                      }}
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <Composer
+              value={replyDraft}
+              onChange={setReplyDraft}
+              disabled={sending}
+              placeholder="Reply in thread"
+              onSubmit={(attachments) =>
+                void submit(replyDraft, attachments, threadRoot.messageId, () => setReplyDraft(''))
+              }
+            />
+          </aside>
       ) : null}
     </div>
   );
+}
+
+export interface AttachmentPayload {
+  name: string;
+  url?: string;
+  sizeBytes: number;
+  mimetype: string;
 }
 
 function Composer({
@@ -261,36 +281,132 @@ function Composer({
 }: {
   value: string;
   onChange: (v: string) => void;
-  onSubmit: () => void;
+  onSubmit: (attachments: AttachmentPayload[]) => void;
   disabled?: boolean;
   placeholder: string;
 }) {
+  const [attachments, setAttachments] = useState<{ id: string; name: string; sizeBytes: number; state: 'uploading' | 'done' | 'error'; url?: string; type: string }[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const newAttachments = files.map((file) => ({
+      id: crypto.randomUUID(),
+      name: file.name,
+      sizeBytes: file.size,
+      type: file.type,
+      state: 'uploading' as const,
+    }));
+
+    setAttachments((prev) => [...prev, ...newAttachments]);
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const attId = newAttachments[i].id;
+      try {
+        const filePath = `uploads/${Date.now()}_${file.name}`;
+        const { error } = await supabase.storage.from('workspaces').upload(filePath, file);
+        if (error) throw error;
+        
+        const { data: urlData } = supabase.storage.from('workspaces').getPublicUrl(filePath);
+        
+        setAttachments((prev) => prev.map(a => a.id === attId ? { ...a, state: 'done', url: urlData.publicUrl } : a));
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        toast.error(`Upload failed: ${message}`);
+        setAttachments((prev) => prev.map(a => a.id === attId ? { ...a, state: 'error' } : a));
+      }
+    }
+    
+    // Clear input so same file can be selected again
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeAttachment = (id: string) => {
+    setAttachments(prev => prev.filter(a => a.id !== id));
+  };
+
+  const handleSubmit = () => {
+    if (attachments.some(a => a.state === 'uploading')) {
+      toast.error('Please wait for uploads to finish.');
+      return;
+    }
+    onSubmit(attachments.filter(a => a.state === 'done').map(a => ({
+      name: a.name,
+      url: a.url,
+      sizeBytes: a.sizeBytes,
+      mimetype: a.type
+    })));
+    setAttachments([]);
+  };
+
   return (
-    <div className="flex items-end gap-2 border-t px-4 py-3">
-      <Textarea
-        rows={1}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        aria-label={placeholder}
-        className="max-h-40 min-h-10 resize-none"
-        onKeyDown={(e) => {
-          // Enter sends, Shift+Enter inserts a newline.
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            onSubmit();
-          }
-        }}
-      />
-      <Button onClick={onSubmit} disabled={disabled || !value.trim()} aria-label="Send message">
-        {disabled ? (
-          <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
-        ) : (
-          <SendIcon className="size-4" aria-hidden="true" />
-        )}
-      </Button>
+    <div className="flex flex-col border-t px-4 py-3 gap-2">
+      {attachments.length > 0 && (
+        <AttachmentGroup>
+          {attachments.map(att => (
+            <Attachment key={att.id} state={att.state}>
+              <AttachmentMedia variant={att.type.startsWith('image/') ? 'image' : 'icon'}>
+                {att.type.startsWith('image/') ? <img src={att.url || URL.createObjectURL(new Blob())} alt="" /> : <FileTextIcon />}
+              </AttachmentMedia>
+              <AttachmentContent>
+                <AttachmentTitle>{att.name}</AttachmentTitle>
+                <AttachmentDescription>{Math.round(att.sizeBytes / 1024)} KB</AttachmentDescription>
+              </AttachmentContent>
+              <AttachmentActions>
+                <AttachmentAction aria-label="Remove" onClick={() => removeAttachment(att.id)}>
+                  <XIcon />
+                </AttachmentAction>
+              </AttachmentActions>
+            </Attachment>
+          ))}
+        </AttachmentGroup>
+      )}
+      <div className="flex items-end gap-2">
+        <input type="file" multiple className="hidden" ref={fileInputRef} onChange={handleFileChange} />
+        <Button variant="ghost" size="icon-sm" className="mb-1" onClick={() => fileInputRef.current?.click()} aria-label="Attach file">
+          <PaperclipIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+        </Button>
+        <Textarea
+          rows={1}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          aria-label={placeholder}
+          className="max-h-40 min-h-10 resize-none"
+          onKeyDown={(e) => {
+            // Enter sends, Shift+Enter inserts a newline.
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSubmit();
+            }
+          }}
+        />
+        <Button className="mb-1" onClick={handleSubmit} disabled={disabled || (!value.trim() && attachments.length === 0)} aria-label="Send message">
+          {disabled ? (
+            <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <SendIcon className="size-4" aria-hidden="true" />
+          )}
+        </Button>
+      </div>
     </div>
   );
+}
+
+const OTHER_USER_VARIANTS = ["blue", "green", "amber", "purple", "pink", "teal"] as const;
+
+function getBubbleVariant(isMine: boolean, authorId: string | null) {
+  if (isMine) return "default";
+  if (!authorId) return "secondary";
+  let hash = 0;
+  for (let i = 0; i < authorId.length; i++) {
+    hash = authorId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % OTHER_USER_VARIANTS.length;
+  return OTHER_USER_VARIANTS[index];
 }
 
 function MessageRow({
@@ -375,33 +491,71 @@ function MessageRow({
             </p>
           ) : null}
 
-          <p className="text-sm whitespace-pre-wrap text-foreground">
-            {message.bodyText}
-            {message.isEdited ? (
-              <span className="ml-1 text-xs text-muted-foreground">(edited)</span>
-            ) : null}
-          </p>
+          <Bubble
+            variant={getBubbleVariant(isMine, message.authorId)}
+            className={cn(reactions.length > 0 && 'mb-4', 'mt-1')}
+          >
+            {message.bodyText && (
+              <BubbleContent className="whitespace-pre-wrap">
+                {message.bodyText}
+                {message.isEdited ? (
+                  <span className="ml-1 text-xs opacity-70">(edited)</span>
+                ) : null}
+              </BubbleContent>
+            )}
 
-          {reactions.length > 0 ? (
-            <div className="mt-1 flex flex-wrap gap-1">
-              {reactions.map(([emoji, info]) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => onReact(emoji)}
-                  title={info.who.join(', ')}
-                  className={cn(
-                    'rounded-full border px-2 py-0.5 text-xs transition-colors',
-                    info.mine
-                      ? 'border-primary/50 bg-primary/15 text-foreground'
-                      : 'border-transparent bg-muted text-muted-foreground hover:bg-accent',
-                  )}
-                >
-                  {emoji} {info.count}
-                </button>
-              ))}
-            </div>
-          ) : null}
+            {Array.isArray(message.bodyBlocks) && message.bodyBlocks.length > 0 && (
+              <div className="mt-2 px-1">
+                <AttachmentGroup>
+                  {message.bodyBlocks.map((b: unknown, idx) => {
+                    const block = b as AttachmentPayload & { type: string };
+                    if (block.type !== 'attachment') return null;
+                    return (
+                      <Attachment key={idx}>
+                        <AttachmentMedia variant={block.mimetype?.startsWith('image/') ? 'image' : 'icon'}>
+                          {block.mimetype?.startsWith('image/') ? <img src={block.url} alt="" /> : <FileTextIcon />}
+                        </AttachmentMedia>
+                        <AttachmentContent>
+                          <AttachmentTitle>{block.name}</AttachmentTitle>
+                          <AttachmentDescription>{Math.round(block.sizeBytes / 1024)} KB</AttachmentDescription>
+                        </AttachmentContent>
+                        {block.url && (
+                          <AttachmentActions>
+                            <AttachmentAction asChild aria-label={`Download ${block.name}`}>
+                              <a href={block.url} target="_blank" rel="noopener noreferrer">
+                                <FileTextIcon />
+                              </a>
+                            </AttachmentAction>
+                          </AttachmentActions>
+                        )}
+                      </Attachment>
+                    );
+                  })}
+                </AttachmentGroup>
+              </div>
+            )}
+
+            {reactions.length > 0 ? (
+              <BubbleReactions align="start" side="bottom" className={cn("gap-0 p-0.5 bg-background border shadow-sm ring-background")}>
+                {reactions.map(([emoji, info]) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => onReact(emoji)}
+                    title={info.who.join(', ')}
+                    className={cn(
+                      'rounded-full px-2 py-0.5 text-xs transition-colors hover:bg-muted',
+                      info.mine
+                        ? 'text-primary font-medium'
+                        : 'text-muted-foreground'
+                    )}
+                  >
+                    {emoji} {info.count}
+                  </button>
+                ))}
+              </BubbleReactions>
+            ) : null}
+          </Bubble>
 
           {!compact && message.replyCount > 0 && onReply ? (
             <button

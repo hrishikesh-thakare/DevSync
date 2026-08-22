@@ -2,6 +2,13 @@ import { create } from 'zustand';
 import { apiFetch } from '@/lib/api';
 import type { Channel, ChannelMember, ChatMessage } from '@/types/api';
 
+export interface ChatAttachmentInput {
+  name: string;
+  url?: string;
+  sizeBytes: number;
+  mimetype: string;
+}
+
 interface ChatState {
   channel: Channel | null;
   members: ChannelMember[];
@@ -14,7 +21,7 @@ interface ChatState {
   error: string | null;
 
   openChannel: (slug: string, channelId: string) => Promise<void>;
-  send: (slug: string, channelId: string, bodyText: string, threadId?: string | null) => Promise<void>;
+  send: (slug: string, channelId: string, bodyText: string, threadId?: string | null, attachments?: ChatAttachmentInput[]) => Promise<void>;
   edit: (slug: string, channelId: string, messageId: string, bodyText: string) => Promise<void>;
   remove: (slug: string, channelId: string, messageId: string) => Promise<void>;
   react: (slug: string, channelId: string, messageId: string, emoji: string, on: boolean) => Promise<void>;
@@ -68,12 +75,19 @@ export const useChatStore = create<ChatState>((set) => ({
     }
   },
 
-  send: async (slug, channelId, bodyText, threadId = null) => {
+  send: async (slug, channelId, bodyText, threadId = null, attachments = []) => {
     // The server broadcasts `new_message` to the room, and this client is in it,
     // so the socket handler appends it — no optimistic insert, or it double-posts.
+    const bodyBlocks = attachments.length > 0 ? attachments.map(att => ({ type: 'attachment', ...att })) : undefined;
+    
+    const payload: Record<string, unknown> = {};
+    if (bodyText) payload.bodyText = bodyText;
+    if (bodyBlocks) payload.bodyBlocks = bodyBlocks;
+    if (threadId) payload.threadId = threadId;
+
     await apiFetch(`${base(slug, channelId)}/messages`, {
       method: 'POST',
-      body: JSON.stringify(threadId ? { bodyText, threadId } : { bodyText }),
+      body: JSON.stringify(payload),
     });
   },
 
