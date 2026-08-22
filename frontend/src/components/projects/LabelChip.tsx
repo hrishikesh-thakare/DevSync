@@ -15,7 +15,7 @@ export const LabelChip = ({ name, onRemove }: { name: string; onRemove?: () => v
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="inline-flex items-center text-[10px] px-1.5 py-0 rounded border"
+          className="inline-flex items-center text-micro px-1.5 py-0 rounded border"
           style={{ backgroundColor: color, borderColor: color, color: fg }}
         >
           {name}

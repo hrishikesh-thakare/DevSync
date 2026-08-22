@@ -64,7 +64,7 @@ export function ReactionsModal({
             <TabsTrigger value="all" className="flex-none">All</TabsTrigger>
             {aggregated.map(([emoji, count]) => (
               <TabsTrigger key={emoji} value={emoji} className="flex-none">
-                {emoji} <span className="text-xs text-muted-foreground ml-1">({count})</span>
+                {emoji} <span className="text-caption text-muted-foreground ml-1">({count})</span>
               </TabsTrigger>
             ))}
           </TabsList>
@@ -80,18 +80,18 @@ export function ReactionsModal({
                 className="flex items-center justify-between px-4 py-3 hover:bg-hover transition-colors group"
               >
                 <div className="flex items-center space-x-3">
-                  <div className="w-9 h-9 rounded-md bg-hover flex items-center justify-center text-foreground font-bold shadow-md border border-border flex-shrink-0">
+                  <div className="w-9 h-9 rounded-md bg-hover flex items-center justify-center text-foreground font-[590] shadow-md border border-border flex-shrink-0">
                     {(rx.userName?.[0] || 'U').toUpperCase()}
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-foreground font-medium">
+                    <span className="text-foreground font-[510]">
                       {isMe ? 'You' : (rx.userName || 'Unknown User')}
                     </span>
                     {isMe && (
                       <Button
-                        variant="link"
+                        variant="ghost"
                         size="sm"
-                        className="justify-start px-0 h-auto text-xs text-subtle-foreground hover:text-destructive"
+                        className="justify-start px-0 h-auto text-caption text-subtle-foreground hover:text-destructive"
                         onClick={() => onRemoveReaction(rx.emoji)}
                       >
                         Click to remove
@@ -99,7 +99,7 @@ export function ReactionsModal({
                     )}
                   </div>
                 </div>
-                <div className="text-xl" aria-hidden="true">
+                <div className="text-heading" aria-hidden="true">
                   {rx.emoji}
                 </div>
               </div>

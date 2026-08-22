@@ -93,7 +93,7 @@ export const CreateBranchModal = ({ slug, keyStr, initialTaskId, onClose, onCrea
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <GitBranch className="w-5 h-5 text-foreground" />
+            <GitBranch className="w-5 h-5 text-foreground" strokeWidth={1.75} />
             Create Branch
           </DialogTitle>
           <DialogDescription>
@@ -103,7 +103,7 @@ export const CreateBranchModal = ({ slug, keyStr, initialTaskId, onClose, onCrea
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive" role="alert">
+            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-ui text-destructive" role="alert">
               {error}
             </div>
           )}
@@ -132,7 +132,7 @@ export const CreateBranchModal = ({ slug, keyStr, initialTaskId, onClose, onCrea
               disabled={isSubmitting}
               required
             />
-            <p className="text-xs text-subtle-foreground mt-1">Leave as main if unsure. Or choose from: {branches.slice(0, 3).join(', ')}{branches.length > 3 ? '...' : ''}</p>
+            <p className="text-caption text-subtle-foreground mt-1">Leave as main if unsure. Or choose from: {branches.slice(0, 3).join(', ')}{branches.length > 3 ? '...' : ''}</p>
           </div>
 
           <div className="space-y-2">
@@ -153,7 +153,7 @@ export const CreateBranchModal = ({ slug, keyStr, initialTaskId, onClose, onCrea
           <DialogFooter>
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               onClick={onClose}
               disabled={isSubmitting}
             >
@@ -164,7 +164,7 @@ export const CreateBranchModal = ({ slug, keyStr, initialTaskId, onClose, onCrea
               disabled={isSubmitting || !branchName || !baseBranch}
             >
               {isSubmitting ? (
-                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Creating...</>
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.75} /> Creating...</>
               ) : 'Create Branch'}
             </Button>
           </DialogFooter>

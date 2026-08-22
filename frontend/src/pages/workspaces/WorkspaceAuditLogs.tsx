@@ -44,11 +44,11 @@ export const WorkspaceAuditLogs = () => {
   }, [slug]);
 
   const getActionIcon = (action: string) => {
-    if (action.includes('deleted') || action.includes('removed')) return <Trash2 className="w-4 h-4 text-danger" />;
-    if (action.includes('created') || action.includes('added')) return <PlusCircle className="w-4 h-4 text-success" />;
-    if (action.includes('updated') || action.includes('archived')) return <Edit2 className="w-4 h-4 text-primary" />;
-    if (action.includes('member')) return <UserMinus className="w-4 h-4 text-warning" />;
-    return <Activity className="w-4 h-4 text-muted-foreground" />;
+    if (action.includes('deleted') || action.includes('removed')) return <Trash2 className="w-4 h-4 text-danger" strokeWidth={1.75} />;
+    if (action.includes('created') || action.includes('added')) return <PlusCircle className="w-4 h-4 text-success" strokeWidth={1.75} />;
+    if (action.includes('updated') || action.includes('archived')) return <Edit2 className="w-4 h-4 text-primary" strokeWidth={1.75} />;
+    if (action.includes('member')) return <UserMinus className="w-4 h-4 text-warning" strokeWidth={1.75} />;
+    return <Activity className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />;
   };
 
   const formatActionName = (action: string) => {
@@ -61,11 +61,11 @@ export const WorkspaceAuditLogs = () => {
       <div className="p-6 border-b border-border flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center">
-            <ShieldAlert className="w-5 h-5 text-muted-foreground" />
+            <ShieldAlert className="w-5 h-5 text-muted-foreground" strokeWidth={1.75} />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-foreground mb-0.5">Audit Logs</h2>
-            <p className="text-sm text-subtle-foreground">A read-only log of destructive and administrative actions in this workspace.</p>
+            <h2 className="text-heading font-[590] text-foreground mb-0.5">Audit Logs</h2>
+            <p className="text-ui text-subtle-foreground">A read-only log of destructive and administrative actions in this workspace.</p>
           </div>
         </div>
       </div>
@@ -73,28 +73,28 @@ export const WorkspaceAuditLogs = () => {
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="border-b border-border bg-muted text-xs uppercase tracking-wider text-subtle-foreground font-semibold">
+            <tr className="border-b border-border bg-muted text-caption uppercase tracking-wider text-subtle-foreground font-[590]">
               <th className="px-6 py-4">Action</th>
               <th className="px-6 py-4">Performed By</th>
               <th className="px-6 py-4">Date</th>
               <th className="px-6 py-4">Details</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-border text-sm">
+          <tbody className="divide-y divide-border text-ui">
             {isLoading ? (
               <tr>
                 <td colSpan={4} className="px-6 py-8 text-center text-subtle-foreground">
                   <div className="animate-pulse space-y-3 max-w-md mx-auto">
-                    <div className="h-4 bg-secondary rounded w-full"></div>
-                    <div className="h-4 bg-secondary rounded w-3/4"></div>
-                    <div className="h-4 bg-secondary rounded w-5/6"></div>
+                    <div className="h-4 bg-hover rounded w-full"></div>
+                    <div className="h-4 bg-hover rounded w-3/4"></div>
+                    <div className="h-4 bg-hover rounded w-5/6"></div>
                   </div>
                 </td>
               </tr>
             ) : logs.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-6 py-12 text-center text-subtle-foreground">
-                  <ShieldAlert className="w-8 h-8 mx-auto mb-3 opacity-20" />
+                  <ShieldAlert className="w-8 h-8 mx-auto mb-3 opacity-20" strokeWidth={1.5} />
                   No audit logs found for this workspace.
                 </td>
               </tr>
@@ -104,12 +104,12 @@ export const WorkspaceAuditLogs = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-2">
                       {getActionIcon(log.action)}
-                      <span className="font-medium text-foreground">{formatActionName(log.action)}</span>
+                      <span className="font-[510] text-foreground">{formatActionName(log.action)}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-2">
-                      <div className="w-6 h-6 rounded bg-secondary flex items-center justify-center text-xs font-bold text-foreground">
+                      <div className="w-6 h-6 rounded bg-hover flex items-center justify-center text-caption font-[590] text-foreground">
                         {log.actorName?.charAt(0) || 'U'}
                       </div>
                       <span className="text-muted-foreground">{log.actorName || 'Unknown User'}</span>
@@ -121,12 +121,12 @@ export const WorkspaceAuditLogs = () => {
                   <td className="px-6 py-4">
                     <div className="flex flex-col gap-1">
                       {log.oldValues && (
-                        <div className="text-xs text-subtle-foreground bg-muted p-2 rounded border border-border max-w-xs truncate" title={JSON.stringify(log.oldValues)}>
+                        <div className="text-caption text-subtle-foreground bg-muted p-2 rounded border border-border max-w-xs truncate" title={JSON.stringify(log.oldValues)}>
                           <span className="font-mono text-muted-foreground">Old: {JSON.stringify(log.oldValues)}</span>
                         </div>
                       )}
                       {log.newValues && (
-                        <div className="text-xs text-subtle-foreground bg-muted p-2 rounded border border-border max-w-xs truncate" title={JSON.stringify(log.newValues)}>
+                        <div className="text-caption text-subtle-foreground bg-muted p-2 rounded border border-border max-w-xs truncate" title={JSON.stringify(log.newValues)}>
                           <span className="font-mono text-success">New: {JSON.stringify(log.newValues)}</span>
                         </div>
                       )}

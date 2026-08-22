@@ -258,11 +258,11 @@ export const GlobalSearchResults = () => {
           navigate(`/w/${slug}/projects/${task.projectKey}/tasks/${task.taskKey}`);
         }
       }}
-      className="group flex items-start p-4 bg-card border border-border rounded-lg hover:bg-hover hover:border-border-strong cursor-pointer transition-all duration-200 focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex items-start p-4 bg-card border border-border rounded-lg hover:bg-hover hover:border-border-strong cursor-pointer transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring"
     >
       {/* Task Key Badge */}
       <div className="mr-4 shrink-0 mt-0.5">
-        <span className="inline-flex items-center px-2 py-1 text-[11px] font-mono font-bold text-foreground bg-secondary border border-border rounded-md">
+        <span className="inline-flex items-center px-2 py-1 text-micro font-mono font-[590] text-foreground bg-hover border border-border rounded-md">
           {task.taskKey}
         </span>
       </div>
@@ -270,18 +270,18 @@ export const GlobalSearchResults = () => {
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-3 mb-1.5">
-          <h4 className="text-body font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+          <h4 className="text-body font-[590] text-foreground group-hover:text-primary transition-colors truncate">
             {task.title}
           </h4>
           {task.status && (
-            <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${STATUS_COLORS[task.status] || 'bg-muted text-muted-foreground border border-border'}`}>
+            <span className={`shrink-0 px-2 py-0.5 rounded text-micro font-[590] uppercase tracking-wider ${STATUS_COLORS[task.status] || 'bg-muted text-muted-foreground border border-border'}`}>
               {task.status.replace('_', ' ')}
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-subtle-foreground">
-          <span className="font-medium text-muted-foreground">{task.projectName}</span>
+        <div className="flex items-center gap-2 text-caption text-subtle-foreground">
+          <span className="font-[510] text-muted-foreground">{task.projectName}</span>
           {task.assigneeName && (
             <>
               <span className="text-subtle-foreground">·</span>
@@ -307,7 +307,7 @@ export const GlobalSearchResults = () => {
         {/* Snippet */}
         {task.snippet && (
           <p
-            className="mt-2 text-sm text-subtle-foreground line-clamp-2 leading-relaxed"
+            className="mt-2 text-ui text-subtle-foreground line-clamp-2 leading-relaxed"
             dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(task.snippet) }}
           />
         )}
@@ -327,7 +327,7 @@ export const GlobalSearchResults = () => {
           navigate(`/w/${slug}/channels/${msg.channelId}`);
         }
       }}
-      className="group flex items-start p-4 bg-card border border-border rounded-lg hover:bg-hover hover:border-border-strong cursor-pointer transition-all duration-200 focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex items-start p-4 bg-card border border-border rounded-lg hover:bg-hover hover:border-border-strong cursor-pointer transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring"
     >
       {/* Avatar */}
       <div className="mr-4 shrink-0 mt-0.5">
@@ -337,7 +337,7 @@ export const GlobalSearchResults = () => {
           </Avatar>
         ) : (
           <Avatar className="size-9 border border-border">
-            <AvatarFallback className="bg-secondary text-foreground text-xs font-bold">
+            <AvatarFallback className="bg-hover text-foreground text-caption font-[590]">
               {msg.authorName?.[0]?.toUpperCase() || '?'}
             </AvatarFallback>
           </Avatar>
@@ -347,20 +347,20 @@ export const GlobalSearchResults = () => {
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-sm font-semibold text-foreground">{msg.authorName || 'Unknown'}</span>
-          <span className="text-xs text-subtle-foreground">in</span>
-          <span className="text-xs text-muted-foreground flex items-center">
-            <Hash className="w-3 h-3 mr-0.5 opacity-60" />
+          <span className="text-ui font-[590] text-foreground">{msg.authorName || 'Unknown'}</span>
+          <span className="text-caption text-subtle-foreground">in</span>
+          <span className="text-caption text-muted-foreground flex items-center">
+            <Hash className="w-3 h-3 mr-0.5 opacity-60" strokeWidth={1.75} />
             {msg.channelName || 'unknown'}
           </span>
           <span className="text-subtle-foreground">·</span>
-          <span className="text-xs text-subtle-foreground">
+          <span className="text-caption text-subtle-foreground">
             {msg.createdAt ? formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true }) : ''}
           </span>
         </div>
 
         <p
-          className="text-sm text-muted-foreground line-clamp-2 leading-relaxed"
+          className="text-ui text-muted-foreground line-clamp-2 leading-relaxed"
           dangerouslySetInnerHTML={{ __html: `"${DOMPurify.sanitize(msg.snippet || msg.bodyText?.substring(0, 150) || '')}"` }}
         />
       </div>
@@ -391,21 +391,21 @@ export const GlobalSearchResults = () => {
       <div className="px-8 pt-8 pb-5 border-b border-border bg-background shrink-0">
         <div className="max-w-4xl">
           <div className="relative">
-            <Search className="w-5 h-5 text-subtle-foreground absolute left-4 top-1/2 -translate-y-1/2" />
+            <Search className="w-5 h-5 text-subtle-foreground absolute left-4 top-1/2 -translate-y-1/2" strokeWidth={1.75} />
             <Input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search tasks, messages..."
-              className="w-full bg-card border border-border rounded-lg pl-12 pr-4 py-3.5 text-foreground focus:border-ring focus:ring-1 focus:ring-ring text-lg transition-all h-auto md:text-lg"
+              className="w-full bg-card border border-border rounded-lg pl-12 pr-4 py-3.5 text-foreground focus:border-ring focus:ring-1 focus:ring-ring text-heading transition-colors h-auto md:text-heading"
               autoFocus
             />
           </div>
 
           {/* Results count */}
           {debouncedQuery && !isLoading && (
-            <p className="mt-3 text-sm text-subtle-foreground">
-              <span className="text-foreground font-semibold">{totalCount}</span> results for "<span className="text-foreground">{debouncedQuery}</span>"
+            <p className="mt-3 text-ui text-subtle-foreground">
+              <span className="text-foreground font-[590]">{totalCount}</span> results for "<span className="text-foreground">{debouncedQuery}</span>"
             </p>
           )}
         </div>
@@ -426,9 +426,9 @@ export const GlobalSearchResults = () => {
                   key={tab.key}
                   onClick={() => setFilterType(tab.key)}
                   variant="ghost"
-                  className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all h-auto ${
+                  className={`px-3.5 py-1.5 rounded-md text-caption font-[590] transition-colors h-auto ${
                     filterType === tab.key
-                      ? 'bg-secondary text-foreground shadow-sm'
+                      ? 'bg-hover text-foreground shadow-sm'
                       : 'text-subtle-foreground hover:text-foreground'
                   }`}
                 >
@@ -505,15 +505,15 @@ export const GlobalSearchResults = () => {
                     type="date"
                     value={filterDateFrom}
                     onChange={e => setFilterDateFrom(e.target.value)}
-                    className="bg-card border border-border rounded-lg px-3 py-1.5 text-xs text-foreground focus:border-ring transition-colors cursor-pointer md:text-xs"
+                    className="bg-card border border-border rounded-lg px-3 py-1.5 text-caption text-foreground focus:border-ring transition-colors cursor-pointer md:text-caption"
                     placeholder="From"
                   />
-                  <span className="text-subtle-foreground text-xs">—</span>
+                  <span className="text-subtle-foreground text-caption">—</span>
                   <Input
                     type="date"
                     value={filterDateTo}
                     onChange={e => setFilterDateTo(e.target.value)}
-                    className="bg-card border border-border rounded-lg px-3 py-1.5 text-xs text-foreground focus:border-ring transition-colors cursor-pointer md:text-xs"
+                    className="bg-card border border-border rounded-lg px-3 py-1.5 text-caption text-foreground focus:border-ring transition-colors cursor-pointer md:text-caption"
                     placeholder="To"
                   />
                 </div>
@@ -525,9 +525,9 @@ export const GlobalSearchResults = () => {
               <Button
                 onClick={clearAllFilters}
                 variant="ghost"
-                className="flex items-center gap-1 px-3 py-1.5 text-xs text-subtle-foreground hover:text-foreground transition-colors h-auto"
+                className="flex items-center gap-1 px-3 py-1.5 text-caption text-subtle-foreground hover:text-foreground transition-colors h-auto"
               >
-                <X className="w-3 h-3" />
+                <X className="w-3 h-3" strokeWidth={1.75} />
                 Clear filters
               </Button>
             )}
@@ -547,27 +547,27 @@ export const GlobalSearchResults = () => {
             <div className="flex flex-col items-center justify-center py-20">
               {recentSearches.length > 0 ? (
                 <div className="w-full max-w-md">
-                  <p className="text-[11px] font-semibold text-subtle-foreground uppercase tracking-wider mb-4">Recent Searches</p>
+                  <p className="text-micro font-[590] text-subtle-foreground uppercase tracking-wider mb-4">Recent Searches</p>
                   <div className="space-y-1">
                     {recentSearches.map((term, i) => (
                       <Button
                         key={i}
                         onClick={() => setQuery(term)}
                         variant="secondary"
-                        className="w-full flex items-center px-4 py-3 rounded-lg text-sm text-foreground bg-card border border-border hover:bg-hover hover:border-border-strong transition-all group h-auto"
+                        className="w-full flex items-center px-4 py-3 rounded-lg text-ui text-foreground bg-card border border-border hover:bg-hover hover:border-border-strong transition-colors group h-auto"
                       >
-                        <Clock className="w-4 h-4 text-subtle-foreground mr-3 shrink-0" />
+                        <Clock className="w-4 h-4 text-subtle-foreground mr-3 shrink-0" strokeWidth={1.75} />
                         <span className="truncate">{term}</span>
-                        <Search className="w-3.5 h-3.5 text-subtle-foreground ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <Search className="w-3.5 h-3.5 text-subtle-foreground ml-auto opacity-0 group-hover:opacity-100 transition-opacity" strokeWidth={1.75} />
                       </Button>
                     ))}
                   </div>
                 </div>
               ) : (
                 <div className="text-center">
-                  <Search className="w-12 h-12 text-subtle-foreground/40 mx-auto mb-4" />
-                  <p className="text-subtle-foreground text-lg">Search across your workspace</p>
-                  <p className="text-subtle-foreground text-sm mt-1">Find tasks, messages, and more</p>
+                  <Search className="w-12 h-12 text-subtle-foreground/40 mx-auto mb-4" strokeWidth={1.5} />
+                  <p className="text-subtle-foreground text-heading">Search across your workspace</p>
+                  <p className="text-subtle-foreground text-ui mt-1">Find tasks, messages, and more</p>
                 </div>
               )}
             </div>
@@ -577,10 +577,10 @@ export const GlobalSearchResults = () => {
           {debouncedQuery && !isLoading && totalCount === 0 && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="w-16 h-16 rounded-lg bg-card border border-border flex items-center justify-center mb-5">
-                <AlertCircle className="w-7 h-7 text-subtle-foreground" />
+                <AlertCircle className="w-7 h-7 text-subtle-foreground" strokeWidth={1.5} />
               </div>
-              <h3 className="text-lg font-semibold text-foreground mb-2">No results for "{debouncedQuery}"</h3>
-              <div className="space-y-1.5 text-sm text-subtle-foreground mt-2">
+              <h3 className="text-heading font-[590] text-foreground mb-2">No results for "{debouncedQuery}"</h3>
+              <div className="space-y-1.5 text-ui text-subtle-foreground mt-2">
                 <p>• Check your spelling</p>
                 <p>• Try fewer or different keywords</p>
                 <p>• Search is scoped to projects and channels you have access to</p>
@@ -594,8 +594,8 @@ export const GlobalSearchResults = () => {
               {/* Tasks Section */}
               {tasks.length > 0 && (
                 <div>
-                  <h3 className="text-[11px] font-bold text-subtle-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <FileText className="w-3.5 h-3.5" />
+                  <h3 className="text-micro font-[590] text-subtle-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />
                     Tasks
                     <span className="text-subtle-foreground font-normal">({taskCount})</span>
                   </h3>
@@ -606,10 +606,10 @@ export const GlobalSearchResults = () => {
                     <Button
                       onClick={() => { setFilterType('tasks'); setPage(0); }}
                       variant="ghost"
-                      className="mt-3 text-sm text-primary hover:text-primary-hover transition-colors flex items-center gap-1 h-auto"
+                      className="mt-3 text-ui text-primary hover:text-primary-hover transition-colors flex items-center gap-1 h-auto"
                     >
                       Show all {taskCount} tasks
-                      <ChevronRight className="w-4 h-4" />
+                      <ChevronRight className="w-4 h-4" strokeWidth={1.75} />
                     </Button>
                   )}
                 </div>
@@ -618,8 +618,8 @@ export const GlobalSearchResults = () => {
               {/* Messages Section */}
               {messages.length > 0 && (
                 <div>
-                  <h3 className="text-[11px] font-bold text-subtle-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <Hash className="w-3.5 h-3.5" />
+                  <h3 className="text-micro font-[590] text-subtle-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <Hash className="w-3.5 h-3.5" strokeWidth={1.75} />
                     Messages
                     <span className="text-subtle-foreground font-normal">({messageCount})</span>
                   </h3>
@@ -630,10 +630,10 @@ export const GlobalSearchResults = () => {
                     <Button
                       onClick={() => { setFilterType('messages'); setPage(0); }}
                       variant="ghost"
-                      className="mt-3 text-sm text-primary hover:text-primary-hover transition-colors flex items-center gap-1 h-auto"
+                      className="mt-3 text-ui text-primary hover:text-primary-hover transition-colors flex items-center gap-1 h-auto"
                     >
                       Show all {messageCount} messages
-                      <ChevronRight className="w-4 h-4" />
+                      <ChevronRight className="w-4 h-4" strokeWidth={1.75} />
                     </Button>
                   )}
                 </div>
@@ -653,20 +653,20 @@ export const GlobalSearchResults = () => {
                     onClick={() => setPage(p => Math.max(0, p - 1))}
                     disabled={page === 0}
                     variant="ghost"
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors h-auto"
+                    className="flex items-center gap-1 px-3 py-1.5 text-ui text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors h-auto"
                   >
-                    <ChevronLeft className="w-4 h-4" /> Previous
+                    <ChevronLeft className="w-4 h-4" strokeWidth={1.75} /> Previous
                   </Button>
-                  <span className="text-xs text-subtle-foreground">
+                  <span className="text-caption text-subtle-foreground">
                     Page {page + 1} of {totalPages}
                   </span>
                   <Button
                     onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                     disabled={page >= totalPages - 1}
                     variant="ghost"
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors h-auto"
+                    className="flex items-center gap-1 px-3 py-1.5 text-ui text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors h-auto"
                   >
-                    Next <ChevronRight className="w-4 h-4" />
+                    Next <ChevronRight className="w-4 h-4" strokeWidth={1.75} />
                   </Button>
                 </div>
               )}
@@ -685,20 +685,20 @@ export const GlobalSearchResults = () => {
                     onClick={() => setPage(p => Math.max(0, p - 1))}
                     disabled={page === 0}
                     variant="ghost"
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors h-auto"
+                    className="flex items-center gap-1 px-3 py-1.5 text-ui text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors h-auto"
                   >
-                    <ChevronLeft className="w-4 h-4" /> Previous
+                    <ChevronLeft className="w-4 h-4" strokeWidth={1.75} /> Previous
                   </Button>
-                  <span className="text-xs text-subtle-foreground">
+                  <span className="text-caption text-subtle-foreground">
                     Page {page + 1} of {totalPages}
                   </span>
                   <Button
                     onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                     disabled={page >= totalPages - 1}
                     variant="ghost"
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors h-auto"
+                    className="flex items-center gap-1 px-3 py-1.5 text-ui text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors h-auto"
                   >
-                    Next <ChevronRight className="w-4 h-4" />
+                    Next <ChevronRight className="w-4 h-4" strokeWidth={1.75} />
                   </Button>
                 </div>
               )}

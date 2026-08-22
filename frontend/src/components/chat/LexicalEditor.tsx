@@ -34,19 +34,19 @@ import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 
 const theme = {
   text: {
-    bold: 'font-bold text-foreground',
+    bold: 'font-[590] text-foreground',
     italic: 'italic text-foreground',
     strikethrough: 'line-through',
-    code: 'bg-secondary border border-border rounded px-1 py-0.5 text-xs font-mono text-foreground',
+    code: 'bg-hover border border-border rounded px-1 py-0.5 text-caption font-mono text-foreground',
   },
-  link: 'text-primary font-medium hover:text-primary-hover cursor-pointer bg-primary-muted px-2 py-0.5 rounded font-mono text-xs border border-primary-border no-underline inline-flex items-center gap-1 my-0.5',
-  quote: 'border-l-4 border-border-strong pl-3 text-muted-foreground italic my-0.5 block',
+  link: 'text-primary font-[510] hover:text-primary-hover cursor-pointer bg-primary-muted px-2 py-0.5 rounded font-mono text-caption border border-primary-border no-underline inline-flex items-center gap-1 my-0.5',
+  quote: 'border-l-4 border-strong pl-3 text-muted-foreground italic my-0.5 block',
   list: {
     ul: 'list-disc list-inside space-y-0.5 my-0.5',
     ol: 'list-decimal list-inside space-y-0.5 my-0.5',
     listitem: 'marker:text-subtle-foreground',
   },
-  code: 'bg-muted border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground whitespace-pre-wrap my-1 block',
+  code: 'bg-muted border border-border rounded-md px-3 py-2 text-ui font-mono text-foreground whitespace-pre-wrap my-1 block',
 };
 
 
@@ -145,30 +145,30 @@ function ToolbarPlugin({ isSending, onUploadClick }: ToolbarPluginProps) {
     <div className="flex items-center justify-between px-2 py-1.5 bg-background border-t border-border">
       <div className="flex items-center gap-0.5">
         <ToolBtn title="Attach file" onClick={onUploadClick} disabled={isSending}>
-          <Plus className="w-4 h-4" />
+          <Plus className="w-4 h-4" strokeWidth={1.75} />
         </ToolBtn>
         <Sep />
         <ToolBtn active={isBold} title="Bold — Ctrl+B" onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold')}>
-          <Bold className="w-4 h-4" />
+          <Bold className="w-4 h-4" strokeWidth={1.75} />
         </ToolBtn>
         <ToolBtn active={isItalic} title="Italic — Ctrl+I" onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic')}>
-          <Italic className="w-4 h-4" />
+          <Italic className="w-4 h-4" strokeWidth={1.75} />
         </ToolBtn>
         <ToolBtn active={isStrikethrough} title="Strikethrough" onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough')}>
-          <Strikethrough className="w-4 h-4" />
+          <Strikethrough className="w-4 h-4" strokeWidth={1.75} />
         </ToolBtn>
         <Sep />
         <ToolBtn active={isCode} title="Inline code" onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'code')}>
-          <Code className="w-4 h-4" />
+          <Code className="w-4 h-4" strokeWidth={1.75} />
         </ToolBtn>
         <ToolBtn active={blockType === 'code'} title="Code block" onClick={formatCodeBlock}>
-          <span className="text-[11px] font-mono font-bold">{`</>`}</span>
+          <span className="text-micro font-mono font-[590]">{`</>`}</span>
         </ToolBtn>
         <ToolBtn active={blockType === 'quote'} title="Blockquote" onClick={formatQuote}>
-          <Quote className="w-4 h-4" />
+          <Quote className="w-4 h-4" strokeWidth={1.75} />
         </ToolBtn>
         <ToolBtn active={blockType === 'bullet'} title="Bullet list" onClick={formatBulletList}>
-          <List className="w-4 h-4" />
+          <List className="w-4 h-4" strokeWidth={1.75} />
         </ToolBtn>
       </div>
     </div>
@@ -390,7 +390,7 @@ function MentionsPlugin({ members, tasks = [] }: { members: WorkspaceMember[]; t
       <div className="max-h-56 overflow-y-auto py-1">
         {filteredMembers.length > 0 && (
           <div>
-            <div className="px-3 py-1 text-[10px] font-bold text-subtle-foreground uppercase tracking-wider bg-muted">Members</div>
+            <div className="px-3 py-1 text-micro font-[590] text-subtle-foreground uppercase tracking-wider bg-muted">Members</div>
             {filteredMembers.map((m) => (
               <div 
                 key={m.userId}
@@ -398,11 +398,11 @@ function MentionsPlugin({ members, tasks = [] }: { members: WorkspaceMember[]; t
                 onMouseDown={(e) => { e.preventDefault(); handleSelect(m.fullName.replace(/\s+/g, '')); }}
               >
                 <Avatar size="sm" className="size-5 shrink-0">
-                  <AvatarFallback className="bg-secondary text-[10px] text-foreground font-bold">
+                  <AvatarFallback className="bg-hover text-micro text-foreground font-[590]">
                     {m.fullName[0]}
                   </AvatarFallback>
                 </Avatar>
-                <span className="text-sm text-foreground truncate">{m.fullName}</span>
+                <span className="text-ui text-foreground truncate">{m.fullName}</span>
               </div>
             ))}
           </div>
@@ -410,15 +410,15 @@ function MentionsPlugin({ members, tasks = [] }: { members: WorkspaceMember[]; t
 
         {filteredTasks.length > 0 && (
           <div>
-            <div className="px-3 py-1 text-[10px] font-bold text-subtle-foreground uppercase tracking-wider bg-muted border-t border-border">Project Tasks</div>
+            <div className="px-3 py-1 text-micro font-[590] text-subtle-foreground uppercase tracking-wider bg-muted border-t border-border">Project Tasks</div>
             {filteredTasks.map((t) => (
               <div 
                 key={t.id}
                 className="px-3 py-1.5 hover:bg-hover cursor-pointer flex items-center justify-between space-x-2"
                 onMouseDown={(e) => { e.preventDefault(); handleSelect(t.taskKey || t.id); }}
               >
-                <span className="text-xs font-mono font-bold text-primary shrink-0">{t.taskKey || t.id}</span>
-                <span className="text-xs text-foreground truncate flex-1 text-right">{t.title}</span>
+                <span className="text-caption font-mono font-[590] text-primary shrink-0">{t.taskKey || t.id}</span>
+                <span className="text-caption text-foreground truncate flex-1 text-right">{t.title}</span>
               </div>
             ))}
           </div>
@@ -524,13 +524,13 @@ export const LexicalEditor = ({
   return (
     <LexicalComposer initialConfig={initialConfig}>
       <div className="relative">
-        <div className="bg-card border border-border rounded-lg overflow-hidden shadow-sm focus-within:ring-1 focus-within:ring-ring focus-within:border-ring transition-all">
+        <div className="bg-card border border-border rounded-lg overflow-hidden shadow-sm focus-within:ring-1 focus-within:ring-ring focus-within:border-ring transition-colors">
           <div className="relative">
             <RichTextPlugin
               contentEditable={
                 <ContentEditable className="message-body max-w-none focus:outline-none min-h-[52px] max-h-[300px] overflow-y-auto px-4 py-3 text-foreground cursor-text" />
               }
-              placeholder={<div className="absolute top-3 left-4 text-body text-subtle-foreground pointer-events-none select-none z-10">{placeholder}</div>}
+              placeholder={<div className="absolute top-3 left-4 text-body text-subtle-foreground pointer-events-none select-none z-[var(--z-sticky)]">{placeholder}</div>}
               ErrorBoundary={LexicalErrorBoundary}
             />
             <HistoryPlugin />
@@ -557,10 +557,10 @@ export const LexicalEditor = ({
                   }}
                   disabled={isSending || isUploading || isEmpty}
                   aria-label="Send message"
-                  className="absolute right-2 bottom-1.5 flex items-center justify-center p-2 rounded-lg bg-primary hover:bg-primary-hover text-primary-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed z-20"
-                  size="icon" variant="default"
+                  className="absolute right-2 bottom-1.5 flex items-center justify-center p-2 rounded-lg bg-primary hover:bg-primary-hover text-primary-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed z-[var(--z-dropdown)]"
+                  size="icon" variant="primary"
                 >
-                  <SendHorizontal className="w-4 h-4" />
+                  <SendHorizontal className="w-4 h-4" strokeWidth={1.75} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Send (Enter)</TooltipContent>
@@ -593,7 +593,7 @@ const ToolBtn = ({
       className={clsx(
         'p-1.5 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-ring',
         active
-          ? 'bg-secondary text-secondary-foreground'
+          ? 'bg-hover text-foreground'
           : 'text-subtle-foreground hover:text-foreground hover:bg-hover',
       )}
     >

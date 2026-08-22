@@ -108,17 +108,17 @@ export const TaskComments: React.FC<TaskCommentsProps> = ({ slug, projectKey, ta
   return (
     <div className="flex flex-col bg-card border border-border rounded-lg overflow-hidden mt-6">
       <div className="px-4 py-3 border-b border-border bg-background">
-        <h3 className="text-sm font-semibold text-foreground">Activity & Comments</h3>
-        <p className="text-[10px] text-subtle-foreground mt-0.5">Synced with project channel</p>
+        <h3 className="text-ui font-[590] text-foreground">Activity & Comments</h3>
+        <p className="text-micro text-subtle-foreground mt-0.5">Synced with project channel</p>
       </div>
       
       <div className="flex-1 max-h-[400px] overflow-y-auto p-4 space-y-4">
         {isLoading ? (
           <div className="flex justify-center py-8">
-            <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
+            <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" strokeWidth={1.75} />
           </div>
         ) : comments.length === 0 ? (
-          <p className="text-center text-xs text-subtle-foreground py-4">No activity yet.</p>
+          <p className="text-center text-caption text-subtle-foreground py-4">No activity yet.</p>
         ) : (
           comments.map(comment => {
             const isMe = comment.authorId === currentUser?.userId;
@@ -126,7 +126,7 @@ export const TaskComments: React.FC<TaskCommentsProps> = ({ slug, projectKey, ta
             if (comment.isSystem) {
               return (
                 <div key={comment.commentId} className="flex justify-center my-2">
-                  <span className="text-[10px] bg-secondary text-muted-foreground px-2 py-1 rounded-full border border-border">
+                  <span className="text-micro bg-hover text-muted-foreground px-2 py-1 rounded-full border border-border">
                     {comment.bodyText}
                   </span>
                 </div>
@@ -136,14 +136,14 @@ export const TaskComments: React.FC<TaskCommentsProps> = ({ slug, projectKey, ta
             return (
               <div key={comment.commentId} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                 <div className="flex items-baseline space-x-2 mb-1 mx-1">
-                  <span className="text-xs font-medium text-foreground">
+                  <span className="text-caption font-[510] text-foreground">
                     {isMe ? 'You' : comment.authorName || 'Unknown'}
                   </span>
-                  <span className="text-[9px] text-subtle-foreground">
+                  <span className="text-micro text-subtle-foreground">
                     {format(new Date(comment.createdAt), 'MMM d, h:mm a')}
                   </span>
                 </div>
-                <div className={`px-3 py-2 rounded-lg max-w-[85%] text-sm ${isMe ? 'bg-primary text-primary-foreground rounded-tr-sm' : 'bg-secondary text-foreground rounded-tl-sm border border-border'}`}>
+                <div className={`px-3 py-2 rounded-lg max-w-[85%] text-ui ${isMe ? 'bg-primary text-primary-foreground rounded-tr-sm' : 'bg-hover text-foreground rounded-tl-sm border border-border'}`}>
                   {comment.bodyText}
                 </div>
               </div>
@@ -160,7 +160,7 @@ export const TaskComments: React.FC<TaskCommentsProps> = ({ slug, projectKey, ta
               value={newComment}
               onChange={e => setNewComment(e.target.value)}
               placeholder="Add a comment... (Syncs to channel)"
-              className="bg-card border-border text-sm rounded-lg pl-3 pr-10 py-2.5 min-h-[44px] max-h-[120px] resize-y placeholder:text-subtle-foreground md:text-sm"
+              className="bg-card border-border text-ui rounded-lg pl-3 pr-10 py-2.5 min-h-[44px] max-h-[120px] resize-y placeholder:text-subtle-foreground md:text-ui"
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -175,7 +175,7 @@ export const TaskComments: React.FC<TaskCommentsProps> = ({ slug, projectKey, ta
             aria-label="Post comment"
             className="h-[44px] px-4 shrink-0"
           >
-            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.75} /> : <Send className="w-4 h-4" strokeWidth={1.75} />}
           </Button>
         </form>
       </div>

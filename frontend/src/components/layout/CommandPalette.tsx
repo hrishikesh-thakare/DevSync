@@ -161,8 +161,8 @@ export const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
         />
         <CommandList>
           {isLoading && (
-            <div className="px-5 py-6 flex items-center justify-center gap-2 text-sm text-subtle-foreground">
-              <Loader2 className="w-4 h-4 animate-spin" />
+            <div className="px-5 py-6 flex items-center justify-center gap-2 text-ui text-subtle-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.75} />
               Searching...
             </div>
           )}
@@ -172,9 +172,9 @@ export const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
               {recentSearches.length > 0 ? (
                 recentSearches.map(term => (
                   <CommandItem key={term} value={term} onSelect={() => handleRecentClick(term)}>
-                    <Clock className="w-4 h-4 text-subtle-foreground" />
+                    <Clock className="w-4 h-4 text-subtle-foreground" strokeWidth={1.75} />
                     <span className="truncate">{term}</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-subtle-foreground ml-auto" />
+                    <ArrowRight className="w-3.5 h-3.5 text-subtle-foreground ml-auto" strokeWidth={1.75} />
                   </CommandItem>
                 ))
               ) : (
@@ -185,9 +185,9 @@ export const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
 
           {query.trim().length >= 2 && !isLoading && results.length === 0 && (
             <CommandEmpty>
-              <Search className="w-8 h-8 text-subtle-foreground mx-auto mb-3" />
+              <Search className="w-8 h-8 text-subtle-foreground mx-auto mb-3" strokeWidth={1.5} />
               <p>No results for "{query}"</p>
-              <p className="text-xs text-subtle-foreground mt-1">Try fewer or different keywords</p>
+              <p className="text-caption text-subtle-foreground mt-1">Try fewer or different keywords</p>
             </CommandEmpty>
           )}
 
@@ -197,10 +197,10 @@ export const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
                 <CommandGroup heading="Tasks">
                   {taskResults.map(task => (
                     <CommandItem key={task.taskId} value={`task-${task.taskId}`} onSelect={() => navigateToResult(task)}>
-                      <FileText className="w-4 h-4 text-subtle-foreground" />
-                      <span className="text-[11px] font-mono text-subtle-foreground shrink-0">{task.taskKey}</span>
-                      <span className="text-sm text-foreground truncate flex-1">{task.title}</span>
-                      <span className="text-[11px] text-subtle-foreground font-mono ml-3 shrink-0">{task.projectKey}</span>
+                      <FileText className="w-4 h-4 text-subtle-foreground" strokeWidth={1.75} />
+                      <span className="text-micro font-mono text-subtle-foreground shrink-0">{task.taskKey}</span>
+                      <span className="text-ui text-foreground truncate flex-1">{task.title}</span>
+                      <span className="text-micro text-subtle-foreground font-mono ml-3 shrink-0">{task.projectKey}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
@@ -210,11 +210,11 @@ export const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
                 <CommandGroup heading="Messages">
                   {messageResults.map(msg => (
                     <CommandItem key={msg.messageId} value={`msg-${msg.messageId}`} onSelect={() => navigateToResult(msg)}>
-                      <Hash className="w-4 h-4 text-subtle-foreground" />
-                      <span className="text-[11px] text-subtle-foreground shrink-0">#{msg.channelName}</span>
-                      <span className="text-sm text-foreground truncate flex-1">{msg.bodyText?.substring(0, 80)}</span>
+                      <Hash className="w-4 h-4 text-subtle-foreground" strokeWidth={1.75} />
+                      <span className="text-micro text-subtle-foreground shrink-0">#{msg.channelName}</span>
+                      <span className="text-ui text-foreground truncate flex-1">{msg.bodyText?.substring(0, 80)}</span>
                       {msg.createdAt && (
-                        <span className="text-[11px] text-subtle-foreground ml-3 shrink-0">
+                        <span className="text-micro text-subtle-foreground ml-3 shrink-0">
                           {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
                         </span>
                       )}
@@ -226,9 +226,9 @@ export const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
               <CommandSeparator />
               <CommandGroup>
                 <CommandItem value="__view_all__" onSelect={handleViewAll}>
-                  <Search className="w-4 h-4" />
+                  <Search className="w-4 h-4" strokeWidth={1.75} />
                   View all results for "{query}"
-                  <CornerDownLeft className="w-3.5 h-3.5 ml-auto" />
+                  <CornerDownLeft className="w-3.5 h-3.5 ml-auto" strokeWidth={1.75} />
                 </CommandItem>
               </CommandGroup>
             </>

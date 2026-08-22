@@ -8,15 +8,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Toaster } from '@/components/ui/sonner';
+import { Toaster } from '@/components/ui/toaster';
 import { Button } from '@/components/ui/button';
 import { useToastStore } from '../../store/toastStore.js';
 
 /**
  * App-level toast + confirm host. Lives here rather than in `components/ui/`
  * because it reads application state (`toastStore`) and composes primitives —
- * `ui/` holds only vendored shadcn primitives, which `npx shadcn add` may
- * regenerate at any time. There is one toast system: sonner's `<Toaster>`.
+ * `ui/` holds only strictly hand-built primitives governed by AGENTS.md.
+ * regenerate at any time. There is one toast system: toaster's `<Toaster>`.
  */
 export const ToastProvider: React.FC = () => {
   const confirmState = useToastStore((s) => s.confirmState);
@@ -41,7 +41,7 @@ export const ToastProvider: React.FC = () => {
               {confirmState?.cancelText}
             </AlertDialogCancel>
             <Button
-              variant={confirmState?.isDestructive ? 'destructive' : 'default'}
+              variant={confirmState?.isDestructive ? 'destructive' : 'primary'}
               onClick={() => resolveConfirm(true)}
             >
               {confirmState?.confirmText}

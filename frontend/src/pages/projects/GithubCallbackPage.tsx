@@ -41,10 +41,10 @@ export const GithubCallbackPage = () => {
     return (
       <div className="flex flex-col h-screen w-screen items-center justify-center bg-background px-4 text-center">
         <div className="bg-danger-muted border border-danger-border text-danger p-6 rounded-lg max-w-md">
-          <h2 className="text-lg font-bold mb-2">GitHub Connection Error</h2>
-          <p className="text-sm mb-6">{error}</p>
+          <h2 className="text-heading font-[590] mb-2">GitHub Connection Error</h2>
+          <p className="text-ui mb-6">{error}</p>
           <Button
-            variant="outline"
+            variant="secondary"
             onClick={() => navigate('/workspaces', { replace: true })}
           >
             Return to Dashboard
@@ -56,9 +56,9 @@ export const GithubCallbackPage = () => {
 
   return (
     <div className="flex flex-col h-screen w-screen items-center justify-center bg-background">
-      <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
-      <h2 className="text-xl font-bold text-foreground mb-2">Connecting GitHub</h2>
-      <p className="text-muted-foreground text-sm">Please wait while we securely link your account...</p>
+      <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" strokeWidth={1.5} />
+      <h2 className="text-heading font-[590] text-foreground mb-2">Connecting GitHub</h2>
+      <p className="text-muted-foreground text-ui">Please wait while we securely link your account...</p>
     </div>
   );
 };

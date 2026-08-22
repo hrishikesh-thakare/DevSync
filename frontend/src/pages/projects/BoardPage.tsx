@@ -72,7 +72,7 @@ const PRIORITIES = [
 
 const IssueTypeIcon = ({ type, className = '' }: { type: string; className?: string }) => {
   const found = ISSUE_TYPES.find(t => t.value === type);
-  if (!found) return <CheckSquare className={clsx("w-4 h-4", className)} />;
+  if (!found) return <CheckSquare className={clsx("w-4 h-4", className)} strokeWidth={1.75} />;
   const Icon = found.icon;
   return <Icon className={clsx("w-4 h-4", found.color, className)} />;
 };
@@ -109,6 +109,7 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
   const [filterPriority, setFilterPriority] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [announcement, setAnnouncement] = useState('');
 
   useEffect(() => {
     if (slug && key) {
@@ -180,7 +181,7 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
   if (isLoading) {
     return (
       <div className="absolute inset-0 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" strokeWidth={1.5} />
       </div>
     );
   }
@@ -189,7 +190,10 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
     if (!canEditTask) return;
     const { active } = event;
     const task = filteredTasks.find((t) => t.taskId === active.id);
-    if (task) setActiveTask(task);
+    if (task) {
+      setActiveTask(task);
+      setAnnouncement(`Picked up task ${task.title}.`);
+    }
   };
 
   const handleDragOver = () => {
@@ -200,18 +204,30 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
     if (!canEditTask) return;
     setActiveTask(null);
     const { active, over } = event;
-    if (!over || !slug || !key) return;
+    if (!over || !slug || !key) {
+      setAnnouncement('Drag cancelled.');
+      return;
+    }
 
     const activeId = active.id as string;
     const overId = over.id as string;
 
     const activeTaskData = tasks.find(t => t.taskId === activeId);
-    if (!activeTaskData) return;
+    if (!activeTaskData) {
+      setAnnouncement('Drag cancelled.');
+      return;
+    }
 
     const isOverColumn = COLUMNS.some(c => c.id === overId);
     const newStatus = isOverColumn ? (overId as TaskStatus) : tasks.find(t => t.taskId === overId)?.status || activeTaskData.status;
     
-    if (activeTaskData.status === newStatus && activeId === overId) return;
+    if (activeTaskData.status === newStatus && activeId === overId) {
+      setAnnouncement(`Dropped task ${activeTaskData.title} in the same column.`);
+      return;
+    }
+
+    const colTitle = COLUMNS.find(c => c.id === newStatus)?.title || newStatus;
+    setAnnouncement(`Moved task ${activeTaskData.title} to ${colTitle}.`);
 
     const newRank = Math.random().toString(36).substring(2, 10);
 
@@ -223,17 +239,20 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
 
   return (
     <div className="h-full flex flex-col">
+      <div aria-live="polite" className="sr-only" role="status">
+        {announcement}
+      </div>
       {/* Filter Bar */}
       <div className="px-6 pt-4 pb-2 flex items-center space-x-3 shrink-0">
         <Button 
           onClick={() => setShowFilters(!showFilters)}
           className={clsx(
-            "flex items-center text-sm px-3 py-1.5 rounded-md border transition-colors h-auto",
+            "flex items-center text-ui px-3 py-1.5 rounded-md border transition-colors h-auto",
             hasActiveFilters ? "border-primary-border text-primary bg-primary-muted" : "border-border text-muted-foreground hover:text-foreground bg-card"
           )}
-          variant="outline" size="default"
+          variant="secondary" size="default"
         >
-          <AlertCircle className="w-3.5 h-3.5 mr-2" />
+          <AlertCircle className="w-3.5 h-3.5 mr-2" strokeWidth={1.75} />
           Filters
           {hasActiveFilters && <span className="ml-2 w-1.5 h-1.5 bg-primary rounded-full"></span>}
         </Button>
@@ -261,7 +280,7 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
             {hasActiveFilters && (
               <Button 
                 onClick={() => { setFilterPriority('all'); setFilterType('all'); }}
-                className="text-xs text-subtle-foreground hover:text-foreground transition-colors"
+                className="text-caption text-subtle-foreground hover:text-foreground transition-colors"
                 variant="ghost" size="default"
               >
                 Clear
@@ -275,10 +294,10 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
           {canEditTask && (
             <Button 
               onClick={() => { setNewTaskStatus('todo'); setShowTaskModal(true); }}
-              className="flex items-center px-3 py-2 bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-semibold rounded-md transition-colors"
-              variant="default" size="default"
+              className="flex items-center px-3 py-2 bg-primary hover:bg-primary-hover text-primary-foreground text-ui font-[590] rounded-md transition-colors"
+              variant="primary" size="default"
             >
-              <Plus className="w-4 h-4 mr-1.5" />
+              <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
               Create Task
             </Button>
           )}
@@ -432,9 +451,9 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
               </div>
 
               <div className="pt-4 flex justify-end space-x-3">
-                <Button type="button" variant="outline" onClick={() => setShowTaskModal(false)}>Cancel</Button>
+                <Button type="button" variant="secondary" onClick={() => setShowTaskModal(false)}>Cancel</Button>
                 <Button type="submit" disabled={isCreatingTask}>
-                  {isCreatingTask && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  {isCreatingTask && <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.75} />}
                   Create Task
                 </Button>
               </div>
@@ -453,11 +472,11 @@ const KanbanColumn = ({ column, tasks, onAddClick }: { column: { id: string; tit
       <div className="p-4 flex items-center justify-between border-b border-border group">
         <div className="flex items-center space-x-2">
           <div className={`w-2.5 h-2.5 rounded-full ${column.color}`}></div>
-          <h3 className="font-semibold text-foreground text-sm">{column.title}</h3>
-          <span className="bg-card text-muted-foreground text-xs px-2 py-0.5 rounded-full">{tasks.length}</span>
+          <h3 className="font-[590] text-foreground text-ui">{column.title}</h3>
+          <span className="bg-card text-muted-foreground text-caption px-2 py-0.5 rounded-full">{tasks.length}</span>
         </div>
         <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button onClick={onAddClick} className="p-1 text-subtle-foreground hover:text-foreground hover:bg-hover rounded-md" size="icon" variant="ghost"><Plus className="w-4 h-4" /></Button>
+          <Button onClick={onAddClick} className="p-1 text-subtle-foreground hover:text-foreground hover:bg-hover rounded-md" size="icon" variant="ghost"><Plus className="w-4 h-4" strokeWidth={1.75} /></Button>
         </div>
       </div>
 
@@ -504,7 +523,7 @@ const KanbanCard = ({ task, isOverlay = false }: { task: Task, isOverlay?: boole
         }
       }}
       className={clsx(
-      "bg-card border rounded-md p-3 cursor-grab active:cursor-grabbing hover:border-border-strong transition-colors group relative",
+      "bg-card border rounded-md p-3 cursor-grab active:cursor-grabbing hover:border-strong transition-colors group relative",
       isOverlay ? "border-primary shadow-md rotate-2 scale-105" : "border-border shadow-sm"
     )}>
       {/* Priority Indicator Line */}
@@ -518,13 +537,13 @@ const KanbanCard = ({ task, isOverlay = false }: { task: Task, isOverlay?: boole
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center space-x-1.5">
             <IssueTypeIcon type={task.type || task.issueType || 'task'} />
-            <span className="text-[11px] font-mono text-subtle-foreground group-hover:text-muted-foreground transition-colors">
+            <span className="text-micro font-mono text-subtle-foreground group-hover:text-muted-foreground transition-colors">
               {task.taskKey}
             </span>
             {task.storyPoints != null && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge variant="outline" className="bg-primary-muted text-primary border-primary-border text-[10px] h-auto px-1.5 font-bold">
+                  <Badge variant="secondary" className="bg-primary-muted text-primary border-primary-border text-micro h-auto px-1.5 font-[590]">
                     {task.storyPoints}
                   </Badge>
                 </TooltipTrigger>
@@ -547,21 +566,21 @@ const KanbanCard = ({ task, isOverlay = false }: { task: Task, isOverlay?: boole
           )}
           {!isOverlay && slug && key && (
             <Button
-              className="ml-auto opacity-0 group-hover:opacity-100 text-subtle-foreground hover:text-danger p-1 rounded-md transition-all hover:bg-danger-muted"
+              className="ml-auto opacity-0 group-hover:opacity-100 text-subtle-foreground hover:text-danger p-1 rounded-md transition-colors hover:bg-danger-muted"
               onClick={async (e) => {
                 e.stopPropagation();
-                if (await confirm({ message: 'Are you sure you want to delete this task?', isDestructive: true })) {
+                if (await confirm({ message: 'Delete this task? This action cannot be undone.', isDestructive: true })) {
                   useBoardStore.getState().deleteTask(slug, key, task.taskKey);
                 }
               }}
               size="icon" variant="destructive"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
             </Button>
           )}
         </div>
         
-        <p className="text-sm font-medium text-foreground mb-4 leading-snug line-clamp-2">
+        <p className="text-ui font-[510] text-foreground mb-4 leading-snug line-clamp-2">
           {task.title}
         </p>
 
@@ -579,7 +598,7 @@ const KanbanCard = ({ task, isOverlay = false }: { task: Task, isOverlay?: boole
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Avatar size="sm" className="size-5 border border-border">
-                    <AvatarFallback className="bg-secondary text-[9px] text-muted-foreground font-medium">
+                    <AvatarFallback className="bg-hover text-micro text-muted-foreground font-[510]">
                       {(members?.find(m => m.userId === task.reporterId)?.fullName || 'S').charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
@@ -594,7 +613,7 @@ const KanbanCard = ({ task, isOverlay = false }: { task: Task, isOverlay?: boole
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Avatar size="sm" className="border border-border">
-                      <AvatarFallback className="bg-secondary text-[10px] text-foreground font-bold">
+                      <AvatarFallback className="bg-hover text-micro text-foreground font-[590]">
                         {(members?.find(m => m.userId === task.assigneeId)?.fullName || 'U').charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
@@ -605,7 +624,7 @@ const KanbanCard = ({ task, isOverlay = false }: { task: Task, isOverlay?: boole
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Avatar size="sm" className="border border-border">
-                      <AvatarFallback className="bg-secondary text-subtle-foreground" />
+                      <AvatarFallback className="bg-hover text-subtle-foreground" />
                     </Avatar>
                   </TooltipTrigger>
                   <TooltipContent>Unassigned</TooltipContent>

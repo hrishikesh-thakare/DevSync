@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { useWorkspaceStore } from '../../store/workspaceStore';
 import { useChatStore } from '../../store/useChatStore';
 import { apiFetch } from '../../lib/api';
@@ -60,7 +60,7 @@ const CreateChannelModal: React.FC<CreateChannelModalProps> = ({ onClose, defaul
         <DialogHeader>
           <DialogTitle>Create a channel</DialogTitle>
           <DialogDescription>
-            Channels are where your team communicates. They're best when organized around a topic — #marketing, for example.
+            Channels are where your team communicates. They're best when organized around a topic � #marketing, for example.
           </DialogDescription>
         </DialogHeader>
 
@@ -69,7 +69,7 @@ const CreateChannelModal: React.FC<CreateChannelModalProps> = ({ onClose, defaul
             <Label htmlFor="channel-name">Name</Label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                {type === 'public' ? <Hash className="h-4 w-4 text-subtle-foreground" /> : <Users className="h-4 w-4 text-subtle-foreground" />}
+                {type === 'public' ? <Hash className="h-4 w-4 text-subtle-foreground" strokeWidth={1.75} /> : <Users className="h-4 w-4 text-subtle-foreground" strokeWidth={1.75} />}
               </div>
               <Input
                 id="channel-name"
@@ -85,30 +85,30 @@ const CreateChannelModal: React.FC<CreateChannelModalProps> = ({ onClose, defaul
           </div>
 
           <fieldset className="space-y-3">
-            <legend className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
+            <legend className="text-caption font-[590] text-muted-foreground uppercase tracking-wider mb-3">
               Visibility
             </legend>
             <RadioGroup value={type} onValueChange={(v) => setType(v as 'public' | 'private')} className="gap-3">
-              <label htmlFor="channel-visibility-public" className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${type === 'public' ? 'border-primary bg-primary-muted' : 'border-border bg-elevated/50 hover:border-border-strong'}`}>
+              <label htmlFor="channel-visibility-public" className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${type === 'public' ? 'border-primary bg-primary-muted' : 'border-border bg-elevated/50 hover:border-strong'}`}>
                 <RadioGroupItem value="public" id="channel-visibility-public" className="mt-1" />
                 <div>
-                  <div className="font-medium text-sm text-foreground">Public</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">Anyone in the workspace can find and join this channel.</div>
+                  <div className="font-[510] text-ui text-foreground">Public</div>
+                  <div className="text-caption text-muted-foreground mt-0.5">Anyone in the workspace can find and join this channel.</div>
                 </div>
               </label>
 
-              <label htmlFor="channel-visibility-private" className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${type === 'private' ? 'border-primary bg-primary-muted' : 'border-border bg-elevated/50 hover:border-border-strong'}`}>
+              <label htmlFor="channel-visibility-private" className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${type === 'private' ? 'border-primary bg-primary-muted' : 'border-border bg-elevated/50 hover:border-strong'}`}>
                 <RadioGroupItem value="private" id="channel-visibility-private" className="mt-1" />
                 <div>
-                  <div className="font-medium text-sm text-foreground">Private</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">Only invited members can view and join this channel.</div>
+                  <div className="font-[510] text-ui text-foreground">Private</div>
+                  <div className="text-caption text-muted-foreground mt-0.5">Only invited members can view and join this channel.</div>
                 </div>
               </label>
             </RadioGroup>
           </fieldset>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="secondary" onClick={onClose}>
               Cancel
             </Button>
             <Button
@@ -116,7 +116,7 @@ const CreateChannelModal: React.FC<CreateChannelModalProps> = ({ onClose, defaul
               disabled={!name.trim() || isSubmitting}
               className="min-w-[100px]"
             >
-              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create'}
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.75} /> : 'Create'}
             </Button>
           </DialogFooter>
         </form>

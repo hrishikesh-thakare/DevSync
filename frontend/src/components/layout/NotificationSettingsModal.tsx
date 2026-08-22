@@ -45,7 +45,7 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="bg-info/10 p-1.5 rounded-lg">
-              <Bell className="w-4 h-4 text-info" />
+              <Bell className="w-4 h-4 text-info" strokeWidth={1.75} />
             </span>
             Notification Settings
           </DialogTitle>
@@ -56,12 +56,12 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
 
         <div className="space-y-6">
           <fieldset className="space-y-4">
-            <legend className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+            <legend className="text-ui font-[510] text-muted-foreground uppercase tracking-wider">
               Filtering &amp; Throttling
             </legend>
             <label className="flex items-start justify-between gap-4 cursor-pointer group">
-              <div className="text-sm">
-                <span className="font-medium text-foreground group-hover:text-foreground transition-colors">Only notify for @mentions</span>
+              <div className="text-ui">
+                <span className="font-[510] text-foreground group-hover:text-foreground transition-colors">Only notify for @mentions</span>
                 <p className="text-subtle-foreground mt-1">Mute all general channel and task updates unless you are explicitly mentioned.</p>
               </div>
               <Switch
@@ -72,8 +72,8 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
             </label>
 
             <label className="flex items-start justify-between gap-4 cursor-pointer group">
-              <div className="text-sm">
-                <span className="font-medium text-foreground group-hover:text-foreground transition-colors">Mute GitHub bot spam</span>
+              <div className="text-ui">
+                <span className="font-[510] text-foreground group-hover:text-foreground transition-colors">Mute GitHub bot spam</span>
                 <p className="text-subtle-foreground mt-1">Stop receiving noisy notifications for PR creations, commits, and CI/CD builds.</p>
               </div>
               <Switch
@@ -86,11 +86,11 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
           <Button onClick={handleSave} disabled={isSaving}>
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.75} /> : <Save className="w-4 h-4" strokeWidth={1.75} />}
             {isSaving ? 'Saving...' : 'Save Preferences'}
           </Button>
         </DialogFooter>

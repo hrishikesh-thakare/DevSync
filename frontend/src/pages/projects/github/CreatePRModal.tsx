@@ -90,7 +90,7 @@ export const CreatePRModal = ({ slug, keyStr, onClose, onCreated }: CreatePRModa
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <GitPullRequest className="w-5 h-5 text-foreground" />
+            <GitPullRequest className="w-5 h-5 text-foreground" strokeWidth={1.75} />
             Create Pull Request
           </DialogTitle>
           <DialogDescription>
@@ -100,7 +100,7 @@ export const CreatePRModal = ({ slug, keyStr, onClose, onCreated }: CreatePRModa
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive" role="alert">
+            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-ui text-destructive" role="alert">
               {error}
             </div>
           )}
@@ -199,7 +199,7 @@ export const CreatePRModal = ({ slug, keyStr, onClose, onCreated }: CreatePRModa
           <DialogFooter>
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               onClick={onClose}
               disabled={isSubmitting}
             >
@@ -210,7 +210,7 @@ export const CreatePRModal = ({ slug, keyStr, onClose, onCreated }: CreatePRModa
               disabled={isSubmitting || !title || !head || !base}
             >
               {isSubmitting ? (
-                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Creating...</>
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.75} /> Creating...</>
               ) : 'Create Pull Request'}
             </Button>
           </DialogFooter>

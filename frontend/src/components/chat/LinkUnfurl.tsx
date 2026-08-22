@@ -69,15 +69,15 @@ export const LinkUnfurl: React.FC<LinkUnfurlProps> = ({ url, workspaceSlug }) =>
       )}
       <div className="p-4 flex flex-col justify-center flex-1 min-w-0">
         {data.domain && (
-          <div className="text-xs font-semibold text-subtle-foreground uppercase tracking-wider mb-1 truncate">
+          <div className="text-caption font-[590] text-subtle-foreground uppercase tracking-wider mb-1 truncate">
             {data.domain}
           </div>
         )}
-        <div className="text-sm font-bold text-foreground mb-1.5 group-hover:text-primary transition-colors line-clamp-2">
+        <div className="text-ui font-[590] text-foreground mb-1.5 group-hover:text-primary transition-colors line-clamp-2">
           {data.title || url}
         </div>
         {data.description && (
-          <div className="text-xs text-muted-foreground line-clamp-3">
+          <div className="text-caption text-muted-foreground line-clamp-3">
             {data.description}
           </div>
         )}

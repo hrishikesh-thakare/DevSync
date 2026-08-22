@@ -54,26 +54,26 @@ export const LoginPage = () => {
       <div className="auth-shape-1"></div>
       <div className="auth-shape-2"></div>
 
-      <div className="bg-card border border-border rounded-lg shadow-sm max-w-md w-full p-8 animate-fadeIn relative z-10">
+      <div className="bg-card border border-border rounded-lg shadow-sm max-w-[400px] w-full p-8 animate-fadeIn relative z-[var(--z-sticky)]">
         <div className="mb-10 text-center">
-          <h1 className="text-4xl font-bold text-foreground mb-2">DevSync</h1>
-          <p className="text-muted-foreground text-sm">Sign in to your workspace</p>
+          <h1 className="text-heading font-[590] text-foreground mb-2">DevSync</h1>
+          <p className="text-muted-foreground text-ui">Sign in to your workspace</p>
         </div>
 
         {error && (
-          <div className="mb-6 rounded-lg bg-danger-muted border border-danger-border p-4 text-sm text-danger text-center">
+          <div className="mb-6 rounded-lg bg-danger-muted border border-danger-border p-4 text-ui text-danger text-center">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <Label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+            <Label className="block text-caption font-[510] text-muted-foreground uppercase tracking-wider mb-2">
               Email Address
             </Label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Mail className="h-5 w-5 text-muted-foreground" />
+                <Mail className="h-5 w-5 text-muted-foreground" strokeWidth={1.75} />
               </div>
               <Input
                 type="email"
@@ -88,16 +88,16 @@ export const LoginPage = () => {
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <Label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              <Label className="block text-caption font-[510] text-muted-foreground uppercase tracking-wider">
                 Password
               </Label>
-              <Link to="/forgot-password" className="text-xs text-primary hover:text-primary-hover transition-colors">
+              <Link to="/forgot-password" className="text-caption text-primary hover:text-primary-hover transition-colors">
                 Forgot password?
               </Link>
             </div>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Lock className="h-5 w-5 text-muted-foreground" />
+                <Lock className="h-5 w-5 text-muted-foreground" strokeWidth={1.75} />
               </div>
               <Input
                 type="password"
@@ -113,15 +113,15 @@ export const LoginPage = () => {
           <Button
             type="submit"
             disabled={isLoading}
-            variant="default"
+            variant="primary"
             className="bg-primary text-primary-foreground hover:bg-primary-hover rounded-md w-full py-3 flex justify-center items-center mt-8 disabled:opacity-70 h-auto"
           >
             {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin text-foreground" />
+              <Loader2 className="h-5 w-5 animate-spin text-foreground" strokeWidth={1.75} />
             ) : (
               <>
                 Sign in
-                <ArrowRight className="ml-2 h-5 w-5" />
+                <ArrowRight className="ml-2 h-5 w-5" strokeWidth={1.75} />
               </>
             )}
           </Button>
@@ -132,7 +132,7 @@ export const LoginPage = () => {
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-border"></div>
             </div>
-            <div className="relative flex justify-center text-sm">
+            <div className="relative flex justify-center text-ui">
               <span className="px-2 bg-transparent text-muted-foreground">Or continue with</span>
             </div>
           </div> */}
@@ -142,7 +142,7 @@ export const LoginPage = () => {
               type="button"
               onClick={() => handleOAuth('github')}
               variant="secondary"
-              className="bg-card border border-border rounded-lg shadow-sm w-full py-3 hover:bg-hover transition-colors font-medium text-foreground h-auto"
+              className="bg-card border border-border rounded-lg shadow-sm w-full py-3 hover:bg-hover transition-colors font-[510] text-foreground h-auto"
             >
               Continue with GitHub
             </Button>
@@ -150,16 +150,16 @@ export const LoginPage = () => {
               type="button"
               onClick={() => handleOAuth('google')}
               variant="secondary"
-              className="bg-card border border-border rounded-lg shadow-sm w-full py-3 hover:bg-hover transition-colors font-medium text-foreground h-auto"
+              className="bg-card border border-border rounded-lg shadow-sm w-full py-3 hover:bg-hover transition-colors font-[510] text-foreground h-auto"
             >
               Continue with Google
             </Button>
           </div>
         </div>
 
-        <p className="mt-8 text-center text-sm text-muted-foreground">
+        <p className="mt-8 text-center text-ui text-muted-foreground">
           Don't have an account?{' '}
-          <Link to="/register" className="font-medium text-primary hover:text-primary-hover transition-colors">
+          <Link to="/register" className="font-[510] text-primary hover:text-primary-hover transition-colors">
             Create an account
           </Link>
         </p>

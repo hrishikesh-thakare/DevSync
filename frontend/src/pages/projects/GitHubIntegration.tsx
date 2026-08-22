@@ -259,12 +259,12 @@ export const GitHubIntegration = () => {
       {!isConnLoading && !connection && (isAdmin() || isProjectAdmin) && (
         <div className="bg-primary flex items-center justify-between px-6 py-3 text-primary-foreground">
           <div className="flex items-center space-x-3">
-            <GitBranch className="w-5 h-5" />
-            <span className="font-semibold text-sm">No GitHub repository connected</span>
+            <GitBranch className="w-5 h-5" strokeWidth={1.75} />
+            <span className="font-[590] text-ui">No GitHub repository connected</span>
           </div>
           <Link 
             to={`/w/${slug}/projects/${key}/settings`} 
-            className="bg-background text-primary px-3 py-1.5 rounded text-sm font-bold hover:bg-hover transition-colors"
+            className="bg-background text-primary px-3 py-1.5 rounded text-ui font-[590] hover:bg-hover transition-colors"
           >
             Connect a repository in Project Settings
           </Link>
@@ -275,21 +275,21 @@ export const GitHubIntegration = () => {
       <div className="px-8 pt-8 pb-4 border-b border-border shrink-0">
         <div className="flex items-start justify-between mb-2">
           <div>
-            <h2 className="text-2xl font-bold text-foreground flex items-center mb-1">
-              <GitBranch className="w-6 h-6 mr-3 text-foreground" />
+            <h2 className="text-heading font-[590] text-foreground flex items-center mb-1">
+              <GitBranch className="w-6 h-6 mr-3 text-foreground" strokeWidth={1.5} />
               GitHub Integration
             </h2>
-            <p className="text-sm text-muted-foreground mb-6">Track pull requests and CI/CD pipelines connected to project tasks.</p>
+            <p className="text-ui text-muted-foreground mb-6">Track pull requests and CI/CD pipelines connected to project tasks.</p>
           </div>
           <div className="flex items-center space-x-4">
             {connection && (
               <a 
                 href={`https://github.com/${connection.githubRepoFullName}`}
                 target="_blank" rel="noopener noreferrer"
-                className="flex items-center text-sm font-semibold text-muted-foreground hover:text-foreground bg-card border border-border px-3 py-1.5 rounded-lg transition-colors"
+                className="flex items-center text-ui font-[590] text-muted-foreground hover:text-foreground bg-card border border-border px-3 py-1.5 rounded-lg transition-colors"
               >
                 {connection.githubRepoFullName}
-                <ExternalLink className="w-4 h-4 ml-2 text-subtle-foreground" />
+                <ExternalLink className="w-4 h-4 ml-2 text-subtle-foreground" strokeWidth={1.75} />
               </a>
             )}
             <Button 
@@ -298,24 +298,24 @@ export const GitHubIntegration = () => {
               className="p-2 text-muted-foreground hover:text-foreground hover:bg-hover rounded-lg transition-colors disabled:opacity-50"
               size="icon" variant="ghost"
             >
-              <RefreshCw className={clsx("w-5 h-5", isLoading && "animate-spin")} />
+              <RefreshCw className={clsx("w-5 h-5", isLoading && "animate-spin")} strokeWidth={1.75} />
             </Button>
           </div>
         </div>
         
         <div className="flex items-center justify-between">
-          <TabsList variant="line" className="w-full justify-start gap-6 border-b border-border px-1">
+          <TabsList  className="w-full justify-start gap-6 border-b border-border px-1">
             <TabsTrigger value="prs" className="flex-1">
-              Pull Requests {prsTotal > 0 && <span className="ml-1.5 bg-secondary text-secondary-foreground py-0.5 px-2 rounded-full text-xs">{prsTotal}</span>}
+              Pull Requests {prsTotal > 0 && <span className="ml-1.5 bg-hover text-foreground py-0.5 px-2 rounded-full text-caption">{prsTotal}</span>}
             </TabsTrigger>
             <TabsTrigger value="issues">
-              Issues {issuesTotal > 0 && <span className="ml-1.5 bg-secondary text-secondary-foreground py-0.5 px-2 rounded-full text-xs">{issuesTotal}</span>}
+              Issues {issuesTotal > 0 && <span className="ml-1.5 bg-hover text-foreground py-0.5 px-2 rounded-full text-caption">{issuesTotal}</span>}
             </TabsTrigger>
             <TabsTrigger value="ci">
-              CI Runs {ciTotal > 0 && <span className="ml-1.5 bg-secondary text-secondary-foreground py-0.5 px-2 rounded-full text-xs">{ciTotal}</span>}
+              CI Runs {ciTotal > 0 && <span className="ml-1.5 bg-hover text-foreground py-0.5 px-2 rounded-full text-caption">{ciTotal}</span>}
             </TabsTrigger>
             <TabsTrigger value="commits">
-              Commits {commitsTotal > 0 && <span className="ml-1.5 bg-secondary text-secondary-foreground py-0.5 px-2 rounded-full text-xs">{commitsTotal}</span>}
+              Commits {commitsTotal > 0 && <span className="ml-1.5 bg-hover text-foreground py-0.5 px-2 rounded-full text-caption">{commitsTotal}</span>}
             </TabsTrigger>
           </TabsList>
 
@@ -351,10 +351,10 @@ export const GitHubIntegration = () => {
                 </Select>
                 <Button 
                   onClick={() => setShowCreatePR(true)}
-                  className="bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-semibold px-3 py-1.5 rounded-lg flex items-center transition-colors"
-                  variant="default" size="default"
+                  className="bg-primary hover:bg-primary-hover text-primary-foreground text-ui font-[590] px-3 py-1.5 rounded-lg flex items-center transition-colors"
+                  variant="primary" size="default"
                 >
-                  <Plus className="w-4 h-4 mr-1" /> New PR
+                  <Plus className="w-4 h-4 mr-1" strokeWidth={1.75} /> New PR
                 </Button>
               </div>
             )}
@@ -397,13 +397,13 @@ export const GitHubIntegration = () => {
       <div className="flex-1 overflow-y-auto p-8 relative">
         {isLoading && (
           <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-(--z-sticky) flex items-start justify-center pt-24">
-            <Loader2 className="w-8 h-8 animate-spin text-subtle-foreground" />
+            <Loader2 className="w-8 h-8 animate-spin text-subtle-foreground" strokeWidth={1.5} />
           </div>
         )}
 
         {error ? (
           <div className="text-center py-12 border border-dashed border-danger-border bg-danger-muted rounded-lg">
-            <AlertCircle className="w-8 h-8 text-destructive mx-auto mb-3" />
+            <AlertCircle className="w-8 h-8 text-destructive mx-auto mb-3" strokeWidth={1.5} />
             <p className="text-destructive">{error}</p>
           </div>
         ) : (
@@ -411,14 +411,14 @@ export const GitHubIntegration = () => {
           <TabsContent value="prs" className="space-y-4 max-w-5xl">
             {prs.length === 0 && !isLoading ? (
               <div className="text-center py-16 border border-dashed border-border rounded-lg bg-card">
-                <GitPullRequest className="w-10 h-10 text-subtle-foreground/40 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-foreground mb-1">No pull requests found</h3>
+                <GitPullRequest className="w-10 h-10 text-subtle-foreground/40 mx-auto mb-4" strokeWidth={1.5} />
+                <h3 className="text-heading font-[590] text-foreground mb-1">No pull requests found</h3>
               </div>
             ) : (
               <div className="border border-border rounded-lg overflow-hidden bg-card">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-muted border-b border-border text-xs font-semibold text-muted-foreground tracking-wider">
+                    <tr className="bg-muted border-b border-border text-caption font-[590] text-muted-foreground tracking-wider">
                       <th className="px-4 py-3 w-24">PR</th>
                       <th className="px-4 py-3">Title</th>
                       <th className="px-4 py-3 w-32">Status</th>
@@ -432,17 +432,17 @@ export const GitHubIntegration = () => {
                       <tr key={pr.id} className="group">
                         <td colSpan={6} className="p-0">
                           <div className="hover:bg-hover transition-colors px-4 py-3 grid" style={{ gridTemplateColumns: '6rem 1fr 8rem 8rem 10rem 6rem' }}>
-                            <span className="text-sm font-mono text-muted-foreground">#{pr.prNumber}</span>
-                            <span className="text-sm text-foreground">{pr.title}</span>
+                            <span className="text-ui font-mono text-muted-foreground">#{pr.prNumber}</span>
+                            <span className="text-ui text-foreground">{pr.title}</span>
                             <span>
                               {pr.state === 'open' && <Badge variant="success" className="h-auto py-1">Open</Badge>}
-                              {pr.state === 'merged' && <Badge variant="outline" className="bg-special-muted text-special border-special-border h-auto py-1">Merged</Badge>}
+                              {pr.state === 'merged' && <Badge variant="secondary" className="bg-special-muted text-special border-special-border h-auto py-1">Merged</Badge>}
                               {pr.state === 'closed' && <Badge variant="destructive" className="h-auto py-1">Closed</Badge>}
                             </span>
                             <span>
-                              {pr.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${pr.taskKey}`} className="inline-flex bg-secondary hover:bg-hover text-foreground border border-border text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{pr.taskKey}</Link> : <span className="text-subtle-foreground">—</span>}
+                              {pr.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${pr.taskKey}`} className="inline-flex bg-hover hover:bg-hover text-foreground border border-border text-micro uppercase font-[590] tracking-wider px-2 py-0.5 rounded transition-colors">{pr.taskKey}</Link> : <span className="text-subtle-foreground">—</span>}
                             </span>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-caption text-muted-foreground">
                               {pr.headBranch} → {pr.baseBranch}
                             </span>
                             <span className="flex items-center justify-end space-x-2">
@@ -451,7 +451,7 @@ export const GitHubIntegration = () => {
                                   <Button
                                     onClick={() => setCommentingOn(commentingOn?.type === 'pr' && commentingOn.number === pr.prNumber ? null : { type: 'pr', number: pr.prNumber })}
                                     className={clsx(
-                                      'text-xs px-2 py-1 rounded transition-colors flex items-center',
+                                      'text-caption px-2 py-1 rounded transition-colors flex items-center',
                                       commentingOn?.type === 'pr' && commentingOn.number === pr.prNumber
                                         ? 'text-primary bg-primary-muted border border-primary-border'
                                         : 'text-subtle-foreground hover:text-foreground opacity-0 group-hover:opacity-100'
@@ -459,12 +459,12 @@ export const GitHubIntegration = () => {
                                     aria-label="Add comment"
                                     size="icon" variant="ghost"
                                   >
-                                    <MessageSquare className="w-3.5 h-3.5" />
+                                    <MessageSquare className="w-3.5 h-3.5" strokeWidth={1.75} />
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Add comment</TooltipContent>
                               </Tooltip>
-                              {pr.htmlUrl && <a href={pr.htmlUrl} target="_blank" rel="noreferrer" className="inline-flex text-muted-foreground hover:text-foreground"><ExternalLink className="w-4 h-4" /></a>}
+                              {pr.htmlUrl && <a href={pr.htmlUrl} target="_blank" rel="noreferrer" className="inline-flex text-muted-foreground hover:text-foreground"><ExternalLink className="w-4 h-4" strokeWidth={1.75} /></a>}
                             </span>
                           </div>
                           {commentingOn?.type === 'pr' && commentingOn.number === pr.prNumber && (
@@ -489,14 +489,14 @@ export const GitHubIntegration = () => {
           <TabsContent value="issues" className="space-y-4 max-w-5xl">
             {issues.length === 0 && !isLoading ? (
               <div className="text-center py-16 border border-dashed border-border rounded-lg bg-card">
-                <AlertCircle className="w-10 h-10 text-subtle-foreground/40 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-foreground mb-1">No issues found</h3>
+                <AlertCircle className="w-10 h-10 text-subtle-foreground/40 mx-auto mb-4" strokeWidth={1.5} />
+                <h3 className="text-heading font-[590] text-foreground mb-1">No issues found</h3>
               </div>
             ) : (
               <div className="border border-border rounded-lg overflow-hidden bg-card">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-muted border-b border-border text-xs font-semibold text-muted-foreground tracking-wider">
+                    <tr className="bg-muted border-b border-border text-caption font-[590] text-muted-foreground tracking-wider">
                       <th className="px-4 py-3 w-16">#</th>
                       <th className="px-4 py-3">Title</th>
                       <th className="px-4 py-3 w-28">Status</th>
@@ -510,26 +510,26 @@ export const GitHubIntegration = () => {
                   <tbody className="divide-y divide-border">
                     {issues.map(issue => (
                       <tr key={issue.id} className="hover:bg-hover transition-colors">
-                        <td className="px-4 py-3 text-xs font-mono text-subtle-foreground">#{issue.githubIssueNumber}</td>
-                        <td className="px-4 py-3 text-sm text-foreground font-medium truncate max-w-sm" title={issue.title}>{issue.title}</td>
+                        <td className="px-4 py-3 text-caption font-mono text-subtle-foreground">#{issue.githubIssueNumber}</td>
+                        <td className="px-4 py-3 text-ui text-foreground font-[510] truncate max-w-sm" title={issue.title}>{issue.title}</td>
                         <td className="px-4 py-3">
                           {issue.state === 'open' 
-                            ? <Badge variant="success" className="text-[10px] h-auto uppercase font-bold tracking-wider"><AlertCircle className="w-3 h-3 mr-1" /> Open</Badge>
-                            : <Badge variant="destructive" className="text-[10px] h-auto uppercase font-bold tracking-wider"><AlertCircle className="w-3 h-3 mr-1" /> Closed</Badge>
+                            ? <Badge variant="success" className="text-micro h-auto uppercase font-[590] tracking-wider"><AlertCircle className="w-3 h-3 mr-1" strokeWidth={1.75} /> Open</Badge>
+                            : <Badge variant="destructive" className="text-micro h-auto uppercase font-[590] tracking-wider"><AlertCircle className="w-3 h-3 mr-1" strokeWidth={1.75} /> Closed</Badge>
                           }
                         </td>
                         <td className="px-4 py-3">
-                          <span className="text-xs text-muted-foreground truncate w-24">{issue.authorGithubLogin || 'Unknown'}</span>
+                          <span className="text-caption text-muted-foreground truncate w-24">{issue.authorGithubLogin || 'Unknown'}</span>
                         </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground truncate max-w-xs" title={(issue.labels || []).join(', ')}>
+                        <td className="px-4 py-3 text-caption text-muted-foreground truncate max-w-xs" title={(issue.labels || []).join(', ')}>
                           {(issue.labels || []).join(', ') || '—'}
                         </td>
                         <td className="px-4 py-3">
-                          {issue.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${issue.taskKey}`} className="inline-flex bg-secondary hover:bg-hover text-foreground border border-border text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{issue.taskKey}</Link> : <span className="text-subtle-foreground">—</span>}
+                          {issue.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${issue.taskKey}`} className="inline-flex bg-hover hover:bg-hover text-foreground border border-border text-micro uppercase font-[590] tracking-wider px-2 py-0.5 rounded transition-colors">{issue.taskKey}</Link> : <span className="text-subtle-foreground">—</span>}
                         </td>
-                        <td className="px-4 py-3 text-xs text-subtle-foreground">{formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}</td>
+                        <td className="px-4 py-3 text-caption text-subtle-foreground">{formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}</td>
                         <td className="px-4 py-3 text-right">
-                          <a href={issue.htmlUrl} target="_blank" rel="noreferrer" className="inline-flex text-muted-foreground hover:text-foreground"><ExternalLink className="w-4 h-4" /></a>
+                          <a href={issue.htmlUrl} target="_blank" rel="noreferrer" className="inline-flex text-muted-foreground hover:text-foreground"><ExternalLink className="w-4 h-4" strokeWidth={1.75} /></a>
                         </td>
                       </tr>
                     ))}
@@ -541,14 +541,14 @@ export const GitHubIntegration = () => {
           <TabsContent value="commits" className="space-y-4 max-w-5xl">
             {commits.length === 0 && !isLoading ? (
               <div className="text-center py-16 border border-dashed border-border rounded-lg bg-card">
-                <GitBranch className="w-10 h-10 text-subtle-foreground/40 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-foreground mb-1">No commits found</h3>
+                <GitBranch className="w-10 h-10 text-subtle-foreground/40 mx-auto mb-4" strokeWidth={1.5} />
+                <h3 className="text-heading font-[590] text-foreground mb-1">No commits found</h3>
               </div>
             ) : (
               <div className="border border-border rounded-lg overflow-hidden bg-card">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-muted border-b border-border text-xs font-semibold text-muted-foreground tracking-wider">
+                    <tr className="bg-muted border-b border-border text-caption font-[590] text-muted-foreground tracking-wider">
                       <th className="px-4 py-3 w-24">SHA</th>
                       <th className="px-4 py-3">Message</th>
                       <th className="px-4 py-3 w-32">Author</th>
@@ -561,8 +561,8 @@ export const GitHubIntegration = () => {
                   <tbody className="divide-y divide-border">
                     {commits.map(commit => (
                       <tr key={commit.id} className="hover:bg-hover transition-colors">
-                        <td className="px-4 py-3 text-xs font-mono text-primary">{commit.commitSha.substring(0, 7)}</td>
-                        <td className="px-4 py-3 text-sm text-foreground truncate max-w-xs" title={commit.messageHeadline}>{commit.messageHeadline}</td>
+                        <td className="px-4 py-3 text-caption font-mono text-primary">{commit.commitSha.substring(0, 7)}</td>
+                        <td className="px-4 py-3 text-ui text-foreground truncate max-w-xs" title={commit.messageHeadline}>{commit.messageHeadline}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center space-x-2">
                             {commit.authorAvatar ? (
@@ -571,21 +571,21 @@ export const GitHubIntegration = () => {
                               </Avatar>
                             ) : (
                               <Avatar size="sm" className="size-5 border border-border">
-                                <AvatarFallback className="bg-secondary text-[10px] text-muted-foreground font-bold">
+                                <AvatarFallback className="bg-hover text-micro text-muted-foreground font-[590]">
                                   {(commit.authorName || '?').charAt(0).toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
                             )}
-                            <span className="text-xs text-muted-foreground truncate w-24">{commit.authorName || 'Unknown'}</span>
+                            <span className="text-caption text-muted-foreground truncate w-24">{commit.authorName || 'Unknown'}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-xs font-mono text-muted-foreground truncate w-40" title={commit.branchName || ''}>{commit.branchName || '—'}</td>
+                        <td className="px-4 py-3 text-caption font-mono text-muted-foreground truncate w-40" title={commit.branchName || ''}>{commit.branchName || '—'}</td>
                         <td className="px-4 py-3">
-                          {commit.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${commit.taskKey}`} className="inline-flex bg-secondary hover:bg-hover text-foreground border border-border text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{commit.taskKey}</Link> : <span className="text-subtle-foreground">—</span>}
+                          {commit.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${commit.taskKey}`} className="inline-flex bg-hover hover:bg-hover text-foreground border border-border text-micro uppercase font-[590] tracking-wider px-2 py-0.5 rounded transition-colors">{commit.taskKey}</Link> : <span className="text-subtle-foreground">—</span>}
                         </td>
-                        <td className="px-4 py-3 text-xs text-subtle-foreground">{formatDistanceToNow(new Date(commit.committedAt), { addSuffix: true })}</td>
+                        <td className="px-4 py-3 text-caption text-subtle-foreground">{formatDistanceToNow(new Date(commit.committedAt), { addSuffix: true })}</td>
                         <td className="px-4 py-3 text-right">
-                          {commit.url && <a href={commit.url} target="_blank" rel="noreferrer" className="inline-flex text-muted-foreground hover:text-foreground"><ExternalLink className="w-4 h-4" /></a>}
+                          {commit.url && <a href={commit.url} target="_blank" rel="noreferrer" className="inline-flex text-muted-foreground hover:text-foreground"><ExternalLink className="w-4 h-4" strokeWidth={1.75} /></a>}
                         </td>
                       </tr>
                     ))}
@@ -597,14 +597,14 @@ export const GitHubIntegration = () => {
           <TabsContent value="ci" className="space-y-4 max-w-5xl">
             {ciRuns.length === 0 && !isLoading ? (
               <div className="text-center py-16 border border-dashed border-border rounded-lg bg-card">
-                <CheckCircle2 className="w-10 h-10 text-subtle-foreground/40 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-foreground mb-1">No workflow runs yet</h3>
+                <CheckCircle2 className="w-10 h-10 text-subtle-foreground/40 mx-auto mb-4" strokeWidth={1.5} />
+                <h3 className="text-heading font-[590] text-foreground mb-1">No workflow runs yet</h3>
               </div>
             ) : (
               <div className="border border-border rounded-lg overflow-hidden bg-card">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-muted border-b border-border text-xs font-semibold text-muted-foreground tracking-wider">
+                    <tr className="bg-muted border-b border-border text-caption font-[590] text-muted-foreground tracking-wider">
                       <th className="px-4 py-3">Workflow</th>
                       <th className="px-4 py-3 w-32">Status</th>
                       <th className="px-4 py-3 w-40">Branch</th>
@@ -616,19 +616,19 @@ export const GitHubIntegration = () => {
                   <tbody className="divide-y divide-border">
                     {ciRuns.map(run => (
                       <tr key={run.id} className="hover:bg-hover transition-colors">
-                        <td className="px-4 py-3 text-sm text-foreground">{run.workflowName || 'Workflow'}</td>
+                        <td className="px-4 py-3 text-ui text-foreground">{run.workflowName || 'Workflow'}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center space-x-1.5">
-                            {run.status === 'in_progress' ? <Badge variant="outline" className="bg-primary-muted text-primary border-primary-border h-auto py-1"><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Running</Badge> :
-                             run.status === 'queued' ? <Badge variant="outline" className="h-auto py-1">Queued</Badge> :
-                             run.conclusion === 'success' ? <Badge variant="success" className="h-auto py-1"><CheckCircle2 className="w-3 h-3 mr-1" /> Passed</Badge> :
-                             run.conclusion === 'failure' ? <Badge variant="destructive" className="h-auto py-1"><XCircle className="w-3 h-3 mr-1" /> Failed</Badge> :
-                             <Badge variant="outline" className="h-auto py-1">Skipped</Badge>}
+                            {run.status === 'in_progress' ? <Badge variant="secondary" className="bg-primary-muted text-primary border-primary-border h-auto py-1"><Loader2 className="w-3 h-3 mr-1 animate-spin" strokeWidth={1.75} /> Running</Badge> :
+                             run.status === 'queued' ? <Badge variant="secondary" className="h-auto py-1">Queued</Badge> :
+                             run.conclusion === 'success' ? <Badge variant="success" className="h-auto py-1"><CheckCircle2 className="w-3 h-3 mr-1" strokeWidth={1.75} /> Passed</Badge> :
+                             run.conclusion === 'failure' ? <Badge variant="destructive" className="h-auto py-1"><XCircle className="w-3 h-3 mr-1" strokeWidth={1.75} /> Failed</Badge> :
+                             <Badge variant="secondary" className="h-auto py-1">Skipped</Badge>}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-xs font-mono text-muted-foreground">{run.headBranch || '—'}</td>
-                        <td className="px-4 py-3 text-sm font-mono text-muted-foreground">{run.headSha?.substring(0, 7) || '—'}</td>
-                        <td className="px-4 py-3 text-xs text-subtle-foreground">{formatDistanceToNow(new Date(run.triggeredAt), { addSuffix: true })}</td>
+                        <td className="px-4 py-3 text-caption font-mono text-muted-foreground">{run.headBranch || '—'}</td>
+                        <td className="px-4 py-3 text-ui font-mono text-muted-foreground">{run.headSha?.substring(0, 7) || '—'}</td>
+                        <td className="px-4 py-3 text-caption text-subtle-foreground">{formatDistanceToNow(new Date(run.triggeredAt), { addSuffix: true })}</td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end space-x-2">
                             {run.conclusion === 'failure' && (
@@ -636,17 +636,17 @@ export const GitHubIntegration = () => {
                                   <TooltipTrigger asChild>
                                     <Button 
                                       onClick={() => setViewingLogsForRunId(run.runId)}
-                                      className="text-xs text-muted-foreground hover:text-foreground border border-border px-2 py-1 rounded bg-secondary flex items-center transition-colors"
-                                      variant="outline" size="default"
+                                      className="text-caption text-muted-foreground hover:text-foreground border border-border px-2 py-1 rounded bg-hover flex items-center transition-colors"
+                                      variant="secondary" size="default"
                                     >
-                                      <Terminal className="w-3 h-3 mr-1" />
+                                      <Terminal className="w-3 h-3 mr-1" strokeWidth={1.75} />
                                       Debug
                                     </Button>
                                   </TooltipTrigger>
                                   <TooltipContent>View Terminal Logs</TooltipContent>
                                 </Tooltip>
                               )}
-                            {run.htmlUrl && <a href={run.htmlUrl} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground"><ExternalLink className="w-4 h-4" /></a>}
+                            {run.htmlUrl && <a href={run.htmlUrl} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground"><ExternalLink className="w-4 h-4" strokeWidth={1.75} /></a>}
                           </div>
                         </td>
                       </tr>

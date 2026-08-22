@@ -103,16 +103,16 @@ export const ProjectChannels = () => {
     <div className="h-full overflow-y-auto p-8 font-sans bg-background text-foreground">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h2 className="text-2xl font-bold text-foreground mb-1">Project Channels</h2>
-          <p className="text-sm text-muted-foreground">Dedicated chat channels for {currentProject.name}.</p>
+          <h2 className="text-heading font-[590] text-foreground mb-1">Project Channels</h2>
+          <p className="text-ui text-muted-foreground">Dedicated chat channels for {currentProject.name}.</p>
         </div>
         {isAdmin() && (
           <Button 
             onClick={() => setShowModal(true)}
-            className="flex items-center px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground font-bold rounded-md transition-colors"
-            variant="default" size="default"
+            className="flex items-center px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground font-[590] rounded-md transition-colors"
+            variant="primary" size="default"
           >
-            <Plus className="w-4 h-4 mr-2" />
+            <Plus className="w-4 h-4 mr-2" strokeWidth={1.75} />
             Create Channel
           </Button>
         )}
@@ -135,7 +135,7 @@ export const ProjectChannels = () => {
                     type="text"
                     value={newChannelName}
                     onChange={e => setNewChannelName(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
-                    className="pl-8 font-mono text-sm"
+                    className="pl-8 font-mono text-ui"
                     placeholder="frontend-dev"
                     required
                   />
@@ -154,9 +154,9 @@ export const ProjectChannels = () => {
                 </Select>
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
+                <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>Cancel</Button>
                 <Button type="submit" disabled={isCreatingChannel}>
-                  {isCreatingChannel && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  {isCreatingChannel && <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.75} />}
                   Create
                 </Button>
               </DialogFooter>
@@ -166,18 +166,18 @@ export const ProjectChannels = () => {
       )}
 
       {isLoading ? (
-        <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>
+        <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" strokeWidth={1.5} /></div>
       ) : channels.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-border rounded-lg">
-          <Hash className="w-12 h-12 text-subtle-foreground/40 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-foreground">No project channels</h3>
-          <p className="text-sm text-subtle-foreground mt-1">Create a channel to discuss this project specifically.</p>
+          <Hash className="w-12 h-12 text-subtle-foreground/40 mx-auto mb-4" strokeWidth={1.5} />
+          <h3 className="text-heading font-[510] text-foreground">No project channels</h3>
+          <p className="text-ui text-subtle-foreground mt-1">Create a channel to discuss this project specifically.</p>
         </div>
       ) : (
         <div className="bg-card border border-border rounded-lg overflow-hidden shadow-sm">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-border bg-muted text-xs uppercase tracking-wider text-subtle-foreground font-semibold">
+              <tr className="border-b border-border bg-muted text-caption uppercase tracking-wider text-subtle-foreground font-[590]">
                 <th className="px-6 py-4">Channel Name</th>
                 <th className="px-6 py-4">Type</th>
               </tr>
@@ -192,15 +192,15 @@ export const ProjectChannels = () => {
                   <td className="px-6 py-4">
                     <div className="flex items-center">
                       {channel.type === 'private' ? (
-                        <Lock className="w-4 h-4 text-subtle-foreground mr-2" />
+                        <Lock className="w-4 h-4 text-subtle-foreground mr-2" strokeWidth={1.75} />
                       ) : (
-                        <Hash className="w-4 h-4 text-subtle-foreground mr-2" />
+                        <Hash className="w-4 h-4 text-subtle-foreground mr-2" strokeWidth={1.75} />
                       )}
-                      <span className="font-medium text-foreground group-hover:text-primary transition-colors">{channel.name}</span>
+                      <span className="font-[510] text-foreground group-hover:text-primary transition-colors">{channel.name}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-sm text-subtle-foreground capitalize">{channel.type}</span>
+                    <span className="text-ui text-subtle-foreground capitalize">{channel.type}</span>
                   </td>
                 </tr>
               ))}

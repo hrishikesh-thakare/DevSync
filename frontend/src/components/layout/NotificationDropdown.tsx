@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Bell, User, UserMinus, MessageSquare, AtSign, 
@@ -21,20 +21,20 @@ import { Button } from '@/components/ui/button';
 
 const getTypeIcon = (type: string) => {
   switch (type) {
-    case 'task_assigned': return <User size={16} className="text-primary" />;
-    case 'task_unassigned': return <UserMinus size={16} className="text-danger" />;
-    case 'task_commented': return <MessageSquare size={16} className="text-success" />;
-    case 'task_mentioned': return <AtSign size={16} className="text-special" />;
-    case 'task_status_changed': return <ArrowRightLeft size={16} className="text-warning" />;
-    case 'sprint_started': return <Play size={16} className="text-success" />;
-    case 'sprint_closed': return <CheckCircle size={16} className="text-muted-foreground" />;
-    case 'channel_mentioned': return <Hash size={16} className="text-special" />;
-    case 'dm_received': return <Mail size={16} className="text-primary" />;
-    case 'commit_linked': return <GitCommit size={16} className="text-warning" />;
-    case 'ci_failed': return <XCircle size={16} className="text-danger" />;
-    case 'project_member_added': return <Briefcase size={16} className="text-success" />;
-    case 'workspace_invited': return <Building2 size={16} className="text-primary" />;
-    default: return <Bell size={16} className="text-muted-foreground" />;
+    case 'task_assigned': return <User size={16} className="text-primary" strokeWidth={1.75} />;
+    case 'task_unassigned': return <UserMinus size={16} className="text-danger" strokeWidth={1.75} />;
+    case 'task_commented': return <MessageSquare size={16} className="text-success" strokeWidth={1.75} />;
+    case 'task_mentioned': return <AtSign size={16} className="text-special" strokeWidth={1.75} />;
+    case 'task_status_changed': return <ArrowRightLeft size={16} className="text-warning" strokeWidth={1.75} />;
+    case 'sprint_started': return <Play size={16} className="text-success" strokeWidth={1.75} />;
+    case 'sprint_closed': return <CheckCircle size={16} className="text-muted-foreground" strokeWidth={1.75} />;
+    case 'channel_mentioned': return <Hash size={16} className="text-special" strokeWidth={1.75} />;
+    case 'dm_received': return <Mail size={16} className="text-primary" strokeWidth={1.75} />;
+    case 'commit_linked': return <GitCommit size={16} className="text-warning" strokeWidth={1.75} />;
+    case 'ci_failed': return <XCircle size={16} className="text-danger" strokeWidth={1.75} />;
+    case 'project_member_added': return <Briefcase size={16} className="text-success" strokeWidth={1.75} />;
+    case 'workspace_invited': return <Building2 size={16} className="text-primary" strokeWidth={1.75} />;
+    default: return <Bell size={16} className="text-muted-foreground" strokeWidth={1.75} />;
   }
 };
 
@@ -115,9 +115,9 @@ const NotificationDropdown: React.FC = () => {
             className="relative p-2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none h-auto w-auto"
             aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'}
           >
-            <Bell size={20} />
+            <Bell size={20} strokeWidth={1.75} />
             {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-primary text-[10px] font-bold text-primary-foreground border-2 border-background">
+              <span className="absolute top-1 right-1 flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-primary text-micro font-[590] text-primary-foreground border-2 border-background">
                 {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             )}
@@ -125,14 +125,14 @@ const NotificationDropdown: React.FC = () => {
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="end" className="w-80 sm:w-96 p-0">
-          <DropdownMenuLabel className="flex items-center justify-between px-4 py-3 border-b border-border font-bold text-foreground text-sm">
+          <DropdownMenuLabel className="flex items-center justify-between px-4 py-3  font-[590] text-foreground text-ui">
             <span>Notifications</span>
             <div className="flex items-center gap-3">
               {unreadCount > 0 && (
                 <Button
                   onClick={() => markAllAsRead()}
                   variant="ghost"
-                  className="text-xs text-primary hover:text-primary-hover font-medium h-auto"
+                  className="text-caption text-primary hover:text-primary-hover font-[510] h-auto"
                 >
                   Mark all as read
                 </Button>
@@ -144,7 +144,7 @@ const NotificationDropdown: React.FC = () => {
                 className="text-subtle-foreground hover:text-foreground transition-colors h-auto w-auto"
                 aria-label="Notification Settings"
               >
-                <Settings size={14} />
+                <Settings size={14} strokeWidth={1.75} />
               </Button>
             </div>
           </DropdownMenuLabel>
@@ -152,15 +152,15 @@ const NotificationDropdown: React.FC = () => {
           <div className="max-h-[400px] overflow-y-auto">
             {displayNotifications.length === 0 ? (
               <div className="p-8 text-center text-subtle-foreground flex flex-col items-center">
-                <Bell size={24} className="mb-2 opacity-20" />
-                <p className="text-sm">No notifications yet</p>
+                <Bell size={24} className="mb-2 opacity-20" strokeWidth={1.5} />
+                <p className="text-ui">No notifications yet</p>
               </div>
             ) : (
               displayNotifications.map((notif) => (
                 <DropdownMenuItem
                   key={notif.notificationId}
                   onSelect={() => handleNotificationClick(notif)}
-                  className={`px-4 py-3 border-b border-border/50 cursor-pointer gap-3 ${!notif.isRead ? 'bg-primary-muted' : ''}`}
+                  className={`px-4 py-3 /50 cursor-pointer gap-3 ${!notif.isRead ? 'bg-primary-muted' : ''}`}
                 >
                   <span className="self-start mt-1 relative flex-shrink-0">
                     {!notif.isRead && (
@@ -170,15 +170,15 @@ const NotificationDropdown: React.FC = () => {
                   </span>
                   <span className="flex-1 min-w-0">
                     <span className="flex justify-between items-start gap-2">
-                      <span className={`text-sm ${!notif.isRead ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground'}`}>
+                      <span className={`text-ui ${!notif.isRead ? 'font-[590] text-foreground' : 'font-[510] text-muted-foreground'}`}>
                         {notif.title}
                       </span>
-                      <span className="text-[10px] text-subtle-foreground whitespace-nowrap flex-shrink-0">
+                      <span className="text-micro text-subtle-foreground whitespace-nowrap flex-shrink-0">
                         {formatTimeAgo(notif.createdAt)}
                       </span>
                     </span>
                     {notif.body && (
-                      <span className="block text-xs text-subtle-foreground mt-1 truncate">
+                      <span className="block text-caption text-subtle-foreground mt-1 truncate">
                         {notif.body}
                       </span>
                     )}
@@ -191,7 +191,7 @@ const NotificationDropdown: React.FC = () => {
           <DropdownMenuSeparator className="my-0" />
           <DropdownMenuItem
             onSelect={handleViewAll}
-            className="py-2 justify-center text-sm text-center text-muted-foreground focus:text-foreground font-medium"
+            className="py-2 justify-center text-ui text-center text-muted-foreground focus:text-foreground font-[510]"
           >
             View all notifications
           </DropdownMenuItem>

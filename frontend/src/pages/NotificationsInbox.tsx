@@ -15,8 +15,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Badge, badgeVariants } from '@/components/ui/badge';
-import type { VariantProps } from 'class-variance-authority';
+import { Badge } from '@/components/ui/badge';
+
 import { Button } from '@/components/ui/button';
 
 
@@ -41,7 +41,7 @@ export const NotificationsInbox = () => {
     }
   };
 
-  const getIcon = (type: string): { icon: LucideIcon; variant: VariantProps<typeof badgeVariants>['variant']; className?: string } => {
+  const getIcon = (type: string): { icon: LucideIcon; variant: any['variant']; className?: string } => {
     switch (type) {
       case 'task_assigned': return { icon: User, variant: 'success' };
       case 'task_unassigned': return { icon: UserMinus, variant: 'destructive' };
@@ -80,9 +80,9 @@ export const NotificationsInbox = () => {
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-3">
-            <h1 className="text-2xl font-bold text-foreground">Inbox</h1>
+            <h1 className="text-heading font-[590] text-foreground">Inbox</h1>
             {localUnreadCount > 0 && (
-              <span className="bg-danger text-danger-foreground text-xs font-bold px-2 py-0.5 rounded-full">
+              <span className="bg-danger text-danger-foreground text-caption font-[590] px-2 py-0.5 rounded-full">
                 {localUnreadCount} new
               </span>
             )}
@@ -91,9 +91,9 @@ export const NotificationsInbox = () => {
             onClick={markAllRead}
             disabled={localUnreadCount === 0}
             variant="ghost"
-            className="flex items-center text-sm font-medium text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors h-auto"
+            className="flex items-center text-ui font-[510] text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors h-auto"
           >
-            <Check className="w-4 h-4 mr-2" />
+            <Check className="w-4 h-4 mr-2" strokeWidth={1.75} />
             Mark all as read
           </Button>
         </div>
@@ -104,14 +104,14 @@ export const NotificationsInbox = () => {
             <Button
               onClick={() => setViewMode('all')}
               variant="ghost"
-              className={clsx("px-4 py-2 text-sm font-medium transition-colors h-auto", viewMode === 'all' ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground")}
+              className={clsx("px-4 py-2 text-ui font-[510] transition-colors h-auto", viewMode === 'all' ? "bg-hover text-foreground" : "text-muted-foreground hover:text-foreground")}
             >
               All
             </Button>
             <Button
               onClick={() => setViewMode('unread')}
               variant="ghost"
-              className={clsx("px-4 py-2 text-sm font-medium transition-colors h-auto", viewMode === 'unread' ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground")}
+              className={clsx("px-4 py-2 text-ui font-[510] transition-colors h-auto", viewMode === 'unread' ? "bg-hover text-foreground" : "text-muted-foreground hover:text-foreground")}
             >
               Unread
             </Button>
@@ -170,10 +170,10 @@ export const NotificationsInbox = () => {
                   </div>
 
                   <div className="flex-1">
-                    <p className={clsx("text-sm mb-1", !notif.isRead ? "text-foreground font-bold" : "text-muted-foreground font-medium")}>
+                    <p className={clsx("text-ui mb-1", !notif.isRead ? "text-foreground font-[590]" : "text-muted-foreground font-[510]")}>
                       {notif.title}
                     </p>
-                    <span className="text-xs text-subtle-foreground">{notif.body}</span>
+                    <span className="text-caption text-subtle-foreground">{notif.body}</span>
                   </div>
 
                   {!notif.isRead && (
@@ -183,10 +183,10 @@ export const NotificationsInbox = () => {
                           onClick={(e) => { e.stopPropagation(); markRead(notif.notificationId); }}
                           variant="ghost"
                           size="icon"
-                          className="opacity-0 group-hover:opacity-100 p-1.5 text-subtle-foreground hover:text-foreground hover:bg-hover rounded transition-all h-auto w-auto"
+                          className="opacity-0 group-hover:opacity-100 p-1.5 text-subtle-foreground hover:text-foreground hover:bg-hover rounded transition-colors h-auto w-auto"
                           aria-label="Mark as read"
                         >
-                          <Check className="w-4 h-4" />
+                          <Check className="w-4 h-4" strokeWidth={1.75} />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>Mark as read</TooltipContent>
@@ -198,7 +198,7 @@ export const NotificationsInbox = () => {
             
             {filtered.length === 0 && (
               <div className="p-12 text-center text-subtle-foreground">
-                <Bell className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <Bell className="w-12 h-12 mx-auto mb-4 opacity-50" strokeWidth={1.5} />
                 <p>{viewMode === 'unread' ? 'No unread notifications.' : "You're all caught up!"}</p>
               </div>
             )}

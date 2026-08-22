@@ -1,4 +1,4 @@
-import { toast } from 'sonner';
+import { useToastStore } from '../store/toastStore';
 
 interface ToastOptions {
   description?: string;
@@ -11,8 +11,12 @@ export interface ToastApi {
   info: (message: string, options?: ToastOptions) => void;
 }
 
-export const useToast = (): ToastApi => ({
-  success: (message, options) => toast.success(message, options),
-  error: (message, options) => toast.error(message, options),
-  info: (message, options) => toast.info(message, options),
-});
+export const useToast = (): ToastApi => {
+  const addToast = useToastStore((s) => s.addToast);
+  
+  return {
+    success: (message, options) => addToast({ type: 'success', message, duration: options?.duration }),
+    error: (message, options) => addToast({ type: 'error', message, duration: options?.duration }),
+    info: (message, options) => addToast({ type: 'info', message, duration: options?.duration }),
+  };
+};

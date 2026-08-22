@@ -14,16 +14,16 @@ export const ProjectList = () => {
     <div className="h-full overflow-y-auto p-8 font-sans bg-background text-foreground">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-foreground mb-1">Projects</h1>
-          <p className="text-sm text-muted-foreground">View and manage all active projects in this workspace.</p>
+          <h1 className="text-heading font-[590] text-foreground mb-1">Projects</h1>
+          <p className="text-ui text-muted-foreground">View and manage all active projects in this workspace.</p>
         </div>
         {isAdmin() && (
           <Button
             onClick={() => navigate(`/w/${slug}/projects/new`)}
-            className="flex items-center px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground font-bold rounded-md transition-colors shadow-sm"
-            variant="default" size="default"
+            className="flex items-center px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground font-[590] rounded-md transition-colors shadow-sm"
+            variant="primary" size="default"
           >
-            <Plus className="w-4 h-4 mr-2" />
+            <Plus className="w-4 h-4 mr-2" strokeWidth={1.75} />
             Create Project
           </Button>
         )}
@@ -31,8 +31,8 @@ export const ProjectList = () => {
 
       {projects.length === 0 ? (
         <div className="text-center py-20 bg-card border border-border border-dashed rounded-lg">
-          <FolderKanban className="w-12 h-12 text-subtle-foreground/40 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-foreground">No projects yet</h3>
+          <FolderKanban className="w-12 h-12 text-subtle-foreground/40 mx-auto mb-4" strokeWidth={1.5} />
+          <h3 className="text-heading font-[510] text-foreground">No projects yet</h3>
           <p className="text-subtle-foreground mt-1">Create your first project to start tracking tasks and sprints.</p>
         </div>
       ) : (
@@ -41,37 +41,37 @@ export const ProjectList = () => {
             <Button
               key={proj.projectId}
               onClick={() => navigate(`/w/${slug}/projects/${proj.key}`)}
-              className="group relative flex flex-col text-left bg-card hover:bg-hover border border-border hover:border-border-strong rounded-lg p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-md overflow-hidden h-auto"
+              className="group relative flex flex-col text-left bg-card hover:bg-hover border border-border hover:border-border-strong rounded-lg p-6 transition-colors duration-300  hover:shadow-md overflow-hidden h-auto"
               variant="ghost" size="default"
             >
               {/* Corner wash on hover. Flat primary tint rather than the old
                   gradient-to-transparent — §5 allows no decorative gradients. */}
               <div
-                className="absolute top-0 right-0 w-24 h-24 bg-primary-muted opacity-0 group-hover:opacity-100 rounded-bl-full transition-opacity duration-500"
+                className="absolute top-0 right-0 w-24 h-24 bg-primary-muted opacity-0 group-hover:opacity-100 rounded-bl-full transition-opacity duration-300"
                 aria-hidden="true"
               />
 
               <div className="flex items-start justify-between mb-4">
-                <div className="w-12 h-12 rounded-lg bg-primary-muted border border-primary-border flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <FolderKanban className="w-6 h-6 text-primary" />
+                <div className="w-12 h-12 rounded-lg bg-primary-muted border border-primary-border flex items-center justify-center group- transition-transform duration-300">
+                  <FolderKanban className="w-6 h-6 text-primary" strokeWidth={1.5} />
                 </div>
-                <span className="text-xs font-mono font-semibold bg-muted px-2 py-1 border border-border rounded text-muted-foreground">
+                <span className="text-caption font-mono font-[590] bg-muted px-2 py-1 border border-border rounded text-muted-foreground">
                   {proj.key}
                 </span>
               </div>
 
-              <h3 className="text-xl font-bold text-foreground group-hover:text-primary transition-colors">
+              <h3 className="text-heading font-[590] text-foreground group-hover:text-primary transition-colors">
                 {proj.name}
               </h3>
-              <p className="text-sm text-subtle-foreground mt-2 mb-6 line-clamp-2">
+              <p className="text-ui text-subtle-foreground mt-2 mb-6 line-clamp-2">
                 Manage tasks, sprints, and CI/CD pipelines for {proj.name}.
               </p>
 
               <div className="mt-auto flex items-center justify-between">
                 <div className="flex -space-x-2">
-                  <div className="w-6 h-6 rounded-full bg-secondary border border-background"></div>
-                  <div className="w-6 h-6 rounded-full bg-secondary border border-background"></div>
-                  <div className="w-6 h-6 rounded-full bg-secondary border border-background flex items-center justify-center text-[8px]">...</div>
+                  <div className="w-6 h-6 rounded-full bg-hover border border-background"></div>
+                  <div className="w-6 h-6 rounded-full bg-hover border border-background"></div>
+                  <div className="w-6 h-6 rounded-full bg-hover border border-background flex items-center justify-center text-micro">...</div>
                 </div>
                 <div className="flex items-center space-x-3">
                   <Tooltip>
@@ -82,9 +82,9 @@ export const ProjectList = () => {
                     </TooltipTrigger>
                     <TooltipContent>Project Settings</TooltipContent>
                   </Tooltip>
-                  <div className="flex items-center text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">
+                  <div className="flex items-center text-ui font-[510] text-muted-foreground group-hover:text-primary transition-colors">
                     Open
-                    <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
+                    <ChevronRight className="w-4 h-4 ml-1 group- transition-transform" strokeWidth={1.75} />
                   </div>
                 </div>
               </div>

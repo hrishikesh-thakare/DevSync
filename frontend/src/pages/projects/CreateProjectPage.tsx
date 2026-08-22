@@ -38,16 +38,16 @@ export const CreateProjectPage = () => {
       <Card className="w-full max-w-lg [--card-spacing:--spacing(8)] rounded-lg shadow-md bg-card border border-border">
         <div className="flex justify-center mb-6">
           <div className="w-16 h-16 bg-primary-muted border border-primary-border rounded-lg flex items-center justify-center">
-            <FolderKanban className="w-8 h-8 text-primary" />
+            <FolderKanban className="w-8 h-8 text-primary" strokeWidth={1.5} />
           </div>
         </div>
         
-        <h1 className="text-2xl font-bold text-center text-foreground mb-2">Create a New Project</h1>
-        <p className="text-center text-muted-foreground mb-8 text-sm">Start tracking tasks, sprints, and CI/CD pipelines.</p>
+        <h1 className="text-heading font-[590] text-center text-foreground mb-2">Create a New Project</h1>
+        <p className="text-center text-muted-foreground mb-8 text-ui">Start tracking tasks, sprints, and CI/CD pipelines.</p>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <Label className="block text-sm font-medium text-foreground mb-1.5">Project Name</Label>
+            <Label className="block text-ui font-[510] text-foreground mb-1.5">Project Name</Label>
             <Input 
               type="text" 
               required
@@ -62,7 +62,7 @@ export const CreateProjectPage = () => {
           </div>
 
           <div>
-            <Label className="block text-sm font-medium text-foreground mb-1.5">Project Key</Label>
+            <Label className="block text-ui font-[510] text-foreground mb-1.5">Project Key</Label>
             <Input 
               type="text" 
               required
@@ -71,11 +71,11 @@ export const CreateProjectPage = () => {
               placeholder="e.g. MOB"
               className="w-full bg-background border border-border rounded-md px-4 py-3 text-foreground font-mono focus:border-ring focus:ring-1 focus:ring-ring uppercase h-auto"
             />
-            <p className="text-xs text-subtle-foreground mt-1.5">Used as a prefix for task IDs (e.g. MOB-1). Immutable after creation.</p>
+            <p className="text-caption text-subtle-foreground mt-1.5">Used as a prefix for task IDs (e.g. MOB-1). Immutable after creation.</p>
           </div>
 
           <div>
-            <Label className="block text-sm font-medium text-foreground mb-1.5">Description (Optional)</Label>
+            <Label className="block text-ui font-[510] text-foreground mb-1.5">Description (Optional)</Label>
             <Textarea 
               rows={3}
               value={description}
@@ -89,7 +89,7 @@ export const CreateProjectPage = () => {
             <Button 
               type="button"
               onClick={() => navigate(-1)}
-              className="px-5 py-2.5 text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
+              className="px-5 py-2.5 text-muted-foreground hover:text-foreground transition-colors text-ui font-[510]"
               variant="ghost" size="default"
             >
               Cancel
@@ -97,10 +97,10 @@ export const CreateProjectPage = () => {
             <Button 
               type="submit"
               disabled={isLoading || !name || !key}
-              className="flex items-center px-6 py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-50 text-primary-foreground text-sm font-bold rounded-md transition-colors"
-              variant="default" size="default"
+              className="flex items-center px-6 py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-50 text-primary-foreground text-ui font-[590] rounded-md transition-colors"
+              variant="primary" size="default"
             >
-              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Create Project'}
+              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" strokeWidth={1.75} /> : 'Create Project'}
             </Button>
           </div>
         </form>

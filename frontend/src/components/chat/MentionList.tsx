@@ -63,7 +63,7 @@ const MentionList = forwardRef((props: MentionListProps, ref) => {
 
   if (!props.items || props.items.length === 0) {
     return (
-      <div className="bg-card border border-border rounded-lg shadow-md p-2 text-sm text-subtle-foreground">
+      <div className="bg-card border border-border rounded-lg shadow-md p-2 text-ui text-subtle-foreground">
         No results
       </div>
     );
@@ -73,7 +73,7 @@ const MentionList = forwardRef((props: MentionListProps, ref) => {
     <div className="bg-card border border-border rounded-lg shadow-md overflow-y-auto max-h-60 py-1 min-w-[150px]">
       {props.items.map((item: MentionItem, index: number) => (
         <button
-          className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+          className={`w-full text-left px-4 py-2 text-ui transition-colors ${
             index === selectedIndex ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-hover'
           }`}
           key={index}

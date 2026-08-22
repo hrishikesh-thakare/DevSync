@@ -1,34 +1,45 @@
 import * as React from "react"
-import { Checkbox as CheckboxPrimitive } from "radix-ui"
-import { CheckIcon, MinusIcon } from "lucide-react"
-
 import { cn } from "@/lib/utils"
+import { Check, Minus } from "lucide-react"
 
-function Checkbox({
-  className,
-  ...props
-}: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
-  return (
-    <CheckboxPrimitive.Root
-      data-slot="checkbox"
-      className={cn(
-        "peer size-4 shrink-0 rounded-sm border border-border-default bg-background shadow-xs transition-shadow outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground data-indeterminate:border-primary data-indeterminate:bg-primary data-indeterminate:text-primary-foreground data-disabled:cursor-not-allowed data-disabled:opacity-50",
-        className
-      )}
-      {...props}
-    >
-      <CheckboxPrimitive.Indicator
-        data-slot="checkbox-indicator"
-        className="flex items-center justify-center text-current transition-none"
-      >
-        {props.checked === "indeterminate" ? (
-          <MinusIcon className="size-3.5" strokeWidth={3} />
-        ) : (
-          <CheckIcon className="size-3.5" strokeWidth={3} />
-        )}
-      </CheckboxPrimitive.Indicator>
-    </CheckboxPrimitive.Root>
-  )
+/* ── Checkbox ──────────────────────────────────────────────────── */
+
+export interface CheckboxProps
+  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "onChange"> {
+  checked?: boolean
+  indeterminate?: boolean
+  onCheckedChange?: (checked: boolean) => void
 }
+
+const Checkbox = React.forwardRef<HTMLButtonElement, CheckboxProps>(
+  ({ className, checked = false, indeterminate = false, onCheckedChange, ...props }, ref) => {
+    return (
+      <button
+        ref={ref}
+        role="checkbox"
+        type="button"
+        aria-checked={indeterminate ? "mixed" : checked}
+        onClick={() => onCheckedChange?.(!checked)}
+        className={cn(
+          "inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors duration-100 ease-in-out",
+          "outline-none focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2",
+          "disabled:cursor-not-allowed disabled:opacity-50",
+          checked || indeterminate
+            ? "border-transparent bg-[var(--primary)] text-primary-foreground"
+            : "border-border bg-transparent",
+          className
+        )}
+        {...props}
+      >
+        {indeterminate ? (
+          <Minus className="h-3 w-3" strokeWidth={1.75} />
+        ) : checked ? (
+          <Check className="h-3 w-3" strokeWidth={1.75} />
+        ) : null}
+      </button>
+    )
+  }
+)
+Checkbox.displayName = "Checkbox"
 
 export { Checkbox }

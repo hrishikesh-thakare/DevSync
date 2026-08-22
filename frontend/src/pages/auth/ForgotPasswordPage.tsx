@@ -35,16 +35,16 @@ export const ForgotPasswordPage = () => {
       <div className="auth-shape-1"></div>
       <div className="auth-shape-2"></div>
 
-      <div className="bg-card border border-border rounded-lg shadow-sm max-w-md w-full p-8 animate-fadeIn relative z-10">
+      <div className="bg-card border border-border rounded-lg shadow-sm max-w-[400px] w-full p-8 animate-fadeIn relative z-[var(--z-sticky)]">
         <div className="mb-10 text-center">
-          <h1 className="text-4xl font-bold text-foreground mb-2">DevSync</h1>
-          <p className="text-muted-foreground text-sm">Reset your password</p>
+          <h1 className="text-heading font-[590] text-foreground mb-2">DevSync</h1>
+          <p className="text-muted-foreground text-ui">Reset your password</p>
         </div>
 
         {sent ? (
           <div className="text-center space-y-6">
             <div className="flex justify-center">
-              <CheckCircle2 className="h-16 w-16 text-success" />
+              <CheckCircle2 className="h-16 w-16 text-success" strokeWidth={1.5} />
             </div>
             <p className="text-foreground">
               If an account exists for <strong className="text-primary">{email}</strong>, a
@@ -52,27 +52,27 @@ export const ForgotPasswordPage = () => {
             </p>
             <Link
               to="/login"
-              className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-hover transition-colors"
+              className="inline-flex items-center gap-2 text-ui font-[510] text-primary hover:text-primary-hover transition-colors"
             >
-              <ArrowLeft className="h-4 w-4" /> Back to sign in
+              <ArrowLeft className="h-4 w-4" strokeWidth={1.75} /> Back to sign in
             </Link>
           </div>
         ) : (
           <>
             {error && (
-              <div className="mb-6 rounded-lg bg-danger-muted border border-danger-border p-4 text-sm text-danger text-center">
+              <div className="mb-6 rounded-lg bg-danger-muted border border-danger-border p-4 text-ui text-danger text-center">
                 {error}
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <Label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                <Label className="block text-caption font-[510] text-muted-foreground uppercase tracking-wider mb-2">
                   Email Address
                 </Label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Mail className="h-5 w-5 text-muted-foreground" />
+                    <Mail className="h-5 w-5 text-muted-foreground" strokeWidth={1.75} />
                   </div>
                   <Input
                     type="email"
@@ -88,23 +88,23 @@ export const ForgotPasswordPage = () => {
               <Button
                 type="submit"
                 disabled={isLoading}
-                variant="default"
+                variant="primary"
                 className="bg-primary text-primary-foreground hover:bg-primary-hover rounded-md w-full py-3 flex justify-center items-center mt-8 disabled:opacity-70 h-auto"
               >
                 {isLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin text-foreground" />
+                  <Loader2 className="h-5 w-5 animate-spin text-foreground" strokeWidth={1.75} />
                 ) : (
                   'Send reset link'
                 )}
               </Button>
             </form>
 
-            <p className="mt-8 text-center text-sm text-muted-foreground">
+            <p className="mt-8 text-center text-ui text-muted-foreground">
               <Link
                 to="/login"
-                className="inline-flex items-center gap-1.5 font-medium text-primary hover:text-primary-hover transition-colors"
+                className="inline-flex items-center gap-1.5 font-[510] text-primary hover:text-primary-hover transition-colors"
               >
-                <ArrowLeft className="h-4 w-4" /> Back to sign in
+                <ArrowLeft className="h-4 w-4" strokeWidth={1.75} /> Back to sign in
               </Link>
             </p>
           </>

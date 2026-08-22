@@ -168,8 +168,8 @@ export const WorkspaceMembers = () => {
       
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground mb-1">Workspace Members</h1>
-          <p className="text-sm text-muted-foreground">Manage access and roles for your team. {members.length} total members.</p>
+          <h1 className="text-heading font-[590] text-foreground mb-1">Workspace Members</h1>
+          <p className="text-ui text-muted-foreground">Manage access and roles for your team. {members.length} total members.</p>
         </div>
         {/* Only admin+ can invite */}
         <div className="flex items-center space-x-3">
@@ -177,19 +177,19 @@ export const WorkspaceMembers = () => {
             <Button 
               onClick={handleLeave}
               variant="destructive"
-              className="flex items-center px-4 py-2 border border-danger-border text-danger hover:bg-danger-muted rounded-md transition-colors font-semibold h-auto"
+              className="flex items-center px-4 py-2 border border-danger-border text-danger hover:bg-danger-muted rounded-md transition-colors font-[590] h-auto"
             >
-              <LogOut className="w-4 h-4 mr-2" />
+              <LogOut className="w-4 h-4 mr-2" strokeWidth={1.75} />
               Leave Workspace
             </Button>
           )}
           {isAdmin() && (
             <Button 
               onClick={() => setShowModal(true)}
-              variant="default"
-              className="flex items-center px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground font-bold rounded-md transition-colors h-auto"
+              variant="primary"
+              className="flex items-center px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground font-[590] rounded-md transition-colors h-auto"
             >
-              <UserPlus className="w-4 h-4 mr-2" />
+              <UserPlus className="w-4 h-4 mr-2" strokeWidth={1.75} />
               Invite Members
             </Button>
           )}
@@ -199,13 +199,13 @@ export const WorkspaceMembers = () => {
       {/* Filters Row */}
       <div className="flex items-center space-x-3 mb-6">
         <div className="relative flex-1 max-w-xs">
-          <Search className="w-4 h-4 text-subtle-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-subtle-foreground absolute left-3 top-1/2 -translate-y-1/2" strokeWidth={1.75} />
           <Input
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search by name or email..."
-            className="w-full bg-card border border-border rounded-md pl-9 pr-4 py-2 text-sm text-foreground focus:border-ring focus:ring-1 focus:ring-ring h-auto"
+            className="w-full bg-card border border-border rounded-md pl-9 pr-4 py-2 text-ui text-foreground focus:border-ring focus:ring-1 focus:ring-ring h-auto"
           />
         </div>
         <Select value={filterRole} onValueChange={setFilterRole}>
@@ -267,9 +267,9 @@ export const WorkspaceMembers = () => {
                 </Select>
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
+                <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>Cancel</Button>
                 <Button type="submit" disabled={isInviting}>
-                  {isInviting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  {isInviting && <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.75} />}
                   Send Invite
                 </Button>
               </DialogFooter>
@@ -282,12 +282,12 @@ export const WorkspaceMembers = () => {
       <div className="bg-card border border-border rounded-lg overflow-hidden shadow-sm">
         {isLoading ? (
           <div className="flex justify-center items-center py-12">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" strokeWidth={1.5} />
           </div>
         ) : (
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-border bg-muted text-xs uppercase tracking-wider text-subtle-foreground font-semibold">
+              <tr className="border-b border-border bg-muted text-caption uppercase tracking-wider text-subtle-foreground font-[590]">
                 <th className="px-6 py-4">User</th>
                 <th className="px-6 py-4">Status</th>
                 <th className="px-6 py-4">Role</th>
@@ -300,16 +300,16 @@ export const WorkspaceMembers = () => {
                 <tr key={member.userId} className="hover:bg-hover transition-colors group">
                   <td className="px-6 py-4">
                     <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center text-foreground font-bold shadow-sm">
+                      <div className="w-10 h-10 rounded-lg bg-hover flex items-center justify-center text-foreground font-[590] shadow-sm">
                         {member.fullName.charAt(0)}
                       </div>
                       <div>
-                        <div className="font-semibold text-foreground">
+                        <div className="font-[590] text-foreground">
                           {member.fullName}
-                          {member.userId === currentUser?.userId && <span className="text-xs text-subtle-foreground ml-2">(you)</span>}
+                          {member.userId === currentUser?.userId && <span className="text-caption text-subtle-foreground ml-2">(you)</span>}
                         </div>
-                        <div className="text-xs text-subtle-foreground flex items-center mt-0.5">
-                          <Mail className="w-3 h-3 mr-1" />
+                        <div className="text-caption text-subtle-foreground flex items-center mt-0.5">
+                          <Mail className="w-3 h-3 mr-1" strokeWidth={1.75} />
                           {member.email}
                         </div>
                       </div>
@@ -319,24 +319,24 @@ export const WorkspaceMembers = () => {
                   <td className="px-6 py-4">
                     <Badge
                       variant={member.state === 'active' ? 'success' : member.state === 'invited' ? 'warning' : 'destructive'}
-                      className="h-auto px-2 py-0.5 rounded uppercase font-semibold tracking-wide"
+                      className="h-auto px-2 py-0.5 rounded uppercase font-[590] tracking-wide"
                     >
                       {member.state}
                     </Badge>
                   </td>
 
                   <td className="px-6 py-4">
-                    <div className="flex items-center text-sm">
-                      {member.role === 'owner' && <Shield className="w-4 h-4 text-warning mr-2" />}
-                      {member.role === 'admin' && <Shield className="w-4 h-4 text-primary mr-2" />}
-                      {member.role === 'member' && <User className="w-4 h-4 text-subtle-foreground mr-2" />}
-                      <span className={clsx("capitalize", member.role === 'owner' ? 'text-warning font-medium' : 'text-foreground')}>
+                    <div className="flex items-center text-ui">
+                      {member.role === 'owner' && <Shield className="w-4 h-4 text-warning mr-2" strokeWidth={1.75} />}
+                      {member.role === 'admin' && <Shield className="w-4 h-4 text-primary mr-2" strokeWidth={1.75} />}
+                      {member.role === 'member' && <User className="w-4 h-4 text-subtle-foreground mr-2" strokeWidth={1.75} />}
+                      <span className={clsx("capitalize", member.role === 'owner' ? 'text-warning font-[510]' : 'text-foreground')}>
                         {member.role}
                       </span>
                     </div>
                   </td>
 
-                  <td className="px-6 py-4 text-sm text-subtle-foreground">
+                  <td className="px-6 py-4 text-ui text-subtle-foreground">
                     {member.joinedAt ? format(new Date(member.joinedAt), 'MMM d, yyyy') : '—'}
                   </td>
 
@@ -353,7 +353,7 @@ export const WorkspaceMembers = () => {
                             size="icon"
                             aria-label={`Actions for ${member.fullName}`}
                           >
-                            <MoreHorizontal className="w-5 h-5" />
+                            <MoreHorizontal className="w-5 h-5" strokeWidth={1.75} />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">

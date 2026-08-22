@@ -150,16 +150,16 @@ export const ProjectMembers = () => {
     <div className="h-full overflow-y-auto p-8 font-sans bg-background text-foreground">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h2 className="text-2xl font-bold text-foreground mb-1">Project Members</h2>
-          <p className="text-sm text-muted-foreground">Manage who has access to {key}.</p>
+          <h2 className="text-heading font-[590] text-foreground mb-1">Project Members</h2>
+          <p className="text-ui text-muted-foreground">Manage who has access to {key}.</p>
         </div>
         {canAddMember && (
           <Button 
             onClick={() => setShowModal(true)}
-            className="flex items-center px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground font-bold rounded-md transition-colors"
-            variant="default" size="default"
+            className="flex items-center px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground font-[590] rounded-md transition-colors"
+            variant="primary" size="default"
           >
-            <UserPlus className="w-4 h-4 mr-2" />
+            <UserPlus className="w-4 h-4 mr-2" strokeWidth={1.75} />
             Add Member
           </Button>
         )}
@@ -185,7 +185,7 @@ export const ProjectMembers = () => {
                   placeholder="name@example.com"
                   required
                 />
-                <p className="text-xs text-subtle-foreground mt-1">User must already be a member of the workspace.</p>
+                <p className="text-caption text-subtle-foreground mt-1">User must already be a member of the workspace.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="pm-role">Project Role</Label>
@@ -201,9 +201,9 @@ export const ProjectMembers = () => {
                 </Select>
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
+                <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>Cancel</Button>
                 <Button type="submit" disabled={isAdding}>
-                  {isAdding && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  {isAdding && <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.75} />}
                   Add to Project
                 </Button>
               </DialogFooter>
@@ -215,7 +215,7 @@ export const ProjectMembers = () => {
       <div className="bg-card border border-border rounded-lg overflow-hidden shadow-sm">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="border-b border-border bg-muted text-xs uppercase tracking-wider text-subtle-foreground font-semibold">
+            <tr className="border-b border-border bg-muted text-caption uppercase tracking-wider text-subtle-foreground font-[590]">
               <th className="px-6 py-4">User</th>
               <th className="px-6 py-4">Project Role</th>
               <th className="px-6 py-4 text-right">Actions</th>
@@ -226,13 +226,13 @@ export const ProjectMembers = () => {
               <tr key={member.userId} className="hover:bg-hover transition-colors group">
                 <td className="px-6 py-4">
                   <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center text-foreground font-bold shadow-sm">
+                    <div className="w-10 h-10 rounded-lg bg-hover flex items-center justify-center text-foreground font-[590] shadow-sm">
                       {member.fullName.charAt(0)}
                     </div>
                     <div>
-                      <div className="font-semibold text-foreground">{member.fullName}</div>
-                      <div className="text-xs text-subtle-foreground flex items-center mt-0.5">
-                        <Mail className="w-3 h-3 mr-1" />
+                      <div className="font-[590] text-foreground">{member.fullName}</div>
+                      <div className="text-caption text-subtle-foreground flex items-center mt-0.5">
+                        <Mail className="w-3 h-3 mr-1" strokeWidth={1.75} />
                         {member.email}
                       </div>
                     </div>
@@ -240,13 +240,13 @@ export const ProjectMembers = () => {
                 </td>
 
                 <td className="px-6 py-4">
-                  <div className="flex items-center text-sm">
-                    {member.role === 'project_admin' && <Shield className="w-4 h-4 text-foreground mr-2" />}
-                    {member.role === 'developer' && <Shield className="w-4 h-4 text-foreground mr-2" />}
-                    {member.role === 'viewer' && <User className="w-4 h-4 text-subtle-foreground mr-2" />}
+                  <div className="flex items-center text-ui">
+                    {member.role === 'project_admin' && <Shield className="w-4 h-4 text-foreground mr-2" strokeWidth={1.75} />}
+                    {member.role === 'developer' && <Shield className="w-4 h-4 text-foreground mr-2" strokeWidth={1.75} />}
+                    {member.role === 'viewer' && <User className="w-4 h-4 text-subtle-foreground mr-2" strokeWidth={1.75} />}
                     <span className={clsx("capitalize", 
-                      member.role === 'project_admin' ? 'text-foreground font-medium' : 
-                      member.role === 'developer' ? 'text-foreground font-medium' : 'text-foreground'
+                      member.role === 'project_admin' ? 'text-foreground font-[510]' : 
+                      member.role === 'developer' ? 'text-foreground font-[510]' : 'text-foreground'
                     )}>
                       {member.role.replace('_', ' ')}
                     </span>
@@ -265,7 +265,7 @@ export const ProjectMembers = () => {
                           aria-label={`Actions for ${member.fullName}`}
                           size="icon" variant="ghost"
                         >
-                          <MoreHorizontal className="w-5 h-5" />
+                          <MoreHorizontal className="w-5 h-5" strokeWidth={1.75} />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-48">

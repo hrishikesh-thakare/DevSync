@@ -43,8 +43,8 @@ export const ProjectLayout = () => {
   if (!currentProject) return null;
 
   const tabClass = ({ isActive }: { isActive: boolean }) => clsx(
-    "flex items-center pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
-    isActive ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border-strong"
+    "flex items-center pb-3 text-ui font-[510] border-b-2 transition-colors whitespace-nowrap",
+    isActive ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground hover:border-strong"
   );
 
   return (
@@ -54,22 +54,22 @@ export const ProjectLayout = () => {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-primary-muted border border-primary-border rounded-lg flex items-center justify-center">
-              <Kanban className="w-5 h-5 text-primary" />
+              <Kanban className="w-5 h-5 text-primary" strokeWidth={1.75} />
             </div>
             <div>
-              <div className="text-xs font-semibold text-subtle-foreground uppercase tracking-widest mb-0.5">Project / {key}</div>
-              <h2 className="text-xl font-bold text-foreground">{currentProject?.name || 'Loading Project...'}</h2>
+              <div className="text-caption font-[590] text-subtle-foreground uppercase tracking-widest mb-0.5">Project / {key}</div>
+              <h2 className="text-heading font-[590] text-foreground">{currentProject?.name || 'Loading Project...'}</h2>
             </div>
           </div>
 
           <div className="flex items-center space-x-3">
             <div className="flex -space-x-2 mr-2">
-              <div className="w-8 h-8 rounded-full bg-secondary border-2 border-background z-20"></div>
-              <div className="w-8 h-8 rounded-full bg-secondary border-2 border-background z-10"></div>
-              <div className="w-8 h-8 rounded-full bg-secondary border-2 border-background flex items-center justify-center text-xs text-foreground z-0">+3</div>
+              <div className="w-8 h-8 rounded-full bg-hover border-2 border-background z-[var(--z-dropdown)]"></div>
+              <div className="w-8 h-8 rounded-full bg-hover border-2 border-background z-[var(--z-sticky)]"></div>
+              <div className="w-8 h-8 rounded-full bg-hover border-2 border-background flex items-center justify-center text-caption text-foreground z-[var(--z-base)]">+3</div>
             </div>
             <Button className="p-2 text-muted-foreground hover:text-foreground hover:bg-hover rounded-lg transition-colors" size="icon" variant="ghost">
-              <Filter className="w-5 h-5" />
+              <Filter className="w-5 h-5" strokeWidth={1.75} />
             </Button>
           </div>
         </div>
@@ -77,33 +77,33 @@ export const ProjectLayout = () => {
         {/* Tab Navigation — All 7 tabs */}
         <div className="flex space-x-6 mt-2 overflow-x-auto">
           <NavLink to={`/w/${slug}/projects/${key}`} end className={tabClass}>
-            <Kanban className="w-4 h-4 mr-2" />
+            <Kanban className="w-4 h-4 mr-2" strokeWidth={1.75} />
             Board
           </NavLink>
           <NavLink to={`/w/${slug}/projects/${key}/backlog`} className={tabClass}>
-            <List className="w-4 h-4 mr-2" />
+            <List className="w-4 h-4 mr-2" strokeWidth={1.75} />
             Backlog
           </NavLink>
           <NavLink to={`/w/${slug}/projects/${key}/sprints`} className={tabClass}>
-            <IterationCcw className="w-4 h-4 mr-2" />
+            <IterationCcw className="w-4 h-4 mr-2" strokeWidth={1.75} />
             Sprints
           </NavLink>
           <NavLink to={`/w/${slug}/projects/${key}/channels`} className={tabClass}>
-            <Hash className="w-4 h-4 mr-2" />
+            <Hash className="w-4 h-4 mr-2" strokeWidth={1.75} />
             Channels
           </NavLink>
           <NavLink to={`/w/${slug}/projects/${key}/github`} className={tabClass}>
-            <GitBranch className="w-4 h-4 mr-2" />
+            <GitBranch className="w-4 h-4 mr-2" strokeWidth={1.75} />
             GitHub
           </NavLink>
           <NavLink to={`/w/${slug}/projects/${key}/members`} className={tabClass}>
-            <Users className="w-4 h-4 mr-2" />
+            <Users className="w-4 h-4 mr-2" strokeWidth={1.75} />
             Members
           </NavLink>
           {/* Settings tab — visible to project_admin or workspace admin */}
           {(isAdmin() || isProjectAdmin) && (
             <NavLink to={`/w/${slug}/projects/${key}/settings`} className={tabClass}>
-              <Settings className="w-4 h-4 mr-2" />
+              <Settings className="w-4 h-4 mr-2" strokeWidth={1.75} />
               Settings
             </NavLink>
           )}

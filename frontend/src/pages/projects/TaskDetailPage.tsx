@@ -86,12 +86,12 @@ const formatBytes = (bytes: number) => {
 
 const attachmentIcon = (filetype?: string | null) => {
   switch (filetype) {
-    case 'image': return <FileImage className="w-4 h-4 text-special flex-shrink-0" />;
-    case 'pdf': return <FileText className="w-4 h-4 text-destructive flex-shrink-0" />;
-    case 'code': return <FileCode2 className="w-4 h-4 text-primary flex-shrink-0" />;
-    case 'video': return <FileVideo2 className="w-4 h-4 text-success flex-shrink-0" />;
-    case 'audio': return <FileAudio2 className="w-4 h-4 text-warning flex-shrink-0" />;
-    default: return <File className="w-4 h-4 text-muted-foreground flex-shrink-0" />;
+    case 'image': return <FileImage className="w-4 h-4 text-special flex-shrink-0" strokeWidth={1.75} />;
+    case 'pdf': return <FileText className="w-4 h-4 text-destructive flex-shrink-0" strokeWidth={1.75} />;
+    case 'code': return <FileCode2 className="w-4 h-4 text-primary flex-shrink-0" strokeWidth={1.75} />;
+    case 'video': return <FileVideo2 className="w-4 h-4 text-success flex-shrink-0" strokeWidth={1.75} />;
+    case 'audio': return <FileAudio2 className="w-4 h-4 text-warning flex-shrink-0" strokeWidth={1.75} />;
+    default: return <File className="w-4 h-4 text-muted-foreground flex-shrink-0" strokeWidth={1.75} />;
   }
 };
 
@@ -336,7 +336,7 @@ export const TaskDetailPage = () => {
   };
 
   const handleDeleteTask = async () => {
-    if (!(await confirm({ message: 'Are you sure you want to delete this task?', isDestructive: true }))) return;
+    if (!(await confirm({ message: 'Delete this task? This action cannot be undone.', isDestructive: true }))) return;
     try {
       await apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}`, {
         method: 'DELETE',
@@ -394,7 +394,7 @@ export const TaskDetailPage = () => {
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-full">
-        <Loader2 className="w-8 h-8 animate-spin text-foreground" />
+        <Loader2 className="w-8 h-8 animate-spin text-foreground" strokeWidth={1.5} />
       </div>
     );
   }
@@ -402,8 +402,8 @@ export const TaskDetailPage = () => {
   if (!task) {
     return (
       <div className="p-8 text-center text-subtle-foreground">
-        <h2 className="text-xl font-bold text-foreground mb-2">Task not found</h2>
-        <Button onClick={() => navigate(-1)} className="text-primary hover:underline" variant="link" size="default">Go back</Button>
+        <h2 className="text-heading font-[590] text-foreground mb-2">Task not found</h2>
+        <Button onClick={() => navigate(-1)} className="text-primary hover:underline" variant="ghost" size="default">Go back</Button>
       </div>
     );
   }
@@ -415,24 +415,24 @@ export const TaskDetailPage = () => {
       <div className="sticky top-0 z-(--z-sticky) flex items-center justify-between px-8 py-4 border-b border-border bg-background/80 backdrop-blur">
         <div className="flex items-center space-x-4">
           <Button onClick={() => navigate(-1)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-hover rounded transition-colors" size="icon" variant="ghost">
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-5 h-5" strokeWidth={1.75} />
           </Button>
-          <span className="text-sm font-mono text-muted-foreground bg-muted px-2 py-1 rounded border border-border">{task.taskKey}</span>
-          {isSaving && <Loader2 className="w-4 h-4 animate-spin text-subtle-foreground" />}
+          <span className="text-ui font-mono text-muted-foreground bg-muted px-2 py-1 rounded border border-border">{task.taskKey}</span>
+          {isSaving && <Loader2 className="w-4 h-4 animate-spin text-subtle-foreground" strokeWidth={1.75} />}
         </div>
         <div className="flex items-center space-x-3">
           {canEditTask && (
             <Button 
               onClick={handleDeleteTask}
-              className="text-sm font-medium px-3 py-1.5 text-destructive hover:text-destructive/80 hover:bg-danger-muted border border-danger-border rounded transition-colors"
+              className="text-ui font-[510] px-3 py-1.5 text-destructive hover:text-destructive/80 hover:bg-danger-muted border border-danger-border rounded transition-colors"
               size="icon" variant="destructive"
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="w-4 h-4" strokeWidth={1.75} />
             </Button>
           )}
           <Button 
             onClick={handleDiscussInChannel}
-            className="text-sm font-medium px-3 py-1.5 bg-secondary text-muted-foreground hover:text-foreground hover:bg-hover rounded transition-colors flex items-center"
+            className="text-ui font-[510] px-3 py-1.5 bg-hover text-muted-foreground hover:text-foreground hover:bg-hover rounded transition-colors flex items-center"
             variant="secondary" size="default"
           >
             <MessageSquare className="w-4 h-4 mr-1.5" /> Discuss
@@ -453,17 +453,17 @@ export const TaskDetailPage = () => {
                   value={editTitle}
                   onChange={e => setEditTitle(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleTitleSave(); if (e.key === 'Escape') setIsEditingTitle(false); }}
-                  className="text-3xl font-bold text-foreground bg-transparent border-0 border-b-2 border-primary px-0 py-0 flex-1 h-auto md:text-3xl"
+                  className="text-heading font-[590] text-foreground bg-transparent border-0 border-b-2 border-primary px-0 py-0 flex-1 h-auto md:text-heading"
                   autoFocus
                 />
-                <Button onClick={handleTitleSave} className="text-sm text-foreground bg-secondary hover:bg-hover px-3 py-1 rounded" variant="secondary" size="default">Save</Button>
-                <Button onClick={() => setIsEditingTitle(false)} className="text-sm text-muted-foreground hover:text-foreground" variant="ghost" size="default">Cancel</Button>
+                <Button onClick={handleTitleSave} className="text-ui text-foreground bg-hover hover:bg-hover px-3 py-1 rounded" variant="secondary" size="default">Save</Button>
+                <Button onClick={() => setIsEditingTitle(false)} className="text-ui text-muted-foreground hover:text-foreground" variant="ghost" size="default">Cancel</Button>
               </div>
             ) : canEditTask ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <h1 
-                    className={clsx("text-3xl font-bold text-foreground mb-4 leading-snug transition-colors", canEditTask && "cursor-pointer hover:text-foreground")}
+                    className={clsx("text-heading font-[590] text-foreground mb-4 leading-snug transition-colors", canEditTask && "cursor-pointer hover:text-foreground")}
                     onClick={() => canEditTask && setIsEditingTitle(true)}
                   >
                     {task.title}
@@ -473,7 +473,7 @@ export const TaskDetailPage = () => {
               </Tooltip>
             ) : (
               <h1 
-                className={clsx("text-3xl font-bold text-foreground mb-4 leading-snug transition-colors", canEditTask && "cursor-pointer hover:text-foreground")}
+                className={clsx("text-heading font-[590] text-foreground mb-4 leading-snug transition-colors", canEditTask && "cursor-pointer hover:text-foreground")}
                 onClick={() => canEditTask && setIsEditingTitle(true)}
               >
                 {task.title}
@@ -484,12 +484,12 @@ export const TaskDetailPage = () => {
           {/* Description — Click to edit */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center space-x-2 text-foreground font-semibold">
-                <AlignLeft className="w-5 h-5" />
+              <div className="flex items-center space-x-2 text-foreground font-[590]">
+                <AlignLeft className="w-5 h-5" strokeWidth={1.75} />
                 <h3>Description</h3>
               </div>
               {canEditTask && !isEditingDesc && (
-                <Button onClick={() => setIsEditingDesc(true)} className="text-xs text-subtle-foreground hover:text-foreground transition-colors" variant="ghost" size="default">
+                <Button onClick={() => setIsEditingDesc(true)} className="text-caption text-subtle-foreground hover:text-foreground transition-colors" variant="ghost" size="default">
                   Edit
                 </Button>
               )}
@@ -500,12 +500,12 @@ export const TaskDetailPage = () => {
                   value={editDesc}
                   onChange={e => setEditDesc(e.target.value)}
                   rows={6}
-                  className="w-full bg-background border border-input rounded-lg p-4 text-foreground text-sm leading-relaxed focus:border-ring h-auto"
+                  className="w-full bg-background border border-border rounded-lg p-4 text-foreground text-ui leading-relaxed focus:border-ring h-auto"
                   autoFocus
                 />
                 <div className="flex space-x-2">
-                  <Button onClick={handleDescSave} className="text-sm bg-primary text-primary-foreground px-4 py-1.5 rounded-lg font-bold hover:bg-primary-hover" variant="default" size="default">Save</Button>
-                  <Button onClick={() => { setIsEditingDesc(false); setEditDesc(typeof task.description === 'string' ? task.description : task.descriptionText || ''); }} className="text-sm text-muted-foreground hover:text-foreground" variant="ghost" size="default">Cancel</Button>
+                  <Button onClick={handleDescSave} className="text-ui bg-primary text-primary-foreground px-4 py-1.5 rounded-lg font-[590] hover:bg-primary-hover" variant="primary" size="default">Save</Button>
+                  <Button onClick={() => { setIsEditingDesc(false); setEditDesc(typeof task.description === 'string' ? task.description : task.descriptionText || ''); }} className="text-ui text-muted-foreground hover:text-foreground" variant="ghost" size="default">Cancel</Button>
                 </div>
               </div>
             ) : (
@@ -530,10 +530,10 @@ export const TaskDetailPage = () => {
           {/* Attachments */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center space-x-2 text-foreground font-semibold">
-                <Paperclip className="w-5 h-5" />
+              <div className="flex items-center space-x-2 text-foreground font-[590]">
+                <Paperclip className="w-5 h-5" strokeWidth={1.75} />
                 <h3>Attachments</h3>
-                {attachments.length > 0 && <span className="text-xs text-subtle-foreground font-normal">{attachments.length}</span>}
+                {attachments.length > 0 && <span className="text-caption text-subtle-foreground font-normal">{attachments.length}</span>}
               </div>
               {canEditTask && (
                 <>
@@ -541,11 +541,11 @@ export const TaskDetailPage = () => {
                   <Button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
-                    className="text-xs text-subtle-foreground hover:text-foreground transition-colors flex items-center disabled:opacity-50"
+                    className="text-caption text-subtle-foreground hover:text-foreground transition-colors flex items-center disabled:opacity-50"
                     variant="ghost" size="default"
                   >
                     {isUploading
-                      ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" strokeWidth={1.75} />
                       : <Plus className="w-3.5 h-3.5 mr-1" />}
                     {isUploading ? 'Uploading...' : 'Attach'}
                   </Button>
@@ -554,7 +554,7 @@ export const TaskDetailPage = () => {
             </div>
             {attachments.length === 0 ? (
               <Card className="[--card-spacing:--spacing(4)] bg-elevated/50 border border-border text-center">
-                <p className="text-xs text-subtle-foreground">No attachments yet.</p>
+                <p className="text-caption text-subtle-foreground">No attachments yet.</p>
               </Card>
             ) : (
               <div className="space-y-1.5">
@@ -568,20 +568,20 @@ export const TaskDetailPage = () => {
                           variant="ghost" size="default"
                         >
                           {attachmentIcon(att.filetype)}
-                          <span className="ml-2 text-sm text-foreground truncate">{att.filename}</span>
-                          {att.sizeBytes ? <span className="ml-2 text-xs text-subtle-foreground flex-shrink-0">{formatBytes(att.sizeBytes)}</span> : null}
+                          <span className="ml-2 text-ui text-foreground truncate">{att.filename}</span>
+                          {att.sizeBytes ? <span className="ml-2 text-caption text-subtle-foreground flex-shrink-0">{formatBytes(att.sizeBytes)}</span> : null}
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>Download</TooltipContent>
                     </Tooltip>
                     <div className="flex items-center flex-shrink-0 ml-3">
-                      <span className="text-[10px] text-subtle-foreground mr-2 hidden sm:inline">
+                      <span className="text-micro text-subtle-foreground mr-2 hidden sm:inline">
                         {att.uploaderName || 'Unknown'}{att.createdAt ? ` · ${format(new Date(att.createdAt), 'MMM d')}` : ''}
                       </span>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button onClick={() => handleDownload(att.fileId)} className="text-subtle-foreground hover:text-foreground" aria-label="Download" size="icon" variant="ghost">
-                            <Download className="w-3.5 h-3.5" />
+                            <Download className="w-3.5 h-3.5" strokeWidth={1.75} />
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>Download</TooltipContent>
@@ -590,7 +590,7 @@ export const TaskDetailPage = () => {
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button onClick={() => handleDeleteAttachment(att.fileId)} className="text-subtle-foreground hover:text-destructive ml-2" aria-label="Remove" size="icon" variant="destructive">
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>Remove</TooltipContent>
@@ -605,16 +605,16 @@ export const TaskDetailPage = () => {
 
           {/* Discussion */}
           <div>
-            <div className="flex items-center space-x-2 text-foreground font-semibold mb-4 border-b border-border pb-2">
+            <div className="flex items-center space-x-2 text-foreground font-[590] mb-4 border-b border-border pb-2">
               <MessageSquare className="w-5 h-5" />
               <h3>Discussion</h3>
             </div>
             <div className="bg-card border border-border rounded-lg p-6 text-center">
-              <p className="text-muted-foreground mb-4 text-sm">Task discussions have been moved to project channels for better team visibility.</p>
+              <p className="text-muted-foreground mb-4 text-ui">Task discussions have been moved to project channels for better team visibility.</p>
               <Button
                 onClick={handleDiscussInChannel}
-                className="inline-flex items-center justify-center px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground font-medium rounded-lg transition-colors"
-                variant="default" size="default"
+                className="inline-flex items-center justify-center px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground font-[510] rounded-lg transition-colors"
+                variant="primary" size="default"
               >
                 <MessageSquare className="w-4 h-4 mr-2" />
                 Discuss in Channel
@@ -626,12 +626,12 @@ export const TaskDetailPage = () => {
         {/* Right Sidebar Details */}
         <div className="col-span-4 space-y-6">
           <div className="bg-card border border-border rounded-lg p-5 space-y-5">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-subtle-foreground mb-2">Details</h4>
+            <h4 className="text-caption font-[590] uppercase tracking-wider text-subtle-foreground mb-2">Details</h4>
             
             <div className="space-y-4">
               {/* Status */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-subtle-foreground">Status</span>
+                <span className="text-ui text-subtle-foreground">Status</span>
                 <Select value={task.status} onValueChange={(v) => patchTask({ status: v })} disabled={!canEditTask}>
                   <SelectTrigger className="bg-elevated">
                     <SelectValue />
@@ -644,7 +644,7 @@ export const TaskDetailPage = () => {
 
               {/* Issue Type */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-subtle-foreground">Type</span>
+                <span className="text-ui text-subtle-foreground">Type</span>
                 <Select value={task.type || 'task'} onValueChange={(v) => patchTask({ type: v })} disabled={!canEditTask}>
                   <SelectTrigger className="bg-elevated">
                     <SelectValue />
@@ -657,7 +657,7 @@ export const TaskDetailPage = () => {
 
               {/* Priority */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-subtle-foreground">Priority</span>
+                <span className="text-ui text-subtle-foreground">Priority</span>
                 <Select value={task.priority} onValueChange={(v) => patchTask({ priority: v })} disabled={!canEditTask}>
                   <SelectTrigger className="bg-elevated">
                     <SelectValue />
@@ -670,7 +670,7 @@ export const TaskDetailPage = () => {
 
               {/* Assignee */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-subtle-foreground">Assignee</span>
+                <span className="text-ui text-subtle-foreground">Assignee</span>
                 <Select value={task.assigneeId || ''} onValueChange={(v) => patchTask({ assigneeId: v || null })} disabled={!canEditTask}>
                   <SelectTrigger className="bg-elevated max-w-[160px]">
                     <SelectValue placeholder="Unassigned" />
@@ -685,14 +685,14 @@ export const TaskDetailPage = () => {
 
               {/* Reporter */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-subtle-foreground">Reporter</span>
+                <span className="text-ui text-subtle-foreground">Reporter</span>
                 <div className="flex items-center space-x-2">
                   <Avatar size="sm" className="border border-border">
-                    <AvatarFallback className="bg-secondary text-[10px] text-foreground font-bold">
+                    <AvatarFallback className="bg-hover text-micro text-foreground font-[590]">
                       {(members.find(m => m.userId === task.reporterId)?.fullName || '?').charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="text-sm text-foreground font-medium">
+                  <span className="text-ui text-foreground font-[510]">
                     {members.find(m => m.userId === task.reporterId)?.fullName || 'System'}
                   </span>
                 </div>
@@ -700,19 +700,19 @@ export const TaskDetailPage = () => {
 
               {/* Due Date */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-subtle-foreground">Due Date</span>
+                <span className="text-ui text-subtle-foreground">Due Date</span>
                 <Input
                   type="date"
                   value={task.dueDate ? task.dueDate.substring(0, 10) : ''}
                   onChange={e => patchTask({ dueDate: e.target.value || null })}
                   disabled={!canEditTask}
-                  className="bg-background border border-input text-foreground rounded px-2 py-1 text-sm disabled:opacity-50"
+                  className="bg-background border border-border text-foreground rounded px-2 py-1 text-ui disabled:opacity-50"
                 />
               </div>
 
               {/* Sprint */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-subtle-foreground">Sprint</span>
+                <span className="text-ui text-subtle-foreground">Sprint</span>
                 <Select value={task.sprintId || ''} onValueChange={(v) => patchTask({ sprintId: v || null })} disabled={!canEditTask}>
                   <SelectTrigger className="bg-elevated max-w-[160px]">
                     <SelectValue placeholder="Backlog" />
@@ -727,7 +727,7 @@ export const TaskDetailPage = () => {
 
               {/* Parent Task */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-subtle-foreground">Parent Task</span>
+                <span className="text-ui text-subtle-foreground">Parent Task</span>
                 <Select value={task.parentTaskId || ''} onValueChange={(v) => patchTask({ parentTaskId: v || null })} disabled={!canEditTask}>
                   <SelectTrigger className="bg-elevated max-w-[160px]">
                     <SelectValue placeholder="None" />
@@ -742,7 +742,7 @@ export const TaskDetailPage = () => {
 
               {/* Points */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-subtle-foreground">Points</span>
+                <span className="text-ui text-subtle-foreground">Points</span>
                 <Input
                   type="number"
                   min="0"
@@ -750,7 +750,7 @@ export const TaskDetailPage = () => {
                   value={task.storyPoints ?? ''}
                   onChange={e => patchTask({ storyPoints: e.target.value !== '' ? parseInt(e.target.value) : null })}
                   disabled={!canEditTask}
-                  className="bg-background border border-input text-foreground rounded px-2 py-1 text-sm w-16 text-right disabled:opacity-50"
+                  className="bg-background border border-border text-foreground rounded px-2 py-1 text-ui w-16 text-right disabled:opacity-50"
                   placeholder="—"
                 />
               </div>
@@ -758,9 +758,9 @@ export const TaskDetailPage = () => {
               {/* AI Estimate */}
               {task.aiDurationEstimate != null && (
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-subtle-foreground">AI Estimate</span>
-                  <span className="flex items-center text-sm text-special font-medium">
-                    <Sparkles className="w-3 h-3 mr-1" />
+                  <span className="text-ui text-subtle-foreground">AI Estimate</span>
+                  <span className="flex items-center text-ui text-special font-[510]">
+                    <Sparkles className="w-3 h-3 mr-1" strokeWidth={1.75} />
                     {Number(task.aiDurationEstimate)}h
                   </span>
                 </div>
@@ -768,14 +768,14 @@ export const TaskDetailPage = () => {
 
               {/* Labels */}
               <div>
-                <span className="text-sm text-subtle-foreground block mb-2">Labels</span>
+                <span className="text-ui text-subtle-foreground block mb-2">Labels</span>
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {(task.labels || []).map((label: string, idx: number) => (
                     <span key={idx} className="flex items-center">
                       <LabelChip name={label} />
                       {canEditTask && (
                         <Button onClick={() => removeLabel(label)} className="ml-1.5 text-subtle-foreground hover:text-foreground" size="icon" variant="ghost">
-                          <X className="w-3 h-3" />
+                          <X className="w-3 h-3" strokeWidth={1.75} />
                         </Button>
                       )}
                     </span>
@@ -789,13 +789,13 @@ export const TaskDetailPage = () => {
                       onChange={e => setLabelInput(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addLabel(); } }}
                       list={`label-suggestions-${key}`}
-                      className="flex-1 bg-background border border-input text-foreground rounded px-2 py-1 text-xs md:text-xs"
+                      className="flex-1 bg-background border border-border text-foreground rounded px-2 py-1 text-caption md:text-caption"
                       placeholder="Add label..."
                     />
                     <datalist id={`label-suggestions-${key}`}>
                       {labelNames.map(name => <option key={name} value={name} />)}
                     </datalist>
-                    <Button onClick={addLabel} className="text-xs text-muted-foreground hover:text-foreground" variant="ghost" size="default">Add</Button>
+                    <Button onClick={addLabel} className="text-caption text-muted-foreground hover:text-foreground" variant="ghost" size="default">Add</Button>
                   </div>
                 )}
               </div>
@@ -805,7 +805,7 @@ export const TaskDetailPage = () => {
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-2">
                     <GitBranch className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm text-foreground font-semibold">GitHub Activity</span>
+                    <span className="text-ui text-foreground font-[590]">GitHub Activity</span>
                   </div>
                   {canEditTask && (
                     <div className="flex items-center space-x-1">
@@ -814,7 +814,7 @@ export const TaskDetailPage = () => {
                         <TooltipTrigger asChild>
                           <Button
                             onClick={() => setShowCreatePR(true)}
-                            className="text-[10px] text-muted-foreground hover:text-foreground hover:bg-hover px-1.5 py-0.5 rounded transition-colors flex items-center"
+                            className="text-micro text-muted-foreground hover:text-foreground hover:bg-hover px-1.5 py-0.5 rounded transition-colors flex items-center"
                             aria-label="Create Pull Request"
                             size="icon" variant="ghost"
                           >
@@ -832,12 +832,12 @@ export const TaskDetailPage = () => {
                   {/* Smart Branch Suggestion */}
                   <div className="bg-card border border-border rounded p-3">
                     <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center text-xs text-subtle-foreground font-medium uppercase tracking-wider">
+                      <div className="flex items-center text-caption text-subtle-foreground font-[510] uppercase tracking-wider">
                         <GitBranch className="w-3 h-3 mr-1" /> Smart Branch Name
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <code className="flex-1 bg-muted border border-border text-[10px] text-foreground px-2 py-1.5 rounded font-mono truncate">
+                      <code className="flex-1 bg-muted border border-border text-micro text-foreground px-2 py-1.5 rounded font-mono truncate">
                         {`feature/${task.taskKey}-${task.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`}
                       </code>
                       <Tooltip>
@@ -849,7 +849,7 @@ export const TaskDetailPage = () => {
                               setCopiedBranch(true);
                               setTimeout(() => setCopiedBranch(false), 2000);
                             }}
-                            className="text-[10px] text-muted-foreground hover:text-foreground bg-secondary hover:bg-hover px-2 py-1.5 rounded transition-colors flex items-center flex-shrink-0"
+                            className="text-micro text-muted-foreground hover:text-foreground bg-hover hover:bg-hover px-2 py-1.5 rounded transition-colors flex items-center flex-shrink-0"
                             variant="secondary" size="default"
                           >
                             {copiedBranch ? <Check className="w-3 h-3 mr-1 text-success" /> : <Copy className="w-3 h-3 mr-1" />}
@@ -859,7 +859,7 @@ export const TaskDetailPage = () => {
                         <TooltipContent>Copy git checkout command</TooltipContent>
                       </Tooltip>
                     </div>
-                    <p className="text-[10px] text-subtle-foreground mt-2">
+                    <p className="text-micro text-subtle-foreground mt-2">
                       One-click copy to enable sync, linking, and traceability
                     </p>
                   </div>
@@ -867,19 +867,19 @@ export const TaskDetailPage = () => {
                   {/* Pull Requests */}
                   {githubActivity.pullRequests?.length > 0 && (
                     <div>
-                      <div className="flex items-center text-xs text-subtle-foreground font-medium mb-1.5 uppercase tracking-wider">
+                      <div className="flex items-center text-caption text-subtle-foreground font-[510] mb-1.5 uppercase tracking-wider">
                         <GitPullRequest className="w-3 h-3 mr-1" /> Pull Requests
                       </div>
                       <div className="space-y-1.5">
                         {githubActivity.pullRequests.map(pr => (
                           <a key={pr.id} href={pr.htmlUrl} target="_blank" rel="noopener noreferrer" className="block bg-card border border-border rounded p-2 hover:border-border-strong transition-colors">
                             <div className="flex items-start justify-between">
-                              <span className="text-xs text-foreground font-medium line-clamp-2 pr-2">{pr.title}</span>
-                              {pr.state === 'open' && <Badge variant="success" className="text-[10px] h-auto px-1.5 flex-shrink-0">Open</Badge>}
-                            {pr.state === 'merged' && <Badge variant="outline" className="bg-special-muted text-special border-special-border text-[10px] h-auto px-1.5 flex-shrink-0">Merged</Badge>}
-                              {pr.state === 'closed' && <Badge variant="destructive" className="text-[10px] h-auto px-1.5 flex-shrink-0">Closed</Badge>}
+                              <span className="text-caption text-foreground font-[510] line-clamp-2 pr-2">{pr.title}</span>
+                              {pr.state === 'open' && <Badge variant="success" className="text-micro h-auto px-1.5 flex-shrink-0">Open</Badge>}
+                            {pr.state === 'merged' && <Badge variant="secondary" className="bg-special-muted text-special border-special-border text-micro h-auto px-1.5 flex-shrink-0">Merged</Badge>}
+                              {pr.state === 'closed' && <Badge variant="destructive" className="text-micro h-auto px-1.5 flex-shrink-0">Closed</Badge>}
                             </div>
-                            <div className="text-[10px] font-mono text-subtle-foreground mt-1">#{pr.prNumber}</div>
+                            <div className="text-micro font-mono text-subtle-foreground mt-1">#{pr.prNumber}</div>
                           </a>
                         ))}
                       </div>
@@ -889,18 +889,18 @@ export const TaskDetailPage = () => {
                   {/* Branches */}
                   {githubActivity.branches?.length > 0 && (
                     <div>
-                      <div className="flex items-center text-xs text-subtle-foreground font-medium mb-1.5 uppercase tracking-wider">
+                      <div className="flex items-center text-caption text-subtle-foreground font-[510] mb-1.5 uppercase tracking-wider">
                         <GitBranch className="w-3 h-3 mr-1" /> Branches
                       </div>
                       <div className="space-y-1.5">
                         {githubActivity.branches.map(b => (
                           <div key={b.id} className="flex flex-col bg-card border border-border rounded p-2">
                             <div className="flex items-start justify-between">
-                              <span className="text-xs font-mono text-primary break-all">{b.branchName}</span>
-                              {b.isDeleted && <span className="text-[10px] text-muted-foreground bg-secondary border border-border px-1.5 py-0.5 rounded ml-2 flex-shrink-0">Deleted</span>}
+                              <span className="text-caption font-mono text-primary break-all">{b.branchName}</span>
+                              {b.isDeleted && <span className="text-micro text-muted-foreground bg-hover border border-border px-1.5 py-0.5 rounded ml-2 flex-shrink-0">Deleted</span>}
                             </div>
                             {b.htmlUrl && !b.isDeleted && (
-                              <a href={b.htmlUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-subtle-foreground hover:text-foreground mt-1 flex items-center">
+                              <a href={b.htmlUrl} target="_blank" rel="noopener noreferrer" className="text-micro text-subtle-foreground hover:text-foreground mt-1 flex items-center">
                                 View on GitHub <ExternalLink className="w-3 h-3 ml-1" />
                               </a>
                             )}
@@ -913,17 +913,17 @@ export const TaskDetailPage = () => {
                   {/* Issues */}
                   {githubActivity.issues?.length > 0 && (
                     <div>
-                      <div className="flex items-center text-xs text-subtle-foreground font-medium mb-1.5 uppercase tracking-wider">
+                      <div className="flex items-center text-caption text-subtle-foreground font-[510] mb-1.5 uppercase tracking-wider">
                         <AlertCircle className="w-3 h-3 mr-1" /> Issues
                       </div>
                       <div className="space-y-1.5">
                         {githubActivity.issues.map(issue => (
                           <a key={issue.id} href={issue.htmlUrl} target="_blank" rel="noopener noreferrer" className="block bg-card border border-border rounded p-2 hover:border-border-strong transition-colors">
                             <div className="flex items-start justify-between">
-                              <span className="text-xs text-foreground font-medium line-clamp-2 pr-2">{issue.title}</span>
-                              {issue.state === 'open' ? <Badge variant="success" className="text-[10px] h-auto px-1.5 flex-shrink-0">Open</Badge> : <Badge variant="destructive" className="text-[10px] h-auto px-1.5 flex-shrink-0">Closed</Badge>}
+                              <span className="text-caption text-foreground font-[510] line-clamp-2 pr-2">{issue.title}</span>
+                              {issue.state === 'open' ? <Badge variant="success" className="text-micro h-auto px-1.5 flex-shrink-0">Open</Badge> : <Badge variant="destructive" className="text-micro h-auto px-1.5 flex-shrink-0">Closed</Badge>}
                             </div>
-                            <div className="text-[10px] font-mono text-subtle-foreground mt-1">#{issue.githubIssueNumber}</div>
+                            <div className="text-micro font-mono text-subtle-foreground mt-1">#{issue.githubIssueNumber}</div>
                           </a>
                         ))}
                       </div>
@@ -933,17 +933,17 @@ export const TaskDetailPage = () => {
                   {/* Commits */}
                   {githubActivity.commits?.length > 0 && (
                     <div>
-                      <div className="flex items-center text-xs text-subtle-foreground font-medium mb-1.5 uppercase tracking-wider">
-                        <GitCommit className="w-3 h-3 mr-1" /> Commits
+                      <div className="flex items-center text-caption text-subtle-foreground font-[510] mb-1.5 uppercase tracking-wider">
+                        <GitCommit className="w-3 h-3 mr-1" strokeWidth={1.75} /> Commits
                       </div>
                       <div className="space-y-1.5">
                         {githubActivity.commits.map(c => (
                           <a key={c.commitSha} href={c.url} target="_blank" rel="noopener noreferrer" className="block bg-card border border-border rounded p-2 hover:border-border-strong transition-colors">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="font-mono text-xs text-primary">{c.commitSha.substring(0, 7)}</span>
-                              <span className="text-[10px] text-subtle-foreground">{format(new Date(c.committedAt), 'MMM d')}</span>
+                              <span className="font-mono text-caption text-primary">{c.commitSha.substring(0, 7)}</span>
+                              <span className="text-micro text-subtle-foreground">{format(new Date(c.committedAt), 'MMM d')}</span>
                             </div>
-                            <p className="text-xs text-foreground truncate" title={c.messageHeadline}>{c.messageHeadline}</p>
+                            <p className="text-caption text-foreground truncate" title={c.messageHeadline}>{c.messageHeadline}</p>
                           </a>
                         ))}
                       </div>
@@ -953,8 +953,8 @@ export const TaskDetailPage = () => {
                   {/* Empty State */}
                   {githubActivity.commits.length === 0 && githubActivity.pullRequests.length === 0 && githubActivity.issues.length === 0 && githubActivity.branches.length === 0 && (
                     <div className="text-center py-4 bg-card border border-border rounded-lg">
-                      <p className="text-xs text-muted-foreground mb-2 font-medium">No GitHub activity yet</p>
-                      <p className="text-[10px] text-subtle-foreground max-w-[200px] mx-auto leading-relaxed">
+                      <p className="text-caption text-muted-foreground mb-2 font-[510]">No GitHub activity yet</p>
+                      <p className="text-micro text-subtle-foreground max-w-[200px] mx-auto leading-relaxed">
                         Mention <span className="font-mono text-foreground bg-muted px-1 rounded">{taskKey}</span> in branches, PRs, issues or commits.
                       </p>
                     </div>
@@ -969,11 +969,11 @@ export const TaskDetailPage = () => {
 
               {/* Created / Updated */}
               <div className="pt-6 mt-6 border-t border-border space-y-2">
-                <div className="flex justify-between text-xs">
+                <div className="flex justify-between text-caption">
                   <span className="text-subtle-foreground">Created</span>
                   <span className="text-subtle-foreground">{task.createdAt ? format(new Date(task.createdAt), 'MMM d, yyyy') : '—'}</span>
                 </div>
-                <div className="flex justify-between text-xs">
+                <div className="flex justify-between text-caption">
                   <span className="text-subtle-foreground">Updated</span>
                   <span className="text-subtle-foreground">{task.updatedAt ? format(new Date(task.updatedAt), 'MMM d, yyyy') : '—'}</span>
                 </div>

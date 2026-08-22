@@ -44,28 +44,28 @@ export const VerifyEmailPage = () => {
       <div className="auth-shape-1"></div>
       <div className="auth-shape-2"></div>
 
-      <div className="bg-card border border-border rounded-lg shadow-sm max-w-md w-full p-8 animate-fadeIn relative z-10 text-center">
+      <div className="bg-card border border-border rounded-lg shadow-sm max-w-[400px] w-full p-8 animate-fadeIn relative z-[var(--z-sticky)] text-center">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-foreground mb-2">DevSync</h1>
-          <p className="text-muted-foreground text-sm">Email verification</p>
+          <h1 className="text-heading font-[590] text-foreground mb-2">DevSync</h1>
+          <p className="text-muted-foreground text-ui">Email verification</p>
         </div>
 
         {state === 'verifying' && (
           <div className="flex flex-col items-center gap-4 py-6">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <p className="text-muted-foreground text-sm">Verifying your email address…</p>
+            <Loader2 className="h-12 w-12 animate-spin text-primary" strokeWidth={1.5} />
+            <p className="text-muted-foreground text-ui">Verifying your email address…</p>
           </div>
         )}
 
         {state === 'verified' && (
           <div className="space-y-6 py-2">
             <div className="flex justify-center">
-              <CheckCircle2 className="h-16 w-16 text-success" />
+              <CheckCircle2 className="h-16 w-16 text-success" strokeWidth={1.5} />
             </div>
             <p className="text-foreground">
               Your email has been <strong className="text-success">verified</strong> successfully.
             </p>
-            <Button asChild variant="default" className="w-full py-3 text-center h-auto">
+            <Button asChild variant="primary" className="w-full py-3 text-center h-auto">
               <Link to="/login" className="inline-block bg-primary text-primary-foreground hover:bg-primary-hover rounded-md w-full py-3 text-center">
                 Go to sign in
               </Link>
@@ -77,13 +77,13 @@ export const VerifyEmailPage = () => {
           <div className="space-y-6 py-2">
             <div className="flex justify-center">
               {token ? (
-                <XCircle className="h-16 w-16 text-danger" />
+                <XCircle className="h-16 w-16 text-danger" strokeWidth={1.5} />
               ) : (
-                <AlertTriangle className="h-16 w-16 text-warning" />
+                <AlertTriangle className="h-16 w-16 text-warning" strokeWidth={1.5} />
               )}
             </div>
-            <p className="text-foreground">{error || 'Something went wrong.'}</p>
-            <Button asChild variant="default" className="w-full py-3 text-center h-auto">
+            <p className="text-foreground">{error || 'Verification failed.'}</p>
+            <Button asChild variant="primary" className="w-full py-3 text-center h-auto">
               <Link to="/login" className="inline-block bg-primary text-primary-foreground hover:bg-primary-hover rounded-md w-full py-3 text-center">
                 Back to sign in
               </Link>

@@ -42,7 +42,7 @@ const IssueTypeIcon = ({ type }: { type: string }) => {
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="flex items-center justify-center">
-            <CheckSquare className="w-4 h-4 text-subtle-foreground" />
+            <CheckSquare className="w-4 h-4 text-subtle-foreground" strokeWidth={1.75} />
           </span>
         </TooltipTrigger>
         <TooltipContent>{type}</TooltipContent>
@@ -183,23 +183,23 @@ export const BacklogPage = () => {
       <div className="flex items-center justify-between mb-6 shrink-0">
         <div className="flex items-center space-x-4">
           <div className="relative w-72">
-            <Search className="w-4 h-4 text-subtle-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-subtle-foreground absolute left-3 top-1/2 -translate-y-1/2" strokeWidth={1.75} />
             <Input 
               type="text" 
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search backlog..." 
-              className="w-full bg-card border border-border rounded-md pl-9 pr-4 py-2 text-sm text-foreground focus:border-ring focus:ring-1 focus:ring-ring transition-colors h-auto"
+              className="w-full bg-card border border-border rounded-md pl-9 pr-4 py-2 text-ui text-foreground focus:border-ring focus:ring-1 focus:ring-ring transition-colors h-auto"
             />
           </div>
           
           <Button 
             onClick={() => setShowOnlyBacklog(!showOnlyBacklog)}
             className={clsx(
-              "px-3 py-2 text-sm font-medium rounded-md border transition-colors",
+              "px-3 py-2 text-ui font-[510] rounded-md border transition-colors",
               showOnlyBacklog ? "bg-primary-muted border-primary-border text-primary" : "bg-card border-border text-muted-foreground hover:text-foreground"
             )}
-            variant="outline" size="default"
+            variant="secondary" size="default"
           >
             Backlog Only
           </Button>
@@ -207,8 +207,8 @@ export const BacklogPage = () => {
 
         <div className="flex items-center space-x-3">
           {selectedTasks.size > 0 && (
-            <div className="flex items-center bg-secondary rounded-md border border-border px-3 py-1.5 animate-in fade-in slide-in-from-right-4">
-              <span className="text-sm font-semibold text-foreground mr-3">{selectedTasks.size} selected</span>
+            <div className="flex items-center bg-hover rounded-md border border-border px-3 py-1.5 animate-in fade-in slide-in-from-right-4">
+              <span className="text-ui font-[590] text-foreground mr-3">{selectedTasks.size} selected</span>
               <Select value={bulkAction} onValueChange={(v) => { setBulkAction(v); setBulkValue(''); }}>
                 <SelectTrigger className="bg-elevated mr-2">
                   <SelectValue placeholder="Select Action..." />
@@ -271,24 +271,24 @@ export const BacklogPage = () => {
                   value={bulkValue}
                   onChange={e => setBulkValue(e.target.value)}
                   placeholder="Points (empty = clear)"
-                  className="bg-background text-sm text-foreground border border-border rounded-md px-2 py-1 focus:border-ring focus:ring-1 focus:ring-ring mr-2 w-32"
+                  className="bg-background text-ui text-foreground border border-border rounded-md px-2 py-1 focus:border-ring focus:ring-1 focus:ring-ring mr-2 w-32"
                 />
               )}
 
               <Button 
                 onClick={handleBulkApply} 
                 disabled={isApplyingBulk || !bulkAction || (bulkAction !== 'clearPoints' && !bulkValue)} 
-                className="text-xs bg-primary hover:bg-primary-hover text-primary-foreground font-bold px-3 py-1 rounded-md disabled:opacity-50"
-                variant="default" size="default"
+                className="text-caption bg-primary hover:bg-primary-hover text-primary-foreground font-[590] px-3 py-1 rounded-md disabled:opacity-50"
+                variant="primary" size="default"
               >
-                {isApplyingBulk ? <Loader2 className="w-3 h-3 animate-spin text-primary-foreground" /> : 'Apply'}
+                {isApplyingBulk ? <Loader2 className="w-3 h-3 animate-spin text-primary-foreground" strokeWidth={1.75} /> : 'Apply'}
               </Button>
             </div>
           )}
 
           {canEditTask && (
-            <Button className="flex items-center px-3 py-2 bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-semibold rounded-md transition-colors" variant="default" size="default">
-              <Plus className="w-4 h-4 mr-1.5" />
+            <Button className="flex items-center px-3 py-2 bg-primary hover:bg-primary-hover text-primary-foreground text-ui font-[590] rounded-md transition-colors" variant="primary" size="default">
+              <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
               Create Task
             </Button>
           )}
@@ -298,39 +298,34 @@ export const BacklogPage = () => {
       {/* Table Container */}
       <div className="flex-1 bg-card border border-border rounded-lg overflow-hidden flex flex-col">
         {/* Table Header */}
-        <div className="grid grid-cols-12 gap-4 px-6 py-3 border-b border-border bg-muted text-xs font-semibold text-subtle-foreground uppercase tracking-wider shrink-0 items-center">
+        <div className="grid grid-cols-12 gap-4 px-6 py-3 border-b border-border bg-muted text-caption font-[590] text-subtle-foreground uppercase tracking-wider shrink-0 items-center">
           <div className="col-span-2 flex items-center space-x-3">
             {canEditTask && (
               <Checkbox
                 aria-label="Select all tasks"
-                checked={
-                  filteredTasks.length > 0 && selectedTasks.size === filteredTasks.length
-                    ? true
-                    : selectedTasks.size > 0
-                      ? 'indeterminate'
-                      : false
-                }
+                checked={filteredTasks.length > 0 && selectedTasks.size === filteredTasks.length}
+                indeterminate={filteredTasks.length > 0 && selectedTasks.size > 0 && selectedTasks.size < filteredTasks.length}
                 onCheckedChange={toggleSelectAll}
                 className="cursor-pointer"
               />
             )}
             <Button onClick={() => handleSort('taskKey')} className="flex items-center hover:text-foreground" variant="ghost" size="default">
-              Key <ArrowUpDown className="w-3 h-3 ml-1" />
+              Key <ArrowUpDown className="w-3 h-3 ml-1" strokeWidth={1.75} />
             </Button>
           </div>
           <div className="col-span-3">
             <Button onClick={() => handleSort('title')} className="flex items-center hover:text-foreground" variant="ghost" size="default">
-              Summary <ArrowUpDown className="w-3 h-3 ml-1" />
+              Summary <ArrowUpDown className="w-3 h-3 ml-1" strokeWidth={1.75} />
             </Button>
           </div>
           <div className="col-span-2">
             <Button onClick={() => handleSort('status')} className="flex items-center hover:text-foreground" variant="ghost" size="default">
-              Status <ArrowUpDown className="w-3 h-3 ml-1" />
+              Status <ArrowUpDown className="w-3 h-3 ml-1" strokeWidth={1.75} />
             </Button>
           </div>
           <div className="col-span-1">
             <Button onClick={() => handleSort('storyPoints')} className="flex items-center hover:text-foreground" variant="ghost" size="default">
-              Points <ArrowUpDown className="w-3 h-3 ml-1" />
+              Points <ArrowUpDown className="w-3 h-3 ml-1" strokeWidth={1.75} />
             </Button>
           </div>
           <div className="col-span-1">Priority</div>
@@ -343,7 +338,7 @@ export const BacklogPage = () => {
         <div className="flex-1 overflow-y-auto relative">
           {isLoading ? (
             <div className="absolute inset-0 flex justify-center items-center">
-              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" strokeWidth={1.5} />
             </div>
           ) : filteredTasks.length === 0 ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-subtle-foreground bg-card border border-dashed border-border m-6 rounded-lg">
@@ -364,7 +359,7 @@ export const BacklogPage = () => {
                 }}
                 className={clsx(
                   "grid grid-cols-12 gap-4 px-6 py-3 border-b border-border hover:bg-hover cursor-pointer transition-colors items-center group focus-visible:ring-2 focus-visible:ring-ring",
-                  selectedTasks.has(task.taskId) && "bg-secondary border-border-strong"
+                  selectedTasks.has(task.taskId) && "bg-hover border-strong"
                 )}
               >
                 {/* Checkbox & Key */}
@@ -380,14 +375,14 @@ export const BacklogPage = () => {
                   )}
                   <div className="flex items-center space-x-2">
                     <IssueTypeIcon type={task.type || task.issueType || 'task'} />
-                    <span className="text-sm font-mono text-subtle-foreground group-hover:text-primary transition-colors">
+                    <span className="text-ui font-mono text-subtle-foreground group-hover:text-primary transition-colors">
                       {task.taskKey}
                     </span>
                   </div>
                 </div>
                 
                 {/* Title */}
-                <div className="col-span-3 text-sm font-medium text-foreground truncate pr-4">
+                <div className="col-span-3 text-ui font-[510] text-foreground truncate pr-4">
                   {task.title}
                   {task.labels && task.labels.length > 0 && (
                     <span className="flex flex-wrap gap-1 mt-1">
@@ -401,7 +396,7 @@ export const BacklogPage = () => {
                 {/* Status */}
                 <div className="col-span-2">
                   <span className={clsx(
-                    "text-[10px] font-bold px-2.5 py-1 rounded-sm uppercase tracking-wide",
+                    "text-micro font-[590] px-2.5 py-1 rounded-sm uppercase tracking-wide",
                     task.status === 'todo' ? "bg-muted text-muted-foreground" :
                     task.status === 'in_progress' ? "bg-primary-muted text-primary border border-primary-border" :
                     task.status === 'in_review' ? "bg-warning-muted text-warning border border-warning-border" :
@@ -416,21 +411,21 @@ export const BacklogPage = () => {
                   {task.storyPoints != null ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Badge variant="outline" className="bg-primary-muted text-primary border-primary-border font-bold">
+                        <Badge variant="secondary" className="bg-primary-muted text-primary border-primary-border font-[590]">
                           {task.storyPoints}
                         </Badge>
                       </TooltipTrigger>
                       <TooltipContent>Story Points</TooltipContent>
                     </Tooltip>
                   ) : (
-                    <span className="text-xs text-subtle-foreground">—</span>
+                    <span className="text-caption text-subtle-foreground">—</span>
                   )}
                 </div>
 
                 {/* Priority */}
                 <div className="col-span-1">
                   <span className={clsx(
-                    "flex items-center text-xs font-semibold capitalize",
+                    "flex items-center text-caption font-[590] capitalize",
                     task.priority === 'critical' ? 'text-danger' :
                     task.priority === 'high' ? 'text-warning' :
                     task.priority === 'medium' ? 'text-primary' : 'text-muted-foreground'
@@ -445,10 +440,10 @@ export const BacklogPage = () => {
                 </div>
 
                 {/* Due Date */}
-                <div className="col-span-1 text-xs text-subtle-foreground flex items-center">
+                <div className="col-span-1 text-caption text-subtle-foreground flex items-center">
                   {task.dueDate ? (
                     <>
-                      <Calendar className="w-3.5 h-3.5 mr-1" />
+                      <Calendar className="w-3.5 h-3.5 mr-1" strokeWidth={1.75} />
                       {format(new Date(task.dueDate), 'MMM d')}
                     </>
                   ) : '—'}
@@ -460,7 +455,7 @@ export const BacklogPage = () => {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Avatar size="sm" className="border border-border shadow-sm">
-                          <AvatarFallback className="bg-secondary text-[10px] font-bold text-foreground">
+                          <AvatarFallback className="bg-hover text-micro font-[590] text-foreground">
                             U
                           </AvatarFallback>
                         </Avatar>
@@ -482,7 +477,7 @@ export const BacklogPage = () => {
                 {/* Actions */}
                 <div className="col-span-1 flex justify-end">
                   <Button onClick={(e) => { e.stopPropagation(); /* would open menu */ }} className="p-1.5 text-subtle-foreground hover:text-foreground hover:bg-hover rounded-md transition-colors opacity-0 group-hover:opacity-100" size="icon" variant="ghost">
-                    <MoreHorizontal className="w-4 h-4" />
+                    <MoreHorizontal className="w-4 h-4" strokeWidth={1.75} />
                   </Button>
                 </div>
               </div>

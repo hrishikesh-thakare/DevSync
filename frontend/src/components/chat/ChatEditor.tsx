@@ -25,7 +25,7 @@ function mrkdwnToHtml(raw: string): string {
 
   // Fenced code block  ```…```
   text = text.replace(/```([\s\S]*?)```/g, (_, code) =>
-    `<pre class="bg-muted border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground whitespace-pre-wrap my-1 overflow-x-auto">${escapeHtml(code.trim())}</pre>`
+    `<pre class="bg-muted border border-border rounded-md px-3 py-2 text-ui font-mono text-foreground whitespace-pre-wrap my-1 overflow-x-auto">${escapeHtml(code.trim())}</pre>`
   );
 
   // Process line-by-line for block-level elements
@@ -37,7 +37,7 @@ function mrkdwnToHtml(raw: string): string {
     // Blockquote
     if (line.startsWith('> ')) {
       if (inList) { html += '</ul>'; inList = false; }
-      html += `<blockquote class="border-l-4 border-border-strong pl-3 text-muted-foreground italic my-0.5">${processInline(line.slice(2))}</blockquote>`;
+      html += `<blockquote class="border-l-4 border-strong pl-3 text-muted-foreground italic my-0.5">${processInline(line.slice(2))}</blockquote>`;
       continue;
     }
 
@@ -66,7 +66,7 @@ function processInline(text: string): string {
   // File attachment links: [filename](file:UUID)  — must come before generic links
   text = text.replace(/\[(.*?)\]\(file:([a-zA-Z0-9-]+)\)/g,
     (_, name, id) =>
-      `<a href="#" data-file-id="${id}" class="inline-flex items-center gap-1.5 px-2 py-0.5 mx-0.5 bg-secondary rounded border border-border text-primary hover:bg-hover transition-colors no-underline text-xs font-medium">📎 ${escapeHtml(name)}</a>`
+      `<a href="#" data-file-id="${id}" class="inline-flex items-center gap-1.5 px-2 py-0.5 mx-0.5 bg-hover rounded border border-border text-primary hover:bg-hover transition-colors no-underline text-caption font-[510]">📎 ${escapeHtml(name)}</a>`
   );
 
   // Bold+Italic  ***text***
@@ -78,14 +78,14 @@ function processInline(text: string): string {
   // Strikethrough  ~text~
   text = text.replace(/~(.*?)~/g, '<del>$1</del>');
   // Inline code  `text`
-  text = text.replace(/`([^`\n]+?)`/g, '<code class="bg-secondary border border-border rounded px-1 py-0.5 text-xs font-mono text-foreground">$1</code>');
+  text = text.replace(/`([^`\n]+?)`/g, '<code class="bg-hover border border-border rounded px-1 py-0.5 text-caption font-mono text-foreground">$1</code>');
   // Hyperlinks  [label](url)
   text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
     '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary underline">$1</a>'
   );
   // @mentions
   text = text.replace(/@([\w\s]+?)(?=\s|$|[^a-zA-Z0-9_ ])/g,
-    '<span class="text-primary bg-primary-muted px-1 rounded font-medium">@$1</span>'
+    '<span class="text-primary bg-primary-muted px-1 rounded font-[510]">@$1</span>'
   );
 
   return text;
@@ -243,14 +243,14 @@ export const ChatEditor = ({
     <div className="relative">
       {/* @mention popup */}
       {mentionQuery !== null && filteredMembers.length > 0 && (
-        <div className="absolute bottom-full left-0 mb-2 w-64 z-(--z-dropdown) overflow-hidden rounded-lg border border-border bg-popover shadow-md">
+        <div className="absolute bottom-full left-0 mb-2 w-64 z-(--z-dropdown) overflow-hidden rounded-lg border border-border bg-card shadow-md">
           <Command shouldFilter={false} className="rounded-none">
-            <div className="px-3 py-1.5 text-[10px] text-muted-foreground font-semibold uppercase tracking-wider border-b border-border">Members</div>
+            <div className="px-3 py-1.5 text-micro text-muted-foreground font-[590] uppercase tracking-wider border-b border-border">Members</div>
             <CommandList>
               {filteredMembers.map(m => (
-                <CommandItem key={m.userId} value={m.fullName} onSelect={() => insertMention(m)} className="flex items-center gap-2.5 px-3 py-2 text-sm">
+                <CommandItem key={m.userId} value={m.fullName} onSelect={() => insertMention(m)} className="flex items-center gap-2.5 px-3 py-2 text-ui">
                   <Avatar size="sm" className="shrink-0">
-                    <AvatarFallback className="bg-primary text-[10px] font-bold text-primary-foreground">{m.fullName[0].toUpperCase()}</AvatarFallback>
+                    <AvatarFallback className="bg-primary text-micro font-[590] text-primary-foreground">{m.fullName[0].toUpperCase()}</AvatarFallback>
                   </Avatar>
                   <span>{m.fullName}</span>
                 </CommandItem>
@@ -261,7 +261,7 @@ export const ChatEditor = ({
       )}
 
       {/* Editor card */}
-      <div className="bg-card border border-border rounded-lg overflow-hidden shadow-sm focus-within:ring-1 focus-within:ring-ring focus-within:border-ring transition-all">
+      <div className="bg-card border border-border rounded-lg overflow-hidden shadow-sm focus-within:ring-1 focus-within:ring-ring focus-within:border-ring transition-colors">
 
         {/* Preview mode */}
         {showPreview && (
@@ -297,7 +297,7 @@ export const ChatEditor = ({
               { label: '> quote', tip: '' },
               { label: '- list', tip: '' },
             ].map(({ label, tip }) => (
-              <span key={label} className="text-[11px] text-subtle-foreground font-mono" title={tip}>
+              <span key={label} className="text-micro text-subtle-foreground font-mono" title={tip}>
                 {label}
                 {tip && <span className="text-subtle-foreground ml-1 font-sans not-italic">{tip}</span>}
               </span>
@@ -312,24 +312,24 @@ export const ChatEditor = ({
             <ToolBtn title="Attach file (+)" onClick={() => fileInputRef.current?.click()} disabled={isUploading || isSending}>
               {isUploading
                 ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
-                : <Plus className="w-4 h-4" />
+                : <Plus className="w-4 h-4" strokeWidth={1.75} />
               }
             </ToolBtn>
             <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
 
             <Sep />
 
-            <ToolBtn title="Bold — Ctrl+B" onClick={() => fmt('*', '*')}><Bold className="w-4 h-4" /></ToolBtn>
-            <ToolBtn title="Italic — Ctrl+I" onClick={() => fmt('_', '_')}><Italic className="w-4 h-4" /></ToolBtn>
-            <ToolBtn title="Strikethrough — Ctrl+Shift+X" onClick={() => fmt('~', '~')}><Strikethrough className="w-4 h-4" /></ToolBtn>
+            <ToolBtn title="Bold — Ctrl+B" onClick={() => fmt('*', '*')}><Bold className="w-4 h-4" strokeWidth={1.75} /></ToolBtn>
+            <ToolBtn title="Italic — Ctrl+I" onClick={() => fmt('_', '_')}><Italic className="w-4 h-4" strokeWidth={1.75} /></ToolBtn>
+            <ToolBtn title="Strikethrough — Ctrl+Shift+X" onClick={() => fmt('~', '~')}><Strikethrough className="w-4 h-4" strokeWidth={1.75} /></ToolBtn>
 
             <Sep />
 
-            <ToolBtn title="Inline code — Ctrl+E" onClick={() => fmt('`', '`')}><Code className="w-4 h-4" /></ToolBtn>
-            <ToolBtn title="Code block" onClick={() => fmt('```\n', '\n```')}><span className="text-[11px] font-mono font-bold">{ `</>` }</span></ToolBtn>
-            <ToolBtn title="Blockquote" onClick={() => fmt('> ', '')}><Quote className="w-4 h-4" /></ToolBtn>
-            <ToolBtn title="Bullet list" onClick={() => fmt('- ', '')}><List className="w-4 h-4" /></ToolBtn>
-            <ToolBtn title="Link — Ctrl+K" onClick={() => fmt('[', '](url)')}><Link2 className="w-4 h-4" /></ToolBtn>
+            <ToolBtn title="Inline code — Ctrl+E" onClick={() => fmt('`', '`')}><Code className="w-4 h-4" strokeWidth={1.75} /></ToolBtn>
+            <ToolBtn title="Code block" onClick={() => fmt('```\n', '\n```')}><span className="text-micro font-mono font-[590]">{ `</>` }</span></ToolBtn>
+            <ToolBtn title="Blockquote" onClick={() => fmt('> ', '')}><Quote className="w-4 h-4" strokeWidth={1.75} /></ToolBtn>
+            <ToolBtn title="Bullet list" onClick={() => fmt('- ', '')}><List className="w-4 h-4" strokeWidth={1.75} /></ToolBtn>
+            <ToolBtn title="Link — Ctrl+K" onClick={() => fmt('[', '](url)')}><Link2 className="w-4 h-4" strokeWidth={1.75} /></ToolBtn>
 
             <Sep />
 
@@ -339,12 +339,12 @@ export const ChatEditor = ({
               onClick={() => setShowPreview(p => !p)}
               active={showPreview}
             >
-              {showPreview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {showPreview ? <EyeOff className="w-4 h-4" strokeWidth={1.75} /> : <Eye className="w-4 h-4" strokeWidth={1.75} />}
             </ToolBtn>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-subtle-foreground hidden sm:block">
+            <span className="text-micro text-subtle-foreground hidden sm:block">
               {showPreview ? 'Preview' : 'Enter to send · Shift+Enter for newline'}
             </span>
             <Tooltip>
@@ -354,9 +354,9 @@ export const ChatEditor = ({
                   disabled={isSending || !value.trim()}
                   aria-label="Send message"
                   className="flex items-center justify-center p-2 rounded-lg bg-primary hover:bg-primary-hover text-primary-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  size="icon" variant="default"
+                  size="icon" variant="primary"
                 >
-                  <SendHorizontal className="w-4 h-4" />
+                  <SendHorizontal className="w-4 h-4" strokeWidth={1.75} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Send (Enter)</TooltipContent>
@@ -385,7 +385,7 @@ const ToolBtn = ({
       className={clsx(
         'p-1.5 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-ring',
         active
-          ? 'bg-secondary text-secondary-foreground'
+          ? 'bg-hover text-foreground'
           : 'text-subtle-foreground hover:text-foreground hover:bg-hover',
       )}
     >

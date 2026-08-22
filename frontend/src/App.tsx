@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import { AuthGuard, GuestGuard } from './components/auth/AuthGuard.js';
 import { ToastProvider } from './components/providers/ToastProvider.js';
 import {
@@ -35,12 +36,31 @@ import {
   GlobalSearchResults
 } from './pages/index.js';
 
+function RouteFocus() {
+  const location = useLocation();
+  
+  useEffect(() => {
+    // Delay slightly to ensure the new route's DOM has rendered
+    const timeout = setTimeout(() => {
+      const h1 = document.querySelector('h1');
+      if (h1) {
+        h1.setAttribute('tabIndex', '-1');
+        h1.focus();
+      }
+    }, 50);
+    return () => clearTimeout(timeout);
+  }, [location.pathname]);
+
+  return null;
+}
+
 function App() {
   return (
     <BrowserRouter>
+      <RouteFocus />
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-(--z-tooltip) focus:px-4 focus:py-2 focus:rounded-md focus:bg-primary focus:text-primary-foreground focus:font-semibold"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-(--z-tooltip) focus:px-4 focus:py-2 focus:rounded-md focus:bg-primary focus:text-primary-foreground focus:font-[590]"
       >
         Skip to main content
       </a>

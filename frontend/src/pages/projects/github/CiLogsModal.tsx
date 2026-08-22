@@ -43,7 +43,7 @@ export const CiLogsModal = ({ slug, keyStr, runId, onClose }: CiLogsModalProps) 
       <DialogContent className="sm:max-w-5xl h-[85vh] flex flex-col gap-0 p-0">
         <DialogHeader className="px-6 py-4 border-b border-border shrink-0">
           <DialogTitle className="flex items-center">
-            <Terminal className="w-5 h-5 mr-2 text-subtle-foreground" />
+            <Terminal className="w-5 h-5 mr-2 text-subtle-foreground" strokeWidth={1.75} />
             Terminal Logs — Run #{runId}
           </DialogTitle>
           <DialogDescription>
@@ -55,24 +55,24 @@ export const CiLogsModal = ({ slug, keyStr, runId, onClose }: CiLogsModalProps) 
         <div className="flex-1 overflow-hidden flex flex-col p-6 bg-code-bg">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
-              <Loader2 className="w-8 h-8 text-info animate-spin" />
+              <Loader2 className="w-8 h-8 text-info animate-spin" strokeWidth={1.5} />
             </div>
           ) : error ? (
-            <div className="flex items-center justify-center h-full text-destructive font-mono text-sm">
+            <div className="flex items-center justify-center h-full text-destructive font-mono text-ui">
               {error}
             </div>
           ) : logsData.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-subtle-foreground font-mono text-sm">
+            <div className="flex items-center justify-center h-full text-subtle-foreground font-mono text-ui">
               No logs found for this run.
             </div>
           ) : (
             <div className="h-full overflow-y-auto pr-4 space-y-6">
               {logsData.map((job, idx) => (
                 <div key={idx} className="flex flex-col">
-                  <div className="text-subtle-foreground text-xs font-bold uppercase tracking-wider mb-2 border-b border-border pb-1">
+                  <div className="text-subtle-foreground text-caption font-[590] uppercase tracking-wider mb-2 border-b border-border pb-1">
                     Job: {job.jobName}
                   </div>
-                  <pre className="font-mono text-[11px] text-code-foreground whitespace-pre-wrap leading-relaxed break-words">
+                  <pre className="font-mono text-micro text-code-foreground whitespace-pre-wrap leading-relaxed break-words">
                     {job.logs || 'No log output.'}
                   </pre>
                 </div>

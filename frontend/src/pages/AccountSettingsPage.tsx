@@ -50,8 +50,8 @@ export const AccountSettingsPage = () => {
   return (
     <div className="h-full overflow-y-auto p-8 font-sans bg-background text-foreground">
       <div className="max-w-2xl relative">
-        <h1 className="text-2xl font-bold text-foreground mb-1">Account Settings</h1>
-        <p className="text-sm text-muted-foreground mb-8">
+        <h1 className="text-heading font-[590] text-foreground mb-1">Account Settings</h1>
+        <p className="text-ui text-muted-foreground mb-8">
           Signed in as <span className="text-foreground">{user?.email}</span>
         </p>
 
@@ -59,11 +59,11 @@ export const AccountSettingsPage = () => {
         <Card className="[--card-spacing:--spacing(6)] bg-elevated/50 border border-border mb-8">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 rounded-lg bg-primary-muted border border-primary-border">
-              <KeyRound className="h-5 w-5 text-primary" />
+              <KeyRound className="h-5 w-5 text-primary" strokeWidth={1.75} />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-foreground">Change Password</h2>
-              <p className="text-xs text-muted-foreground">
+              <h2 className="text-heading font-[590] text-foreground">Change Password</h2>
+              <p className="text-caption text-muted-foreground">
                 Changing your password signs out every other device.
               </p>
             </div>
@@ -71,7 +71,7 @@ export const AccountSettingsPage = () => {
 
           <form onSubmit={handleChangePassword} className="space-y-4">
             <div>
-              <Label className="block text-sm font-medium text-muted-foreground mb-1.5">
+              <Label className="block text-ui font-[510] text-muted-foreground mb-1.5">
                 Current Password
               </Label>
               <Input
@@ -85,7 +85,7 @@ export const AccountSettingsPage = () => {
             </div>
 
             <div>
-              <Label className="block text-sm font-medium text-muted-foreground mb-1.5">
+              <Label className="block text-ui font-[510] text-muted-foreground mb-1.5">
                 New Password
               </Label>
               <Input
@@ -96,13 +96,13 @@ export const AccountSettingsPage = () => {
                 placeholder="At least 8 characters"
                 required
               />
-              <p className="mt-1 text-xs text-subtle-foreground">
+              <p className="mt-1 text-caption text-subtle-foreground">
                 Must include uppercase, lowercase, a number, and a special character.
               </p>
             </div>
 
             <div>
-              <Label className="block text-sm font-medium text-muted-foreground mb-1.5">
+              <Label className="block text-ui font-[510] text-muted-foreground mb-1.5">
                 Confirm New Password
               </Label>
               <Input
@@ -116,7 +116,7 @@ export const AccountSettingsPage = () => {
             </div>
 
             {fieldError && (
-              <div className="rounded-lg bg-danger-muted border border-danger-border p-3 text-sm text-danger">
+              <div className="rounded-lg bg-danger-muted border border-danger-border p-3 text-ui text-danger">
                 {fieldError}
               </div>
             )}
@@ -124,13 +124,13 @@ export const AccountSettingsPage = () => {
             <Button
               type="submit"
               disabled={isSaving}
-              variant="default"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-semibold transition-colors disabled:opacity-60 h-auto"
+              variant="primary"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-primary hover:bg-primary-hover text-primary-foreground text-ui font-[590] transition-colors disabled:opacity-60 h-auto"
             >
               {isSaving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
               ) : (
-                <ShieldCheck className="h-4 w-4" />
+                <ShieldCheck className="h-4 w-4" strokeWidth={1.75} />
               )}
               Update Password
             </Button>

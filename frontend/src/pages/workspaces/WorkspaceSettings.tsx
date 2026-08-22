@@ -67,25 +67,25 @@ export const WorkspaceSettings = () => {
   return (
     <div className="h-full overflow-y-auto p-8 font-sans bg-background text-foreground">
       <div className="max-w-3xl relative">
-        <h1 className="text-2xl font-bold text-foreground mb-8">Workspace Settings</h1>
+        <h1 className="text-heading font-[590] text-foreground mb-8">Workspace Settings</h1>
 
         {/* General Settings */}
         <Card className="[--card-spacing:--spacing(6)] bg-elevated/50 border border-border mb-8">
-          <h2 className="text-lg font-bold text-foreground mb-6">General Information</h2>
+          <h2 className="text-heading font-[590] text-foreground mb-6">General Information</h2>
 
           <div className="space-y-6">
             <div className="flex items-start space-x-6">
               <div className="shrink-0">
-                <div className="w-20 h-20 rounded-lg bg-secondary border border-border flex items-center justify-center cursor-pointer hover:border-border-strong hover:bg-hover transition-colors group relative overflow-hidden">
+                <div className="w-20 h-20 rounded-lg bg-hover border border-border flex items-center justify-center cursor-pointer hover:border-strong hover:bg-hover transition-colors group relative overflow-hidden">
                   <ImageIcon className="w-8 h-8 text-subtle-foreground group-hover:opacity-0 transition-opacity" />
                   <div className="absolute inset-0 flex items-center justify-center bg-overlay opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="text-xs font-semibold">Change</span>
+                    <span className="text-caption font-[590]">Change</span>
                   </div>
                 </div>
               </div>
               <div className="flex-1 space-y-4">
                 <div>
-                  <Label className="block text-sm font-medium text-muted-foreground mb-1.5">Workspace Name</Label>
+                  <Label className="block text-ui font-[510] text-muted-foreground mb-1.5">Workspace Name</Label>
                   <Input 
                     type="text" 
                     value={wsName}
@@ -94,7 +94,7 @@ export const WorkspaceSettings = () => {
                   />
                 </div>
                 <div>
-                  <Label className="block text-sm font-medium text-muted-foreground mb-1.5">Description</Label>
+                  <Label className="block text-ui font-[510] text-muted-foreground mb-1.5">Description</Label>
                   <Textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -106,8 +106,8 @@ export const WorkspaceSettings = () => {
             </div>
 
             <div className="flex justify-end pt-4 border-t border-border">
-              <Button onClick={handleSave} disabled={isSaving} variant="default" className="flex items-center px-5 py-2.5 bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-bold rounded-md transition-colors disabled:opacity-50 h-auto">
-                <Save className="w-4 h-4 mr-2" />
+              <Button onClick={handleSave} disabled={isSaving} variant="primary" className="flex items-center px-5 py-2.5 bg-primary hover:bg-primary-hover text-primary-foreground text-ui font-[590] rounded-md transition-colors disabled:opacity-50 h-auto">
+                <Save className="w-4 h-4 mr-2" strokeWidth={1.75} />
                 {isSaving ? 'Saving...' : 'Save Changes'}
               </Button>
             </div>
@@ -117,20 +117,20 @@ export const WorkspaceSettings = () => {
         {/* Danger Zone */}
         {isOwner() && (
           <div className="border border-danger-border bg-danger-muted rounded-lg p-6">
-            <h2 className="text-lg font-bold text-danger mb-2 flex items-center">
-              <AlertTriangle className="w-5 h-5 mr-2" />
+            <h2 className="text-heading font-[590] text-danger mb-2 flex items-center">
+              <AlertTriangle className="w-5 h-5 mr-2" strokeWidth={1.75} />
               Danger Zone
             </h2>
-            <p className="text-muted-foreground text-sm mb-6">
+            <p className="text-muted-foreground text-ui mb-6">
               Deleting this workspace will permanently remove all projects, channels, tasks, and messages associated with it. This action cannot be undone.
             </p>
             
             <div className="flex items-center justify-between p-4 bg-background border border-danger-border rounded-lg">
               <div>
-                <h4 className="font-semibold text-foreground">Delete Workspace</h4>
-                <p className="text-xs text-subtle-foreground">Permanently remove everything.</p>
+                <h4 className="font-[590] text-foreground">Delete Workspace</h4>
+                <p className="text-caption text-subtle-foreground">Permanently remove everything.</p>
               </div>
-              <Button onClick={() => setDeleteModalOpen(true)} variant="destructive" className="px-4 py-2 bg-danger hover:bg-danger/90 text-danger-foreground text-sm font-bold rounded-md transition-colors h-auto">
+              <Button onClick={() => setDeleteModalOpen(true)} variant="destructive" className="px-4 py-2 bg-danger hover:bg-danger/90 text-danger-foreground text-ui font-[590] rounded-md transition-colors h-auto">
                 Delete Workspace
               </Button>
             </div>
@@ -143,11 +143,11 @@ export const WorkspaceSettings = () => {
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-destructive">
-                  <AlertTriangle className="w-6 h-6" />
+                  <AlertTriangle className="w-6 h-6" strokeWidth={1.5} />
                   Delete Workspace
                 </DialogTitle>
                 <DialogDescription>
-                  This action is permanent. Please type <span className="font-mono font-bold text-foreground bg-hover px-1 py-0.5 rounded">DEVSYNC</span> to confirm.
+                  This action is permanent. Please type <span className="font-mono font-[590] text-foreground bg-hover px-1 py-0.5 rounded">DEVSYNC</span> to confirm.
                 </DialogDescription>
               </DialogHeader>
               <Input
@@ -159,7 +159,7 @@ export const WorkspaceSettings = () => {
                 className="focus:border-destructive focus:ring-destructive"
               />
               <DialogFooter>
-                <Button variant="outline" onClick={() => setDeleteModalOpen(false)}>Cancel</Button>
+                <Button variant="secondary" onClick={() => setDeleteModalOpen(false)}>Cancel</Button>
                 <Button
                   variant="destructive"
                   onClick={handleDelete}

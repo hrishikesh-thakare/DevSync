@@ -53,8 +53,8 @@ function FileImagePreview({ slug, fileId, fileName }: { slug: string; fileId: st
 
   if (loading) {
     return (
-      <div className="w-48 h-32 bg-secondary animate-pulse rounded-lg flex items-center justify-center border border-border">
-        <Loader2 className="w-5 h-5 text-subtle-foreground animate-spin" />
+      <div className="w-48 h-32 bg-hover animate-pulse rounded-lg flex items-center justify-center border border-border">
+        <Loader2 className="w-5 h-5 text-subtle-foreground animate-spin" strokeWidth={1.75} />
       </div>
     );
   }
@@ -87,7 +87,7 @@ export const ChannelPage = () => {
   const taskKeyQuery = searchParams.get('task');
 
   const initialChatContent = taskKeyQuery
-    ? `<p><span class="text-primary bg-primary-muted px-1 rounded font-medium">@${taskKeyQuery}</span> </p>`
+    ? `<p><span class="text-primary bg-primary-muted px-1 rounded font-[510]">@${taskKeyQuery}</span> </p>`
     : '';
 
 
@@ -374,7 +374,7 @@ export const ChannelPage = () => {
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
           // Flash effect
-          el.classList.add('bg-primary-muted', 'transition-all', 'duration-1000');
+          el.classList.add('bg-primary-muted', 'transition-colors', 'duration-300');
           setTimeout(() => el.classList.remove('bg-primary-muted'), 2000);
         }
       } else {
@@ -521,7 +521,7 @@ export const ChannelPage = () => {
 
 
   const handleDeleteChannel = async () => {
-    if (!(await confirm('Are you sure you want to delete this channel?'))) return;
+    if (!(await confirm('Delete this channel? This action cannot be undone.'))) return;
     try {
       await apiFetch(`/workspaces/${slug}/channels/${channelId}`, { method: 'DELETE' });
       fetchWorkspaceData(slug as string);
@@ -582,13 +582,13 @@ export const ChannelPage = () => {
         key={msg.messageId} 
         id={msg.messageId}
         className={`group flex items-start py-1.5 transition-colors relative ${isThreadContext ? '' : '-mx-4 px-4'} ${
-          isMentioned ? 'bg-primary-muted hover:bg-primary-muted/70 border-l-4 border-primary rounded-r-lg font-medium' : 'hover:bg-hover rounded-lg'
+          isMentioned ? 'bg-primary-muted hover:bg-primary-muted/70 border-l-4 border-primary rounded-r-lg font-[510]' : 'hover:bg-hover rounded-lg'
         }`}
       >
         <div className="w-10 flex-shrink-0 flex justify-center">
           {showHeader && (
             <div className="relative mt-1">
-              <div className="w-9 h-9 rounded-md bg-secondary flex items-center justify-center text-foreground font-bold shadow-sm border border-border">
+              <div className="w-9 h-9 rounded-md bg-hover flex items-center justify-center text-foreground font-[590] shadow-sm border border-border">
                 {msg.authorName?.[0]?.toUpperCase() || 'U'}
               </div>
               <div className={`absolute -bottom-1 -right-1 w-2.5 h-2.5 ${getStatusDotClass(authorMember?.presence, authorMember?.statusText)} border-2 border-background rounded-full`}></div>
@@ -599,16 +599,16 @@ export const ChannelPage = () => {
         <div className="ml-3 flex-1 min-w-0">
           {showHeader && (
             <div className="flex items-baseline space-x-2 mb-0.5">
-              <span className="font-semibold text-foreground">{msg.authorName || 'Unknown User'}</span>
+              <span className="font-[590] text-foreground">{msg.authorName || 'Unknown User'}</span>
               {authorMember?.statusText && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="text-[10px] bg-secondary text-muted-foreground px-1.5 py-0.5 rounded font-normal">{authorMember.statusText}</span>
+                    <span className="text-micro bg-hover text-muted-foreground px-1.5 py-0.5 rounded font-normal">{authorMember.statusText}</span>
                   </TooltipTrigger>
                   <TooltipContent>{authorMember.statusText}</TooltipContent>
                 </Tooltip>
               )}
-              <span className="text-xs text-subtle-foreground">{msg.createdAt ? format(new Date(msg.createdAt), 'h:mm a') : ''}</span>
+              <span className="text-caption text-subtle-foreground">{msg.createdAt ? format(new Date(msg.createdAt), 'h:mm a') : ''}</span>
             </div>
           )}
           {editingMessageId === msg.messageId ? (
@@ -618,7 +618,7 @@ export const ChannelPage = () => {
                 initialContent={msg.bodyText} 
                 placeholder="Edit your message..."
               />
-              <Button onClick={() => setEditingMessageId(null)} className="text-xs font-medium text-muted-foreground hover:text-foreground mt-2 ml-1 transition-colors" variant="ghost" size="default">
+              <Button onClick={() => setEditingMessageId(null)} className="text-caption font-[510] text-muted-foreground hover:text-foreground mt-2 ml-1 transition-colors" variant="ghost" size="default">
                 Cancel
               </Button>
             </div>
@@ -720,19 +720,19 @@ export const ChannelPage = () => {
             <div className="mt-2 flex items-center gap-3">
               <Button 
                 onClick={() => toggleThreadInline(msg.messageId)}
-                className="flex items-center text-sm font-medium text-primary hover:text-primary-hover px-1 py-0.5 rounded transition-colors"
+                className="flex items-center text-ui font-[510] text-primary hover:text-primary-hover px-1 py-0.5 rounded transition-colors"
                 variant="ghost" size="default"
               >
-                <span className="font-mono font-bold mr-1.5 text-lg leading-none">{expandedThreads.has(msg.messageId) ? '[-]' : '[+]'}</span>
+                <span className="font-mono font-[590] mr-1.5 text-heading leading-none">{expandedThreads.has(msg.messageId) ? '[-]' : '[+]'}</span>
                 {msg.replyCount ?? msg.threadCount} {(msg.replyCount ?? msg.threadCount) === 1 ? 'reply' : 'replies'} inline
               </Button>
 
               <Button 
                 onClick={() => loadThread(msg.messageId)}
-                className="flex items-center text-sm font-medium text-muted-foreground hover:text-foreground bg-secondary hover:bg-hover px-2 py-1 rounded transition-colors"
+                className="flex items-center text-ui font-[510] text-muted-foreground hover:text-foreground bg-hover hover:bg-hover px-2 py-1 rounded transition-colors"
                 variant="secondary" size="default"
               >
-                <MessageSquare className="w-4 h-4 mr-1.5" />
+                <MessageSquare className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
                 Sidebar
               </Button>
             </div>
@@ -768,12 +768,12 @@ export const ChannelPage = () => {
                       <Button
                         onClick={() => openReactionsModal(msg)}
                         aria-label={data.userNames.join(', ')}
-                        className={`flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-xs font-medium border transition-colors ${
+                        className={`flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-caption font-[510] border transition-colors ${
                           hasReacted
                             ? 'bg-primary-muted border-primary-border text-primary hover:bg-primary-muted/70'
-                            : 'bg-secondary border-border text-muted-foreground hover:bg-hover'
+                            : 'bg-hover border-border text-muted-foreground hover:bg-hover'
                         }`}
-                        variant="outline" size="default"
+                        variant="secondary" size="default"
                       >
                         <span>{emoji}</span>
                         <span>{data.count}</span>
@@ -797,19 +797,19 @@ export const ChannelPage = () => {
           )}
         </div>
 
-        <div className="opacity-0 group-hover:opacity-100 flex items-center space-x-1 bg-popover border border-border rounded-md p-1 shadow-sm absolute right-12 -mt-3 transition-opacity">
+        <div className="opacity-0 group-hover:opacity-100 flex items-center space-x-1 bg-card border border-border rounded-md p-1 shadow-sm absolute right-12 -mt-3 transition-opacity">
 
           <div className="relative group/react">
             <Button className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-hover rounded" size="icon" variant="ghost">
-              <Smile className="w-4 h-4" />
+              <Smile className="w-4 h-4" strokeWidth={1.75} />
             </Button>
             <div className="absolute right-full top-1/2 -translate-y-1/2 pr-2 hidden group-hover/react:block z-(--z-dropdown)">
-              <div className="flex items-center space-x-1 bg-popover p-1.5 rounded-full shadow-md border border-border">
+              <div className="flex items-center space-x-1 bg-card p-1.5 rounded-full shadow-md border border-border">
                 {['👍', '❤️', '😂', '🎉', '👀'].map(emoji => (
                   <Button
                     key={emoji}
                     onClick={() => toggleReaction(msg.messageId, emoji)}
-                    className="hover:bg-hover rounded-full w-7 h-7 flex items-center justify-center text-sm transition-transform hover:scale-110"
+                    className="hover:bg-hover rounded-full w-7 h-7 flex items-center justify-center text-ui transition-transform "
                     size="icon" variant="ghost"
                   >
                     {emoji}
@@ -828,7 +828,7 @@ export const ChannelPage = () => {
                   aria-label="Reply in thread"
                   size="icon" variant="ghost"
                 >
-                  <MessageSquare className="w-4 h-4" />
+                  <MessageSquare className="w-4 h-4" strokeWidth={1.75} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Reply in thread</TooltipContent>
@@ -843,7 +843,7 @@ export const ChannelPage = () => {
                   aria-label="Edit Message"
                   size="icon" variant="ghost"
                 >
-                  <Edit2 className="w-4 h-4" />
+                  <Edit2 className="w-4 h-4" strokeWidth={1.75} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Edit Message</TooltipContent>
@@ -875,11 +875,11 @@ export const ChannelPage = () => {
         <div className="h-14 border-b border-border bg-background px-6 flex items-center justify-between shrink-0">
           <div className="flex items-center">
             {currentChannel?.type === 'private' ? (
-              <Lock className="w-5 h-5 text-subtle-foreground mr-2" />
+              <Lock className="w-5 h-5 text-subtle-foreground mr-2" strokeWidth={1.75} />
             ) : (
-              <Hash className="w-5 h-5 text-subtle-foreground mr-2" />
+              <Hash className="w-5 h-5 text-subtle-foreground mr-2" strokeWidth={1.75} />
             )}
-            <h2 className="font-bold text-foreground mr-2">{currentChannel?.name || 'Loading...'}</h2>
+            <h2 className="font-[590] text-foreground mr-2">{currentChannel?.name || 'Loading...'}</h2>
             {isAdmin() && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -889,7 +889,7 @@ export const ChannelPage = () => {
                     aria-label="Edit Channel Name"
                     size="icon" variant="ghost"
                   >
-                    <Edit2 className="w-3.5 h-3.5" />
+                    <Edit2 className="w-3.5 h-3.5" strokeWidth={1.75} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Edit Channel Name</TooltipContent>
@@ -899,24 +899,24 @@ export const ChannelPage = () => {
           <div className="flex items-center space-x-4">
             {isSearchOpen ? (
               <form onSubmit={handleSearchSubmit} className="relative flex items-center">
-                <Search className="w-4 h-4 text-subtle-foreground absolute left-2.5" />
+                <Search className="w-4 h-4 text-subtle-foreground absolute left-2.5" strokeWidth={1.75} />
                 <Input
                   type="text"
                   autoFocus
                   placeholder="Search channel..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-card border border-border rounded-md pl-8 pr-8 py-1.5 text-sm text-foreground focus:border-ring focus:ring-1 focus:ring-ring w-64"
+                  className="bg-card border border-border rounded-md pl-8 pr-8 py-1.5 text-ui text-foreground focus:border-ring focus:ring-1 focus:ring-ring w-64"
                 />
                 <Button type="button" onClick={handleClearSearch} className="absolute right-2 text-muted-foreground hover:text-foreground" size="icon" variant="ghost">
-                  <X className="w-4 h-4" />
+                  <X className="w-4 h-4" strokeWidth={1.75} />
                 </Button>
               </form>
             ) : (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button onClick={() => setIsSearchOpen(true)} className="text-subtle-foreground hover:text-foreground transition-colors" aria-label="Search Channel" size="icon" variant="ghost">
-                    <Search className="w-5 h-5" />
+                    <Search className="w-5 h-5" strokeWidth={1.75} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Search Channel</TooltipContent>
@@ -928,7 +928,7 @@ export const ChannelPage = () => {
                 <TooltipTrigger asChild>
                   <Button 
                     onClick={handleDeleteChannel}
-                    className="text-danger hover:text-danger/80 text-sm font-medium transition-colors"
+                    className="text-danger hover:text-danger/80 text-ui font-[510] transition-colors"
                     aria-label="Delete Channel"
                     variant="destructive" size="default"
                   >
@@ -939,8 +939,8 @@ export const ChannelPage = () => {
               </Tooltip>
             )}
             <div className="flex items-center text-muted-foreground hover:text-foreground cursor-pointer transition-colors">
-              <Users className="w-4 h-4 mr-1.5" />
-              <span className="text-sm font-medium">{memberCount}</span>
+              <Users className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
+              <span className="text-ui font-[510]">{memberCount}</span>
             </div>
           </div>
         </div>
@@ -949,17 +949,17 @@ export const ChannelPage = () => {
         <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>
           {isLoading || isSearching ? (
             <div className="flex justify-center py-10">
-              <Loader2 className="w-8 h-8 text-primary animate-spin" />
+              <Loader2 className="w-8 h-8 text-primary animate-spin" strokeWidth={1.5} />
             </div>
           ) : isSearchOpen && searchQuery.trim().length >= 2 ? (
             searchResults.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-subtle-foreground">
-                <Search className="w-12 h-12 mb-3 opacity-20" />
+                <Search className="w-12 h-12 mb-3 opacity-20" strokeWidth={1.5} />
                 <p>No messages match your search.</p>
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="text-sm font-semibold text-muted-foreground pb-2 border-b border-border">
+                <div className="text-ui font-[590] text-muted-foreground pb-2 border-b border-border">
                   Search Results for "{searchQuery}"
                 </div>
                 {searchResults.map(msg => renderMessage(msg, false))}
@@ -967,9 +967,9 @@ export const ChannelPage = () => {
             )
           ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-subtle-foreground">
-              <Hash className="w-16 h-16 mb-4 opacity-20" />
-              <p className="text-lg">Welcome to #{currentChannel?.name}!</p>
-              <p className="text-sm">This is the start of the channel.</p>
+              <Hash className="w-16 h-16 mb-4 opacity-20" strokeWidth={1.5} />
+              <p className="text-heading">Welcome to #{currentChannel?.name}!</p>
+              <p className="text-ui">This is the start of the channel.</p>
             </div>
           ) : (
             messages.map(msg => renderMessage(msg, false))
@@ -990,7 +990,7 @@ export const ChannelPage = () => {
               <TooltipTrigger asChild>
                 <span tabIndex={-1} className="block">
                   <div
-                    className="text-subtle-foreground text-sm text-center p-3 bg-muted rounded-lg border border-border cursor-not-allowed"
+                    className="text-subtle-foreground text-ui text-center p-3 bg-muted rounded-lg border border-border cursor-not-allowed"
                   >
                     {currentChannel?.isAnnouncementOnly ? "Only admins can post here" : "You are a viewer and cannot send messages in this channel."}
                   </div>
@@ -1009,11 +1009,11 @@ export const ChannelPage = () => {
         <div className="w-96 border-l border-border bg-card flex flex-col shrink-0">
           <div className="h-14 border-b border-border flex items-center justify-between px-4 shrink-0">
             <div className="flex items-center">
-              <h3 className="font-bold text-foreground">Thread</h3>
-              <span className="text-subtle-foreground text-sm ml-2">#{currentChannel?.name}</span>
+              <h3 className="font-[590] text-foreground">Thread</h3>
+              <span className="text-subtle-foreground text-ui ml-2">#{currentChannel?.name}</span>
             </div>
             <Button onClick={() => setActiveThreadMessageId(null)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-hover rounded transition-colors" size="icon" variant="ghost">
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5" strokeWidth={1.75} />
             </Button>
           </div>
 
@@ -1028,10 +1028,10 @@ export const ChannelPage = () => {
             {/* Replies */}
             <div ref={threadScrollRef} className="flex-1 p-4 space-y-6">
               {isThreadLoading ? (
-                <div className="flex justify-center py-4"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+                <div className="flex justify-center py-4"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" strokeWidth={1.5} /></div>
               ) : threadReplies.length === 0 ? (
-                <div className="text-center py-8 text-subtle-foreground text-sm">
-                  <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                <div className="text-center py-8 text-subtle-foreground text-ui">
+                  <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-30" strokeWidth={1.5} />
                   No replies yet. Start the conversation!
                 </div>
               ) : (
@@ -1045,7 +1045,7 @@ export const ChannelPage = () => {
             {canChat ? (
               <LexicalEditor onSubmit={handleSendThread} placeholder="Reply to thread..." tasks={currentProject ? tasks : []} />
             ) : (
-              <div className="text-subtle-foreground text-xs text-center p-2 bg-muted rounded border border-border">
+              <div className="text-subtle-foreground text-caption text-center p-2 bg-muted rounded border border-border">
                 Read-only
               </div>
             )}

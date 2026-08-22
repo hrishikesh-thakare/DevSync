@@ -6,7 +6,6 @@ import { useNotificationStore, Notification } from '../../store/useNotificationS
 import { Hash, Lock, Search, Settings, Plus, FolderKanban, Loader2, Home, LogOut, ChevronDown as ChevronDownIcon, Command, ShieldAlert, Smartphone, Monitor, UserRound } from 'lucide-react';
 import { CommandPalette } from '../../components/layout/CommandPalette.js';
 import NotificationDropdown from '../../components/layout/NotificationDropdown.js';
-import { ThemeToggle } from '@/components/layout/ThemeToggle';
 import clsx from 'clsx';
 import { socketClient } from '../../lib/socket.js';
 import { useToast } from '../../hooks/useToast.js';
@@ -280,7 +279,7 @@ export const WorkspaceLayout = () => {
   if (isLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" strokeWidth={1.5} />
       </div>
     );
   }
@@ -288,9 +287,9 @@ export const WorkspaceLayout = () => {
   if (error || !name) {
     return (
       <div className="flex h-screen w-screen flex-col items-center justify-center bg-background text-foreground">
-        <h2 className="text-2xl font-bold text-danger mb-2">Workspace Error</h2>
+        <h2 className="text-heading font-[590] text-danger mb-2">Workspace Error</h2>
         <p className="text-muted-foreground">{error || 'Workspace not found'}</p>
-        <Button onClick={() => navigate('/workspaces')} className="mt-6 text-primary hover:underline" variant="link" size="default">
+        <Button onClick={() => navigate('/workspaces')} className="mt-6 text-primary hover:underline" variant="ghost" size="default">
           Return to Hub
         </Button>
       </div>
@@ -301,14 +300,14 @@ export const WorkspaceLayout = () => {
     <div className="flex h-screen w-screen bg-background text-foreground overflow-hidden font-sans">
 
       {/* ─── SIDEBAR ────────────────────────────────────────────────────────── */}
-      <aside className="w-64 bg-card border-r border-border flex flex-col flex-shrink-0">
+      <nav className="w-[240px] bg-card  flex flex-col flex-shrink-0">
 
         {/* Workspace Header */}
         <div
-          className="h-14 px-4 flex items-center justify-between border-b border-border shadow-sm hover:bg-hover cursor-pointer transition-colors"
+          className="h-14 px-4 flex items-center justify-between  shadow-sm hover:bg-hover cursor-pointer transition-colors"
           onClick={() => navigate(`/w/${slug}`)}
         >
-          <h1 className="font-bold text-foreground truncate text-lg">{name}</h1>
+          <h1 className="font-[590] text-foreground truncate text-heading">{name}</h1>
           <ChevronDownIcon className="w-4 h-4 text-muted-foreground" />
         </div>
 
@@ -321,24 +320,24 @@ export const WorkspaceLayout = () => {
               to={`/w/${slug}`}
               end
               className={({ isActive }) => clsx(
-                "flex items-center px-2 py-1.5 rounded-md text-sm transition-colors group",
-                isActive ? "bg-primary-muted text-primary font-medium" : "text-muted-foreground hover:bg-hover hover:text-foreground"
+                "flex items-center px-2 py-1.5 rounded-md text-ui transition-colors group",
+                isActive ? "bg-primary-muted text-primary font-[510]" : "text-muted-foreground hover:bg-hover hover:text-foreground"
               )}
             >
-              <Home className="w-4 h-4 mr-2.5 opacity-70 group-hover:opacity-100" />
+              <Home className="w-4 h-4 mr-2.5 opacity-70 group-hover:opacity-100" strokeWidth={1.75} />
               Dashboard
             </NavLink>
-            <Button onClick={() => setShowCommandPalette(true)} className="w-full flex items-center px-2 py-1.5 rounded-md text-sm text-muted-foreground hover:bg-hover hover:text-foreground transition-colors group" variant="ghost" size="default">
-              <Search className="w-4 h-4 mr-2.5 opacity-70 group-hover:opacity-100" />
+            <Button onClick={() => setShowCommandPalette(true)} className="w-full flex items-center px-2 py-1.5 rounded-md text-ui text-muted-foreground hover:bg-hover hover:text-foreground transition-colors group" variant="ghost" size="default">
+              <Search className="w-4 h-4 mr-2.5 opacity-70 group-hover:opacity-100" strokeWidth={1.75} />
               Search
-              <kbd className="ml-auto text-[10px] bg-secondary px-1.5 py-0.5 rounded text-subtle-foreground">⌘K</kbd>
+              <kbd className="ml-auto text-micro bg-hover px-1.5 py-0.5 rounded text-subtle-foreground">⌘K</kbd>
             </Button>
           </div>
 
           {/* Channels Section */}
           <div>
             <div className="px-5 mb-1.5 flex items-center justify-between group cursor-pointer">
-              <span className="text-[11px] font-semibold text-subtle-foreground uppercase tracking-wider group-hover:text-muted-foreground transition-colors">Channels</span>
+              <span className="text-micro font-[590] text-subtle-foreground uppercase tracking-wider group-hover:text-muted-foreground transition-colors">Channels</span>
               {/* Only admin+ can create channels */}
               {isAdmin() && (
                 <Button 
@@ -346,10 +345,10 @@ export const WorkspaceLayout = () => {
                     e.stopPropagation();
                     setShowChannelModal(true);
                   }}
-                  className="opacity-0 group-hover:opacity-100 text-subtle-foreground hover:text-foreground transition-all"
+                  className="opacity-0 group-hover:opacity-100 text-subtle-foreground hover:text-foreground transition-colors"
                   size="icon" variant="ghost"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-3.5 h-3.5" strokeWidth={1.75} />
                 </Button>
               )}
             </div>
@@ -360,17 +359,17 @@ export const WorkspaceLayout = () => {
                   to={`/w/${slug}/channels/${ch.channelId}`}
                   className={({ isActive }) => clsx(
                     "flex items-center px-2 py-1 rounded-md text-body transition-colors",
-                    isActive ? "bg-primary-muted text-primary font-medium" : "text-muted-foreground hover:bg-hover hover:text-foreground"
+                    isActive ? "bg-primary-muted text-primary font-[510]" : "text-muted-foreground hover:bg-hover hover:text-foreground"
                   )}
                 >
                   {ch.type === 'private' ? (
-                    <Lock className="w-3.5 h-3.5 mr-2 opacity-60" />
+                    <Lock className="w-3.5 h-3.5 mr-2 opacity-60" strokeWidth={1.75} />
                   ) : (
-                    <Hash className="w-4 h-4 mr-2 opacity-60" />
+                    <Hash className="w-4 h-4 mr-2 opacity-60" strokeWidth={1.75} />
                   )}
-                  <span className={clsx("truncate flex-1", channelUnreadCounts[ch.channelId] && "text-foreground font-bold")}>{ch.name}</span>
+                  <span className={clsx("truncate flex-1", channelUnreadCounts[ch.channelId] && "text-foreground font-[590]")}>{ch.name}</span>
                   {channelUnreadCounts[ch.channelId] ? (
-                    <span className="ml-2 bg-danger text-danger-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center min-w-[16px] h-[16px]">
+                    <span className="ml-2 bg-danger text-danger-foreground text-micro font-[590] px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center min-w-[16px] h-[16px]">
                       {channelUnreadCounts[ch.channelId]}
                     </span>
                   ) : null}
@@ -385,7 +384,7 @@ export const WorkspaceLayout = () => {
               <Button
                 type="button"
                 onClick={() => navigate(`/w/${slug}/projects`)}
-                className="text-[11px] font-semibold text-subtle-foreground uppercase tracking-wider group-hover:text-foreground transition-colors cursor-pointer"
+                className="text-micro font-[590] text-subtle-foreground uppercase tracking-wider group-hover:text-foreground transition-colors cursor-pointer"
                 variant="ghost" size="default"
               >
                 Projects
@@ -396,10 +395,10 @@ export const WorkspaceLayout = () => {
                   type="button"
                   onClick={() => navigate(`/w/${slug}/projects/new`)}
                   aria-label={`Create project in ${name}`}
-                  className="opacity-0 group-hover:opacity-100 text-subtle-foreground hover:text-foreground transition-all"
+                  className="opacity-0 group-hover:opacity-100 text-subtle-foreground hover:text-foreground transition-colors"
                   size="icon" variant="ghost"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-3.5 h-3.5" strokeWidth={1.75} />
                 </Button>
               )}
             </div>
@@ -409,11 +408,11 @@ export const WorkspaceLayout = () => {
                   <NavLink
                     to={`/w/${slug}/projects/${proj.key}`}
                     className={({ isActive }) => clsx(
-                      "flex items-center px-2 py-1.5 rounded-md text-[14px] transition-colors",
-                      isActive ? "bg-primary-muted text-primary font-medium" : "text-muted-foreground hover:bg-hover hover:text-foreground"
+                      "flex items-center px-2 py-1.5 rounded-md text-body transition-colors",
+                      isActive ? "bg-primary-muted text-primary font-[510]" : "text-muted-foreground hover:bg-hover hover:text-foreground"
                     )}
                   >
-                    <FolderKanban className="w-4 h-4 mr-2.5 opacity-60" />
+                    <FolderKanban className="w-4 h-4 mr-2.5 opacity-60" strokeWidth={1.75} />
                     <span className="truncate">{proj.name}</span>
                   </NavLink>
                   {/* Nested Project Channels */}
@@ -424,18 +423,18 @@ export const WorkspaceLayout = () => {
                           key={ch.channelId}
                           to={`/w/${slug}/channels/${ch.channelId}`}
                           className={({ isActive }) => clsx(
-                            "flex items-center px-2 py-1 rounded-md text-[13px] transition-colors",
-                            isActive ? "bg-primary-muted text-primary font-medium" : "text-subtle-foreground hover:bg-hover hover:text-foreground"
+                            "flex items-center px-2 py-1 rounded-md text-ui transition-colors",
+                            isActive ? "bg-primary-muted text-primary font-[510]" : "text-subtle-foreground hover:bg-hover hover:text-foreground"
                           )}
                         >
                           {ch.type === 'private' ? (
-                            <Lock className="w-3.5 h-3.5 mr-2 opacity-60" />
+                            <Lock className="w-3.5 h-3.5 mr-2 opacity-60" strokeWidth={1.75} />
                           ) : (
-                            <Hash className="w-3.5 h-3.5 mr-2 opacity-60" />
+                            <Hash className="w-3.5 h-3.5 mr-2 opacity-60" strokeWidth={1.75} />
                           )}
-                          <span className={clsx("truncate flex-1", channelUnreadCounts[ch.channelId] && "text-foreground font-bold")}>{ch.name}</span>
+                          <span className={clsx("truncate flex-1", channelUnreadCounts[ch.channelId] && "text-foreground font-[590]")}>{ch.name}</span>
                           {channelUnreadCounts[ch.channelId] ? (
-                            <span className="ml-2 bg-danger text-danger-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center min-w-[16px] h-[16px]">
+                            <span className="ml-2 bg-danger text-danger-foreground text-micro font-[590] px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center min-w-[16px] h-[16px]">
                               {channelUnreadCounts[ch.channelId]}
                             </span>
                           ) : null}
@@ -451,21 +450,21 @@ export const WorkspaceLayout = () => {
           {/* Direct Messages Section */}
           <div>
             <div className="px-5 mb-1.5 flex items-center justify-between group cursor-pointer">
-              <span className="text-[11px] font-semibold text-subtle-foreground uppercase tracking-wider group-hover:text-muted-foreground transition-colors">Direct Messages</span>
+              <span className="text-micro font-[590] text-subtle-foreground uppercase tracking-wider group-hover:text-muted-foreground transition-colors">Direct Messages</span>
               <Button 
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowDMModal(true);
                 }}
-                className="opacity-0 group-hover:opacity-100 text-subtle-foreground hover:text-foreground transition-all"
+                className="opacity-0 group-hover:opacity-100 text-subtle-foreground hover:text-foreground transition-colors"
                 size="icon" variant="ghost"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-3.5 h-3.5" strokeWidth={1.75} />
               </Button>
             </div>
             <div className="px-3 space-y-0.5">
               {channels.filter(c => c.type === 'dm' || c.type === 'group_dm').length === 0 ? (
-                <p className="text-xs text-subtle-foreground px-2 py-2 italic">No conversations yet</p>
+                <p className="text-caption text-subtle-foreground px-2 py-2 italic">No conversations yet</p>
               ) : (
                 channels.filter(c => c.type === 'dm' || c.type === 'group_dm').map((ch) => {
                   const dmMember = members.find(m => m.fullName === ch.name || m.displayName === ch.name);
@@ -475,27 +474,27 @@ export const WorkspaceLayout = () => {
                       to={`/w/${slug}/channels/${ch.channelId}`}
                       className={({ isActive }) => clsx(
                         "flex items-center px-2 py-1 rounded-md text-body transition-colors group",
-                        isActive ? "bg-primary-muted text-primary font-medium" : "text-muted-foreground hover:bg-hover hover:text-foreground"
+                        isActive ? "bg-primary-muted text-primary font-[510]" : "text-muted-foreground hover:bg-hover hover:text-foreground"
                       )}
                     >
                       <div className="relative mr-2">
                         <Avatar size="sm" className="size-4 shrink-0">
-                          <AvatarFallback className="bg-secondary text-[8px] text-foreground font-bold">
+                          <AvatarFallback className="bg-hover text-micro text-foreground font-[590]">
                             {ch.name?.charAt(0).toUpperCase() || '?'}
                           </AvatarFallback>
                         </Avatar>
                         <div className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 ${getStatusDotClass(dmMember?.presence, dmMember?.statusText)} border border-background rounded-full`}></div>
                       </div>
-                      <span className={clsx("truncate flex-1", channelUnreadCounts[ch.channelId] && "text-foreground font-bold")}>{ch.name}</span>
+                      <span className={clsx("truncate flex-1", channelUnreadCounts[ch.channelId] && "text-foreground font-[590]")}>{ch.name}</span>
                       {channelUnreadCounts[ch.channelId] ? (
-                        <span className="ml-2 bg-danger text-danger-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center min-w-[16px] h-[16px]">
+                        <span className="ml-2 bg-danger text-danger-foreground text-micro font-[590] px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center min-w-[16px] h-[16px]">
                           {channelUnreadCounts[ch.channelId]}
                         </span>
                       ) : null}
                       {dmMember?.statusText && (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="text-[10px] text-subtle-foreground ml-1 truncate max-w-[80px]">{dmMember.statusText}</span>
+                            <span className="text-micro text-subtle-foreground ml-1 truncate max-w-[80px]">{dmMember.statusText}</span>
                           </TooltipTrigger>
                           <TooltipContent>{dmMember.statusText}</TooltipContent>
                         </Tooltip>
@@ -514,15 +513,15 @@ export const WorkspaceLayout = () => {
           <Button
             type="button"
             onClick={() => navigate(`/w/${slug}/settings`)}
-            className="w-full p-4 border-t border-border text-left cursor-pointer group hover:bg-hover transition-colors"
+            className="w-full p-4  text-left cursor-pointer group hover:bg-hover transition-colors"
             variant="ghost" size="default"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <div className="w-7 h-7 rounded bg-primary-muted border border-primary-border"></div>
-                <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">Workspace Settings</span>
+                <span className="text-ui font-[510] text-muted-foreground group-hover:text-foreground transition-colors">Workspace Settings</span>
               </div>
-              <Settings className="w-4 h-4 text-subtle-foreground group-hover:text-foreground" />
+              <Settings className="w-4 h-4 text-subtle-foreground group-hover:text-foreground" strokeWidth={1.75} />
             </div>
           </Button>
         )}
@@ -537,32 +536,32 @@ export const WorkspaceLayout = () => {
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <div className="w-7 h-7 rounded bg-elevated border border-border flex items-center justify-center">
-                  <ShieldAlert className="w-4 h-4 text-subtle-foreground group-hover:text-foreground transition-colors" />
+                <div className="w-7 h-7 rounded bg-elevated flex items-center justify-center">
+                  <ShieldAlert className="w-4 h-4 text-subtle-foreground group-hover:text-foreground transition-colors" strokeWidth={1.75} />
                 </div>
-                <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">Audit Logs</span>
+                <span className="text-ui font-[510] text-muted-foreground group-hover:text-foreground transition-colors">Audit Logs</span>
               </div>
             </div>
           </Button>
         )}
-      </aside>
+      </nav>
 
       {/* ─── MAIN CONTENT OUTLET ────────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col min-w-0 bg-background relative">
         {/* Top Navbar / Utility Bar */}
-        <header className="h-14 px-6 flex items-center justify-between border-b border-border bg-background shrink-0">
+        <header className="h-14 px-6 flex items-center justify-between  bg-background shrink-0">
           {/* Search */}
           <div className="flex items-center flex-1">
              <div className="relative max-w-md w-full cursor-pointer" onClick={() => setShowCommandPalette(true)}>
-               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle-foreground" size={16} />
+               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle-foreground" size={16} strokeWidth={1.75} />
                <Input
                  type="text"
                  placeholder="Search tasks, messages..."
-                 className="w-full bg-card border border-border rounded-md pl-9 pr-16 py-1.5 text-sm text-muted-foreground cursor-pointer"
+                 className="w-full bg-card rounded-md pl-9 pr-16 py-1.5 text-ui text-muted-foreground cursor-pointer"
                  readOnly
                />
-               <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-1.5 py-0.5 rounded border border-border bg-secondary text-[10px] text-subtle-foreground font-mono">
-                 <Command size={10} />
+               <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-1.5 py-0.5 rounded bg-hover text-micro text-subtle-foreground font-mono">
+                 <Command size={10} strokeWidth={1.75} />
                  <span>K</span>
                </div>
              </div>
@@ -570,8 +569,7 @@ export const WorkspaceLayout = () => {
 
           <div className="flex items-center space-x-4">
             {/* Light / dark mode */}
-            <ThemeToggle />
-
+            
             {/* Notifications Dropdown */}
             <NotificationDropdown />
 
@@ -584,20 +582,20 @@ export const WorkspaceLayout = () => {
                   variant="ghost" size="default"
                 >
                   <div className="relative">
-                    <Avatar className="size-7 border border-border">
-                      <AvatarFallback className="bg-secondary text-foreground text-xs font-bold">
+                    <Avatar className="size-7">
+                      <AvatarFallback className="bg-hover text-foreground text-caption font-[590]">
                         {user?.fullName?.[0]?.toUpperCase() || 'U'}
                       </AvatarFallback>
                     </Avatar>
-                    <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${getStatusDotClass(currentUserMember?.presence, currentUserMember?.statusText)} rounded-full border-2 border-background`} />
+                    <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${getStatusDotClass(currentUserMember?.presence, currentUserMember?.statusText)} rounded-full `} />
                   </div>
                   <div className="flex flex-col items-start hidden sm:flex">
                     <div className="flex items-center space-x-1.5">
-                      <span className="text-sm font-medium text-muted-foreground">{user?.fullName?.split(' ')[0]}</span>
+                      <span className="text-ui font-[510] text-muted-foreground">{user?.fullName?.split(' ')[0]}</span>
                       {currentUserMember?.statusText && (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="text-[10px] bg-hover text-subtle-foreground px-1.5 py-0.5 rounded font-normal">{currentUserMember.statusText}</span>
+                            <span className="text-micro bg-hover text-subtle-foreground px-1.5 py-0.5 rounded font-normal">{currentUserMember.statusText}</span>
                           </TooltipTrigger>
                           <TooltipContent>{currentUserMember.statusText}</TooltipContent>
                         </Tooltip>
@@ -608,22 +606,22 @@ export const WorkspaceLayout = () => {
                 </Button>
               </DropdownMenuTrigger>
 
-              <DropdownMenuContent align="end" className="w-64 p-0">
-                <DropdownMenuLabel className="p-4 border-b border-border flex flex-col items-start gap-0.5 font-normal">
-                  <span className="text-sm font-semibold text-foreground">{user?.fullName}</span>
-                  <span className="text-xs text-subtle-foreground">{user?.email}</span>
-                  <span className="mt-2 inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-hover text-muted-foreground border border-border">
+              <DropdownMenuContent align="end" className="w-[240px] p-0">
+                <DropdownMenuLabel className="p-4  flex flex-col items-start gap-0.5 font-normal">
+                  <span className="text-ui font-[590] text-foreground">{user?.fullName}</span>
+                  <span className="text-caption text-subtle-foreground">{user?.email}</span>
+                  <span className="mt-2 inline-block text-micro font-[590] uppercase tracking-wider px-2 py-0.5 rounded bg-hover text-muted-foreground">
                     {myRole}
                   </span>
                 </DropdownMenuLabel>
 
                 <div className="p-1 space-y-0.5">
-                  <div className="px-2 py-1 flex items-center justify-between text-[11px] font-semibold text-subtle-foreground uppercase tracking-wider">
+                  <div className="px-2 py-1 flex items-center justify-between text-micro font-[590] text-subtle-foreground uppercase tracking-wider">
                     <span>Status</span>
                     {currentUserMember?.statusText && (
                       <Button
                         onClick={() => handleClearStatus()}
-                        className="text-subtle-foreground hover:text-foreground normal-case font-normal text-xs"
+                        className="text-subtle-foreground hover:text-foreground normal-case font-normal text-caption"
                         variant="ghost" size="default"
                       >
                         Clear
@@ -655,7 +653,7 @@ export const WorkspaceLayout = () => {
                       <span className={`w-2 h-2 rounded-full mr-2 ${preset.color}`} />
                       <span className="flex-1">{preset.label}</span>
                       {currentUserMember?.statusText === preset.label && (
-                        <span className="text-[10px] text-primary font-bold">✓</span>
+                        <span className="text-micro text-primary font-[590]">✓</span>
                       )}
                     </DropdownMenuItem>
                   ))}
@@ -664,21 +662,21 @@ export const WorkspaceLayout = () => {
                 <DropdownMenuSeparator />
                 {isOwner() && (
                   <DropdownMenuItem onSelect={() => navigate(`/w/${slug}/settings`)}>
-                    <Settings className="w-4 h-4 mr-3 text-subtle-foreground" />
+                    <Settings className="w-4 h-4 mr-3 text-subtle-foreground" strokeWidth={1.75} />
                     Workspace Settings
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onSelect={() => { setShowSessionsModal(true); fetchSessions(); }}>
-                  <Monitor className="w-4 h-4 mr-3 text-subtle-foreground" />
+                  <Monitor className="w-4 h-4 mr-3 text-subtle-foreground" strokeWidth={1.75} />
                   Manage Sessions
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => navigate('/account')}>
-                  <UserRound className="w-4 h-4 mr-3 text-subtle-foreground" />
+                  <UserRound className="w-4 h-4 mr-3 text-subtle-foreground" strokeWidth={1.75} />
                   Account Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem variant="destructive" onSelect={() => handleLogout()}>
-                  <LogOut className="w-4 h-4 mr-3" />
+                  <LogOut className="w-4 h-4 mr-3" strokeWidth={1.75} />
                   Sign Out
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -710,7 +708,7 @@ export const WorkspaceLayout = () => {
                     type="text"
                     value={newChannelName}
                     onChange={e => setNewChannelName(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
-                    className="pl-8 font-mono text-sm"
+                    className="pl-8 font-mono text-ui"
                     placeholder="general"
                     required
                   />
@@ -738,8 +736,8 @@ export const WorkspaceLayout = () => {
                     className="mt-0.5 data-checked:border-success data-checked:bg-success data-checked:text-success-foreground"
                   />
                   <div className="flex flex-col">
-                    <Label htmlFor="wl-default-channel" className="text-sm font-medium text-foreground">Default Channel</Label>
-                    <span className="text-xs text-subtle-foreground">New workspace members are automatically added</span>
+                    <Label htmlFor="wl-default-channel" className="text-ui font-[510] text-foreground">Default Channel</Label>
+                    <span className="text-caption text-subtle-foreground">New workspace members are automatically added</span>
                   </div>
                 </div>
 
@@ -751,16 +749,16 @@ export const WorkspaceLayout = () => {
                     className="mt-0.5 data-checked:border-info data-checked:bg-info data-checked:text-info-foreground"
                   />
                   <div className="flex flex-col">
-                    <Label htmlFor="wl-announcement-only" className="text-sm font-medium text-foreground">Announcement Only</Label>
-                    <span className="text-xs text-subtle-foreground">Only admins and the channel creator can post messages</span>
+                    <Label htmlFor="wl-announcement-only" className="text-ui font-[510] text-foreground">Announcement Only</Label>
+                    <span className="text-caption text-subtle-foreground">Only admins and the channel creator can post messages</span>
                   </div>
                 </div>
               </div>
 
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setShowChannelModal(false)}>Cancel</Button>
+                <Button type="button" variant="secondary" onClick={() => setShowChannelModal(false)}>Cancel</Button>
                 <Button type="submit" disabled={isCreatingChannel}>
-                  {isCreatingChannel && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  {isCreatingChannel && <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.75} />}
                   Create
                 </Button>
               </DialogFooter>
@@ -792,9 +790,9 @@ export const WorkspaceLayout = () => {
                 </Select>
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setShowDMModal(false)}>Cancel</Button>
+                <Button type="button" variant="secondary" onClick={() => setShowDMModal(false)}>Cancel</Button>
                 <Button type="submit" disabled={isCreatingChannel}>
-                  {isCreatingChannel && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  {isCreatingChannel && <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.75} />}
                   Start Chat
                 </Button>
               </DialogFooter>
@@ -810,7 +808,7 @@ export const WorkspaceLayout = () => {
       {showSessionsModal && (
         <Dialog open onOpenChange={(open) => { if (!open) setShowSessionsModal(false); }}>
           <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col gap-0 p-0">
-            <DialogHeader className="px-6 py-4 border-b border-border shrink-0">
+            <DialogHeader className="px-6 py-4  shrink-0">
               <DialogTitle>Active Sessions</DialogTitle>
               <DialogDescription>Devices currently signed in to your account.</DialogDescription>
             </DialogHeader>
@@ -818,33 +816,33 @@ export const WorkspaceLayout = () => {
             <div className="p-6 space-y-3 overflow-y-auto flex-1">
               {isSessionsLoading ? (
                 <div className="flex justify-center py-10">
-                  <Loader2 className="w-6 h-6 animate-spin text-foreground" />
+                  <Loader2 className="w-6 h-6 animate-spin text-foreground" strokeWidth={1.5} />
                 </div>
               ) : sessions.length === 0 ? (
                 <p className="text-center text-subtle-foreground py-10">No active sessions.</p>
               ) : (
                 sessions.map((session) => (
-                  <div key={session.tokenId} className="flex items-center justify-between p-4 bg-elevated border border-border rounded-lg">
+                  <div key={session.tokenId} className="flex items-center justify-between p-4 bg-elevated rounded-lg">
                     <div className="flex items-center space-x-3 min-w-0">
-                      <div className="w-10 h-10 rounded-lg bg-hover border border-border flex items-center justify-center shrink-0">
+                      <div className="w-10 h-10 rounded-lg bg-hover flex items-center justify-center shrink-0">
                         {session.deviceInfo?.userAgent?.match(/Android|iPhone|iPad/i) ? (
-                          <Smartphone className="w-4 h-4 text-subtle-foreground" />
+                          <Smartphone className="w-4 h-4 text-subtle-foreground" strokeWidth={1.75} />
                         ) : (
-                          <Monitor className="w-4 h-4 text-subtle-foreground" />
+                          <Monitor className="w-4 h-4 text-subtle-foreground" strokeWidth={1.75} />
                         )}
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center space-x-2">
-                          <span className="text-sm font-medium text-foreground truncate">
+                          <span className="text-ui font-[510] text-foreground truncate">
                             {getDeviceLabel(session.deviceInfo?.userAgent)}
                           </span>
                           {session.isCurrent && (
-                            <span className="text-[10px] font-bold uppercase tracking-wider bg-success/10 border border-success/30 text-success px-1.5 py-0.5 rounded">
+                            <span className="text-micro font-[590] uppercase tracking-wider bg-success/10 border border-success/30 text-success px-1.5 py-0.5 rounded">
                               This device
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-subtle-foreground mt-0.5">
+                        <div className="text-caption text-subtle-foreground mt-0.5">
                           {session.deviceInfo?.ip && <span className="font-mono">{session.deviceInfo.ip}</span>}
                           <span className="mx-1.5">·</span>
                           Signed in {new Date(session.issuedAt).toLocaleString()}
@@ -856,8 +854,8 @@ export const WorkspaceLayout = () => {
                     {!session.isCurrent && (
                       <Button
                         onClick={() => handleRevokeSession(session.tokenId)}
-                        className="ml-3 shrink-0 text-xs font-semibold bg-hover text-muted-foreground px-3 py-1.5 rounded hover:bg-destructive/10 hover:text-destructive transition-colors border border-border"
-                        variant="outline" size="default"
+                        className="ml-3 shrink-0 text-caption font-[590] bg-hover text-muted-foreground px-3 py-1.5 rounded hover:bg-destructive/10 hover:text-destructive transition-colors"
+                        variant="secondary" size="default"
                       >
                         Log Out
                       </Button>
@@ -867,9 +865,9 @@ export const WorkspaceLayout = () => {
               )}
             </div>
 
-            <div className="p-6 pt-0 border-t border-border shrink-0">
+            <div className="p-6 pt-0  shrink-0">
               <Button
-                variant="outline"
+                variant="secondary"
                 className="w-full"
                 onClick={handleRevokeOthers}
                 disabled={sessions.filter(s => !s.isCurrent).length === 0}
