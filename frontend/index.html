@@ -4,22 +4,17 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/devsync-icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
     <meta name="description" content="DevSync — AI-Integrated Developer Collaboration Platform. Unify project management, team chat, GitHub tracking, and AI-powered insights in one workspace." />
     <title>DevSync — Developer Collaboration Platform</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Inter must load as a VARIABLE font (100..900) — the 510 and 590 weights
+         that define this design system do not exist as static instances.
+         See AGENTS.md §4 — Font Loading. -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,100..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   </head>
   <body>
-    <script>
-      // Apply the saved theme before first paint to avoid a flash of the wrong mode.
-      (function () {
-        var stored = null;
-        try { stored = localStorage.getItem('devsync-theme'); } catch (e) {}
-        var dark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
-        document.documentElement.classList.toggle('dark', dark);
-      })();
-    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -30,7 +30,7 @@ export const GithubCallbackPage = () => {
         navigate(returnTo, { replace: true });
       } catch (err: unknown) {
         console.error('GitHub OAuth Exchange Error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to connect GitHub account.');
+        setError(err instanceof Error ? err.message : "Couldn't connect GitHub account. Try again in a moment.");
       }
     };
 
@@ -41,7 +41,7 @@ export const GithubCallbackPage = () => {
     return (
       <div className="flex flex-col h-screen w-screen items-center justify-center bg-background px-4 text-center">
         <div className="bg-danger-muted border border-danger-border text-danger p-6 rounded-lg max-w-md">
-          <h2 className="text-heading font-[590] mb-2">GitHub Connection Error</h2>
+          <h2 className="text-h2 font-[590] mb-2">GitHub Connection Error</h2>
           <p className="text-ui mb-6">{error}</p>
           <Button
             variant="secondary"
@@ -57,7 +57,7 @@ export const GithubCallbackPage = () => {
   return (
     <div className="flex flex-col h-screen w-screen items-center justify-center bg-background">
       <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" strokeWidth={1.5} />
-      <h2 className="text-heading font-[590] text-foreground mb-2">Connecting GitHub</h2>
+      <h2 className="text-h2 font-[590] text-foreground mb-2">Connecting GitHub</h2>
       <p className="text-muted-foreground text-ui">Please wait while we securely link your account...</p>
     </div>
   );

@@ -42,13 +42,14 @@ export const CreateProjectPage = () => {
           </div>
         </div>
         
-        <h1 className="text-heading font-[590] text-center text-foreground mb-2">Create a New Project</h1>
+        <h1 className="text-h1 font-[590] text-center text-foreground mb-2">Create a New Project</h1>
         <p className="text-center text-muted-foreground mb-8 text-ui">Start tracking tasks, sprints, and CI/CD pipelines.</p>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <Label className="block text-ui font-[510] text-foreground mb-1.5">Project Name</Label>
+            <Label htmlFor="createprojectpage-project-name" className="block text-ui font-[510] text-foreground mb-1.5">Project Name</Label>
             <Input 
+              id="createprojectpage-project-name"
               type="text" 
               required
               value={name}
@@ -57,31 +58,33 @@ export const CreateProjectPage = () => {
                 if (!key) setKey(e.target.value.substring(0, 3).toUpperCase());
               }}
               placeholder="e.g. Mobile App V2"
-              className="w-full bg-background border border-border rounded-md px-4 py-3 text-foreground focus:border-ring focus:ring-1 focus:ring-ring h-auto"
+              className="w-full bg-background px-4 py-3 text-foreground"
             />
           </div>
 
           <div>
-            <Label className="block text-ui font-[510] text-foreground mb-1.5">Project Key</Label>
+            <Label htmlFor="createprojectpage-project-key" className="block text-ui font-[510] text-foreground mb-1.5">Project Key</Label>
             <Input 
+              id="createprojectpage-project-key"
               type="text" 
               required
               value={key}
               onChange={(e) => setKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
               placeholder="e.g. MOB"
-              className="w-full bg-background border border-border rounded-md px-4 py-3 text-foreground font-mono focus:border-ring focus:ring-1 focus:ring-ring uppercase h-auto"
+              className="w-full bg-background px-4 py-3 text-foreground font-mono uppercase"
             />
             <p className="text-caption text-subtle-foreground mt-1.5">Used as a prefix for task IDs (e.g. MOB-1). Immutable after creation.</p>
           </div>
 
           <div>
-            <Label className="block text-ui font-[510] text-foreground mb-1.5">Description (Optional)</Label>
+            <Label htmlFor="createprojectpage-description-optional" className="block text-ui font-[510] text-foreground mb-1.5">Description (Optional)</Label>
             <Textarea 
+              id="createprojectpage-description-optional"
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What is this project about?"
-              className="w-full bg-background border border-border rounded-md px-4 py-3 text-foreground focus:border-ring focus:ring-1 focus:ring-ring h-auto"
+              className="w-full bg-background px-4 py-3 text-foreground"
             />
           </div>
 
@@ -97,7 +100,7 @@ export const CreateProjectPage = () => {
             <Button 
               type="submit"
               disabled={isLoading || !name || !key}
-              className="flex items-center px-6 py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-50 text-primary-foreground text-ui font-[590] rounded-md transition-colors"
+              className="flex items-center px-6 py-2.5 bg-primary hover:bg-primary-hover disabled:text-disabled text-primary-foreground"
               variant="primary" size="default"
             >
               {isLoading ? <Loader2 className="w-5 h-5 animate-spin" strokeWidth={1.75} /> : 'Create Project'}

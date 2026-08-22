@@ -55,16 +55,16 @@ const FAQItem = ({ question, answer }: { question: string; answer: string }) => 
         className="w-full flex items-center justify-between py-6 text-left group cursor-pointer"
         variant="ghost" size="default"
       >
-        <span className="text-heading font-[590] text-foreground group-hover:text-muted-foreground transition-colors pr-8">
+        <span className="text-h3 font-[590] text-foreground group-hover:text-muted-foreground transition-colors pr-8">
           {question}
         </span>
         <ChevronDown
-          className={`w-5 h-5 text-muted-foreground shrink-0 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} strokeWidth={1.75}
+          className={`w-5 h-5 text-muted-foreground shrink-0 transition-colors duration-[--duration-slow] ${open ? 'rotate-180' : ''}`} strokeWidth={1.75}
         />
       </Button>
       <div
         
-        className={cn("overflow-hidden transition-colors duration-300", open ? "h-auto opacity-100" : "h-0 opacity-0")}
+        className={cn("overflow-hidden transition-colors duration-[--duration-slow]", open ? "h-auto opacity-100" : "h-0 opacity-0")}
         
         
       >
@@ -163,9 +163,9 @@ export const LandingPage = () => {
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-2.5">
             <div className="w-8 h-8 bg-foreground rounded-lg flex items-center justify-center shadow-md">
-              <Zap className="w-4.5 h-4.5 text-inverse fill-current" strokeWidth={1.75} />
+              <Zap className="w-5 h-5 text-inverse fill-current" strokeWidth={1.75} />
             </div>
-            <span className="font-[590] text-heading tracking-tight text-foreground">
+            <span className="font-[590] text-h3 text-foreground">
               Dev<span className="text-muted-foreground">Sync</span>
             </span>
           </div>
@@ -185,7 +185,7 @@ export const LandingPage = () => {
             </Button>
             <Button
               onClick={() => navigate('/register')}
-              className="text-sm font-[590] bg-foreground text-inverse px-5 py-2 rounded-full hover:bg-foreground/90 transition-colors  active:scale-95 cursor-pointer"
+              className="text-sm font-[590] bg-foreground text-inverse px-5 py-2 rounded-full hover:bg-foreground/90 transition-colors active:scale-95 cursor-pointer"
               variant="primary" size="default"
             >
               Get Started
@@ -207,7 +207,7 @@ export const LandingPage = () => {
           <FadeIn>
             <div className="inline-flex items-center space-x-2 bg-card border border-border rounded-full px-4 py-1.5 mb-8">
               <span className="flex h-2 w-2 rounded-full bg-success animate-pulse" />
-              <span className="text-xs font-[510] text-foreground uppercase tracking-widest">
+              <span className="text-xs font-[510] text-foreground uppercase">
                 DevSync v1.0 is live
               </span>
             </div>
@@ -215,7 +215,7 @@ export const LandingPage = () => {
 
           {/* Headline */}
           <FadeIn delay={0.1}>
-            <h1 className="text-heading md:text-heading lg:text-heading font-[590] text-foreground tracking-tight leading-[1.08] mb-7">
+            <h1 className="text-h1 sm:text-display font-[590] text-foreground mb-7">
               The unified workspace{' '}
               <br className="hidden md:block" />
               for your dev team.
@@ -224,7 +224,7 @@ export const LandingPage = () => {
 
           {/* Subheading */}
           <FadeIn delay={0.2}>
-            <p className="text-heading md:text-heading text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-body md:text-body text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
               Replace Jira, Slack, and GitHub dashboards with one blazing-fast
               platform. Track issues, chat in real-time, and monitor commits
               — all in one place.
@@ -236,7 +236,7 @@ export const LandingPage = () => {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Button
                 onClick={() => navigate('/register')}
-                className="w-full sm:w-auto flex items-center justify-center px-8 py-4 text-base font-[590] text-inverse bg-foreground hover:bg-foreground/90 rounded-full transition-colors shadow-md .5 cursor-pointer"
+                className="w-full sm:w-auto flex items-center justify-center px-8 py-4 text-base font-[590] text-inverse bg-foreground hover:bg-foreground/90 rounded-full transition-colors shadow-md cursor-pointer"
                 variant="primary" size="default"
               >
                 Start Building for Free
@@ -281,7 +281,7 @@ export const LandingPage = () => {
       {/* ─── SOCIAL PROOF QUOTE ─── */}
       <FadeIn>
         <section className="max-w-3xl mx-auto px-6 py-20 text-center">
-          <blockquote className="text-heading md:text-heading font-[590] text-foreground leading-snug mb-6">
+          <blockquote className="text-h2 md:text-h1 font-[590] text-foreground mb-6">
             "The teams who ship fastest are the teams who stop context-switching.{' '}
             <span className="text-subtle-foreground">DevSync makes that the default.</span>"
           </blockquote>
@@ -292,7 +292,7 @@ export const LandingPage = () => {
       <div className="border-y border-border py-5 overflow-hidden">
         <div className="flex items-center justify-center gap-8 md:gap-14 flex-wrap px-6">
           {techBadges.map((badge) => (
-            <span key={badge} className="text-sm font-[590] text-subtle-foreground uppercase tracking-widest whitespace-nowrap">
+            <span key={badge} className="text-sm font-[590] text-subtle-foreground uppercase whitespace-nowrap">
               {badge}
             </span>
           ))}
@@ -302,10 +302,10 @@ export const LandingPage = () => {
       {/* ─── FEATURES GRID ─── */}
       <section id="features" className="max-w-7xl mx-auto px-6 py-28">
         <FadeIn className="text-center mb-20">
-          <span className="text-xs font-[590] text-subtle-foreground uppercase tracking-[0.2em] mb-4 block">
+          <span className="text-xs font-[590] text-subtle-foreground uppercase mb-4 block">
             What's inside
           </span>
-          <h2 className="text-heading md:text-heading font-[590] text-foreground leading-tight">
+          <h2 className="text-h2 md:text-h2 font-[590] text-foreground leading-tight">
             Everything a dev team needs{' '}
             <br className="hidden md:block" />
             to ship with confidence.
@@ -315,11 +315,11 @@ export const LandingPage = () => {
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {features.map((f, i) => (
             <FadeIn key={f.title} delay={i * 0.08}>
-              <div className="group bg-card border border-border rounded-lg p-7 hover:bg-hover hover:border-border-strong transition-colors duration-300">
+              <div className="group bg-card border border-border rounded-lg p-7 hover:bg-hover hover:border-border-strong transition-colors duration-[--duration-slow]">
                 <div className="w-12 h-12 bg-hover border border-border rounded-lg flex items-center justify-center mb-5 text-muted-foreground group-hover:bg-secondary group-hover:text-foreground transition-colors">
                   {f.icon}
                 </div>
-                <h3 className="text-heading font-[590] text-foreground mb-2.5">{f.title}</h3>
+                <h3 className="text-h3 font-[590] text-foreground mb-2.5">{f.title}</h3>
                 <p className="text-muted-foreground leading-relaxed text-body">{f.desc}</p>
               </div>
             </FadeIn>
@@ -330,10 +330,10 @@ export const LandingPage = () => {
       {/* ─── HOW IT WORKS — 3 Steps ─── */}
       <section id="how-it-works" className="max-w-7xl mx-auto px-6 py-28 border-t border-border">
         <FadeIn className="text-center mb-20">
-          <span className="text-xs font-[590] text-subtle-foreground uppercase tracking-[0.2em] mb-4 block">
+          <span className="text-xs font-[590] text-subtle-foreground uppercase mb-4 block">
             How it works
           </span>
-          <h2 className="text-heading md:text-heading font-[590] text-foreground leading-tight">
+          <h2 className="text-h2 md:text-h2 font-[590] text-foreground leading-tight">
             Three steps.{' '}
             <span className="text-subtle-foreground">No friction.</span>
           </h2>
@@ -342,16 +342,16 @@ export const LandingPage = () => {
         <div className="grid md:grid-cols-3 gap-6">
           {steps.map((s, i) => (
             <FadeIn key={s.num} delay={i * 0.12}>
-              <div className="relative bg-card border border-border rounded-lg p-8 hover:bg-hover transition-colors duration-300 overflow-hidden">
+              <div className="relative bg-card border border-border rounded-lg p-8 hover:bg-hover transition-colors duration-[--duration-slow] overflow-hidden">
                 {/* Big number */}
-                <span className="text-heading font-[590] text-foreground/5 absolute top-2 right-4 leading-none select-none">
+                <span className="text-display font-[590] text-foreground/5 absolute top-2 right-4 leading-none select-none">
                   {s.num}
                 </span>
                 <div className="relative z-[var(--z-sticky)]">
                   <span className="inline-block text-sm font-[590] text-foreground bg-hover border border-border-strong rounded-lg px-3 py-1 mb-5">
                     {s.num}
                   </span>
-                  <h3 className="text-heading font-[590] text-foreground mb-3">{s.title}</h3>
+                  <h3 className="text-h3 font-[590] text-foreground mb-3">{s.title}</h3>
                   <p className="text-muted-foreground leading-relaxed">{s.desc}</p>
                 </div>
               </div>
@@ -366,15 +366,15 @@ export const LandingPage = () => {
           {/* Left — Text */}
           <FadeIn>
             <div>
-              <span className="text-xs font-[590] text-subtle-foreground uppercase tracking-[0.2em] mb-4 block">
+              <span className="text-xs font-[590] text-subtle-foreground uppercase mb-4 block">
                 Built to impress
               </span>
-              <h2 className="text-heading md:text-heading font-[590] text-foreground leading-tight mb-6">
+              <h2 className="text-h2 md:text-h2 font-[590] text-foreground leading-tight mb-6">
                 A finished product,{' '}
                 <br className="hidden md:block" />
                 not a boilerplate.
               </h2>
-              <p className="text-muted-foreground text-heading leading-relaxed mb-8">
+              <p className="text-muted-foreground text-body leading-relaxed mb-8">
                 DevSync isn't a starter template. It's a fully working,
                 production-grade platform with real-time chat, Kanban boards,
                 sprint management, and deep GitHub integration — all battle-tested
@@ -421,7 +421,7 @@ export const LandingPage = () => {
       {/* ─── FAQ ─── */}
       <section id="faq" className="max-w-3xl mx-auto px-6 py-28 border-t border-border">
         <FadeIn className="mb-14">
-          <h2 className="text-heading md:text-heading font-[590] text-foreground text-center">
+          <h2 className="text-h2 md:text-h2 font-[590] text-foreground text-center">
             The honest answers.
           </h2>
         </FadeIn>
@@ -456,18 +456,18 @@ export const LandingPage = () => {
               aria-hidden="true"
             />
             <div className="relative z-[var(--z-sticky)]">
-              <h2 className="text-heading md:text-6xl font-[590] text-inverse leading-tight mb-4">
+              <h2 className="text-h1 sm:text-display font-[590] text-inverse mb-4">
                 Make your team{' '}
                 <span className="text-inverse/60">
                   sync.
                 </span>
               </h2>
-              <p className="text-inverse/70 text-heading mb-8 max-w-lg mx-auto">
+              <p className="text-inverse/70 text-body mb-8 max-w-lg mx-auto">
                 Join the workspace where every commit, message, and task lives in one place.
               </p>
               <Button
                 onClick={() => navigate('/register')}
-                className="inline-flex items-center px-8 py-4 text-base font-[590] text-foreground bg-inverse hover:bg-inverse/90 rounded-full transition-colors  active:scale-95 cursor-pointer"
+                className="inline-flex items-center px-8 py-4 text-base font-[590] text-foreground bg-inverse hover:bg-inverse/90 rounded-full transition-colors active:scale-95 cursor-pointer"
                 variant="primary" size="default"
               >
                 Get Started — Free
@@ -486,7 +486,7 @@ export const LandingPage = () => {
               <div className="w-7 h-7 bg-foreground rounded-lg flex items-center justify-center">
                 <Zap className="w-4 h-4 text-inverse fill-current" strokeWidth={1.75} />
               </div>
-              <span className="font-[590] text-heading text-foreground tracking-tight">DevSync</span>
+              <span className="font-[590] text-h3 text-foreground">DevSync</span>
             </div>
             <div className="flex items-center gap-8">
               <a href="#features" className="text-sm text-subtle-foreground hover:text-foreground transition-colors">Features</a>

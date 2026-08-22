@@ -85,7 +85,7 @@ const CreateChannelModal: React.FC<CreateChannelModalProps> = ({ onClose, defaul
           </div>
 
           <fieldset className="space-y-3">
-            <legend className="text-caption font-[590] text-muted-foreground uppercase tracking-wider mb-3">
+            <legend className="text-caption font-[590] text-muted-foreground uppercase mb-3">
               Visibility
             </legend>
             <RadioGroup value={type} onValueChange={(v) => setType(v as 'public' | 'private')} className="gap-3">

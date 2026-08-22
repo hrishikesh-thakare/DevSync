@@ -51,7 +51,7 @@ export const OAuthCallbackPage = () => {
     return (
       <div className="flex flex-col h-screen w-screen items-center justify-center bg-background px-4 text-center">
         <div className="bg-danger-muted border border-danger-border text-danger p-6 rounded-lg max-w-[400px]">
-          <h2 className="text-heading font-[590] mb-2">Authentication Error</h2>
+          <h2 className="text-h2 font-[590] mb-2">Authentication Error</h2>
           <p className="text-ui mb-6">{error}</p>
           <Button
             variant="secondary"
@@ -67,7 +67,7 @@ export const OAuthCallbackPage = () => {
   return (
     <div className="flex flex-col h-screen w-screen items-center justify-center bg-background">
       <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" strokeWidth={1.5} />
-      <h2 className="text-heading font-[590] text-foreground mb-2">Authenticating</h2>
+      <h2 className="text-h2 font-[590] text-foreground mb-2">Authenticating</h2>
       <p className="text-muted-foreground text-ui">Securely connecting your account...</p>
     </div>
   );

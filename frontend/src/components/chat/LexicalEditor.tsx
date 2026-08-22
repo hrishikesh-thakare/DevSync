@@ -390,7 +390,7 @@ function MentionsPlugin({ members, tasks = [] }: { members: WorkspaceMember[]; t
       <div className="max-h-56 overflow-y-auto py-1">
         {filteredMembers.length > 0 && (
           <div>
-            <div className="px-3 py-1 text-micro font-[590] text-subtle-foreground uppercase tracking-wider bg-muted">Members</div>
+            <div className="px-3 py-1 text-micro font-[590] text-subtle-foreground uppercase bg-muted">Members</div>
             {filteredMembers.map((m) => (
               <div 
                 key={m.userId}
@@ -410,7 +410,7 @@ function MentionsPlugin({ members, tasks = [] }: { members: WorkspaceMember[]; t
 
         {filteredTasks.length > 0 && (
           <div>
-            <div className="px-3 py-1 text-micro font-[590] text-subtle-foreground uppercase tracking-wider bg-muted border-t border-border">Project Tasks</div>
+            <div className="px-3 py-1 text-micro font-[590] text-subtle-foreground uppercase bg-muted border-t border-border">Project Tasks</div>
             {filteredTasks.map((t) => (
               <div 
                 key={t.id}
@@ -557,7 +557,7 @@ export const LexicalEditor = ({
                   }}
                   disabled={isSending || isUploading || isEmpty}
                   aria-label="Send message"
-                  className="absolute right-2 bottom-1.5 flex items-center justify-center p-2 rounded-lg bg-primary hover:bg-primary-hover text-primary-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed z-[var(--z-dropdown)]"
+                  className="absolute right-2 bottom-1.5 flex items-center justify-center p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed z-[var(--z-dropdown)]"
                   size="icon" variant="primary"
                 >
                   <SendHorizontal className="w-4 h-4" strokeWidth={1.75} />

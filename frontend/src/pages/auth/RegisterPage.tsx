@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../../store/auth.js';
-import { Mail, Lock, User, ArrowRight, Loader2 } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, GitBranch, Globe } from 'lucide-react';
 import { supabase } from '../../lib/supabase.js';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,7 +40,7 @@ export const RegisterPage = () => {
       await register({ email, password, fullName });
       navigate('/workspaces', { replace: true });
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to create account');
+      setError(err instanceof Error ? err.message : "Couldn't create your account. Check the details above and try again.");
     } finally {
       setIsLoading(false);
     }
@@ -48,24 +48,42 @@ export const RegisterPage = () => {
 
   return (
     <div className="auth-bg min-h-screen flex items-center justify-center p-4">
-      <div className="auth-shape-1"></div>
-      <div className="auth-shape-2"></div>
+      <div className="bg-card rounded-[8px] shadow-sm max-w-[400px] w-full p-8 animate-fadeIn">
+        <div className="mb-8 text-center">
+          <h1 className="text-h2 font-[590] text-foreground">Create your account</h1>
+        </div>
 
-      <div className="bg-card border border-border rounded-lg shadow-sm max-w-[400px] w-full p-8 animate-fadeIn relative z-[var(--z-sticky)]">
-        <div className="mb-10 text-center">
-          <h1 className="text-heading font-[590] text-foreground mb-2">Join DevSync</h1>
-          <p className="text-muted-foreground text-ui">Create your developer account</p>
+        {/* §14 Auth: OAuth sits ABOVE the form, divided from it by a
+            --border-subtle rule with "or" centred on it. */}
+        <div className="space-y-3">
+          <Button type="button" onClick={() => handleOAuth('github')} variant="secondary" size="lg" className="w-full">
+            <GitBranch className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+            Continue with GitHub
+          </Button>
+          <Button type="button" onClick={() => handleOAuth('google')} variant="secondary" size="lg" className="w-full">
+            <Globe className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+            Continue with Google
+          </Button>
+        </div>
+
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center" aria-hidden="true">
+            <div className="w-full border-t border-border" />
+          </div>
+          <div className="relative flex justify-center">
+            <span className="bg-card px-2 text-caption text-subtle-foreground">or</span>
+          </div>
         </div>
 
         {error && (
-          <div className="mb-6 rounded-lg bg-danger-muted border border-danger-border p-4 text-ui text-danger text-center">
+          <div role="alert" className="mb-6 rounded-[8px] bg-danger-muted border border-danger-border p-4 text-ui text-danger-on-muted">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <Label className="block text-caption font-[510] text-muted-foreground uppercase tracking-wider mb-2">
+            <Label htmlFor="registerpage-full-name">
               Full Name
             </Label>
             <div className="relative">
@@ -73,10 +91,11 @@ export const RegisterPage = () => {
                 <User className="h-5 w-5 text-muted-foreground" strokeWidth={1.75} />
               </div>
               <Input
+                id="registerpage-full-name"
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 bg-background border border-border rounded-md text-foreground placeholder:text-subtle-foreground focus:ring-1 focus:ring-ring focus:border-ring transition-colors duration-200 h-auto"
+                className="pl-11"
                 placeholder="John Doe"
                 required
               />
@@ -84,7 +103,7 @@ export const RegisterPage = () => {
           </div>
 
           <div>
-            <Label className="block text-caption font-[510] text-muted-foreground uppercase tracking-wider mb-2">
+            <Label htmlFor="registerpage-email-address">
               Email Address
             </Label>
             <div className="relative">
@@ -92,10 +111,11 @@ export const RegisterPage = () => {
                 <Mail className="h-5 w-5 text-muted-foreground" strokeWidth={1.75} />
               </div>
               <Input
+                id="registerpage-email-address"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 bg-background border border-border rounded-md text-foreground placeholder:text-subtle-foreground focus:ring-1 focus:ring-ring focus:border-ring transition-colors duration-200 h-auto"
+                className="pl-11"
                 placeholder="you@company.com"
                 required
               />
@@ -103,7 +123,7 @@ export const RegisterPage = () => {
           </div>
 
           <div>
-            <Label className="block text-caption font-[510] text-muted-foreground uppercase tracking-wider mb-2">
+            <Label htmlFor="registerpage-password">
               Password
             </Label>
             <div className="relative">
@@ -111,10 +131,11 @@ export const RegisterPage = () => {
                 <Lock className="h-5 w-5 text-muted-foreground" strokeWidth={1.75} />
               </div>
               <Input
+                id="registerpage-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 bg-background border border-border rounded-md text-foreground placeholder:text-subtle-foreground focus:ring-1 focus:ring-ring focus:border-ring transition-colors duration-200 h-auto"
+                className="pl-11"
                 placeholder="••••••••"
                 required
                 minLength={6}
@@ -124,50 +145,14 @@ export const RegisterPage = () => {
 
           <Button
             type="submit"
-            disabled={isLoading}
+            loading={isLoading}
             variant="primary"
-            className="bg-primary text-primary-foreground hover:bg-primary-hover rounded-md w-full py-3 flex justify-center items-center mt-8 disabled:opacity-70 h-auto"
+            className="w-full mt-6"
           >
-            {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin text-foreground" strokeWidth={1.75} />
-            ) : (
-              <>
-                Create Account
-                <ArrowRight className="ml-2 h-5 w-5" strokeWidth={1.75} />
-              </>
-            )}
+            Create Account
+            <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
           </Button>
         </form>
-
-        <div className="mt-8">
-          {/* <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border"></div>
-            </div>
-            <div className="relative flex justify-center text-ui">
-              <span className="px-2 bg-transparent text-muted-foreground">Or continue with</span>
-            </div>
-          </div> */}
-
-          <div className="mt-6 space-y-4">
-            <Button
-              type="button"
-              onClick={() => handleOAuth('github')}
-              variant="secondary"
-              className="bg-card border border-border rounded-lg shadow-sm w-full py-3 hover:bg-hover transition-colors font-[510] text-foreground h-auto"
-            >
-              Continue with GitHub
-            </Button>
-            <Button
-              type="button"
-              onClick={() => handleOAuth('google')}
-              variant="secondary"
-              className="bg-card border border-border rounded-lg shadow-sm w-full py-3 hover:bg-hover transition-colors font-[510] text-foreground h-auto"
-            >
-              Continue with Google
-            </Button>
-          </div>
-        </div>
 
         <p className="mt-8 text-center text-ui text-muted-foreground">
           Already have an account?{' '}

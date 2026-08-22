@@ -11,7 +11,7 @@ test.describe('Login Flow @auth', () => {
   });
 
   test('should display the login form', async ({ page }) => {
-    await expect(page.getByText('Sign in to your workspace')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Sign in to DevSync' })).toBeVisible();
     await expect(page.locator('input[type="email"]')).toBeVisible();
     await expect(page.locator('input[type="password"]')).toBeVisible();
     await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible();
@@ -38,7 +38,7 @@ test.describe('Login Flow @auth', () => {
     await page.getByRole('button', { name: /sign in/i }).click();
 
     // Should show error message and stay on login page
-    await expect(page.locator('.text-red-400, [class*="error"], [class*="red"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('alert')).toBeVisible({ timeout: 10_000 });
     await expect(page).toHaveURL(/\/login/);
   });
 
@@ -47,7 +47,7 @@ test.describe('Login Flow @auth', () => {
     await page.locator('input[type="password"]').fill(TEST_PASSWORD);
     await page.getByRole('button', { name: /sign in/i }).click();
 
-    await expect(page.locator('.text-red-400, [class*="error"], [class*="red"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('alert')).toBeVisible({ timeout: 10_000 });
     await expect(page).toHaveURL(/\/login/);
   });
 

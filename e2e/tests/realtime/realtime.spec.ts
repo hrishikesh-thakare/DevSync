@@ -177,12 +177,12 @@ test.describe('Realtime (WebSockets)', () => {
 
     const { status } = await apiRequest('/auth/status', accessToken, {
       method: 'POST',
-      body: JSON.stringify({ statusText, presence: 'busy' }),
+      body: JSON.stringify({ statusText, presence: 'away' }),
     });
     expect(status).toBe(200);
 
     const received = await presencePromise;
-    expect(received.presence).toBe('busy');
+    expect(received.presence).toBe('away');
 
     socket.disconnect();
   });

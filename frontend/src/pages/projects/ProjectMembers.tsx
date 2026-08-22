@@ -103,7 +103,7 @@ export const ProjectMembers = () => {
       const data = await apiFetch(`/workspaces/${slug}/projects/${key}/members`);
       setMembers(data.members || []);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add project member.');
+      toast.error(err instanceof Error ? err.message : "Couldn't add project member. Try again in a moment.");
     } finally {
       setIsAdding(false);
     }
@@ -117,7 +117,7 @@ export const ProjectMembers = () => {
       const data = await apiFetch(`/workspaces/${slug}/projects/${key}/members`);
       setMembers(data.members || []);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to remove member.');
+      toast.error(err instanceof Error ? err.message : "Couldn't remove member. Try again in a moment.");
     }
     setActiveDropdown(null);
   };
@@ -132,7 +132,7 @@ export const ProjectMembers = () => {
       const data = await apiFetch(`/workspaces/${slug}/projects/${key}/members`);
       setMembers(data.members || []);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update role.');
+      toast.error(err instanceof Error ? err.message : "Couldn't update role. Try again in a moment.");
     }
     setActiveDropdown(null);
   };
@@ -150,13 +150,13 @@ export const ProjectMembers = () => {
     <div className="h-full overflow-y-auto p-8 font-sans bg-background text-foreground">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h2 className="text-heading font-[590] text-foreground mb-1">Project Members</h2>
+          <h2 className="text-h2 font-[590] text-foreground mb-1">Project Members</h2>
           <p className="text-ui text-muted-foreground">Manage who has access to {key}.</p>
         </div>
         {canAddMember && (
           <Button 
             onClick={() => setShowModal(true)}
-            className="flex items-center px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground font-[590] rounded-md transition-colors"
+            className="flex items-center px-4 py-2 font-[590] rounded-md transition-colors"
             variant="primary" size="default"
           >
             <UserPlus className="w-4 h-4 mr-2" strokeWidth={1.75} />
@@ -215,7 +215,7 @@ export const ProjectMembers = () => {
       <div className="bg-card border border-border rounded-lg overflow-hidden shadow-sm">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="border-b border-border bg-muted text-caption uppercase tracking-wider text-subtle-foreground font-[590]">
+            <tr className="border-b border-border bg-muted text-caption uppercase text-subtle-foreground font-[590]">
               <th className="px-6 py-4">User</th>
               <th className="px-6 py-4">Project Role</th>
               <th className="px-6 py-4 text-right">Actions</th>

@@ -1,26 +1,41 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
+/**
+ * §8 Status Chips / Priority Badges: 12px, pill radius, 2px 8px padding.
+ *
+ * Every tinted variant pairs `bg-*-muted` with `text-*-on-muted`, never with
+ * the ramp's base colour. §3 measures why: `--primary` on its own 15% tint is
+ * 3.53:1 and `--special` is 3.89:1, both under 4.5:1. `--success` and
+ * `--warning` are light enough that their on-muted value IS the base.
+ */
 const badgeVariants = {
-  default: "bg-[var(--primary-muted)] text-[var(--primary)]",
+  default: "bg-primary-muted text-primary-on-muted",
   secondary: "bg-hover text-muted-foreground",
-  destructive: "bg-[var(--danger-muted)] text-[var(--danger)]",
-  outline: "bg-transparent border border-border text-muted-foreground",
-  success: "bg-[var(--success-muted)] text-[var(--success)]",
-  warning: "bg-[var(--warning-muted)] text-[var(--warning)]",
-  info: "bg-[var(--info-muted)] text-[var(--info)]",
-  special: "bg-[var(--special-muted)] text-[var(--special)]",
+  destructive: "bg-danger-muted text-danger-on-muted",
+  outline: "bg-transparent shadow-sm text-muted-foreground",
+  success: "bg-success-muted text-success-on-muted",
+  warning: "bg-warning-muted text-warning-on-muted",
+  info: "bg-info-muted text-info-on-muted",
+  special: "bg-special-muted text-special-on-muted",
+  /** Neutral count pill — §8 Count Badges. */
+  count: "bg-muted text-subtle-foreground",
+  /** Unread count pill — §8 Count Badges. */
+  unread: "bg-primary text-primary-foreground",
 }
 
-export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: keyof typeof badgeVariants
+export type BadgeVariant = keyof typeof badgeVariants
+
+export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
+  variant?: BadgeVariant
 }
 
 function Badge({ className, variant = "default", ...props }: BadgeProps) {
   return (
-    <div
+    <span
       className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-caption font-[510] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2",
+        "inline-flex items-center rounded-full px-2 py-0.5 text-caption font-[510]",
+        "transition-colors duration-[--duration-fast] ease-standard",
         badgeVariants[variant],
         className
       )}

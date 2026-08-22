@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { AuthGuard, GuestGuard } from './components/auth/AuthGuard.js';
-import { ToastProvider } from './components/providers/ToastProvider.js';
+import { ToastProvider } from './components/ui/ToastProvider';
 import {
   LandingPage,
   LoginPage,
@@ -36,19 +36,29 @@ import {
   GlobalSearchResults
 } from './pages/index.js';
 
+/**
+ * §18 Route change: "Move focus to the new page's <h1> on navigation; SPAs
+ * routinely fail this."
+ *
+ * The query is scoped to #main-content rather than the document, because the
+ * first <h1> in the document is the workspace name in the sidebar — focusing
+ * that would drop the user into the nav on every navigation. When a page has no
+ * heading, the content region itself takes focus so the reading position still
+ * moves out of the chrome.
+ */
 function RouteFocus() {
   const location = useLocation();
-  
+
   useEffect(() => {
-    // Delay slightly to ensure the new route's DOM has rendered
-    const timeout = setTimeout(() => {
-      const h1 = document.querySelector('h1');
-      if (h1) {
-        h1.setAttribute('tabIndex', '-1');
-        h1.focus();
-      }
-    }, 50);
-    return () => clearTimeout(timeout);
+    // One frame, so the new route's DOM exists before we look for its heading.
+    const raf = requestAnimationFrame(() => {
+      const main = document.getElementById('main-content');
+      const target = main?.querySelector('h1') ?? main;
+      if (!target) return;
+      target.setAttribute('tabindex', '-1');
+      target.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(raf);
   }, [location.pathname]);
 
   return null;

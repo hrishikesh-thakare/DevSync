@@ -4,6 +4,8 @@ import { useBoardStore, Task, TaskStatus } from '../../store/boardStore.js';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { Loader2, AlertCircle, Plus, Bug, BookOpen, Zap, CheckSquare, Layers, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
+import { BoardSkeleton } from '@/components/ui/skeletons';
+import { useDelayedFlag } from '@/hooks/useDelayedFlag';
 import { useAuthStore } from '../../store/auth.js';
 import { useToast } from '../../hooks/useToast.js';
 import { useConfirm } from '../../hooks/useConfirm.js';
@@ -119,7 +121,7 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
       import('../../lib/api.js').then(({ apiFetch }) => {
         apiFetch(`/workspaces/${slug}/projects/${key}/sprints`)
           .then(data => setSprints(data.sprints || []))
-          .catch(err => console.error('Failed to load sprints', err));
+          .catch(err => console.error("Couldn't load sprints. Check your connection and try again.", err));
       });
     }
   }, [slug, key, fetchTasks, fetchMembers, fetchLabels]);
@@ -155,7 +157,7 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
       setNewTaskSprintId(sprintId || '');
       setNewTaskPoints('');
     } catch (err: unknown) {
-      toast.error((err as Error).message || 'Failed to create task.');
+      toast.error((err as Error).message || "Couldn't create the task. Check your connection and try again.");
     } finally {
       setIsCreatingTask(false);
     }
@@ -178,12 +180,10 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
     filteredTasks = filteredTasks.filter(t => (t.type || t.issueType || 'task') === filterType);
   }
 
+  const showSkeleton = useDelayedFlag(isLoading);
+
   if (isLoading) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" strokeWidth={1.5} />
-      </div>
-    );
+    return showSkeleton ? <BoardSkeleton /> : null;
   }
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -248,11 +248,11 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
           onClick={() => setShowFilters(!showFilters)}
           className={clsx(
             "flex items-center text-ui px-3 py-1.5 rounded-md border transition-colors h-auto",
-            hasActiveFilters ? "border-primary-border text-primary bg-primary-muted" : "border-border text-muted-foreground hover:text-foreground bg-card"
+            hasActiveFilters ? "border-primary-border text-primary-on-muted bg-primary-muted" : "border-border text-muted-foreground hover:text-foreground bg-card"
           )}
           variant="secondary" size="default"
         >
-          <AlertCircle className="w-3.5 h-3.5 mr-2" strokeWidth={1.75} />
+          <AlertCircle className="w-4 h-4 mr-2" strokeWidth={1.75} />
           Filters
           {hasActiveFilters && <span className="ml-2 w-1.5 h-1.5 bg-primary rounded-full"></span>}
         </Button>
@@ -294,7 +294,7 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
           {canEditTask && (
             <Button 
               onClick={() => { setNewTaskStatus('todo'); setShowTaskModal(true); }}
-              className="flex items-center px-3 py-2 bg-primary hover:bg-primary-hover text-primary-foreground text-ui font-[590] rounded-md transition-colors"
+              className="flex items-center px-3 py-2"
               variant="primary" size="default"
             >
               <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
@@ -475,8 +475,8 @@ const KanbanColumn = ({ column, tasks, onAddClick }: { column: { id: string; tit
           <h3 className="font-[590] text-foreground text-ui">{column.title}</h3>
           <span className="bg-card text-muted-foreground text-caption px-2 py-0.5 rounded-full">{tasks.length}</span>
         </div>
-        <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button onClick={onAddClick} className="p-1 text-subtle-foreground hover:text-foreground hover:bg-hover rounded-md" size="icon" variant="ghost"><Plus className="w-4 h-4" strokeWidth={1.75} /></Button>
+        <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity">
+          <Button onClick={onAddClick} className="p-1 text-subtle-foreground hover:text-foreground hover:bg-hover rounded-md" size="icon" variant="ghost" aria-label={`Add task to ${column.title}`}><Plus className="w-4 h-4" strokeWidth={1.75} /></Button>
         </div>
       </div>
 
@@ -543,7 +543,7 @@ const KanbanCard = ({ task, isOverlay = false }: { task: Task, isOverlay?: boole
             {task.storyPoints != null && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge variant="secondary" className="bg-primary-muted text-primary border-primary-border text-micro h-auto px-1.5 font-[590]">
+                  <Badge variant="secondary" className="bg-primary-muted text-primary-on-muted border-primary-border text-micro px-1.5 font-[590]">
                     {task.storyPoints}
                   </Badge>
                 </TooltipTrigger>
@@ -566,7 +566,7 @@ const KanbanCard = ({ task, isOverlay = false }: { task: Task, isOverlay?: boole
           )}
           {!isOverlay && slug && key && (
             <Button
-              className="ml-auto opacity-0 group-hover:opacity-100 text-subtle-foreground hover:text-danger p-1 rounded-md transition-colors hover:bg-danger-muted"
+              className="ml-auto opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 text-subtle-foreground hover:text-danger p-1 rounded-md transition-colors hover:bg-danger-muted"
               onClick={async (e) => {
                 e.stopPropagation();
                 if (await confirm({ message: 'Delete this task? This action cannot be undone.', isDestructive: true })) {
@@ -575,7 +575,7 @@ const KanbanCard = ({ task, isOverlay = false }: { task: Task, isOverlay?: boole
               }}
               size="icon" variant="destructive"
             >
-              <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+              <Trash2 className="w-4 h-4" strokeWidth={1.75} />
             </Button>
           )}
         </div>

@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { PresenceDot, normalizePresence } from '@/components/ui/presence-dot';
 
 import { Hash, Lock, Users, Loader2, Smile, MessageSquare, X, Edit2, Search } from 'lucide-react';
 import { format } from 'date-fns';
@@ -27,12 +28,6 @@ import { useConfirm } from '../../hooks/useConfirm.js';
 import { socketClient } from '../../lib/socket.js';
 
 
-const getStatusDotClass = (presence?: string, statusText?: string | null) => {
-  if (presence === 'offline' || statusText === 'Away') return 'bg-subtle-foreground';
-  if (statusText === 'In a meeting' || statusText === 'Focusing') return 'bg-danger';
-  if (statusText === 'Commuting' || statusText === 'Out sick' || statusText === 'Vacationing') return 'bg-warning';
-  return 'bg-success';
-};
 
 function FileImagePreview({ slug, fileId, fileName }: { slug: string; fileId: string; fileName: string }) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -66,7 +61,7 @@ function FileImagePreview({ slug, fileId, fileName }: { slug: string; fileId: st
       href={imageUrl}
       target="_blank"
       rel="noreferrer"
-      className="block my-1.5 overflow-hidden rounded-lg border border-border bg-card max-w-sm group transition-transform hover:scale-[1.01]"
+      className="block my-1.5 overflow-hidden rounded-lg border border-border bg-card max-w-sm group transition-colors duration-[--duration-fast] ease-standard"
     >
       <img
         src={imageUrl}
@@ -87,7 +82,7 @@ export const ChannelPage = () => {
   const taskKeyQuery = searchParams.get('task');
 
   const initialChatContent = taskKeyQuery
-    ? `<p><span class="text-primary bg-primary-muted px-1 rounded font-[510]">@${taskKeyQuery}</span> </p>`
+    ? `<p><span class="text-primary-on-muted bg-primary-muted px-1 rounded font-[510]">@${taskKeyQuery}</span> </p>`
     : '';
 
 
@@ -179,7 +174,7 @@ export const ChannelPage = () => {
         body: JSON.stringify({ bodyText: newContent })
       });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to edit message');
+      toast.error(err instanceof Error ? err.message : "Couldn't save your edit. Try again in a moment.");
     }
   };
 
@@ -209,7 +204,7 @@ export const ChannelPage = () => {
         });
       }
     } catch (err) {
-      console.error('Failed to toggle reaction', err);
+      console.error("Couldn't update the reaction. Try again in a moment.", err);
       // Revert if error
       if (hasReacted) {
         addReactionToMessage(messageId, { userId: user.userId, emoji, userName: user.fullName || 'Me' });
@@ -374,7 +369,7 @@ export const ChannelPage = () => {
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
           // Flash effect
-          el.classList.add('bg-primary-muted', 'transition-colors', 'duration-300');
+          el.classList.add('bg-primary-muted', 'transition-colors', 'duration-[--duration-slow]');
           setTimeout(() => el.classList.remove('bg-primary-muted'), 2000);
         }
       } else {
@@ -417,7 +412,7 @@ export const ChannelPage = () => {
       setThreadReplies(data.replies || []);
     } catch (err) {
       console.error(err);
-      toast.error(err instanceof Error ? err.message : 'Failed to load thread');
+      toast.error(err instanceof Error ? err.message : "Couldn't load this thread. Try again in a moment.");
     } finally {
       setIsThreadLoading(false);
     }
@@ -467,7 +462,7 @@ export const ChannelPage = () => {
           });
           return; // Do not send normal chat message
         } catch (err) {
-          toast.error(err instanceof Error ? err.message : 'Failed to create task via slash command');
+          toast.error(err instanceof Error ? err.message : "Couldn't create the task from that command. Check the syntax and try again.");
           return;
         }
       }
@@ -485,7 +480,7 @@ export const ChannelPage = () => {
         });
         setThreadReplies([...threadReplies, data.data]);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to send reply');
+        toast.error(err instanceof Error ? err.message : "Couldn't send your reply. Check your connection and try again.");
       }
     }
   };
@@ -513,7 +508,7 @@ export const ChannelPage = () => {
         setActiveThreadMessageId(null);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete message');
+      toast.error(err instanceof Error ? err.message : "Couldn't delete the message. Try again in a moment.");
     }
   };
 
@@ -527,7 +522,7 @@ export const ChannelPage = () => {
       fetchWorkspaceData(slug as string);
       navigate(`/w/${slug}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete channel');
+      toast.error(err instanceof Error ? err.message : "Couldn't delete the channel. Try again in a moment.");
     }
   };
 
@@ -544,11 +539,24 @@ export const ChannelPage = () => {
       });
       fetchWorkspaceData(slug as string);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update channel name');
+      toast.error(err instanceof Error ? err.message : "Couldn't rename the channel. Try again in a moment.");
     }
   };
 
-  const renderMessage = (msg: Message, isThreadContext = false) => {
+  const GROUP_WINDOW_MS = 5 * 60 * 1000;
+
+  const authorOf = (m: Message) =>
+    ('authorId' in m ? (m as { authorId?: string }).authorId : undefined) || m.senderId;
+
+  /** §8: a message opens a new group unless the same author posted within 5 minutes. */
+  const startsGroup = (msg: Message, prev?: Message) => {
+    if (!prev) return true;
+    if (authorOf(prev) !== authorOf(msg)) return true;
+    const gap = new Date(msg.createdAt).getTime() - new Date(prev.createdAt).getTime();
+    return !Number.isFinite(gap) || gap > GROUP_WINDOW_MS;
+  };
+
+  const renderMessage = (msg: Message, isThreadContext = false, prev?: Message) => {
     const isMe = ('authorId' in msg ? (msg as { authorId?: string }).authorId : undefined) === user?.userId || msg.senderId === user?.userId;
     const authorId = ('authorId' in msg ? (msg as { authorId?: string }).authorId : undefined) || msg.senderId;
     const authorMember = members.find(m => m.userId === authorId);
@@ -568,8 +576,7 @@ export const ChannelPage = () => {
       bodyLower.includes('@everyone') || bodyLower.includes('@channel') || bodyLower.includes('@all')
     );
 
-    // Basic logic for headers (simplified for thread)
-    const showHeader = true;
+    const showHeader = isThreadContext || startsGroup(msg, prev);
 
     // Render raw HTML — convert file markers and task mentions into styled anchors/spans
     const htmlContent = renderMessageContent(msg.bodyText || '');
@@ -582,16 +589,29 @@ export const ChannelPage = () => {
         key={msg.messageId} 
         id={msg.messageId}
         className={`group flex items-start py-1.5 transition-colors relative ${isThreadContext ? '' : '-mx-4 px-4'} ${
-          isMentioned ? 'bg-primary-muted hover:bg-primary-muted/70 border-l-4 border-primary rounded-r-lg font-[510]' : 'hover:bg-hover rounded-lg'
-        }`}
+ isMentioned ? 'bg-primary-muted border-l-2 border-primary' : 'hover:bg-hover rounded-lg'
+ }`}
       >
         <div className="w-10 flex-shrink-0 flex justify-center">
+          {/* §8 Chat: in a collapsed group the avatar is shown once and the
+              later messages' timestamps "show on hover only". They take the
+              avatar's gutter so the text stays aligned, and are revealed on
+              focus as well as hover — the same rule as every other
+              hover-revealed control in §8. */}
+          {!showHeader && msg.createdAt && (
+            <time
+              dateTime={new Date(msg.createdAt).toISOString()}
+              className="mt-0.5 text-micro tabular-nums text-subtle-foreground opacity-0 transition-opacity duration-[--duration-fast] ease-standard group-hover:opacity-100 group-focus-within:opacity-100"
+            >
+              {format(new Date(msg.createdAt), 'h:mm')}
+            </time>
+          )}
           {showHeader && (
             <div className="relative mt-1">
-              <div className="w-9 h-9 rounded-md bg-hover flex items-center justify-center text-foreground font-[590] shadow-sm border border-border">
+              <div className="w-7 h-7 rounded-full bg-elevated flex items-center justify-center text-muted-foreground text-micro font-[510]">
                 {msg.authorName?.[0]?.toUpperCase() || 'U'}
               </div>
-              <div className={`absolute -bottom-1 -right-1 w-2.5 h-2.5 ${getStatusDotClass(authorMember?.presence, authorMember?.statusText)} border-2 border-background rounded-full`}></div>
+              <PresenceDot presence={normalizePresence(authorMember?.presence, authorMember?.statusText)} ringClassName="ring-background" className="absolute -bottom-0.5 -right-0.5" />
             </div>
           )}
         </div>
@@ -608,7 +628,11 @@ export const ChannelPage = () => {
                   <TooltipContent>{authorMember.statusText}</TooltipContent>
                 </Tooltip>
               )}
-              <span className="text-caption text-subtle-foreground">{msg.createdAt ? format(new Date(msg.createdAt), 'h:mm a') : ''}</span>
+              {msg.createdAt && (
+                <time dateTime={new Date(msg.createdAt).toISOString()} className="text-caption tabular-nums text-subtle-foreground">
+                  {format(new Date(msg.createdAt), 'h:mm a')}
+                </time>
+              )}
             </div>
           )}
           {editingMessageId === msg.messageId ? (
@@ -723,7 +747,7 @@ export const ChannelPage = () => {
                 className="flex items-center text-ui font-[510] text-primary hover:text-primary-hover px-1 py-0.5 rounded transition-colors"
                 variant="ghost" size="default"
               >
-                <span className="font-mono font-[590] mr-1.5 text-heading leading-none">{expandedThreads.has(msg.messageId) ? '[-]' : '[+]'}</span>
+                <span className="font-mono font-[590] mr-1.5 text-ui leading-none">{expandedThreads.has(msg.messageId) ? '[-]' : '[+]'}</span>
                 {msg.replyCount ?? msg.threadCount} {(msg.replyCount ?? msg.threadCount) === 1 ? 'reply' : 'replies'} inline
               </Button>
 
@@ -769,10 +793,10 @@ export const ChannelPage = () => {
                         onClick={() => openReactionsModal(msg)}
                         aria-label={data.userNames.join(', ')}
                         className={`flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-caption font-[510] border transition-colors ${
-                          hasReacted
-                            ? 'bg-primary-muted border-primary-border text-primary hover:bg-primary-muted/70'
-                            : 'bg-hover border-border text-muted-foreground hover:bg-hover'
-                        }`}
+ hasReacted
+ ? 'bg-primary-muted border-primary-border text-primary hover:bg-primary-muted/70'
+ : 'bg-hover border-border text-muted-foreground hover:bg-hover'
+ }`}
                         variant="secondary" size="default"
                       >
                         <span>{emoji}</span>
@@ -797,10 +821,10 @@ export const ChannelPage = () => {
           )}
         </div>
 
-        <div className="opacity-0 group-hover:opacity-100 flex items-center space-x-1 bg-card border border-border rounded-md p-1 shadow-sm absolute right-12 -mt-3 transition-opacity">
+        <div className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 flex items-center space-x-1 bg-card p-1 shadow-sm absolute right-12 -mt-3 transition-opacity">
 
           <div className="relative group/react">
-            <Button className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-hover rounded" size="icon" variant="ghost">
+            <Button className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-hover rounded" size="icon" variant="ghost" aria-label="Add reaction">
               <Smile className="w-4 h-4" strokeWidth={1.75} />
             </Button>
             <div className="absolute right-full top-1/2 -translate-y-1/2 pr-2 hidden group-hover/react:block z-(--z-dropdown)">
@@ -809,7 +833,7 @@ export const ChannelPage = () => {
                   <Button
                     key={emoji}
                     onClick={() => toggleReaction(msg.messageId, emoji)}
-                    className="hover:bg-hover rounded-full w-7 h-7 flex items-center justify-center text-ui transition-transform "
+                    className="hover:bg-hover rounded-full w-7 h-7 flex items-center justify-center text-ui transition-colors"
                     size="icon" variant="ghost"
                   >
                     {emoji}
@@ -852,7 +876,7 @@ export const ChannelPage = () => {
           {(isMe || isAdmin()) && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button onClick={() => deleteMessage(msg.messageId)} className="p-1.5 text-danger hover:text-danger/80 hover:bg-hover rounded" aria-label="Delete Message" size="icon" variant="destructive">
+                <Button onClick={() => deleteMessage(msg.messageId)} className="p-1.5 text-danger hover:bg-hover rounded" aria-label="Delete Message" size="icon" variant="destructive">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                 </Button>
               </TooltipTrigger>
@@ -889,7 +913,7 @@ export const ChannelPage = () => {
                     aria-label="Edit Channel Name"
                     size="icon" variant="ghost"
                   >
-                    <Edit2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    <Edit2 className="w-4 h-4" strokeWidth={1.75} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Edit Channel Name</TooltipContent>
@@ -906,7 +930,7 @@ export const ChannelPage = () => {
                   placeholder="Search channel..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-card border border-border rounded-md pl-8 pr-8 py-1.5 text-ui text-foreground focus:border-ring focus:ring-1 focus:ring-ring w-64"
+                  className="bg-card pl-8 pr-8 py-1.5 text-ui text-foreground w-64"
                 />
                 <Button type="button" onClick={handleClearSearch} className="absolute right-2 text-muted-foreground hover:text-foreground" size="icon" variant="ghost">
                   <X className="w-4 h-4" strokeWidth={1.75} />
@@ -928,7 +952,7 @@ export const ChannelPage = () => {
                 <TooltipTrigger asChild>
                   <Button 
                     onClick={handleDeleteChannel}
-                    className="text-danger hover:text-danger/80 text-ui font-[510] transition-colors"
+                    className="text-danger text-ui font-[510] transition-colors"
                     aria-label="Delete Channel"
                     variant="destructive" size="default"
                   >
@@ -946,7 +970,14 @@ export const ChannelPage = () => {
         </div>
 
         {/* Message Feed */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>
+        <div
+          className="flex-1 overflow-y-auto p-4 space-y-4"
+          ref={scrollRef}
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions"
+          aria-label={currentChannel?.name ? `Messages in #${currentChannel.name}` : "Messages"}
+        >
           {isLoading || isSearching ? (
             <div className="flex justify-center py-10">
               <Loader2 className="w-8 h-8 text-primary animate-spin" strokeWidth={1.5} />
@@ -966,13 +997,13 @@ export const ChannelPage = () => {
               </div>
             )
           ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-subtle-foreground">
-              <Hash className="w-16 h-16 mb-4 opacity-20" strokeWidth={1.5} />
-              <p className="text-heading">Welcome to #{currentChannel?.name}!</p>
-              <p className="text-ui">This is the start of the channel.</p>
+            <div className="flex flex-col items-center justify-center h-full px-6 py-12 text-center">
+              <Hash className="w-8 h-8 text-subtle-foreground" strokeWidth={1.5} aria-hidden="true" />
+              <p className="mt-3 text-body font-[510] text-muted-foreground">This is the start of #{currentChannel?.name}</p>
+              <p className="mt-1 max-w-[48ch] text-button text-subtle-foreground">Send the first message to get the conversation going.</p>
             </div>
           ) : (
-            messages.map(msg => renderMessage(msg, false))
+            messages.map((msg, i) => renderMessage(msg, false, messages[i - 1]))
           )}
         </div>
 

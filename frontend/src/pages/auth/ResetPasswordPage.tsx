@@ -33,7 +33,7 @@ export const ResetPasswordPage = () => {
       });
       setDone(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to reset password.');
+      setError(err instanceof Error ? err.message : "Couldn't reset your password. Request a new link and try again.");
     } finally {
       setIsLoading(false);
     }
@@ -42,15 +42,15 @@ export const ResetPasswordPage = () => {
   if (!token) {
     return (
       <div className="auth-bg min-h-screen flex items-center justify-center p-4">
-        <div className="bg-card border border-border rounded-lg shadow-sm max-w-[400px] w-full p-8 animate-fadeIn relative z-[var(--z-sticky)] text-center">
+        <div className="bg-card rounded-[8px] shadow-sm max-w-[400px] w-full p-8 animate-fadeIn text-center">
           <AlertTriangle className="h-12 w-12 text-warning mx-auto mb-4" strokeWidth={1.5} />
           <p className="text-foreground mb-6">
             This reset link is invalid. Please request a new password reset link.
           </p>
-          <Button asChild variant="primary" className="w-full py-3 text-center h-auto">
+          <Button asChild variant="primary" className="w-full py-3 text-center">
             <Link
               to="/forgot-password"
-              className="inline-block bg-primary text-primary-foreground hover:bg-primary-hover rounded-md w-full py-3 text-center"
+              className="inline-flex w-full items-center justify-center rounded-[6px] bg-primary px-4 h-[36px] text-button font-[510] text-primary-foreground transition-colors duration-[--duration-fast] ease-standard hover:bg-primary-hover"
             >
               Request a new link
             </Link>
@@ -62,12 +62,9 @@ export const ResetPasswordPage = () => {
 
   return (
     <div className="auth-bg min-h-screen flex items-center justify-center p-4">
-      <div className="auth-shape-1"></div>
-      <div className="auth-shape-2"></div>
-
-      <div className="bg-card border border-border rounded-lg shadow-sm max-w-[400px] w-full p-8 animate-fadeIn relative z-[var(--z-sticky)]">
+            <div className="bg-card rounded-[8px] shadow-sm max-w-[400px] w-full p-8 animate-fadeIn">
         <div className="mb-10 text-center">
-          <h1 className="text-heading font-[590] text-foreground mb-2">DevSync</h1>
+          <h1 className="text-h1 font-[590] text-foreground mb-2">DevSync</h1>
           <p className="text-muted-foreground text-ui">Choose a new password</p>
         </div>
 
@@ -80,8 +77,8 @@ export const ResetPasswordPage = () => {
               Your password has been reset. All devices were signed out — log in again with your
               new password.
             </p>
-            <Button asChild variant="primary" className="w-full py-3 text-center h-auto">
-              <Link to="/login" className="inline-block bg-primary text-primary-foreground hover:bg-primary-hover rounded-md w-full py-3 text-center">
+            <Button asChild variant="primary" className="w-full py-3 text-center">
+              <Link to="/login" className="inline-flex w-full items-center justify-center rounded-[6px] bg-primary px-4 h-[36px] text-button font-[510] text-primary-foreground transition-colors duration-[--duration-fast] ease-standard hover:bg-primary-hover">
                 Go to sign in
               </Link>
             </Button>
@@ -89,14 +86,14 @@ export const ResetPasswordPage = () => {
         ) : (
           <>
             {error && (
-              <div className="mb-6 rounded-lg bg-danger-muted border border-danger-border p-4 text-ui text-danger text-center">
+              <div role="alert" className="mb-6 rounded-[8px] bg-danger-muted border border-danger-border p-4 text-ui text-danger-on-muted">
                 {error}
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <Label className="block text-caption font-[510] text-muted-foreground uppercase tracking-wider mb-2">
+                <Label htmlFor="resetpasswordpage-new-password">
                   New Password
                 </Label>
                 <div className="relative">
@@ -104,10 +101,11 @@ export const ResetPasswordPage = () => {
                     <Lock className="h-5 w-5 text-muted-foreground" strokeWidth={1.75} />
                   </div>
                   <Input
+                    id="resetpasswordpage-new-password"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-background border border-border rounded-md text-foreground placeholder:text-subtle-foreground focus:ring-1 focus:ring-ring focus:border-ring transition-colors duration-200 h-auto"
+                    className="pl-11"
                     placeholder="At least 8 characters"
                     required
                   />
@@ -118,7 +116,7 @@ export const ResetPasswordPage = () => {
               </div>
 
               <div>
-                <Label className="block text-caption font-[510] text-muted-foreground uppercase tracking-wider mb-2">
+                <Label htmlFor="resetpasswordpage-confirm-password">
                   Confirm Password
                 </Label>
                 <div className="relative">
@@ -126,10 +124,11 @@ export const ResetPasswordPage = () => {
                     <Lock className="h-5 w-5 text-muted-foreground" strokeWidth={1.75} />
                   </div>
                   <Input
+                    id="resetpasswordpage-confirm-password"
                     type="password"
                     value={confirm}
                     onChange={(e) => setConfirm(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-background border border-border rounded-md text-foreground placeholder:text-subtle-foreground focus:ring-1 focus:ring-ring focus:border-ring transition-colors duration-200 h-auto"
+                    className="pl-11"
                     placeholder="Re-enter new password"
                     required
                   />
@@ -138,9 +137,9 @@ export const ResetPasswordPage = () => {
 
               <Button
                 type="submit"
-                disabled={isLoading}
+                loading={isLoading}
                 variant="primary"
-                className="bg-primary text-primary-foreground hover:bg-primary-hover rounded-md w-full py-3 flex justify-center items-center mt-8 disabled:opacity-70 h-auto"
+                className="w-full mt-6"
               >
                 {isLoading ? (
                   <Loader2 className="h-5 w-5 animate-spin text-foreground" strokeWidth={1.75} />

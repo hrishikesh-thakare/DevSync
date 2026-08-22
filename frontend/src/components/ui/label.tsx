@@ -1,8 +1,12 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
-/* ── Label ─────────────────────────────────────────────────────── */
-
+/**
+ * §8 Form Controls: "Label | 13px weight 510 `--text-secondary`, 6px below."
+ *
+ * `htmlFor` is not optional. "Every control needs a `<label>`. A placeholder is
+ * not a label — it disappears on input."
+ */
 const Label = React.forwardRef<
   HTMLLabelElement,
   React.LabelHTMLAttributes<HTMLLabelElement>
@@ -10,7 +14,8 @@ const Label = React.forwardRef<
   <label
     ref={ref}
     className={cn(
-      "text-ui font-[510] text-muted-foreground leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-50",
+      "block mb-1.5 text-button font-[510] text-muted-foreground",
+      "peer-disabled:cursor-not-allowed peer-disabled:text-disabled",
       className
     )}
     {...props}

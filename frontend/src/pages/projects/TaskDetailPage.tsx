@@ -87,7 +87,7 @@ const formatBytes = (bytes: number) => {
 const attachmentIcon = (filetype?: string | null) => {
   switch (filetype) {
     case 'image': return <FileImage className="w-4 h-4 text-special flex-shrink-0" strokeWidth={1.75} />;
-    case 'pdf': return <FileText className="w-4 h-4 text-destructive flex-shrink-0" strokeWidth={1.75} />;
+    case 'pdf': return <FileText className="w-4 h-4 text-danger-on-muted flex-shrink-0" strokeWidth={1.75} />;
     case 'code': return <FileCode2 className="w-4 h-4 text-primary flex-shrink-0" strokeWidth={1.75} />;
     case 'video': return <FileVideo2 className="w-4 h-4 text-success flex-shrink-0" strokeWidth={1.75} />;
     case 'audio': return <FileAudio2 className="w-4 h-4 text-warning flex-shrink-0" strokeWidth={1.75} />;
@@ -234,7 +234,7 @@ export const TaskDetailPage = () => {
       await fetchAttachments();
     } catch (err: unknown) {
       console.error('Failed to upload attachment:', err);
-      toast.error('Failed to upload attachment.');
+      toast.error("Couldn't upload attachment. Try again in a moment.");
     } finally {
       setIsUploading(false);
     }
@@ -248,12 +248,12 @@ export const TaskDetailPage = () => {
       }
     } catch (err: unknown) {
       console.error('Failed to get attachment download URL:', err);
-      toast.error('Failed to download attachment.');
+      toast.error("Couldn't download attachment. Try again in a moment.");
     }
   };
 
   const handleDeleteAttachment = async (fileId: string) => {
-    if (!(await confirm({ message: 'Remove this attachment?', isDestructive: true }))) return;
+    if (!(await confirm({ message: 'Remove this attachment? The file will be deleted from the task.', isDestructive: true }))) return;
     try {
       await apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}/attachments/${fileId}`, {
         method: 'DELETE',
@@ -261,7 +261,7 @@ export const TaskDetailPage = () => {
       setAttachments(prev => prev.filter(a => a.fileId !== fileId));
     } catch (err: unknown) {
       console.error('Failed to remove attachment:', err);
-      toast.error('Failed to remove attachment.');
+      toast.error("Couldn't remove attachment. Try again in a moment.");
     }
   };
 
@@ -402,20 +402,28 @@ export const TaskDetailPage = () => {
   if (!task) {
     return (
       <div className="p-8 text-center text-subtle-foreground">
-        <h2 className="text-heading font-[590] text-foreground mb-2">Task not found</h2>
+        <h2 className="text-h2 font-[590] text-foreground mb-2">Task not found</h2>
         <Button onClick={() => navigate(-1)} className="text-primary hover:underline" variant="ghost" size="default">Go back</Button>
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-background font-sans">
+    // §14 Task Detail: "Container | Side Panel, 480px, full-screen below
+    // 1024px." §8 Side Panel: `--bg-surface`, right-anchored, 1px
+    // `--border-subtle` left border, translateX enter over --duration-slow.
+    // It is a drawer, not a dialog: focus is not trapped and the page behind
+    // stays usable, which is exactly the distinction §8 draws.
+    <aside
+      aria-label={`Task ${task.taskKey}`}
+      className="ml-auto flex h-full w-full flex-col overflow-y-auto border-l border-border bg-card font-sans lg:w-[480px] animate-in slide-in-from-right-full duration-[--duration-slow]"
+    >
 
-      {/* Top Breadcrumb & Actions */}
-      <div className="sticky top-0 z-(--z-sticky) flex items-center justify-between px-8 py-4 border-b border-border bg-background/80 backdrop-blur">
-        <div className="flex items-center space-x-4">
-          <Button onClick={() => navigate(-1)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-hover rounded transition-colors" size="icon" variant="ghost">
-            <ArrowLeft className="w-5 h-5" strokeWidth={1.75} />
+      {/* §8 Side Panel header: 56px, title 15px weight 510, close ghost icon button. */}
+      <div className="sticky top-0 z-(--z-sticky) flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4">
+        <div className="flex items-center gap-3">
+          <Button onClick={() => navigate(-1)} size="icon" variant="ghost" aria-label="Close task">
+            <ArrowLeft className="w-4 h-4" strokeWidth={1.75} aria-hidden="true" />
           </Button>
           <span className="text-ui font-mono text-muted-foreground bg-muted px-2 py-1 rounded border border-border">{task.taskKey}</span>
           {isSaving && <Loader2 className="w-4 h-4 animate-spin text-subtle-foreground" strokeWidth={1.75} />}
@@ -424,8 +432,8 @@ export const TaskDetailPage = () => {
           {canEditTask && (
             <Button 
               onClick={handleDeleteTask}
-              className="text-ui font-[510] px-3 py-1.5 text-destructive hover:text-destructive/80 hover:bg-danger-muted border border-danger-border rounded transition-colors"
-              size="icon" variant="destructive"
+              className="rounded-[6px]"
+              size="icon" variant="destructive" aria-label="Delete task"
             >
               <Trash2 className="w-4 h-4" strokeWidth={1.75} />
             </Button>
@@ -435,7 +443,7 @@ export const TaskDetailPage = () => {
             className="text-ui font-[510] px-3 py-1.5 bg-hover text-muted-foreground hover:text-foreground hover:bg-hover rounded transition-colors flex items-center"
             variant="secondary" size="default"
           >
-            <MessageSquare className="w-4 h-4 mr-1.5" /> Discuss
+            <MessageSquare className="w-4 h-4 mr-1.5" strokeWidth={1.75} /> Discuss
           </Button>
         </div>
       </div>
@@ -453,7 +461,7 @@ export const TaskDetailPage = () => {
                   value={editTitle}
                   onChange={e => setEditTitle(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleTitleSave(); if (e.key === 'Escape') setIsEditingTitle(false); }}
-                  className="text-heading font-[590] text-foreground bg-transparent border-0 border-b-2 border-primary px-0 py-0 flex-1 h-auto md:text-heading"
+                  className="text-h3 font-[590] text-foreground bg-transparent border-0 border-b-2 border-primary px-0 py-0 flex-1"
                   autoFocus
                 />
                 <Button onClick={handleTitleSave} className="text-ui text-foreground bg-hover hover:bg-hover px-3 py-1 rounded" variant="secondary" size="default">Save</Button>
@@ -463,7 +471,7 @@ export const TaskDetailPage = () => {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <h1 
-                    className={clsx("text-heading font-[590] text-foreground mb-4 leading-snug transition-colors", canEditTask && "cursor-pointer hover:text-foreground")}
+                    className={clsx("text-h3 font-[590] text-foreground mb-4 transition-colors", canEditTask && "cursor-pointer hover:text-foreground")}
                     onClick={() => canEditTask && setIsEditingTitle(true)}
                   >
                     {task.title}
@@ -473,7 +481,7 @@ export const TaskDetailPage = () => {
               </Tooltip>
             ) : (
               <h1 
-                className={clsx("text-heading font-[590] text-foreground mb-4 leading-snug transition-colors", canEditTask && "cursor-pointer hover:text-foreground")}
+                className={clsx("text-h3 font-[590] text-foreground mb-4 transition-colors", canEditTask && "cursor-pointer hover:text-foreground")}
                 onClick={() => canEditTask && setIsEditingTitle(true)}
               >
                 {task.title}
@@ -500,7 +508,7 @@ export const TaskDetailPage = () => {
                   value={editDesc}
                   onChange={e => setEditDesc(e.target.value)}
                   rows={6}
-                  className="w-full bg-background border border-border rounded-lg p-4 text-foreground text-ui leading-relaxed focus:border-ring h-auto"
+                  className="w-full bg-background border border-border rounded-lg p-4 text-foreground text-ui leading-relaxed focus:border-ring"
                   autoFocus
                 />
                 <div className="flex space-x-2">
@@ -541,12 +549,12 @@ export const TaskDetailPage = () => {
                   <Button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
-                    className="text-caption text-subtle-foreground hover:text-foreground transition-colors flex items-center disabled:opacity-50"
+                    className="text-caption text-subtle-foreground hover:text-foreground transition-colors flex items-center disabled:text-disabled"
                     variant="ghost" size="default"
                   >
                     {isUploading
-                      ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" strokeWidth={1.75} />
-                      : <Plus className="w-3.5 h-3.5 mr-1" />}
+                      ? <Loader2 className="w-4 h-4 animate-spin mr-1" strokeWidth={1.75} />
+                      : <Plus className="w-4 h-4 mr-1" strokeWidth={1.75} />}
                     {isUploading ? 'Uploading...' : 'Attach'}
                   </Button>
                 </>
@@ -581,7 +589,7 @@ export const TaskDetailPage = () => {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button onClick={() => handleDownload(att.fileId)} className="text-subtle-foreground hover:text-foreground" aria-label="Download" size="icon" variant="ghost">
-                            <Download className="w-3.5 h-3.5" strokeWidth={1.75} />
+                            <Download className="w-4 h-4" strokeWidth={1.75} />
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>Download</TooltipContent>
@@ -589,8 +597,8 @@ export const TaskDetailPage = () => {
                       {canEditTask && (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button onClick={() => handleDeleteAttachment(att.fileId)} className="text-subtle-foreground hover:text-destructive ml-2" aria-label="Remove" size="icon" variant="destructive">
-                              <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                            <Button onClick={() => handleDeleteAttachment(att.fileId)} className="text-subtle-foreground hover:text-danger-on-muted ml-2" aria-label="Remove" size="icon" variant="destructive">
+                              <Trash2 className="w-4 h-4" strokeWidth={1.75} />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>Remove</TooltipContent>
@@ -606,17 +614,17 @@ export const TaskDetailPage = () => {
           {/* Discussion */}
           <div>
             <div className="flex items-center space-x-2 text-foreground font-[590] mb-4 border-b border-border pb-2">
-              <MessageSquare className="w-5 h-5" />
+              <MessageSquare className="w-5 h-5" strokeWidth={1.75} />
               <h3>Discussion</h3>
             </div>
             <div className="bg-card border border-border rounded-lg p-6 text-center">
               <p className="text-muted-foreground mb-4 text-ui">Task discussions have been moved to project channels for better team visibility.</p>
               <Button
                 onClick={handleDiscussInChannel}
-                className="inline-flex items-center justify-center px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground font-[510] rounded-lg transition-colors"
+                className="inline-flex items-center justify-center px-4 py-2 font-[510] rounded-lg transition-colors"
                 variant="primary" size="default"
               >
-                <MessageSquare className="w-4 h-4 mr-2" />
+                <MessageSquare className="w-4 h-4 mr-2" strokeWidth={1.75} />
                 Discuss in Channel
               </Button>
             </div>
@@ -626,7 +634,7 @@ export const TaskDetailPage = () => {
         {/* Right Sidebar Details */}
         <div className="col-span-4 space-y-6">
           <div className="bg-card border border-border rounded-lg p-5 space-y-5">
-            <h4 className="text-caption font-[590] uppercase tracking-wider text-subtle-foreground mb-2">Details</h4>
+            <h4 className="text-caption font-[590] uppercase text-subtle-foreground mb-2">Details</h4>
             
             <div className="space-y-4">
               {/* Status */}
@@ -706,7 +714,7 @@ export const TaskDetailPage = () => {
                   value={task.dueDate ? task.dueDate.substring(0, 10) : ''}
                   onChange={e => patchTask({ dueDate: e.target.value || null })}
                   disabled={!canEditTask}
-                  className="bg-background border border-border text-foreground rounded px-2 py-1 text-ui disabled:opacity-50"
+                  className="bg-background border border-border text-foreground rounded px-2 py-1 text-ui disabled:text-disabled"
                 />
               </div>
 
@@ -750,7 +758,7 @@ export const TaskDetailPage = () => {
                   value={task.storyPoints ?? ''}
                   onChange={e => patchTask({ storyPoints: e.target.value !== '' ? parseInt(e.target.value) : null })}
                   disabled={!canEditTask}
-                  className="bg-background border border-border text-foreground rounded px-2 py-1 text-ui w-16 text-right disabled:opacity-50"
+                  className="bg-background border border-border text-foreground rounded px-2 py-1 text-ui w-16 text-right disabled:text-disabled"
                   placeholder="—"
                 />
               </div>
@@ -804,7 +812,7 @@ export const TaskDetailPage = () => {
               <div className="pt-4 border-t border-border">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-2">
-                    <GitBranch className="w-4 h-4 text-muted-foreground" />
+                    <GitBranch className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
                     <span className="text-ui text-foreground font-[590]">GitHub Activity</span>
                   </div>
                   {canEditTask && (
@@ -818,8 +826,8 @@ export const TaskDetailPage = () => {
                             aria-label="Create Pull Request"
                             size="icon" variant="ghost"
                           >
-                            <Plus className="w-3 h-3 mr-0.5" />
-                            <GitPullRequest className="w-3 h-3" />
+                            <Plus className="w-3 h-3 mr-0.5" strokeWidth={1.75} />
+                            <GitPullRequest className="w-3 h-3" strokeWidth={1.75} />
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>Create Pull Request</TooltipContent>
@@ -832,8 +840,8 @@ export const TaskDetailPage = () => {
                   {/* Smart Branch Suggestion */}
                   <div className="bg-card border border-border rounded p-3">
                     <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center text-caption text-subtle-foreground font-[510] uppercase tracking-wider">
-                        <GitBranch className="w-3 h-3 mr-1" /> Smart Branch Name
+                      <div className="flex items-center text-caption text-subtle-foreground font-[510] uppercase">
+                        <GitBranch className="w-3 h-3 mr-1" strokeWidth={1.75} /> Smart Branch Name
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -852,7 +860,7 @@ export const TaskDetailPage = () => {
                             className="text-micro text-muted-foreground hover:text-foreground bg-hover hover:bg-hover px-2 py-1.5 rounded transition-colors flex items-center flex-shrink-0"
                             variant="secondary" size="default"
                           >
-                            {copiedBranch ? <Check className="w-3 h-3 mr-1 text-success" /> : <Copy className="w-3 h-3 mr-1" />}
+                            {copiedBranch ? <Check className="w-3 h-3 mr-1 text-success" strokeWidth={1.75} /> : <Copy className="w-3 h-3 mr-1" strokeWidth={1.75} />}
                             {copiedBranch ? 'Copied' : 'Copy'}
                           </Button>
                         </TooltipTrigger>
@@ -867,17 +875,17 @@ export const TaskDetailPage = () => {
                   {/* Pull Requests */}
                   {githubActivity.pullRequests?.length > 0 && (
                     <div>
-                      <div className="flex items-center text-caption text-subtle-foreground font-[510] mb-1.5 uppercase tracking-wider">
-                        <GitPullRequest className="w-3 h-3 mr-1" /> Pull Requests
+                      <div className="flex items-center text-caption text-subtle-foreground font-[510] mb-1.5 uppercase">
+                        <GitPullRequest className="w-3 h-3 mr-1" strokeWidth={1.75} /> Pull Requests
                       </div>
                       <div className="space-y-1.5">
                         {githubActivity.pullRequests.map(pr => (
                           <a key={pr.id} href={pr.htmlUrl} target="_blank" rel="noopener noreferrer" className="block bg-card border border-border rounded p-2 hover:border-border-strong transition-colors">
                             <div className="flex items-start justify-between">
                               <span className="text-caption text-foreground font-[510] line-clamp-2 pr-2">{pr.title}</span>
-                              {pr.state === 'open' && <Badge variant="success" className="text-micro h-auto px-1.5 flex-shrink-0">Open</Badge>}
-                            {pr.state === 'merged' && <Badge variant="secondary" className="bg-special-muted text-special border-special-border text-micro h-auto px-1.5 flex-shrink-0">Merged</Badge>}
-                              {pr.state === 'closed' && <Badge variant="destructive" className="text-micro h-auto px-1.5 flex-shrink-0">Closed</Badge>}
+                              {pr.state === 'open' && <Badge variant="success" className="text-micro px-1.5 flex-shrink-0">Open</Badge>}
+                            {pr.state === 'merged' && <Badge variant="secondary" className="bg-special-muted text-special border-special-border text-micro px-1.5 flex-shrink-0">Merged</Badge>}
+                              {pr.state === 'closed' && <Badge variant="destructive" className="text-micro px-1.5 flex-shrink-0">Closed</Badge>}
                             </div>
                             <div className="text-micro font-mono text-subtle-foreground mt-1">#{pr.prNumber}</div>
                           </a>
@@ -889,8 +897,8 @@ export const TaskDetailPage = () => {
                   {/* Branches */}
                   {githubActivity.branches?.length > 0 && (
                     <div>
-                      <div className="flex items-center text-caption text-subtle-foreground font-[510] mb-1.5 uppercase tracking-wider">
-                        <GitBranch className="w-3 h-3 mr-1" /> Branches
+                      <div className="flex items-center text-caption text-subtle-foreground font-[510] mb-1.5 uppercase">
+                        <GitBranch className="w-3 h-3 mr-1" strokeWidth={1.75} /> Branches
                       </div>
                       <div className="space-y-1.5">
                         {githubActivity.branches.map(b => (
@@ -901,7 +909,7 @@ export const TaskDetailPage = () => {
                             </div>
                             {b.htmlUrl && !b.isDeleted && (
                               <a href={b.htmlUrl} target="_blank" rel="noopener noreferrer" className="text-micro text-subtle-foreground hover:text-foreground mt-1 flex items-center">
-                                View on GitHub <ExternalLink className="w-3 h-3 ml-1" />
+                                View on GitHub <ExternalLink className="w-3 h-3 ml-1" strokeWidth={1.75} />
                               </a>
                             )}
                           </div>
@@ -913,15 +921,15 @@ export const TaskDetailPage = () => {
                   {/* Issues */}
                   {githubActivity.issues?.length > 0 && (
                     <div>
-                      <div className="flex items-center text-caption text-subtle-foreground font-[510] mb-1.5 uppercase tracking-wider">
-                        <AlertCircle className="w-3 h-3 mr-1" /> Issues
+                      <div className="flex items-center text-caption text-subtle-foreground font-[510] mb-1.5 uppercase">
+                        <AlertCircle className="w-3 h-3 mr-1" strokeWidth={1.75} /> Issues
                       </div>
                       <div className="space-y-1.5">
                         {githubActivity.issues.map(issue => (
                           <a key={issue.id} href={issue.htmlUrl} target="_blank" rel="noopener noreferrer" className="block bg-card border border-border rounded p-2 hover:border-border-strong transition-colors">
                             <div className="flex items-start justify-between">
                               <span className="text-caption text-foreground font-[510] line-clamp-2 pr-2">{issue.title}</span>
-                              {issue.state === 'open' ? <Badge variant="success" className="text-micro h-auto px-1.5 flex-shrink-0">Open</Badge> : <Badge variant="destructive" className="text-micro h-auto px-1.5 flex-shrink-0">Closed</Badge>}
+                              {issue.state === 'open' ? <Badge variant="success" className="text-micro px-1.5 flex-shrink-0">Open</Badge> : <Badge variant="destructive" className="text-micro px-1.5 flex-shrink-0">Closed</Badge>}
                             </div>
                             <div className="text-micro font-mono text-subtle-foreground mt-1">#{issue.githubIssueNumber}</div>
                           </a>
@@ -933,7 +941,7 @@ export const TaskDetailPage = () => {
                   {/* Commits */}
                   {githubActivity.commits?.length > 0 && (
                     <div>
-                      <div className="flex items-center text-caption text-subtle-foreground font-[510] mb-1.5 uppercase tracking-wider">
+                      <div className="flex items-center text-caption text-subtle-foreground font-[510] mb-1.5 uppercase">
                         <GitCommit className="w-3 h-3 mr-1" strokeWidth={1.75} /> Commits
                       </div>
                       <div className="space-y-1.5">
@@ -994,6 +1002,6 @@ export const TaskDetailPage = () => {
           }}
         />
       )}
-    </div>
+    </aside>
   );
 };

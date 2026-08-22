@@ -150,8 +150,7 @@ export const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
   return (
     <CommandDialog
       open={isOpen}
-      onOpenChange={(open) => { if (!open) onClose(); }}
-      className="sm:max-w-2xl"
+      onOpenChange={(open) => { if (!open) onClose(); }}
     >
       <Command shouldFilter={false}>
         <CommandInput
@@ -174,7 +173,7 @@ export const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
                   <CommandItem key={term} value={term} onSelect={() => handleRecentClick(term)}>
                     <Clock className="w-4 h-4 text-subtle-foreground" strokeWidth={1.75} />
                     <span className="truncate">{term}</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-subtle-foreground ml-auto" strokeWidth={1.75} />
+                    <ArrowRight className="w-4 h-4 text-subtle-foreground ml-auto" strokeWidth={1.75} />
                   </CommandItem>
                 ))
               ) : (
@@ -228,7 +227,7 @@ export const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
                 <CommandItem value="__view_all__" onSelect={handleViewAll}>
                   <Search className="w-4 h-4" strokeWidth={1.75} />
                   View all results for "{query}"
-                  <CornerDownLeft className="w-3.5 h-3.5 ml-auto" strokeWidth={1.75} />
+                  <CornerDownLeft className="w-4 h-4 ml-auto" strokeWidth={1.75} />
                 </CommandItem>
               </CommandGroup>
             </>

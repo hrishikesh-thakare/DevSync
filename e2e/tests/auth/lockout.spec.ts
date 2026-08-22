@@ -5,12 +5,21 @@
  * always runs against a freshly registered user so no seeded account is ever
  * locked.
  */
+import { randomUUID } from 'node:crypto';
 import { test, expect } from '@playwright/test';
 import { API_URL, TEST_PASSWORD } from '../../helpers/constants.js';
 
-// process.pid keeps the email unique across parallel workers: module-scope
-// Date.now() is identical in every worker and caused registration races.
-const email = `lockout-${process.pid}-${Date.now()}@demo.com`;
+/**
+ * Assigned in `beforeAll`, not at module scope.
+ *
+ * `pid + Date.now()` is unique per worker but constant for the lifetime of a
+ * loaded module, so any second `beforeAll` in the same worker re-registered the
+ * same address and got "A user with this email already exists." (400). A UUID
+ * minted per hook run is unique per *invocation*, which is the actual
+ * requirement — this suite needs a freshly locked-out account each time, and
+ * never needs the address to be stable across runs.
+ */
+let email = '';
 const wrongPassword = 'WrongPassword123!';
 
 async function loginAttempt(mail: string, password: string) {
@@ -23,12 +32,22 @@ async function loginAttempt(mail: string, password: string) {
 
 test.describe('Account Lockout', () => {
   test.beforeAll(async () => {
+    email = `lockout-${randomUUID()}@demo.com`;
+
     const reg = await fetch(`${API_URL}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, fullName: 'Lockout Tester', password: TEST_PASSWORD }),
     });
-    expect([200, 201]).toContain(reg.status);
+    // Surface the server's message on failure. A bare status assertion here
+    // reports "expected [200,201], got 400" and hides which 400 it was —
+    // a duplicate email, a rejected password and a schema violation all look
+    // identical, so the failure gives you nothing to act on.
+    const regBody = await reg.json().catch(() => ({}));
+    expect(
+      [200, 201],
+      `POST /auth/register (${email}) → ${reg.status}: ${JSON.stringify(regBody)}`,
+    ).toContain(reg.status);
 
     // 5 failed attempts must all return 401 without leaking state
     for (let i = 0; i < 5; i++) {

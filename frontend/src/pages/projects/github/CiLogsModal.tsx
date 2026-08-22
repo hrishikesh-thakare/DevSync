@@ -29,7 +29,7 @@ export const CiLogsModal = ({ slug, keyStr, runId, onClose }: CiLogsModalProps) 
         if (isMounted) setLogsData(res.jobs || []);
       } catch (err: unknown) {
         const e = err as Error;
-        if (isMounted) setError(e.message || 'Failed to load logs');
+        if (isMounted) setError(e.message || "Couldn't load the job log. Try again in a moment.");
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -58,7 +58,7 @@ export const CiLogsModal = ({ slug, keyStr, runId, onClose }: CiLogsModalProps) 
               <Loader2 className="w-8 h-8 text-info animate-spin" strokeWidth={1.5} />
             </div>
           ) : error ? (
-            <div className="flex items-center justify-center h-full text-destructive font-mono text-ui">
+            <div className="flex items-center justify-center h-full text-danger-on-muted font-mono text-ui">
               {error}
             </div>
           ) : logsData.length === 0 ? (
@@ -69,7 +69,7 @@ export const CiLogsModal = ({ slug, keyStr, runId, onClose }: CiLogsModalProps) 
             <div className="h-full overflow-y-auto pr-4 space-y-6">
               {logsData.map((job, idx) => (
                 <div key={idx} className="flex flex-col">
-                  <div className="text-subtle-foreground text-caption font-[590] uppercase tracking-wider mb-2 border-b border-border pb-1">
+                  <div className="text-subtle-foreground text-caption font-[590] uppercase mb-2 border-b border-border pb-1">
                     Job: {job.jobName}
                   </div>
                   <pre className="font-mono text-micro text-code-foreground whitespace-pre-wrap leading-relaxed break-words">

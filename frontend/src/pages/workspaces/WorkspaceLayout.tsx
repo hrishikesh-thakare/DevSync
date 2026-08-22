@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Outlet, useParams, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, useParams, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useAuthStore } from '../../store/auth.js';
 import { useNotificationStore, Notification } from '../../store/useNotificationStore.js';
-import { Hash, Lock, Search, Settings, Plus, FolderKanban, Loader2, Home, LogOut, ChevronDown as ChevronDownIcon, Command, ShieldAlert, Smartphone, Monitor, UserRound } from 'lucide-react';
+import { Hash, Lock, Search, Settings, Plus, FolderKanban, Loader2, Home, LogOut, ChevronDown as ChevronDownIcon, Command, Menu, ShieldAlert, Smartphone, Monitor, UserRound } from 'lucide-react';
 import { CommandPalette } from '../../components/layout/CommandPalette.js';
 import NotificationDropdown from '../../components/layout/NotificationDropdown.js';
 import clsx from 'clsx';
@@ -20,6 +20,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { AppShellSkeleton } from '@/components/ui/skeletons';
+import { useDelayedFlag } from '@/hooks/useDelayedFlag';
+import { PresenceDot, normalizePresence, type Presence } from '@/components/ui/presence-dot';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -45,12 +48,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
-const getStatusDotClass = (presence?: string, statusText?: string | null) => {
-  if (presence === 'offline' || statusText === 'Away') return 'bg-subtle-foreground';
-  if (statusText === 'In a meeting' || statusText === 'Focusing') return 'bg-danger';
-  if (statusText === 'Commuting' || statusText === 'Out sick' || statusText === 'Vacationing') return 'bg-warning';
-  return 'bg-success';
-};
 
 export const WorkspaceLayout = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -79,8 +76,10 @@ export const WorkspaceLayout = () => {
   const [isCreatingChannel, setIsCreatingChannel] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const currentUserMember = members.find(m => m.userId === user?.userId);
+  const showSkeleton = useDelayedFlag(isLoading);
 
   // Global Ctrl+K / Cmd+K shortcut
   useEffect(() => {
@@ -99,6 +98,18 @@ export const WorkspaceLayout = () => {
       fetchWorkspaceData(slug);
     }
   }, [slug, fetchWorkspaceData]);
+
+  // Below 1024px the sidebar is an overlay drawer, so it has to close once
+  // navigation lands — otherwise the scrim covers the page it just opened.
+  // Adjusted during render (React's documented pattern for state derived from a
+  // prop change) rather than from an effect, which would paint one frame with
+  // the drawer still over the new route.
+  const { pathname } = useLocation();
+  const [drawerPath, setDrawerPath] = useState(pathname);
+  if (drawerPath !== pathname) {
+    setDrawerPath(pathname);
+    if (sidebarOpen) setSidebarOpen(false);
+  }
 
   useEffect(() => {
     fetchNotifications();
@@ -142,13 +153,13 @@ export const WorkspaceLayout = () => {
       setIsAnnouncementOnly(false);
       fetchWorkspaceData(slug);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create channel.');
+      toast.error(err instanceof Error ? err.message : "Couldn't create the channel. Check the name is unique and try again.");
     } finally {
       setIsCreatingChannel(false);
     }
   };
 
-  const handleSelectStatus = async (newStatusText: string, presenceMode: 'online' | 'offline' = 'online') => {
+  const handleSelectStatus = async (newStatusText: string, presenceMode: Presence = 'online') => {
     if (user?.userId) {
       updateMemberPresence(user.userId, { statusText: newStatusText, presence: presenceMode });
     }
@@ -159,7 +170,7 @@ export const WorkspaceLayout = () => {
         body: JSON.stringify({ statusText: newStatusText, presence: presenceMode }),
       });
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update status.');
+      toast.error(err instanceof Error ? err.message : "Couldn't update your status. Try again in a moment.");
     }
   };
 
@@ -174,7 +185,7 @@ export const WorkspaceLayout = () => {
         body: JSON.stringify({ statusText: '' }),
       });
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to clear status.');
+      toast.error(err instanceof Error ? err.message : "Couldn't clear your status. Try again in a moment.");
     }
   };
 
@@ -206,7 +217,7 @@ export const WorkspaceLayout = () => {
       setSelectedDMMemberId('');
       fetchWorkspaceData(slug);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create DM.');
+      toast.error(err instanceof Error ? err.message : "Couldn't start the conversation. Try again in a moment.");
     } finally {
       setIsCreatingChannel(false);
     }
@@ -249,7 +260,7 @@ export const WorkspaceLayout = () => {
       const data = await apiFetch('/auth/sessions');
       setSessions(data.sessions || []);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load sessions.');
+      toast.error(err instanceof Error ? err.message : "Couldn't load sessions. Check your connection and try again.");
     } finally {
       setIsSessionsLoading(false);
     }
@@ -261,7 +272,7 @@ export const WorkspaceLayout = () => {
       toast.success('Session logged out.');
       setSessions(s => s.filter(x => x.tokenId !== tokenId));
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to revoke session.');
+      toast.error(err instanceof Error ? err.message : "Couldn't revoke session. Try again in a moment.");
     }
   };
 
@@ -272,22 +283,18 @@ export const WorkspaceLayout = () => {
       toast.success('All other sessions logged out.');
       setSessions(s => s.filter(x => x.isCurrent));
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to revoke sessions.');
+      toast.error(err instanceof Error ? err.message : "Couldn't revoke sessions. Try again in a moment.");
     }
   };
 
   if (isLoading) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" strokeWidth={1.5} />
-      </div>
-    );
+    return showSkeleton ? <AppShellSkeleton /> : null;
   }
 
   if (error || !name) {
     return (
       <div className="flex h-screen w-screen flex-col items-center justify-center bg-background text-foreground">
-        <h2 className="text-heading font-[590] text-danger mb-2">Workspace Error</h2>
+        <h2 className="text-h2 font-[590] text-danger mb-2">Workspace Error</h2>
         <p className="text-muted-foreground">{error || 'Workspace not found'}</p>
         <Button onClick={() => navigate('/workspaces')} className="mt-6 text-primary hover:underline" variant="ghost" size="default">
           Return to Hub
@@ -300,16 +307,36 @@ export const WorkspaceLayout = () => {
     <div className="flex h-screen w-screen bg-background text-foreground overflow-hidden font-sans">
 
       {/* ─── SIDEBAR ────────────────────────────────────────────────────────── */}
-      <nav className="w-[240px] bg-card  flex flex-col flex-shrink-0">
-
-        {/* Workspace Header */}
+      {/* Scrim behind the mobile drawer — §8 Side Panel, left-anchored. */}
+      {sidebarOpen && (
         <div
-          className="h-14 px-4 flex items-center justify-between  shadow-sm hover:bg-hover cursor-pointer transition-colors"
+          className="fixed inset-0 z-[var(--z-overlay)] bg-overlay lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <nav
+        id="workspace-sidebar"
+        aria-label="Workspace"
+        className={clsx(
+          "w-[240px] bg-card flex flex-col flex-shrink-0 border-r border-border",
+          // §11/§14: below 1024px this is an overlay drawer, not a column.
+          "max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-[var(--z-modal)]",
+          "max-lg: transition-colors max-lg:duration-[--duration-slow] max-lg:ease-standard",
+          sidebarOpen ? "max-lg:translate-x-0" : "max-lg:-translate-x-full"
+        )}
+      >
+
+        {/* Workspace switcher — a real button, so it is keyboard-reachable. */}
+        <button
+          type="button"
+          className="h-14 px-4 flex items-center justify-between gap-2 border-b border-border text-left hover:bg-hover transition-colors duration-[--duration-fast] ease-standard"
           onClick={() => navigate(`/w/${slug}`)}
         >
-          <h1 className="font-[590] text-foreground truncate text-heading">{name}</h1>
-          <ChevronDownIcon className="w-4 h-4 text-muted-foreground" />
-        </div>
+          <span className="font-[590] text-foreground truncate text-h3">{name}</span>
+          <ChevronDownIcon className="w-4 h-4 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden="true" />
+        </button>
 
         {/* Scrollable Nav */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-6">
@@ -321,23 +348,23 @@ export const WorkspaceLayout = () => {
               end
               className={({ isActive }) => clsx(
                 "flex items-center px-2 py-1.5 rounded-md text-ui transition-colors group",
-                isActive ? "bg-primary-muted text-primary font-[510]" : "text-muted-foreground hover:bg-hover hover:text-foreground"
+                isActive ? "bg-primary-muted text-primary-on-muted font-[510]" : "text-muted-foreground hover:bg-hover hover:text-foreground"
               )}
             >
-              <Home className="w-4 h-4 mr-2.5 opacity-70 group-hover:opacity-100" strokeWidth={1.75} />
+              <Home className="w-4 h-4 mr-2.5" strokeWidth={1.75} />
               Dashboard
             </NavLink>
             <Button onClick={() => setShowCommandPalette(true)} className="w-full flex items-center px-2 py-1.5 rounded-md text-ui text-muted-foreground hover:bg-hover hover:text-foreground transition-colors group" variant="ghost" size="default">
-              <Search className="w-4 h-4 mr-2.5 opacity-70 group-hover:opacity-100" strokeWidth={1.75} />
+              <Search className="w-4 h-4 mr-2.5" strokeWidth={1.75} />
               Search
-              <kbd className="ml-auto text-micro bg-hover px-1.5 py-0.5 rounded text-subtle-foreground">⌘K</kbd>
+              <kbd className="ml-auto rounded-[4px] bg-muted px-1.5 py-0.5 font-mono text-micro text-subtle-foreground">⌘K</kbd>
             </Button>
           </div>
 
           {/* Channels Section */}
           <div>
             <div className="px-5 mb-1.5 flex items-center justify-between group cursor-pointer">
-              <span className="text-micro font-[590] text-subtle-foreground uppercase tracking-wider group-hover:text-muted-foreground transition-colors">Channels</span>
+              <span className="text-micro font-[510] text-subtle-foreground uppercase group-hover:text-muted-foreground transition-colors">Channels</span>
               {/* Only admin+ can create channels */}
               {isAdmin() && (
                 <Button 
@@ -345,10 +372,10 @@ export const WorkspaceLayout = () => {
                     e.stopPropagation();
                     setShowChannelModal(true);
                   }}
-                  className="opacity-0 group-hover:opacity-100 text-subtle-foreground hover:text-foreground transition-colors"
+                  className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 text-subtle-foreground hover:text-foreground transition-colors"
                   size="icon" variant="ghost"
                 >
-                  <Plus className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  <Plus className="w-4 h-4" strokeWidth={1.75} />
                 </Button>
               )}
             </div>
@@ -359,17 +386,17 @@ export const WorkspaceLayout = () => {
                   to={`/w/${slug}/channels/${ch.channelId}`}
                   className={({ isActive }) => clsx(
                     "flex items-center px-2 py-1 rounded-md text-body transition-colors",
-                    isActive ? "bg-primary-muted text-primary font-[510]" : "text-muted-foreground hover:bg-hover hover:text-foreground"
+                    isActive ? "bg-primary-muted text-primary-on-muted font-[510]" : "text-muted-foreground hover:bg-hover hover:text-foreground"
                   )}
                 >
                   {ch.type === 'private' ? (
-                    <Lock className="w-3.5 h-3.5 mr-2 opacity-60" strokeWidth={1.75} />
+                    <Lock className="w-4 h-4 mr-2 opacity-60" strokeWidth={1.75} />
                   ) : (
                     <Hash className="w-4 h-4 mr-2 opacity-60" strokeWidth={1.75} />
                   )}
                   <span className={clsx("truncate flex-1", channelUnreadCounts[ch.channelId] && "text-foreground font-[590]")}>{ch.name}</span>
                   {channelUnreadCounts[ch.channelId] ? (
-                    <span className="ml-2 bg-danger text-danger-foreground text-micro font-[590] px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center min-w-[16px] h-[16px]">
+                    <span className="ml-2 bg-primary text-primary-foreground text-micro font-[510] px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center min-w-[16px] h-[16px]">
                       {channelUnreadCounts[ch.channelId]}
                     </span>
                   ) : null}
@@ -384,7 +411,7 @@ export const WorkspaceLayout = () => {
               <Button
                 type="button"
                 onClick={() => navigate(`/w/${slug}/projects`)}
-                className="text-micro font-[590] text-subtle-foreground uppercase tracking-wider group-hover:text-foreground transition-colors cursor-pointer"
+                className="text-micro font-[510] text-subtle-foreground uppercase group-hover:text-foreground transition-colors cursor-pointer"
                 variant="ghost" size="default"
               >
                 Projects
@@ -395,10 +422,10 @@ export const WorkspaceLayout = () => {
                   type="button"
                   onClick={() => navigate(`/w/${slug}/projects/new`)}
                   aria-label={`Create project in ${name}`}
-                  className="opacity-0 group-hover:opacity-100 text-subtle-foreground hover:text-foreground transition-colors"
+                  className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 text-subtle-foreground hover:text-foreground transition-colors"
                   size="icon" variant="ghost"
                 >
-                  <Plus className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  <Plus className="w-4 h-4" strokeWidth={1.75} />
                 </Button>
               )}
             </div>
@@ -409,7 +436,7 @@ export const WorkspaceLayout = () => {
                     to={`/w/${slug}/projects/${proj.key}`}
                     className={({ isActive }) => clsx(
                       "flex items-center px-2 py-1.5 rounded-md text-body transition-colors",
-                      isActive ? "bg-primary-muted text-primary font-[510]" : "text-muted-foreground hover:bg-hover hover:text-foreground"
+                      isActive ? "bg-primary-muted text-primary-on-muted font-[510]" : "text-muted-foreground hover:bg-hover hover:text-foreground"
                     )}
                   >
                     <FolderKanban className="w-4 h-4 mr-2.5 opacity-60" strokeWidth={1.75} />
@@ -424,17 +451,17 @@ export const WorkspaceLayout = () => {
                           to={`/w/${slug}/channels/${ch.channelId}`}
                           className={({ isActive }) => clsx(
                             "flex items-center px-2 py-1 rounded-md text-ui transition-colors",
-                            isActive ? "bg-primary-muted text-primary font-[510]" : "text-subtle-foreground hover:bg-hover hover:text-foreground"
+                            isActive ? "bg-primary-muted text-primary-on-muted font-[510]" : "text-subtle-foreground hover:bg-hover hover:text-foreground"
                           )}
                         >
                           {ch.type === 'private' ? (
-                            <Lock className="w-3.5 h-3.5 mr-2 opacity-60" strokeWidth={1.75} />
+                            <Lock className="w-4 h-4 mr-2 opacity-60" strokeWidth={1.75} />
                           ) : (
-                            <Hash className="w-3.5 h-3.5 mr-2 opacity-60" strokeWidth={1.75} />
+                            <Hash className="w-4 h-4 mr-2 opacity-60" strokeWidth={1.75} />
                           )}
                           <span className={clsx("truncate flex-1", channelUnreadCounts[ch.channelId] && "text-foreground font-[590]")}>{ch.name}</span>
                           {channelUnreadCounts[ch.channelId] ? (
-                            <span className="ml-2 bg-danger text-danger-foreground text-micro font-[590] px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center min-w-[16px] h-[16px]">
+                            <span className="ml-2 bg-primary text-primary-foreground text-micro font-[510] px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center min-w-[16px] h-[16px]">
                               {channelUnreadCounts[ch.channelId]}
                             </span>
                           ) : null}
@@ -450,16 +477,16 @@ export const WorkspaceLayout = () => {
           {/* Direct Messages Section */}
           <div>
             <div className="px-5 mb-1.5 flex items-center justify-between group cursor-pointer">
-              <span className="text-micro font-[590] text-subtle-foreground uppercase tracking-wider group-hover:text-muted-foreground transition-colors">Direct Messages</span>
+              <span className="text-micro font-[510] text-subtle-foreground uppercase group-hover:text-muted-foreground transition-colors">Direct Messages</span>
               <Button 
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowDMModal(true);
                 }}
-                className="opacity-0 group-hover:opacity-100 text-subtle-foreground hover:text-foreground transition-colors"
+                className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 text-subtle-foreground hover:text-foreground transition-colors"
                 size="icon" variant="ghost"
               >
-                <Plus className="w-3.5 h-3.5" strokeWidth={1.75} />
+                <Plus className="w-4 h-4" strokeWidth={1.75} />
               </Button>
             </div>
             <div className="px-3 space-y-0.5">
@@ -474,7 +501,7 @@ export const WorkspaceLayout = () => {
                       to={`/w/${slug}/channels/${ch.channelId}`}
                       className={({ isActive }) => clsx(
                         "flex items-center px-2 py-1 rounded-md text-body transition-colors group",
-                        isActive ? "bg-primary-muted text-primary font-[510]" : "text-muted-foreground hover:bg-hover hover:text-foreground"
+                        isActive ? "bg-primary-muted text-primary-on-muted font-[510]" : "text-muted-foreground hover:bg-hover hover:text-foreground"
                       )}
                     >
                       <div className="relative mr-2">
@@ -483,11 +510,11 @@ export const WorkspaceLayout = () => {
                             {ch.name?.charAt(0).toUpperCase() || '?'}
                           </AvatarFallback>
                         </Avatar>
-                        <div className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 ${getStatusDotClass(dmMember?.presence, dmMember?.statusText)} border border-background rounded-full`}></div>
+                        <PresenceDot presence={normalizePresence(dmMember?.presence, dmMember?.statusText)} ringClassName="ring-card" className="absolute -bottom-0.5 -right-0.5" />
                       </div>
                       <span className={clsx("truncate flex-1", channelUnreadCounts[ch.channelId] && "text-foreground font-[590]")}>{ch.name}</span>
                       {channelUnreadCounts[ch.channelId] ? (
-                        <span className="ml-2 bg-danger text-danger-foreground text-micro font-[590] px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center min-w-[16px] h-[16px]">
+                        <span className="ml-2 bg-primary text-primary-foreground text-micro font-[510] px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center min-w-[16px] h-[16px]">
                           {channelUnreadCounts[ch.channelId]}
                         </span>
                       ) : null}
@@ -513,7 +540,7 @@ export const WorkspaceLayout = () => {
           <Button
             type="button"
             onClick={() => navigate(`/w/${slug}/settings`)}
-            className="w-full p-4  text-left cursor-pointer group hover:bg-hover transition-colors"
+            className="w-full p-4 text-left cursor-pointer group hover:bg-hover transition-colors"
             variant="ghost" size="default"
           >
             <div className="flex items-center justify-between">
@@ -547,25 +574,48 @@ export const WorkspaceLayout = () => {
       </nav>
 
       {/* ─── MAIN CONTENT OUTLET ────────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col min-w-0 bg-background relative">
+      <div className="flex-1 flex flex-col min-w-0 bg-background relative">
         {/* Top Navbar / Utility Bar */}
-        <header className="h-14 px-6 flex items-center justify-between  bg-background shrink-0">
-          {/* Search */}
+        <header className="h-14 px-4 sm:px-6 flex items-center gap-3 justify-between bg-card border-b border-border shrink-0">
+          {/* §14: hamburger opens the drawer below 1024px. */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden"
+            aria-label="Open navigation"
+            aria-expanded={sidebarOpen}
+            aria-controls="workspace-sidebar"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <Menu className="w-5 h-5" strokeWidth={1.75} aria-hidden="true" />
+          </Button>
+          {/* Search — a button, not a read-only input. It opens the command
+              palette, so it has to be operable by keyboard like any other
+              control; a div with an onClick is not. */}
           <div className="flex items-center flex-1">
-             <div className="relative max-w-md w-full cursor-pointer" onClick={() => setShowCommandPalette(true)}>
-               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle-foreground" size={16} strokeWidth={1.75} />
-               <Input
-                 type="text"
-                 placeholder="Search tasks, messages..."
-                 className="w-full bg-card rounded-md pl-9 pr-16 py-1.5 text-ui text-muted-foreground cursor-pointer"
-                 readOnly
-               />
-               <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-1.5 py-0.5 rounded bg-hover text-micro text-subtle-foreground font-mono">
-                 <Command size={10} strokeWidth={1.75} />
-                 <span>K</span>
-               </div>
-             </div>
-           </div>
+            <button
+              type="button"
+              onClick={() => setShowCommandPalette(true)}
+              aria-keyshortcuts="Meta+K Control+K"
+              className="relative hidden sm:flex max-w-md w-full h-[32px] items-center gap-2 rounded-[6px] border border-input bg-input-bg pl-9 pr-16 text-left text-ui text-subtle-foreground transition-colors duration-[--duration-fast] ease-standard hover:bg-hover focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
+            >
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle-foreground" size={16} strokeWidth={1.75} aria-hidden="true" />
+              Search tasks, messages…
+              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 rounded-[4px] bg-muted px-1.5 py-0.5 font-mono text-micro text-subtle-foreground">
+                <Command size={16} strokeWidth={1.75} aria-hidden="true" className="h-3 w-3" />
+                <span>K</span>
+              </kbd>
+            </button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="sm:hidden"
+              aria-label="Search"
+              onClick={() => setShowCommandPalette(true)}
+            >
+              <Search className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+            </Button>
+          </div>
 
           <div className="flex items-center space-x-4">
             {/* Light / dark mode */}
@@ -587,7 +637,7 @@ export const WorkspaceLayout = () => {
                         {user?.fullName?.[0]?.toUpperCase() || 'U'}
                       </AvatarFallback>
                     </Avatar>
-                    <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${getStatusDotClass(currentUserMember?.presence, currentUserMember?.statusText)} rounded-full `} />
+                    <PresenceDot presence={normalizePresence(currentUserMember?.presence, currentUserMember?.statusText)} ringClassName="ring-card" className="absolute bottom-0 right-0" />
                   </div>
                   <div className="flex flex-col items-start hidden sm:flex">
                     <div className="flex items-center space-x-1.5">
@@ -602,21 +652,21 @@ export const WorkspaceLayout = () => {
                       )}
                     </div>
                   </div>
-                  <ChevronDownIcon className="w-3.5 h-3.5 text-subtle-foreground" />
+                  <ChevronDownIcon className="w-4 h-4 text-subtle-foreground" />
                 </Button>
               </DropdownMenuTrigger>
 
               <DropdownMenuContent align="end" className="w-[240px] p-0">
-                <DropdownMenuLabel className="p-4  flex flex-col items-start gap-0.5 font-normal">
+                <DropdownMenuLabel className="p-4 flex flex-col items-start gap-0.5 font-normal">
                   <span className="text-ui font-[590] text-foreground">{user?.fullName}</span>
                   <span className="text-caption text-subtle-foreground">{user?.email}</span>
-                  <span className="mt-2 inline-block text-micro font-[590] uppercase tracking-wider px-2 py-0.5 rounded bg-hover text-muted-foreground">
+                  <span className="mt-2 inline-block text-micro font-[590] uppercase px-2 py-0.5 rounded bg-hover text-muted-foreground">
                     {myRole}
                   </span>
                 </DropdownMenuLabel>
 
                 <div className="p-1 space-y-0.5">
-                  <div className="px-2 py-1 flex items-center justify-between text-micro font-[590] text-subtle-foreground uppercase tracking-wider">
+                  <div className="px-2 py-1 flex items-center justify-between text-micro font-[510] text-subtle-foreground uppercase">
                     <span>Status</span>
                     {currentUserMember?.statusText && (
                       <Button
@@ -629,28 +679,44 @@ export const WorkspaceLayout = () => {
                     )}
                   </div>
 
+                  {/* "Away" now writes the actual `away` presence. It used to
+                      write `offline`, which is why §3's amber away dot was
+                      unreachable and an away user read as signed out. */}
                   <DropdownMenuItem
-                    onSelect={() => handleSelectStatus(currentUserMember?.presence === 'online' ? 'Away' : 'Active', currentUserMember?.presence === 'online' ? 'offline' : 'online')}
+                    onSelect={() =>
+                      currentUserMember?.presence === 'online'
+                        ? handleSelectStatus('Away', 'away')
+                        : handleSelectStatus('Active', 'online')
+                    }
                   >
-                    <span className={`w-2 h-2 rounded-full mr-2 ${currentUserMember?.presence === 'online' ? 'bg-success' : 'bg-subtle-foreground'}`} />
+                    <PresenceDot
+                      presence={currentUserMember?.presence === 'online' ? 'away' : 'online'}
+                      ringClassName="ring-popover"
+                      className="mr-2"
+                    />
                     <span>Set as {currentUserMember?.presence === 'online' ? 'Away' : 'Active'}</span>
                   </DropdownMenuItem>
 
                   <DropdownMenuSeparator className="my-1" />
 
+                  {/* §3 Presence has exactly three states. Each preset maps to
+                      one of them rather than inventing a hue per label: "here"
+                      is online, "here but not responsive" is away, "not here"
+                      is offline. The dot is the same PresenceDot the avatars
+                      use, so there is one source for what a state looks like. */}
                   {[
-                    { label: 'Active', presence: 'online' as const, color: 'bg-success' },
-                    { label: 'In a meeting', presence: 'online' as const, color: 'bg-danger' },
-                    { label: 'Focusing', presence: 'online' as const, color: 'bg-danger' },
-                    { label: 'Commuting', presence: 'online' as const, color: 'bg-warning' },
-                    { label: 'Out sick', presence: 'offline' as const, color: 'bg-warning' },
-                    { label: 'Vacationing', presence: 'offline' as const, color: 'bg-warning' },
+                    { label: 'Active', presence: 'online' as const },
+                    { label: 'In a meeting', presence: 'away' as const },
+                    { label: 'Focusing', presence: 'away' as const },
+                    { label: 'Commuting', presence: 'away' as const },
+                    { label: 'Out sick', presence: 'offline' as const },
+                    { label: 'Vacationing', presence: 'offline' as const },
                   ].map((preset) => (
                     <DropdownMenuItem
                       key={preset.label}
                       onSelect={() => handleSelectStatus(preset.label, preset.presence)}
                     >
-                      <span className={`w-2 h-2 rounded-full mr-2 ${preset.color}`} />
+                      <PresenceDot presence={preset.presence} ringClassName="ring-popover" className="mr-2" />
                       <span className="flex-1">{preset.label}</span>
                       {currentUserMember?.statusText === preset.label && (
                         <span className="text-micro text-primary font-[590]">✓</span>
@@ -688,7 +754,7 @@ export const WorkspaceLayout = () => {
         <div className="flex-1 overflow-hidden">
           <Outlet />
         </div>
-      </main>
+      </div>
 
       {/* CREATE CHANNEL MODAL */}
       {showChannelModal && (
@@ -808,7 +874,7 @@ export const WorkspaceLayout = () => {
       {showSessionsModal && (
         <Dialog open onOpenChange={(open) => { if (!open) setShowSessionsModal(false); }}>
           <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col gap-0 p-0">
-            <DialogHeader className="px-6 py-4  shrink-0">
+            <DialogHeader className="px-6 py-4 shrink-0">
               <DialogTitle>Active Sessions</DialogTitle>
               <DialogDescription>Devices currently signed in to your account.</DialogDescription>
             </DialogHeader>
@@ -837,7 +903,7 @@ export const WorkspaceLayout = () => {
                             {getDeviceLabel(session.deviceInfo?.userAgent)}
                           </span>
                           {session.isCurrent && (
-                            <span className="text-micro font-[590] uppercase tracking-wider bg-success/10 border border-success/30 text-success px-1.5 py-0.5 rounded">
+                            <span className="text-micro font-[590] uppercase bg-success/10 border border-success/30 text-success px-1.5 py-0.5 rounded">
                               This device
                             </span>
                           )}
@@ -854,7 +920,7 @@ export const WorkspaceLayout = () => {
                     {!session.isCurrent && (
                       <Button
                         onClick={() => handleRevokeSession(session.tokenId)}
-                        className="ml-3 shrink-0 text-caption font-[590] bg-hover text-muted-foreground px-3 py-1.5 rounded hover:bg-destructive/10 hover:text-destructive transition-colors"
+                        className="ml-3 shrink-0 text-caption font-[590] bg-hover text-muted-foreground px-3 py-1.5 rounded hover:bg-danger-muted hover:text-danger-on-muted transition-colors"
                         variant="secondary" size="default"
                       >
                         Log Out
@@ -865,7 +931,7 @@ export const WorkspaceLayout = () => {
               )}
             </div>
 
-            <div className="p-6 pt-0  shrink-0">
+            <div className="p-6 pt-0 shrink-0">
               <Button
                 variant="secondary"
                 className="w-full"

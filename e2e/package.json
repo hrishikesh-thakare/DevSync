@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "playwright test",
+    "test:clean": "node scripts/run-playwright-clean.mjs",
+    "test:clean:yes": "node scripts/run-playwright-clean.mjs --yes",
     "test:rbac": "playwright test --grep @rbac",
     "test:auth": "playwright test --grep @auth",
     "test:headed": "playwright test --headed",

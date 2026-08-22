@@ -58,7 +58,7 @@ export const CreateBranchModal = ({ slug, keyStr, initialTaskId, onClose, onCrea
         const branchNames = (branchRes.branches || []).map((b: { branchName: string }) => b.branchName);
         setBranches(Array.from(new Set(branchNames)));
       } catch (err) {
-        console.error('Failed to load metadata', err);
+        console.error("Couldn't load repository details. Try again in a moment.", err);
       } finally {
         setIsLoadingMeta(false);
       }
@@ -83,7 +83,7 @@ export const CreateBranchModal = ({ slug, keyStr, initialTaskId, onClose, onCrea
       });
       onCreated();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to create branch');
+      setError(err instanceof Error ? err.message : "Couldn't create the branch. Check the name is unique and try again.");
       setIsSubmitting(false);
     }
   };
@@ -103,7 +103,7 @@ export const CreateBranchModal = ({ slug, keyStr, initialTaskId, onClose, onCrea
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-ui text-destructive" role="alert">
+            <div className="p-3 bg-danger-muted border border-danger-border rounded-lg text-ui text-danger-on-muted" role="alert">
               {error}
             </div>
           )}

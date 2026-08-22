@@ -99,7 +99,7 @@ export const TaskComments: React.FC<TaskCommentsProps> = ({ slug, projectKey, ta
       });
       setNewComment('');
     } catch (err) {
-      console.error('Failed to post comment', err);
+      console.error("Couldn't post your comment. Try again in a moment.", err);
     } finally {
       setIsSubmitting(false);
     }

@@ -1,6 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 import { BASE_URL } from './helpers/constants.js';
 
+const IS_CI = !!process.env.CI;
+
 /**
  * DevSync Playwright Configuration
  *
@@ -9,10 +11,10 @@ import { BASE_URL } from './helpers/constants.js';
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : 2,
-  reporter: process.env.CI
+  forbidOnly: IS_CI,
+  retries: IS_CI ? 2 : 0,
+  workers: IS_CI ? 1 : 2,
+  reporter: IS_CI
     ? [['list'], ['github'], ['html', { open: 'never' }]]
     : [['list'], ['html', { open: 'on-failure' }]],
 

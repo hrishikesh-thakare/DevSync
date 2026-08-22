@@ -3,7 +3,7 @@ import { register, login, refresh, logout, oauthCallback, updateStatus, updatePr
 import { requireAuth } from '../../middleware/auth.js';
 import { authLimiter } from '../../middleware/rateLimit.js';
 import { validate } from '../../middleware/validate.js';
-import { registerSchema, loginSchema, changePasswordSchema, forgotPasswordSchema, resetPasswordSchema, verifyEmailSchema } from './auth.schemas.js';
+import { registerSchema, loginSchema, changePasswordSchema, forgotPasswordSchema, resetPasswordSchema, verifyEmailSchema, updateStatusSchema, updatePresenceSchema } from './auth.schemas.js';
 
 const router = Router();
 
@@ -27,8 +27,8 @@ router.get('/me', requireAuth, (req, res) => {
 });
 
 // Protected routes for presence, status and preferences
-router.post('/status', requireAuth, updateStatus);
-router.post('/presence', requireAuth, updatePresence);
+router.post('/status', requireAuth, validate(updateStatusSchema), updateStatus);
+router.post('/presence', requireAuth, validate(updatePresenceSchema), updatePresence);
 router.patch('/preferences', requireAuth, updatePreferences);
 router.post('/change-password', requireAuth, validate(changePasswordSchema), changePassword);
 

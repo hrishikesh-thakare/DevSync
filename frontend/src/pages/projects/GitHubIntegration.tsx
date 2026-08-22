@@ -1,3 +1,4 @@
+import React from "react";
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { GitBranch, GitPullRequest, CheckCircle2, XCircle, Loader2, RefreshCw, AlertCircle, ExternalLink, Plus, MessageSquare, Terminal } from 'lucide-react';
@@ -185,7 +186,7 @@ export const GitHubIntegration = () => {
       setCiRuns(res.runs || []); setCiTotal(res.totalCount || 0);
       setCiPage(res.page || 1);
       setBranchesList(prev => Array.from(new Set([...prev, ...(res.branches || [])])));
-    } catch (err: unknown) { const e = err as Error; setError(e.message || 'Failed to fetch CI runs'); } finally { setIsLoading(false); }
+    } catch (err: unknown) { const e = err as Error; setError(e.message || "Couldn't load CI runs. Check your connection and try again."); } finally { setIsLoading(false); }
   }, [slug, key, ciPage, branchFilter, ciConclusionFilter]);
 
   const fetchPrs = useCallback(async (page = prsPage) => {
@@ -196,7 +197,7 @@ export const GitHubIntegration = () => {
       const res = await apiFetch(url);
       setPrs(res.pullRequests || []); setPrsTotal(res.totalCount || 0);
       setPrsPage(res.page || 1);
-    } catch (err: unknown) { const e = err as Error; setError(e.message || 'Failed to fetch PRs'); } finally { setIsLoading(false); }
+    } catch (err: unknown) { const e = err as Error; setError(e.message || "Couldn't load pull requests. Check your connection and try again."); } finally { setIsLoading(false); }
   }, [slug, key, prsPage, prStateFilter]);
 
   const fetchCommits = useCallback(async (page = commitsPage) => {
@@ -208,7 +209,7 @@ export const GitHubIntegration = () => {
       setCommits(res.commits || []); setCommitsTotal(res.totalCount || 0);
       setCommitsPage(res.page || 1);
       setBranchesList(prev => Array.from(new Set([...prev, ...(res.branches || [])])));
-    } catch (err: unknown) { const e = err as Error; setError(e.message || 'Failed to fetch commits'); } finally { setIsLoading(false); }
+    } catch (err: unknown) { const e = err as Error; setError(e.message || "Couldn't fetch commits. Check your connection and try again."); } finally { setIsLoading(false); }
   }, [slug, key, commitsPage, branchFilter]);
 
   const fetchIssues = useCallback(async (page = issuesPage) => {
@@ -219,7 +220,7 @@ export const GitHubIntegration = () => {
       const res = await apiFetch(url);
       setIssues(res.issues || []); setIssuesTotal(res.totalCount || 0);
       setIssuesPage(res.page || 1);
-    } catch (err: unknown) { const e = err as Error; setError(e.message || 'Failed to fetch Issues'); } finally { setIsLoading(false); }
+    } catch (err: unknown) { const e = err as Error; setError(e.message || "Couldn't fetch Issues. Check your connection and try again."); } finally { setIsLoading(false); }
   }, [slug, key, issuesPage, issueStateFilter]);
 
   useEffect(() => {
@@ -275,7 +276,7 @@ export const GitHubIntegration = () => {
       <div className="px-8 pt-8 pb-4 border-b border-border shrink-0">
         <div className="flex items-start justify-between mb-2">
           <div>
-            <h2 className="text-heading font-[590] text-foreground flex items-center mb-1">
+            <h2 className="text-h2 font-[590] text-foreground flex items-center mb-1">
               <GitBranch className="w-6 h-6 mr-3 text-foreground" strokeWidth={1.5} />
               GitHub Integration
             </h2>
@@ -295,8 +296,8 @@ export const GitHubIntegration = () => {
             <Button 
               onClick={handleRefresh}
               disabled={isLoading}
-              className="p-2 text-muted-foreground hover:text-foreground hover:bg-hover rounded-lg transition-colors disabled:opacity-50"
-              size="icon" variant="ghost"
+              className="p-2 text-muted-foreground hover:text-foreground hover:bg-hover rounded-lg transition-colors disabled:text-disabled"
+              size="icon" variant="ghost" aria-label="Refresh GitHub data"
             >
               <RefreshCw className={clsx("w-5 h-5", isLoading && "animate-spin")} strokeWidth={1.75} />
             </Button>
@@ -351,7 +352,7 @@ export const GitHubIntegration = () => {
                 </Select>
                 <Button 
                   onClick={() => setShowCreatePR(true)}
-                  className="bg-primary hover:bg-primary-hover text-primary-foreground text-ui font-[590] px-3 py-1.5 rounded-lg flex items-center transition-colors"
+                  className="text-ui font-[590] px-3 py-1.5 rounded-lg flex items-center transition-colors"
                   variant="primary" size="default"
                 >
                   <Plus className="w-4 h-4 mr-1" strokeWidth={1.75} /> New PR
@@ -403,8 +404,8 @@ export const GitHubIntegration = () => {
 
         {error ? (
           <div className="text-center py-12 border border-dashed border-danger-border bg-danger-muted rounded-lg">
-            <AlertCircle className="w-8 h-8 text-destructive mx-auto mb-3" strokeWidth={1.5} />
-            <p className="text-destructive">{error}</p>
+            <AlertCircle className="w-8 h-8 text-danger-on-muted mx-auto mb-3" strokeWidth={1.5} />
+            <p className="text-danger-on-muted">{error}</p>
           </div>
         ) : (
           <>
@@ -412,39 +413,43 @@ export const GitHubIntegration = () => {
             {prs.length === 0 && !isLoading ? (
               <div className="text-center py-16 border border-dashed border-border rounded-lg bg-card">
                 <GitPullRequest className="w-10 h-10 text-subtle-foreground/40 mx-auto mb-4" strokeWidth={1.5} />
-                <h3 className="text-heading font-[590] text-foreground mb-1">No pull requests found</h3>
+                <h3 className="text-h3 font-[590] text-foreground mb-1">No pull requests found</h3>
               </div>
             ) : (
               <div className="border border-border rounded-lg overflow-hidden bg-card">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-muted border-b border-border text-caption font-[590] text-muted-foreground tracking-wider">
-                      <th className="px-4 py-3 w-24">PR</th>
-                      <th className="px-4 py-3">Title</th>
-                      <th className="px-4 py-3 w-32">Status</th>
-                      <th className="px-4 py-3 w-32">Task</th>
-                      <th className="px-4 py-3 w-40">Branches</th>
-                      <th className="px-4 py-3 w-24 text-right">Link</th>
+                    <tr className="bg-muted border-b border-border text-caption font-[510] text-subtle-foreground">
+                      <th scope="col" className="px-4 py-3 w-24">PR</th>
+                      <th scope="col" className="px-4 py-3">Title</th>
+                      <th scope="col" className="px-4 py-3 w-32">Status</th>
+                      <th scope="col" className="px-4 py-3 w-32">Task</th>
+                      <th scope="col" className="px-4 py-3 w-40">Branches</th>
+                      <th scope="col" className="px-4 py-3 w-24 text-right">Link</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {prs.map(pr => (
-                      <tr key={pr.id} className="group">
-                        <td colSpan={6} className="p-0">
-                          <div className="hover:bg-hover transition-colors px-4 py-3 grid" style={{ gridTemplateColumns: '6rem 1fr 8rem 8rem 10rem 6rem' }}>
-                            <span className="text-ui font-mono text-muted-foreground">#{pr.prNumber}</span>
-                            <span className="text-ui text-foreground">{pr.title}</span>
-                            <span>
-                              {pr.state === 'open' && <Badge variant="success" className="h-auto py-1">Open</Badge>}
-                              {pr.state === 'merged' && <Badge variant="secondary" className="bg-special-muted text-special border-special-border h-auto py-1">Merged</Badge>}
-                              {pr.state === 'closed' && <Badge variant="destructive" className="h-auto py-1">Closed</Badge>}
-                            </span>
-                            <span>
-                              {pr.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${pr.taskKey}`} className="inline-flex bg-hover hover:bg-hover text-foreground border border-border text-micro uppercase font-[590] tracking-wider px-2 py-0.5 rounded transition-colors">{pr.taskKey}</Link> : <span className="text-subtle-foreground">—</span>}
-                            </span>
-                            <span className="text-caption text-muted-foreground">
+                      // A real cell per column. The previous shape — one
+                      // `<td colSpan={6}>` wrapping a CSS grid — gave assistive
+                      // tech a six-column header over a one-column body, so no
+                      // header mapped to any cell.
+                      <React.Fragment key={pr.id}>
+                      <tr className="group hover:bg-hover transition-colors">
+                          <td className="px-4 py-3 align-top text-ui font-mono text-muted-foreground">#{pr.prNumber}</td>
+                          <td className="px-4 py-3 align-top text-ui text-foreground">{pr.title}</td>
+                          <td className="px-4 py-3 align-top">
+                              {pr.state === 'open' && <Badge variant="success">Open</Badge>}
+                              {pr.state === 'merged' && <Badge variant="special">Merged</Badge>}
+                              {pr.state === 'closed' && <Badge variant="destructive">Closed</Badge>}
+                          </td>
+                          <td className="px-4 py-3 align-top">
+                              {pr.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${pr.taskKey}`} className="inline-flex bg-hover hover:bg-hover text-foreground border border-border text-micro uppercase font-[510] px-2 py-0.5 rounded transition-colors">{pr.taskKey}</Link> : <span className="text-subtle-foreground">—</span>}
+                          </td>
+                          <td className="px-4 py-3 align-top text-caption text-muted-foreground">
                               {pr.headBranch} → {pr.baseBranch}
-                            </span>
+                          </td>
+                          <td className="px-4 py-3 align-top">
                             <span className="flex items-center justify-end space-x-2">
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -453,22 +458,24 @@ export const GitHubIntegration = () => {
                                     className={clsx(
                                       'text-caption px-2 py-1 rounded transition-colors flex items-center',
                                       commentingOn?.type === 'pr' && commentingOn.number === pr.prNumber
-                                        ? 'text-primary bg-primary-muted border border-primary-border'
-                                        : 'text-subtle-foreground hover:text-foreground opacity-0 group-hover:opacity-100'
+                                        ? 'text-primary-on-muted bg-primary-muted border border-primary-border'
+                                        : 'text-subtle-foreground hover:text-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100'
                                     )}
                                     aria-label="Add comment"
                                     size="icon" variant="ghost"
                                   >
-                                    <MessageSquare className="w-3.5 h-3.5" strokeWidth={1.75} />
+                                    <MessageSquare className="w-4 h-4" strokeWidth={1.75} />
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Add comment</TooltipContent>
                               </Tooltip>
-                              {pr.htmlUrl && <a href={pr.htmlUrl} target="_blank" rel="noreferrer" className="inline-flex text-muted-foreground hover:text-foreground"><ExternalLink className="w-4 h-4" strokeWidth={1.75} /></a>}
+                              {pr.htmlUrl && <a href={pr.htmlUrl} target="_blank" rel="noreferrer" aria-label={`Open pull request #${pr.prNumber} on GitHub`} className="inline-flex text-muted-foreground hover:text-foreground"><ExternalLink className="w-4 h-4" strokeWidth={1.75} aria-hidden="true" /></a>}
                             </span>
-                          </div>
-                          {commentingOn?.type === 'pr' && commentingOn.number === pr.prNumber && (
-                            <div className="px-4 pb-3">
+                          </td>
+                        </tr>
+                        {commentingOn?.type === 'pr' && commentingOn.number === pr.prNumber && (
+                          <tr>
+                            <td colSpan={6} className="px-4 pb-3">
                               <CommentSection
                                 slug={slug as string}
                                 keyStr={key as string}
@@ -476,10 +483,10 @@ export const GitHubIntegration = () => {
                                 number={pr.prNumber}
                                 onClose={() => setCommentingOn(null)}
                               />
-                            </div>
-                          )}
-                        </td>
-                      </tr>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -490,21 +497,21 @@ export const GitHubIntegration = () => {
             {issues.length === 0 && !isLoading ? (
               <div className="text-center py-16 border border-dashed border-border rounded-lg bg-card">
                 <AlertCircle className="w-10 h-10 text-subtle-foreground/40 mx-auto mb-4" strokeWidth={1.5} />
-                <h3 className="text-heading font-[590] text-foreground mb-1">No issues found</h3>
+                <h3 className="text-h3 font-[590] text-foreground mb-1">No issues found</h3>
               </div>
             ) : (
               <div className="border border-border rounded-lg overflow-hidden bg-card">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-muted border-b border-border text-caption font-[590] text-muted-foreground tracking-wider">
-                      <th className="px-4 py-3 w-16">#</th>
-                      <th className="px-4 py-3">Title</th>
-                      <th className="px-4 py-3 w-28">Status</th>
-                      <th className="px-4 py-3 w-32">Author</th>
-                      <th className="px-4 py-3 w-32">Labels</th>
-                      <th className="px-4 py-3 w-28">Task</th>
-                      <th className="px-4 py-3 w-32">Date</th>
-                      <th className="px-4 py-3 w-16 text-right">Link</th>
+                    <tr className="bg-muted border-b border-border text-caption font-[510] text-subtle-foreground">
+                      <th scope="col" className="px-4 py-3 w-16">#</th>
+                      <th scope="col" className="px-4 py-3">Title</th>
+                      <th scope="col" className="px-4 py-3 w-28">Status</th>
+                      <th scope="col" className="px-4 py-3 w-32">Author</th>
+                      <th scope="col" className="px-4 py-3 w-32">Labels</th>
+                      <th scope="col" className="px-4 py-3 w-28">Task</th>
+                      <th scope="col" className="px-4 py-3 w-32">Date</th>
+                      <th scope="col" className="px-4 py-3 w-16 text-right">Link</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -514,8 +521,8 @@ export const GitHubIntegration = () => {
                         <td className="px-4 py-3 text-ui text-foreground font-[510] truncate max-w-sm" title={issue.title}>{issue.title}</td>
                         <td className="px-4 py-3">
                           {issue.state === 'open' 
-                            ? <Badge variant="success" className="text-micro h-auto uppercase font-[590] tracking-wider"><AlertCircle className="w-3 h-3 mr-1" strokeWidth={1.75} /> Open</Badge>
-                            : <Badge variant="destructive" className="text-micro h-auto uppercase font-[590] tracking-wider"><AlertCircle className="w-3 h-3 mr-1" strokeWidth={1.75} /> Closed</Badge>
+                            ? <Badge variant="success" className="text-micro uppercase font-[590]"><AlertCircle className="w-3 h-3 mr-1" strokeWidth={1.75} /> Open</Badge>
+                            : <Badge variant="destructive" className="text-micro uppercase font-[590]"><AlertCircle className="w-3 h-3 mr-1" strokeWidth={1.75} /> Closed</Badge>
                           }
                         </td>
                         <td className="px-4 py-3">
@@ -525,7 +532,7 @@ export const GitHubIntegration = () => {
                           {(issue.labels || []).join(', ') || '—'}
                         </td>
                         <td className="px-4 py-3">
-                          {issue.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${issue.taskKey}`} className="inline-flex bg-hover hover:bg-hover text-foreground border border-border text-micro uppercase font-[590] tracking-wider px-2 py-0.5 rounded transition-colors">{issue.taskKey}</Link> : <span className="text-subtle-foreground">—</span>}
+                          {issue.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${issue.taskKey}`} className="inline-flex bg-hover hover:bg-hover text-foreground border border-border text-micro uppercase font-[590] px-2 py-0.5 rounded transition-colors">{issue.taskKey}</Link> : <span className="text-subtle-foreground">—</span>}
                         </td>
                         <td className="px-4 py-3 text-caption text-subtle-foreground">{formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}</td>
                         <td className="px-4 py-3 text-right">
@@ -542,20 +549,20 @@ export const GitHubIntegration = () => {
             {commits.length === 0 && !isLoading ? (
               <div className="text-center py-16 border border-dashed border-border rounded-lg bg-card">
                 <GitBranch className="w-10 h-10 text-subtle-foreground/40 mx-auto mb-4" strokeWidth={1.5} />
-                <h3 className="text-heading font-[590] text-foreground mb-1">No commits found</h3>
+                <h3 className="text-h3 font-[590] text-foreground mb-1">No commits found</h3>
               </div>
             ) : (
               <div className="border border-border rounded-lg overflow-hidden bg-card">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-muted border-b border-border text-caption font-[590] text-muted-foreground tracking-wider">
-                      <th className="px-4 py-3 w-24">SHA</th>
-                      <th className="px-4 py-3">Message</th>
-                      <th className="px-4 py-3 w-32">Author</th>
-                      <th className="px-4 py-3 w-40">Branch</th>
-                      <th className="px-4 py-3 w-32">Task</th>
-                      <th className="px-4 py-3 w-32">Date</th>
-                      <th className="px-4 py-3 w-16 text-right">Link</th>
+                    <tr className="bg-muted border-b border-border text-caption font-[510] text-subtle-foreground">
+                      <th scope="col" className="px-4 py-3 w-24">SHA</th>
+                      <th scope="col" className="px-4 py-3">Message</th>
+                      <th scope="col" className="px-4 py-3 w-32">Author</th>
+                      <th scope="col" className="px-4 py-3 w-40">Branch</th>
+                      <th scope="col" className="px-4 py-3 w-32">Task</th>
+                      <th scope="col" className="px-4 py-3 w-32">Date</th>
+                      <th scope="col" className="px-4 py-3 w-16 text-right">Link</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -581,7 +588,7 @@ export const GitHubIntegration = () => {
                         </td>
                         <td className="px-4 py-3 text-caption font-mono text-muted-foreground truncate w-40" title={commit.branchName || ''}>{commit.branchName || '—'}</td>
                         <td className="px-4 py-3">
-                          {commit.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${commit.taskKey}`} className="inline-flex bg-hover hover:bg-hover text-foreground border border-border text-micro uppercase font-[590] tracking-wider px-2 py-0.5 rounded transition-colors">{commit.taskKey}</Link> : <span className="text-subtle-foreground">—</span>}
+                          {commit.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${commit.taskKey}`} className="inline-flex bg-hover hover:bg-hover text-foreground border border-border text-micro uppercase font-[590] px-2 py-0.5 rounded transition-colors">{commit.taskKey}</Link> : <span className="text-subtle-foreground">—</span>}
                         </td>
                         <td className="px-4 py-3 text-caption text-subtle-foreground">{formatDistanceToNow(new Date(commit.committedAt), { addSuffix: true })}</td>
                         <td className="px-4 py-3 text-right">
@@ -598,19 +605,19 @@ export const GitHubIntegration = () => {
             {ciRuns.length === 0 && !isLoading ? (
               <div className="text-center py-16 border border-dashed border-border rounded-lg bg-card">
                 <CheckCircle2 className="w-10 h-10 text-subtle-foreground/40 mx-auto mb-4" strokeWidth={1.5} />
-                <h3 className="text-heading font-[590] text-foreground mb-1">No workflow runs yet</h3>
+                <h3 className="text-h3 font-[590] text-foreground mb-1">No workflow runs yet</h3>
               </div>
             ) : (
               <div className="border border-border rounded-lg overflow-hidden bg-card">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-muted border-b border-border text-caption font-[590] text-muted-foreground tracking-wider">
-                      <th className="px-4 py-3">Workflow</th>
-                      <th className="px-4 py-3 w-32">Status</th>
-                      <th className="px-4 py-3 w-40">Branch</th>
-                      <th className="px-4 py-3 w-24">Commit</th>
-                      <th className="px-4 py-3 w-32">Started</th>
-                      <th className="px-4 py-3 w-32 text-right">Actions</th>
+                    <tr className="bg-muted border-b border-border text-caption font-[510] text-subtle-foreground">
+                      <th scope="col" className="px-4 py-3">Workflow</th>
+                      <th scope="col" className="px-4 py-3 w-32">Status</th>
+                      <th scope="col" className="px-4 py-3 w-40">Branch</th>
+                      <th scope="col" className="px-4 py-3 w-24">Commit</th>
+                      <th scope="col" className="px-4 py-3 w-32">Started</th>
+                      <th scope="col" className="px-4 py-3 w-32 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -619,11 +626,11 @@ export const GitHubIntegration = () => {
                         <td className="px-4 py-3 text-ui text-foreground">{run.workflowName || 'Workflow'}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center space-x-1.5">
-                            {run.status === 'in_progress' ? <Badge variant="secondary" className="bg-primary-muted text-primary border-primary-border h-auto py-1"><Loader2 className="w-3 h-3 mr-1 animate-spin" strokeWidth={1.75} /> Running</Badge> :
-                             run.status === 'queued' ? <Badge variant="secondary" className="h-auto py-1">Queued</Badge> :
-                             run.conclusion === 'success' ? <Badge variant="success" className="h-auto py-1"><CheckCircle2 className="w-3 h-3 mr-1" strokeWidth={1.75} /> Passed</Badge> :
-                             run.conclusion === 'failure' ? <Badge variant="destructive" className="h-auto py-1"><XCircle className="w-3 h-3 mr-1" strokeWidth={1.75} /> Failed</Badge> :
-                             <Badge variant="secondary" className="h-auto py-1">Skipped</Badge>}
+                            {run.status === 'in_progress' ? <Badge variant="secondary" className="bg-primary-muted text-primary-on-muted border-primary-border py-1"><Loader2 className="w-3 h-3 mr-1 animate-spin" strokeWidth={1.75} /> Running</Badge> :
+                             run.status === 'queued' ? <Badge variant="secondary" className="py-1">Queued</Badge> :
+                             run.conclusion === 'success' ? <Badge variant="success" className="py-1"><CheckCircle2 className="w-3 h-3 mr-1" strokeWidth={1.75} /> Passed</Badge> :
+                             run.conclusion === 'failure' ? <Badge variant="destructive" className="py-1"><XCircle className="w-3 h-3 mr-1" strokeWidth={1.75} /> Failed</Badge> :
+                             <Badge variant="secondary" className="py-1">Skipped</Badge>}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-caption font-mono text-muted-foreground">{run.headBranch || '—'}</td>

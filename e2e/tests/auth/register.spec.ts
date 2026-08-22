@@ -42,7 +42,7 @@ test.describe('Registration Flow @auth', () => {
     await page.getByRole('button', { name: /create account|sign up|register/i }).click();
 
     // Should show error
-    await expect(page.locator('.text-red-400, [class*="error"], [class*="red"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('alert')).toBeVisible({ timeout: 10_000 });
   });
 
   test('should have link to login page', async ({ page }) => {

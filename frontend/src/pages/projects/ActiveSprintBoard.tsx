@@ -1,3 +1,4 @@
+import clsx from 'clsx';
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { BoardPage } from './BoardPage.js';
@@ -58,7 +59,7 @@ export const ActiveSprintBoard = () => {
         }
         setActiveSprint(sprint ?? null);
       } catch (err) {
-        console.error('Failed to fetch sprints', err);
+        console.error("Couldn't load sprints. Check your connection and try again.", err);
       }
     };
     if (slug && key) fetchSprints();
@@ -72,7 +73,7 @@ export const ActiveSprintBoard = () => {
       <div className="bg-card border-b border-border px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between shrink-0">
         <div>
           <div className="flex items-center space-x-3 mb-1">
-            <h2 className="text-heading font-[590] text-foreground">{activeSprint.name}</h2>
+            <h2 className="text-h2 font-[590] text-foreground">{activeSprint.name}</h2>
             <span className="bg-hover border border-border text-muted-foreground text-micro font-[590] uppercase px-2 py-0.5 rounded">
               {activeSprint.status === 'closed' ? 'Closed' : activeSprint.status === 'future' ? 'Planned' : 'Active'}
             </span>
@@ -112,12 +113,29 @@ export const ActiveSprintBoard = () => {
           return (
           <div className="mt-4 sm:mt-0 flex items-center space-x-6">
             <div className="flex flex-col items-end">
-              <div className="text-caption font-[590] text-subtle-foreground mb-1 uppercase tracking-wider">Sprint Progress</div>
+              <div className="text-micro font-[510] text-subtle-foreground mb-1 uppercase">Sprint Progress</div>
               <div className="flex items-center space-x-3">
-                <div className="w-32 h-2.5 bg-hover rounded-full overflow-hidden">
-                  <div className="h-full bg-primary rounded-full transition-colors" style={{ width: `${pct}%` }}></div>
+                {/* §8 Progress: 6px track on --bg-inset, --primary fill, and the
+                    over-capacity case switches to --warning. It is a graphic, so
+                    it needs role="progressbar" with the aria-value* triple — and
+                    the numeric value also exists as text beside it. */}
+                <div
+                  role="progressbar"
+                  aria-valuenow={pct}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Sprint progress"
+                  className="w-32 h-1.5 bg-muted rounded-full overflow-hidden"
+                >
+                  <div
+                    className={clsx(
+                      'h-full rounded-full transition-[width] duration-[--duration-base] ease-standard',
+                      pct > 100 ? 'bg-warning' : 'bg-primary'
+                    )}
+                    style={{ width: `${Math.min(pct, 100)}%` }}
+                  />
                 </div>
-                <span className="text-ui font-mono text-foreground">{pct}%</span>
+                <span className="text-ui font-mono text-foreground tabular-nums">{pct}%</span>
               </div>
               <div className="text-caption text-subtle-foreground mt-1 font-mono">
                 {hasPoints ? `${completedPoints} / ${totalPoints} pts` : `${completedCount} / ${taskCount} tasks`}
@@ -138,8 +156,8 @@ export const ActiveSprintBoard = () => {
       {/* AI Summary for closed sprints */}
       {activeSprint?.status === 'closed' && activeSprint.aiSummary && (
         <div className="bg-special-muted border-b border-special-border px-6 py-4 shrink-0">
-          <div className="flex items-center text-caption text-special font-[590] uppercase tracking-wider mb-1.5">
-            <Sparkles className="w-3.5 h-3.5 mr-1.5" strokeWidth={1.75} /> AI Sprint Summary
+          <div className="flex items-center text-caption text-special font-[590] uppercase mb-1.5">
+            <Sparkles className="w-4 h-4 mr-1.5" strokeWidth={1.75} /> AI Sprint Summary
           </div>
           <p className="text-ui text-foreground leading-relaxed">{activeSprint.aiSummary.summary}</p>
           {activeSprint.aiSummary.highlights && activeSprint.aiSummary.highlights.length > 0 && (

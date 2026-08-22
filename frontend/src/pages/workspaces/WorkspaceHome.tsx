@@ -3,7 +3,7 @@ import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { Hash, FolderKanban, ArrowRight, Users, Shield } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import clsx from 'clsx';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeVariant } from '@/components/ui/badge';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -12,7 +12,7 @@ export const WorkspaceHome = () => {
   const { name, description, projects, channels, myRole, memberCount, isAdmin, isOwner } = useCurrentWorkspaceStore();
 
   const roleBadge = (role: string) => {
-    const variants: Record<string, any['variant']> = {
+    const variants: Record<string, BadgeVariant> = {
       owner: 'success',
       admin: 'outline',
       member: 'outline',
@@ -30,7 +30,7 @@ export const WorkspaceHome = () => {
         <div className="absolute top-0 right-0 w-64 h-64 bg-primary-muted rounded-full pointer-events-none" aria-hidden="true"></div>
         <div className="flex items-start justify-between relative z-[var(--z-sticky)]">
           <div>
-            <h1 className="text-heading font-[590] text-foreground mb-2">Welcome to {name}</h1>
+            <h1 className="text-h1 font-[590] text-foreground mb-2">Welcome to {name}</h1>
             <p className="text-muted-foreground max-w-2xl mb-4">
               {description || "Here's what's happening in your workspace today. Jump back into your active projects or catch up on channel discussions."}
             </p>
@@ -39,11 +39,11 @@ export const WorkspaceHome = () => {
               <Badge
                   variant={roleBadge(myRole)}
                   className={clsx(
-                    "h-auto px-2.5 py-1 rounded-full border font-[590] uppercase tracking-wider",
-                    myRole === 'admin' && 'bg-primary-muted text-primary border-primary-border'
+                    "h-auto px-2.5 py-1 rounded-full border font-[590] uppercase",
+                    myRole === 'admin' && 'bg-primary-muted text-primary-on-muted border-primary-border'
                   )}
                 >
-                  <Shield className="w-3.5 h-3.5 mr-1.5" strokeWidth={1.75} />
+                  <Shield className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
                   {myRole}
                 </Badge>
               <span className="flex items-center text-muted-foreground">
@@ -59,23 +59,23 @@ export const WorkspaceHome = () => {
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3 relative z-[var(--z-sticky)]">
-          <Button asChild variant="primary" className="px-4 py-2 rounded-lg text-ui font-[590] transition-colors h-auto">
-            <Link to={`/w/${slug}/projects`} className="px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground rounded-md text-ui font-[590] transition-colors">
+          <Button asChild variant="primary" className="px-4 py-2 rounded-lg text-ui font-[590] transition-colors">
+            <Link to={`/w/${slug}/projects`} className="px-4 py-2 rounded-md text-ui font-[590] transition-colors">
               View All Projects
             </Link>
           </Button>
-          <Button asChild variant="secondary" className="px-4 py-2 rounded-lg text-ui font-[510] transition-colors h-auto">
+          <Button asChild variant="secondary" className="px-4 py-2 rounded-lg text-ui font-[510] transition-colors">
             <Link to={`/w/${slug}/notifications`} className="px-4 py-2 bg-hover hover:bg-hover text-foreground rounded-md text-ui font-[510] transition-colors">
               View Notifications
             </Link>
           </Button>
-          <Button asChild variant="secondary" className="px-4 py-2 rounded-lg text-ui font-[510] transition-colors h-auto">
+          <Button asChild variant="secondary" className="px-4 py-2 rounded-lg text-ui font-[510] transition-colors">
             <Link to={`/w/${slug}/members`} className="px-4 py-2 bg-hover hover:bg-hover text-foreground rounded-md text-ui font-[510] transition-colors">
               {isAdmin() ? 'Manage Members' : 'View Members'}
             </Link>
           </Button>
           {isOwner() && (
-            <Button asChild variant="secondary" className="px-4 py-2 rounded-lg text-ui font-[510] transition-colors h-auto">
+            <Button asChild variant="secondary" className="px-4 py-2 rounded-lg text-ui font-[510] transition-colors">
               <Link to={`/w/${slug}/settings`} className="px-4 py-2 bg-hover hover:bg-hover text-foreground rounded-md text-ui font-[510] transition-colors">
                 Workspace Settings
               </Link>

@@ -19,10 +19,10 @@ test.describe('Account Status & Preferences', () => {
     const { accessToken } = await apiLogin(TEST_USERS.owner.email);
     const { status, data } = await apiRequest('/auth/status', accessToken, {
       method: 'POST',
-      body: JSON.stringify({ statusText: 'In a meeting', presence: 'busy' }),
+      body: JSON.stringify({ statusText: 'In a meeting', presence: 'away' }),
     });
     expect(status).toBe(200);
-    expect(data.user.presence).toBe('busy');
+    expect(data.user.presence).toBe('away');
     expect(data.user.statusText).toBe('In a meeting');
   });
 
@@ -34,6 +34,74 @@ test.describe('Account Status & Preferences', () => {
     });
     expect(status).toBe(200);
     expect(data.user.presence).toBe('away');
+  });
+
+  /**
+   * `users.presence` is an unconstrained varchar with no DB-level check, so the
+   * Zod schema on these two routes is the only thing holding the enum. Before
+   * it existed the handler wrote whatever arrived — this suite asserted that a
+   * presence of 'busy' round-tripped, which is the defect rather than the
+   * contract. The client renders exactly three states (design system §3), and
+   * anything else would be stored and then silently fall through to the
+   * offline fallback.
+   */
+  test('presence is constrained to the three rendered states', async () => {
+    const { accessToken } = await apiLogin(TEST_USERS.admin.email);
+
+    for (const presence of ['online', 'away', 'offline']) {
+      const { status, data } = await apiRequest('/auth/presence', accessToken, {
+        method: 'POST',
+        body: JSON.stringify({ presence }),
+      });
+      expect(status, `presence '${presence}' should be accepted`).toBe(200);
+      expect(data.user.presence).toBe(presence);
+    }
+
+    for (const presence of ['busy', 'BUSY', '', 'online ', 'dnd']) {
+      const { status } = await apiRequest('/auth/presence', accessToken, {
+        method: 'POST',
+        body: JSON.stringify({ presence }),
+      });
+      expect(status, `presence '${presence}' should be rejected`).toBe(400);
+    }
+
+    // A missing field and an unknown one are both rejected — the schema is
+    // `.strict()`, so this doubles as a mass-assignment guard.
+    const missing = await apiRequest('/auth/presence', accessToken, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    expect(missing.status, 'missing presence should be rejected').toBe(400);
+
+    const extra = await apiRequest('/auth/presence', accessToken, {
+      method: 'POST',
+      body: JSON.stringify({ presence: 'online', isAdmin: true }),
+    });
+    expect(extra.status, 'unknown keys should be rejected').toBe(400);
+  });
+
+  test('status text is length-bounded and its presence is validated', async () => {
+    const { accessToken } = await apiLogin(TEST_USERS.projectAdmin.email);
+
+    const tooLong = await apiRequest('/auth/status', accessToken, {
+      method: 'POST',
+      body: JSON.stringify({ statusText: 'x'.repeat(101) }),
+    });
+    expect(tooLong.status, 'over 100 characters should be rejected').toBe(400);
+
+    const badPresence = await apiRequest('/auth/status', accessToken, {
+      method: 'POST',
+      body: JSON.stringify({ statusText: 'Focusing', presence: 'busy' }),
+    });
+    expect(badPresence.status, "presence 'busy' should be rejected").toBe(400);
+
+    // Clearing the status is what the client sends on "Clear status".
+    const cleared = await apiRequest('/auth/status', accessToken, {
+      method: 'POST',
+      body: JSON.stringify({ statusText: '' }),
+    });
+    expect(cleared.status).toBe(200);
+    expect(cleared.data.user.statusText).toBe('');
   });
 
   test('PATCH /auth/preferences merges preferences instead of replacing them', async () => {

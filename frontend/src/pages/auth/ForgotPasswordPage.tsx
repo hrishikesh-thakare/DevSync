@@ -24,7 +24,7 @@ export const ForgotPasswordPage = () => {
       });
       setSent(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to request a password reset.');
+      setError(err instanceof Error ? err.message : "Couldn't send the reset email. Check the address and try again.");
     } finally {
       setIsLoading(false);
     }
@@ -32,12 +32,9 @@ export const ForgotPasswordPage = () => {
 
   return (
     <div className="auth-bg min-h-screen flex items-center justify-center p-4">
-      <div className="auth-shape-1"></div>
-      <div className="auth-shape-2"></div>
-
-      <div className="bg-card border border-border rounded-lg shadow-sm max-w-[400px] w-full p-8 animate-fadeIn relative z-[var(--z-sticky)]">
+            <div className="bg-card rounded-[8px] shadow-sm max-w-[400px] w-full p-8 animate-fadeIn">
         <div className="mb-10 text-center">
-          <h1 className="text-heading font-[590] text-foreground mb-2">DevSync</h1>
+          <h1 className="text-h1 font-[590] text-foreground mb-2">DevSync</h1>
           <p className="text-muted-foreground text-ui">Reset your password</p>
         </div>
 
@@ -60,14 +57,14 @@ export const ForgotPasswordPage = () => {
         ) : (
           <>
             {error && (
-              <div className="mb-6 rounded-lg bg-danger-muted border border-danger-border p-4 text-ui text-danger text-center">
+              <div role="alert" className="mb-6 rounded-[8px] bg-danger-muted border border-danger-border p-4 text-ui text-danger-on-muted">
                 {error}
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <Label className="block text-caption font-[510] text-muted-foreground uppercase tracking-wider mb-2">
+                <Label htmlFor="forgotpasswordpage-email-address">
                   Email Address
                 </Label>
                 <div className="relative">
@@ -75,10 +72,11 @@ export const ForgotPasswordPage = () => {
                     <Mail className="h-5 w-5 text-muted-foreground" strokeWidth={1.75} />
                   </div>
                   <Input
+                    id="forgotpasswordpage-email-address"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-background border border-border rounded-md text-foreground placeholder:text-subtle-foreground focus:ring-1 focus:ring-ring focus:border-ring transition-colors duration-200 h-auto"
+                    className="pl-11"
                     placeholder="you@company.com"
                     required
                   />
@@ -87,9 +85,9 @@ export const ForgotPasswordPage = () => {
 
               <Button
                 type="submit"
-                disabled={isLoading}
+                loading={isLoading}
                 variant="primary"
-                className="bg-primary text-primary-foreground hover:bg-primary-hover rounded-md w-full py-3 flex justify-center items-center mt-8 disabled:opacity-70 h-auto"
+                className="w-full mt-6"
               >
                 {isLoading ? (
                   <Loader2 className="h-5 w-5 animate-spin text-foreground" strokeWidth={1.75} />

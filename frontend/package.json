@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "theme": "node scripts/build-theme.mjs",
-    "dev": "npm run theme && vite",
+    "dev": "npm run theme && vite --port 5173 --strictPort",
     "build": "npm run theme && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"

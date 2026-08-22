@@ -91,7 +91,7 @@ export const ProjectChannels = () => {
       fetchProjectChannels();
     } catch (err: unknown) {
       const e = err as Error;
-      alert(e.message || 'Failed to create channel.');
+      alert(e.message || "Couldn't create the channel. Check the name is unique and try again.");
     } finally {
       setIsCreatingChannel(false);
     }
@@ -103,13 +103,13 @@ export const ProjectChannels = () => {
     <div className="h-full overflow-y-auto p-8 font-sans bg-background text-foreground">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h2 className="text-heading font-[590] text-foreground mb-1">Project Channels</h2>
+          <h2 className="text-h2 font-[590] text-foreground mb-1">Project Channels</h2>
           <p className="text-ui text-muted-foreground">Dedicated chat channels for {currentProject.name}.</p>
         </div>
         {isAdmin() && (
           <Button 
             onClick={() => setShowModal(true)}
-            className="flex items-center px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground font-[590] rounded-md transition-colors"
+            className="flex items-center px-4 py-2 font-[590] rounded-md transition-colors"
             variant="primary" size="default"
           >
             <Plus className="w-4 h-4 mr-2" strokeWidth={1.75} />
@@ -170,14 +170,14 @@ export const ProjectChannels = () => {
       ) : channels.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-border rounded-lg">
           <Hash className="w-12 h-12 text-subtle-foreground/40 mx-auto mb-4" strokeWidth={1.5} />
-          <h3 className="text-heading font-[510] text-foreground">No project channels</h3>
+          <h3 className="text-h3 font-[510] text-foreground">No project channels</h3>
           <p className="text-ui text-subtle-foreground mt-1">Create a channel to discuss this project specifically.</p>
         </div>
       ) : (
         <div className="bg-card border border-border rounded-lg overflow-hidden shadow-sm">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-border bg-muted text-caption uppercase tracking-wider text-subtle-foreground font-[590]">
+              <tr className="border-b border-border bg-muted text-caption uppercase text-subtle-foreground font-[590]">
                 <th className="px-6 py-4">Channel Name</th>
                 <th className="px-6 py-4">Type</th>
               </tr>

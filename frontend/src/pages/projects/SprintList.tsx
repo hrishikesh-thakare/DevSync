@@ -80,7 +80,7 @@ export const SprintList = () => {
       toast.success('Sprint capacity updated.');
       fetchSprintsAndMembers();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update capacity.');
+      toast.error(err instanceof Error ? err.message : "Couldn't update capacity. Try again in a moment.");
     }
   };
 
@@ -104,7 +104,7 @@ export const SprintList = () => {
       
       setCanManageSprint(isAdmin || isProjectAdmin);
     } catch (err) {
-      console.error('Failed to load sprints or members', err);
+      console.error("Couldn't load sprints. Check your connection and try again. or members", err);
     } finally {
       setIsLoading(false);
     }
@@ -145,7 +145,7 @@ export const SprintList = () => {
       setNewCapacityPoints('');
       fetchSprintsAndMembers();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create sprint.');
+      toast.error(err instanceof Error ? err.message : "Couldn't create sprint. Try again in a moment.");
     } finally {
       setIsCreating(false);
     }
@@ -165,7 +165,7 @@ export const SprintList = () => {
       setShowStartModal(null);
       fetchSprintsAndMembers();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to start sprint.');
+      toast.error(err instanceof Error ? err.message : "Couldn't start sprint. Try again in a moment.");
     } finally {
       setIsStarting(false);
     }
@@ -181,7 +181,7 @@ export const SprintList = () => {
       setShowCloseModal(null);
       fetchSprintsAndMembers();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to close sprint.');
+      toast.error(err instanceof Error ? err.message : "Couldn't close sprint. Try again in a moment.");
     } finally {
       setIsClosing(false);
     }
@@ -193,7 +193,7 @@ export const SprintList = () => {
       await apiFetch(`/workspaces/${slug}/projects/${key}/sprints/${sprintId}`, { method: 'DELETE' });
       fetchSprintsAndMembers();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete sprint.');
+      toast.error(err instanceof Error ? err.message : "Couldn't delete sprint. Try again in a moment.");
     }
   };
 
@@ -213,7 +213,7 @@ export const SprintList = () => {
     <div className="h-full p-8 font-sans overflow-y-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h2 className="text-heading font-[590] text-foreground">Sprints</h2>
+          <h2 className="text-h2 font-[590] text-foreground">Sprints</h2>
           <p className="text-muted-foreground text-ui">Manage iterations and view historical velocity.</p>
         </div>
         {canManageSprint && (
@@ -222,7 +222,7 @@ export const SprintList = () => {
               setNewName(`Sprint ${sprints.length + 1}`);
               setShowCreateModal(true);
             }}
-            className="flex items-center px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground text-ui font-[590] rounded-md transition-colors"
+            className="flex items-center px-4 py-2"
             variant="primary" size="default"
           >
             <Plus className="w-4 h-4 mr-2" strokeWidth={1.75} />
@@ -237,10 +237,10 @@ export const SprintList = () => {
 
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
-              <div className="px-2.5 py-1 bg-success-muted border border-success-border text-success text-caption font-[590] uppercase tracking-wider rounded-md">
+              <div className="px-2.5 py-1 bg-success-muted border border-success-border text-success text-caption font-[590] uppercase rounded-md">
                 Active Sprint
               </div>
-              <h3 className="text-heading font-[590] text-foreground">{activeSprint.name}</h3>
+              <h3 className="text-h3 font-[590] text-foreground">{activeSprint.name}</h3>
             </div>
             <div className="flex items-center space-x-3">
               <Button
@@ -273,7 +273,7 @@ export const SprintList = () => {
             </div>
             <div className="flex items-center gap-2 text-caption font-mono">
               <span className="bg-hover px-2 py-1 border border-border rounded">{activeSprint.stats?.taskCount ?? 0} tasks</span>
-              <Badge variant="secondary" className="bg-primary-muted text-primary border-primary-border h-auto py-1">
+              <Badge variant="secondary" className="bg-primary-muted text-primary-on-muted border-primary-border py-1">
                 {activeSprint.stats?.completedPoints ?? 0} / {activeSprint.stats?.totalPoints ?? 0} pts
               </Badge>
               {canManageSprint ? (
@@ -287,7 +287,7 @@ export const SprintList = () => {
                     onChange={e => setCapacityDrafts(d => ({ ...d, [activeSprint.sprintId]: e.target.value }))}
                     onBlur={() => saveCapacity(activeSprint.sprintId)}
                     onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                    className="w-14 h-auto rounded-sm border-border px-1 py-0.5 text-caption font-mono md:text-caption"
+                    className="w-14 rounded-sm border-border px-1 py-0.5 text-caption font-mono md:text-caption"
                   />
                   pts
                 </label>
@@ -304,14 +304,14 @@ export const SprintList = () => {
       {/* Future Sprints */}
       {futureSprints.length > 0 && (
         <div className="mb-8">
-          <h3 className="text-heading font-[590] text-foreground mb-4">Planned Sprints</h3>
+          <h3 className="text-h3 font-[590] text-foreground mb-4">Planned Sprints</h3>
           <div className="space-y-4">
             {futureSprints.map(sprint => (
               <div key={sprint.sprintId} className="flex items-center justify-between p-5 bg-card border border-border rounded-lg hover:bg-hover transition-colors">
                 <div>
                   <div className="flex items-center space-x-3 mb-1.5">
                     <h4 className="text-body font-[590] text-foreground">{sprint.name}</h4>
-                    <span className="text-micro font-[590] uppercase tracking-wider px-2 py-0.5 rounded-sm bg-primary-muted text-primary border border-primary-border">
+                    <span className="text-micro font-[590] uppercase px-2 py-0.5 rounded-sm bg-primary-muted text-primary-on-muted border border-primary-border">
                       future
                     </span>
                   </div>
@@ -330,7 +330,7 @@ export const SprintList = () => {
                           onChange={e => setCapacityDrafts(d => ({ ...d, [sprint.sprintId]: e.target.value }))}
                           onBlur={() => saveCapacity(sprint.sprintId)}
                           onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                          className="w-12 h-auto rounded-sm border-border px-1 py-0 text-caption font-mono md:text-caption"
+                          className="w-12 rounded-sm border-border px-1 py-0 text-caption font-mono md:text-caption"
                         />
                       </label>
                     ) : sprint.capacityPoints != null ? (
@@ -372,7 +372,7 @@ export const SprintList = () => {
       {/* Closed Sprints */}
       {closedSprints.length > 0 && (
         <div>
-          <h3 className="text-heading font-[590] text-foreground mb-4">Completed Sprints</h3>
+          <h3 className="text-h3 font-[590] text-foreground mb-4">Completed Sprints</h3>
           <div className="space-y-4">
             {closedSprints.map(sprint => (
               <div key={sprint.sprintId} className="p-5 bg-card border border-border rounded-lg">
@@ -380,18 +380,18 @@ export const SprintList = () => {
                   <div>
                     <div className="flex items-center space-x-3 mb-1.5">
                       <h4 className="text-body font-[590] text-foreground">{sprint.name}</h4>
-                      <span className="text-micro font-[590] uppercase tracking-wider px-2 py-0.5 rounded-sm bg-hover text-subtle-foreground">
+                      <span className="text-micro font-[590] uppercase px-2 py-0.5 rounded-sm bg-hover text-subtle-foreground">
                         closed
                       </span>
                     </div>
                     <div className="flex items-center text-caption text-subtle-foreground space-x-4">
-                      <span className="flex items-center"><Calendar className="w-3.5 h-3.5 mr-1.5" strokeWidth={1.75} /> 
+                      <span className="flex items-center"><Calendar className="w-4 h-4 mr-1.5" strokeWidth={1.75} /> 
                         {sprint.startDate ? format(new Date(sprint.startDate), 'MMM d') : 'N/A'} – {sprint.endDate ? format(new Date(sprint.endDate), 'MMM d') : 'N/A'}
                       </span>
                       <span className="font-mono bg-muted px-1.5 py-0.5 rounded border border-border">{sprint.stats?.taskCount ?? 0} tasks</span>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Badge variant="secondary" className="bg-primary-muted text-primary border-primary-border px-1.5 font-mono">
+                          <Badge variant="secondary" className="bg-primary-muted text-primary-on-muted border-primary-border px-1.5 font-mono">
                             {sprint.stats?.completedPoints ?? 0} pts done
                           </Badge>
                         </TooltipTrigger>
@@ -416,8 +416,8 @@ export const SprintList = () => {
 
                 {sprint.aiSummary && (
                   <div className="mt-4 bg-special-muted border border-special-border rounded-lg p-4">
-                    <div className="flex items-center text-caption text-special font-[590] uppercase tracking-wider mb-2">
-                      <Sparkles className="w-3.5 h-3.5 mr-1.5" strokeWidth={1.75} /> AI Sprint Summary
+                    <div className="flex items-center text-caption text-special font-[590] uppercase mb-2">
+                      <Sparkles className="w-4 h-4 mr-1.5" strokeWidth={1.75} /> AI Sprint Summary
                     </div>
                     <p className="text-ui text-muted-foreground leading-relaxed">{sprint.aiSummary.summary}</p>
                     {sprint.aiSummary.highlights && sprint.aiSummary.highlights.length > 0 && (

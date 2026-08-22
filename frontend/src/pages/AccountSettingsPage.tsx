@@ -38,19 +38,19 @@ export const AccountSettingsPage = () => {
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to change password.');
+      toast.error(err instanceof Error ? err.message : "Couldn't change your password. Check your current password and try again.");
     } finally {
       setIsSaving(false);
     }
   };
 
   const inputClass =
-    'w-full bg-background border border-border rounded-md px-4 py-2.5 text-foreground focus:border-ring focus:ring-1 focus:ring-ring transition-colors h-auto';
+    'w-full';
 
   return (
     <div className="h-full overflow-y-auto p-8 font-sans bg-background text-foreground">
       <div className="max-w-2xl relative">
-        <h1 className="text-heading font-[590] text-foreground mb-1">Account Settings</h1>
+        <h1 className="text-h1 font-[590] text-foreground mb-1">Account Settings</h1>
         <p className="text-ui text-muted-foreground mb-8">
           Signed in as <span className="text-foreground">{user?.email}</span>
         </p>
@@ -62,7 +62,7 @@ export const AccountSettingsPage = () => {
               <KeyRound className="h-5 w-5 text-primary" strokeWidth={1.75} />
             </div>
             <div>
-              <h2 className="text-heading font-[590] text-foreground">Change Password</h2>
+              <h2 className="text-h2 font-[590] text-foreground">Change Password</h2>
               <p className="text-caption text-muted-foreground">
                 Changing your password signs out every other device.
               </p>
@@ -71,10 +71,11 @@ export const AccountSettingsPage = () => {
 
           <form onSubmit={handleChangePassword} className="space-y-4">
             <div>
-              <Label className="block text-ui font-[510] text-muted-foreground mb-1.5">
+              <Label htmlFor="accountsettingspage-current-password" className="block text-ui font-[510] text-muted-foreground mb-1.5">
                 Current Password
               </Label>
               <Input
+                id="accountsettingspage-current-password"
                 type="password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
@@ -85,10 +86,11 @@ export const AccountSettingsPage = () => {
             </div>
 
             <div>
-              <Label className="block text-ui font-[510] text-muted-foreground mb-1.5">
+              <Label htmlFor="accountsettingspage-new-password" className="block text-ui font-[510] text-muted-foreground mb-1.5">
                 New Password
               </Label>
               <Input
+                id="accountsettingspage-new-password"
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
@@ -102,10 +104,11 @@ export const AccountSettingsPage = () => {
             </div>
 
             <div>
-              <Label className="block text-ui font-[510] text-muted-foreground mb-1.5">
+              <Label htmlFor="accountsettingspage-confirm-new-password" className="block text-ui font-[510] text-muted-foreground mb-1.5">
                 Confirm New Password
               </Label>
               <Input
+                id="accountsettingspage-confirm-new-password"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -125,7 +128,7 @@ export const AccountSettingsPage = () => {
               type="submit"
               disabled={isSaving}
               variant="primary"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-primary hover:bg-primary-hover text-primary-foreground text-ui font-[590] transition-colors disabled:opacity-60 h-auto"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md text-ui font-[590] transition-colors disabled:opacity-60"
             >
               {isSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />

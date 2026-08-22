@@ -1,45 +1,73 @@
 import * as React from "react"
 import { createPortal } from "react-dom"
 import { cn } from "@/lib/utils"
+import { useFocusTrap } from "@/hooks/useFocusTrap"
 
-/* ── Context ─── */
+/* ── Dialog (§8 Dialogs & Modals) ────────────────────────────────
+   Panel on `--bg-surface-raised` with `--shadow-elevated`, 8px radius, 480px
+   default / 640px content-heavy. Scrim at `--z-overlay`, panel at `--z-modal`
+   — never `--z-toast`, which §5 reserves so alerts always sit above modals.
+
+   Focus trap, initial focus, scroll lock and focus return are all hand-built:
+   no primitives library is installed, and §2 says to build that behaviour
+   explicitly rather than assume it. */
+
 interface DialogContextValue {
   open: boolean
   onOpenChange: (open: boolean) => void
+  titleId: string
+  descriptionId: string
 }
 
 const DialogContext = React.createContext<DialogContextValue>({
   open: false,
   onOpenChange: () => {},
+  titleId: "",
+  descriptionId: "",
 })
 
-/* ── Dialog (root) ─── */
 interface DialogProps {
   open?: boolean
   onOpenChange?: (open: boolean) => void
   children: React.ReactNode
 }
 
-function Dialog({ open = false, onOpenChange, children }: DialogProps) {
-  // If controlled
-  if (onOpenChange) {
-    return <DialogContext.Provider value={{ open, onOpenChange }}>{children}</DialogContext.Provider>
-  }
+function Dialog({ open, onOpenChange, children }: DialogProps) {
+  // Hooks run unconditionally — the previous version called `useState` only on
+  // the uncontrolled branch, which breaks the Rules of Hooks the moment a
+  // caller switches between controlled and uncontrolled.
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(open ?? false)
+  const titleId = React.useId()
+  const descriptionId = React.useId()
 
-  // Uncontrolled (fallback, though most usages should be controlled)
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const [isOpen, setIsOpen] = React.useState(open)
-  return <DialogContext.Provider value={{ open: isOpen, onOpenChange: setIsOpen }}>{children}</DialogContext.Provider>
+  const isControlled = onOpenChange !== undefined
+  const currentOpen = isControlled ? (open ?? false) : uncontrolledOpen
+
+  const handleOpenChange = React.useCallback(
+    (next: boolean) => {
+      if (isControlled) onOpenChange?.(next)
+      else setUncontrolledOpen(next)
+    },
+    [isControlled, onOpenChange]
+  )
+
+  const ctx = React.useMemo(
+    () => ({ open: currentOpen, onOpenChange: handleOpenChange, titleId, descriptionId }),
+    [currentOpen, handleOpenChange, titleId, descriptionId]
+  )
+
+  return <DialogContext.Provider value={ctx}>{children}</DialogContext.Provider>
 }
 
-/* ── DialogContent ─── */
-type DialogContentProps = React.HTMLAttributes<HTMLDivElement>
+interface DialogContentProps extends React.HTMLAttributes<HTMLDivElement> {
+  /** §16: 480px default, 640px for content-heavy dialogs. */
+  wide?: boolean
+}
 
 const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
-  ({ className, children, ...props }, ref) => {
-    const { open, onOpenChange } = React.useContext(DialogContext)
-    const prevFocusRef = React.useRef<HTMLElement | null>(null)
-    React.useEffect(() => { if (open) prevFocusRef.current = document.activeElement as HTMLElement; else prevFocusRef.current?.focus() }, [open])
+  ({ className, wide = false, children, ...props }, ref) => {
+    const { open, onOpenChange, titleId, descriptionId } = React.useContext(DialogContext)
+    const panelRef = useFocusTrap<HTMLDivElement>(open)
 
     React.useEffect(() => {
       if (!open) return
@@ -56,20 +84,27 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
     if (!open) return null
 
     return createPortal(
-      <div className="fixed inset-0 z-[var(--z-toast)]">
-        {/* Overlay */}
+      <>
         <div
-          className="fixed inset-0 bg-[var(--overlay)] transition-opacity"
+          className="fixed inset-0 z-[var(--z-overlay)] bg-overlay animate-in fade-in-0 duration-[--duration-base]"
           onClick={() => onOpenChange(false)}
+          aria-hidden="true"
         />
-        {/* Panel Container */}
-        <div className="fixed inset-0 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4 pointer-events-none">
           <div
-            ref={ref}
+            ref={(node) => {
+              panelRef.current = node
+              if (typeof ref === "function") ref(node)
+              else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node
+            }}
             role="dialog"
             aria-modal="true"
+            aria-labelledby={titleId}
+            aria-describedby={descriptionId}
             className={cn(
-              "relative w-full max-w-lg rounded-[8px] bg-card p-6 shadow-md animate-in fade-in-0 zoom-in-95 duration-200",
+              "pointer-events-auto relative w-full rounded-[8px] bg-popover p-6 shadow-md",
+              "animate-in fade-in-0 zoom-in-96 duration-[--duration-slow]",
+              wide ? "max-w-[640px]" : "max-w-[480px]",
               className
             )}
             {...props}
@@ -77,37 +112,55 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
             {children}
           </div>
         </div>
-      </div>,
+      </>,
       document.body
     )
   }
 )
 DialogContent.displayName = "DialogContent"
 
-/* ── DialogHeader ─── */
 function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex flex-col space-y-1.5 text-center sm:text-left mb-4", className)} {...props} />
+  return <div className={cn("flex flex-col gap-1.5 mb-4", className)} {...props} />
 }
 
-/* ── DialogTitle ─── */
 const DialogTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
-  ({ className, ...props }, ref) => (
-    <h2 ref={ref} className={cn("text-heading font-[590] leading-none tracking-tight text-foreground", className)} {...props} />
-  )
+  ({ className, id, ...props }, ref) => {
+    const { titleId } = React.useContext(DialogContext)
+    return (
+      <h2
+        ref={ref}
+        id={id ?? titleId}
+        className={cn("text-h3 font-[590] text-foreground", className)}
+        {...props}
+      />
+    )
+  }
 )
 DialogTitle.displayName = "DialogTitle"
 
-/* ── DialogDescription ─── */
-const DialogDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
-  ({ className, ...props }, ref) => (
-    <p ref={ref} className={cn("text-body font-normal text-muted-foreground", className)} {...props} />
+const DialogDescription = React.forwardRef<
+  HTMLParagraphElement,
+  React.HTMLAttributes<HTMLParagraphElement>
+>(({ className, id, ...props }, ref) => {
+  const { descriptionId } = React.useContext(DialogContext)
+  return (
+    <p
+      ref={ref}
+      id={id ?? descriptionId}
+      className={cn("text-ui font-normal text-muted-foreground", className)}
+      {...props}
+    />
   )
-)
+})
 DialogDescription.displayName = "DialogDescription"
 
-/* ── DialogFooter ─── */
 function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 mt-4", className)} {...props} />
+  return (
+    <div
+      className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end mt-4", className)}
+      {...props}
+    />
+  )
 }
 
 export { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter }

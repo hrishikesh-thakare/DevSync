@@ -7,7 +7,7 @@ import { useToast } from '../../hooks/useToast.js';
 import { useConfirm } from '../../hooks/useConfirm.js';
 import { useLabelStore } from '../../store/labelStore.js';
 import type { ProjectMember } from '../../store/boardStore.js';
-import { DEFAULT_LABEL_COLOR } from '@/theme/colors';
+import { DEFAULT_LABEL_COLOR, assertContrast, readableText } from '@/theme/colors';
 import {
   Select,
   SelectContent,
@@ -148,7 +148,7 @@ export const ProjectSettings = () => {
       });
       toast.success('Project updated successfully.');
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update project.');
+      toast.error(err instanceof Error ? err.message : "Couldn't save the project. Check your connection and try again.");
     } finally {
       setIsSaving(false);
     }
@@ -160,7 +160,7 @@ export const ProjectSettings = () => {
       await apiFetch(`/workspaces/${slug}/projects/${key}/archive`, { method: 'PATCH' });
       navigate(`/w/${slug}`);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to archive project.');
+      toast.error(err instanceof Error ? err.message : "Couldn't archive the project. Try again in a moment.");
     }
   };
 
@@ -178,7 +178,7 @@ export const ProjectSettings = () => {
       });
       if (error) throw error;
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to start GitHub authorization');
+      toast.error(err instanceof Error ? err.message : "Couldn't start GitHub authorization. Try again in a moment.");
     }
   };
 
@@ -202,7 +202,7 @@ export const ProjectSettings = () => {
       setGithubConnection(res.connection);
       setSelectedRepo('');
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to connect repository.');
+      toast.error(err instanceof Error ? err.message : "Couldn't connect repository. Try again in a moment.");
     } finally {
       setIsConnecting(false);
     }
@@ -217,7 +217,7 @@ export const ProjectSettings = () => {
       });
       setGithubConnection(null);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to disconnect repository.');
+      toast.error(err instanceof Error ? err.message : "Couldn't disconnect repository. Try again in a moment.");
     } finally {
       setIsDisconnecting(false);
     }
@@ -230,7 +230,7 @@ export const ProjectSettings = () => {
       setIsGithubAuthorized(false);
       setUserRepos([]);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to disconnect personal GitHub account.');
+      toast.error(err instanceof Error ? err.message : "Couldn't disconnect personal GitHub account. Try again in a moment.");
     }
   };
 
@@ -244,7 +244,7 @@ export const ProjectSettings = () => {
       setNewLabelColor(DEFAULT_LABEL_COLOR);
       toast.success('Label created.');
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create label.');
+      toast.error(err instanceof Error ? err.message : "Couldn't create label. Try again in a moment.");
     } finally {
       setIsCreatingLabel(false);
     }
@@ -257,7 +257,7 @@ export const ProjectSettings = () => {
       setEditingLabelId(null);
       toast.success('Label renamed across all tasks.');
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to rename label.');
+      toast.error(err instanceof Error ? err.message : "Couldn't rename label. Try again in a moment.");
     }
   };
 
@@ -266,7 +266,7 @@ export const ProjectSettings = () => {
     try {
       await updateLabel(slug, key, labelId, { color });
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update label color.');
+      toast.error(err instanceof Error ? err.message : "Couldn't update the label colour. Try again in a moment.");
     }
   };
 
@@ -277,7 +277,7 @@ export const ProjectSettings = () => {
       await deleteLabel(slug, key, labelId);
       toast.success('Label deleted.');
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete label.');
+      toast.error(err instanceof Error ? err.message : "Couldn't delete label. Try again in a moment.");
     }
   };
 
@@ -286,45 +286,48 @@ export const ProjectSettings = () => {
   return (
     <div className="h-full overflow-y-auto p-8 font-sans bg-background text-foreground">
       <div className="max-w-3xl">
-        <h1 className="text-heading font-[590] text-foreground mb-8">Project Settings</h1>
+        <h1 className="text-h1 font-[590] text-foreground mb-8">Project Settings</h1>
 
         <Card className="[--card-spacing:--spacing(6)] bg-elevated/50 border border-border mb-8">
-          <h2 className="text-heading font-[590] text-foreground mb-6">General Details</h2>
+          <h2 className="text-h2 font-[590] text-foreground mb-6">General Details</h2>
 
           <div className="space-y-6">
             <div>
-              <Label className="block text-ui font-[510] text-muted-foreground mb-1.5">Project Name</Label>
+              <Label htmlFor="projectsettings-project-name" className="block text-ui font-[510] text-muted-foreground mb-1.5">Project Name</Label>
               <Input 
+                id="projectsettings-project-name"
                 type="text" 
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-background border border-border rounded-md px-4 py-2.5 text-foreground focus:border-ring focus:ring-1 focus:ring-ring transition-colors h-auto"
+                className="w-full"
               />
             </div>
             
             <div>
-              <Label className="block text-ui font-[510] text-muted-foreground mb-1.5">Project Key</Label>
+              <Label htmlFor="projectsettings-project-key" className="block text-ui font-[510] text-muted-foreground mb-1.5">Project Key</Label>
               <Input 
+                id="projectsettings-project-key"
                 type="text" 
                 value={key}
                 disabled
-                className="w-full bg-muted border border-border rounded-md px-4 py-2.5 text-subtle-foreground cursor-not-allowed font-mono h-auto"
+                className="w-full bg-muted px-4 py-2.5 text-subtle-foreground cursor-not-allowed font-mono"
               />
               <p className="text-caption text-subtle-foreground mt-2">The project key is immutable after creation.</p>
             </div>
 
             <div>
-              <Label className="block text-ui font-[510] text-muted-foreground mb-1.5">Description</Label>
+              <Label htmlFor="projectsettings-description" className="block text-ui font-[510] text-muted-foreground mb-1.5">Description</Label>
               <Textarea 
+                id="projectsettings-description"
                 rows={3}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full bg-background border border-border rounded-md px-4 py-2.5 text-foreground focus:border-ring focus:ring-1 focus:ring-ring transition-colors h-auto"
+                className="w-full"
               />
             </div>
 
             <div className="flex justify-end pt-4 border-t border-border">
-              <Button onClick={handleSave} disabled={isSaving} className="flex items-center px-5 py-2.5 bg-primary hover:bg-primary-hover text-primary-foreground text-ui font-[590] rounded-md transition-colors" variant="primary" size="default">
+              <Button onClick={handleSave} disabled={isSaving} className="flex items-center px-5 py-2.5" variant="primary" size="default">
                 <Save className="w-4 h-4 mr-2" strokeWidth={1.75} />
                 {isSaving ? 'Saving...' : 'Save Details'}
               </Button>
@@ -334,7 +337,7 @@ export const ProjectSettings = () => {
 
         {/* GitHub Connection Section */}
         <Card className="[--card-spacing:--spacing(6)] bg-elevated/50 border border-border mb-8">
-          <h2 className="text-heading font-[590] text-foreground mb-2 flex items-center">
+          <h2 className="text-h2 font-[590] text-foreground mb-2 flex items-center">
             <GitBranch className="w-5 h-5 mr-2 text-muted-foreground" strokeWidth={1.75} />
             GitHub Connection
           </h2>
@@ -349,12 +352,12 @@ export const ProjectSettings = () => {
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center space-x-3 mb-2">
-                    <h3 className="text-heading font-[590] text-foreground">
+                    <h3 className="text-h3 font-[590] text-foreground">
                       <a href={`https://github.com/${githubConnection.githubRepoFullName}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
                         {githubConnection.githubRepoFullName}
                       </a>
                     </h3>
-                    <Badge variant="success" className="h-auto">
+                    <Badge variant="success" className="">
                       <CheckCircle2 className="w-3 h-3 mr-1" strokeWidth={1.75} /> Active
                     </Badge>
                   </div>
@@ -366,7 +369,7 @@ export const ProjectSettings = () => {
                 <Button 
                   onClick={handleDisconnectGithub} 
                   disabled={isDisconnecting}
-                  className="px-4 py-2 border border-danger-border text-danger hover:bg-danger-muted text-ui font-[590] rounded-md transition-colors disabled:opacity-50"
+                  className="px-4 py-2 border border-danger-border text-danger hover:bg-danger-muted disabled:text-disabled"
                   variant="destructive" size="default"
                 >
                   {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
@@ -378,13 +381,13 @@ export const ProjectSettings = () => {
               {!isGithubAuthorized ? (
                 <div className="text-center py-4">
                   <GitBranch className="w-12 h-12 text-subtle-foreground/40 mx-auto mb-3" strokeWidth={1.5} />
-                  <h3 className="text-heading font-[590] text-foreground mb-2">Connect your GitHub Account</h3>
+                  <h3 className="text-h3 font-[590] text-foreground mb-2">Connect your GitHub Account</h3>
                   <p className="text-ui text-muted-foreground mb-6 max-w-md mx-auto">
                     Authorize DevSync to access your GitHub repositories to quickly link them to this project.
                   </p>
                   <Button 
                     onClick={handleAuthorizeGithub}
-                    className="inline-flex items-center px-5 py-2.5 bg-primary text-primary-foreground hover:bg-primary-hover text-ui font-[590] rounded-md transition-colors"
+                    className="inline-flex items-center px-5 py-2.5 bg-primary text-primary-foreground hover:bg-primary-hover"
                     variant="primary" size="default"
                   >
                     Authorize with GitHub
@@ -393,7 +396,7 @@ export const ProjectSettings = () => {
               ) : (
                 <div className="space-y-4">
                   <div>
-                    <Label className="block text-ui font-[510] text-muted-foreground mb-1.5">Select a Repository</Label>
+                    <Label htmlFor="projectsettings-select-a-repository" className="block text-ui font-[510] text-muted-foreground mb-1.5">Select a Repository</Label>
                     {isFetchingRepos ? (
                       <div className="flex items-center space-x-2 text-ui text-muted-foreground p-2">
                         <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.75} />
@@ -401,7 +404,7 @@ export const ProjectSettings = () => {
                       </div>
                     ) : (
                       <Select value={selectedRepo} onValueChange={setSelectedRepo}>
-                        <SelectTrigger className="w-full bg-elevated">
+                        <SelectTrigger id="projectsettings-select-a-repository" className="w-full bg-elevated">
                           <SelectValue placeholder="-- Choose a repository --" />
                         </SelectTrigger>
                         <SelectContent>
@@ -418,7 +421,7 @@ export const ProjectSettings = () => {
                     <Button 
                       onClick={handleConnectGithub} 
                       disabled={isConnecting || !selectedRepo}
-                      className="flex items-center px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover text-ui font-[590] rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover disabled:text-disabled disabled:cursor-not-allowed"
                       variant="primary" size="default"
                     >
                       {isConnecting && <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.75} />}
@@ -448,7 +451,7 @@ export const ProjectSettings = () => {
         </Card>
 
         <div className="border border-border bg-elevated/50 rounded-lg p-6 mb-8">
-          <h2 className="text-heading font-[590] text-foreground mb-2 flex items-center">
+          <h2 className="text-h2 font-[590] text-foreground mb-2 flex items-center">
             <Tag className="w-5 h-5 mr-2" strokeWidth={1.75} />
             Labels
           </h2>
@@ -463,7 +466,7 @@ export const ProjectSettings = () => {
               onChange={(e) => setNewLabelName(e.target.value)}
               placeholder="New label name"
               maxLength={50}
-              className="flex-1 bg-background border border-border rounded-md px-3 py-2 text-foreground text-ui focus:border-ring focus:ring-1 focus:ring-ring h-auto"
+              className="flex-1 bg-background px-3 py-2 text-foreground text-ui"
             />
             <Tooltip>
               <TooltipTrigger asChild>
@@ -483,7 +486,7 @@ export const ProjectSettings = () => {
             <Button
               type="submit"
               disabled={isCreatingLabel || !newLabelName.trim()}
-              className="flex items-center px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover text-ui font-[590] rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover disabled:text-disabled disabled:cursor-not-allowed"
               variant="primary" size="default"
             >
               {isCreatingLabel ? <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.75} /> : <Plus className="w-4 h-4 mr-2" strokeWidth={1.75} />}
@@ -496,7 +499,7 @@ export const ProjectSettings = () => {
               <p className="text-ui text-subtle-foreground">No labels yet. Labels can also be added directly when creating or editing tasks.</p>
             ) : (
               labels.map((label) => (
-                <div key={label.labelId} className="flex items-center gap-3 p-3 bg-background border border-border rounded-md">
+                <div key={label.labelId} className="flex items-center gap-3 p-3 bg-background">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       {/* Native color picker � deliberate exception, see above. */}
@@ -519,7 +522,7 @@ export const ProjectSettings = () => {
                         maxLength={50}
                         autoFocus
                         onKeyDown={(e) => { if (e.key === 'Enter') handleRenameLabel(label.labelId); if (e.key === 'Escape') setEditingLabelId(null); }}
-                        className="flex-1 bg-background border border-border rounded-md px-3 py-1.5 text-foreground text-ui"
+                        className="flex-1 bg-background px-3 py-1.5 text-foreground text-ui"
                       />
                       <Button onClick={() => handleRenameLabel(label.labelId)} className="text-caption text-primary hover:text-primary-hover font-[590]" variant="ghost" size="default">
                         Save
@@ -530,12 +533,22 @@ export const ProjectSettings = () => {
                     </div>
                   ) : (
                     <>
-                      <span
-                        className="inline-flex items-center text-caption px-2 py-0.5 rounded border font-[510]"
-                        style={{ backgroundColor: `${label.color}22`, borderColor: `${label.color}66`, color: label.color }}
-                      >
-                        {label.name}
-                      </span>
+                      {/* §10: "Don't render a DB-supplied label colour raw."
+                          The stored hex goes through assertContrast (lift until
+                          the chip clears 3:1 on --bg-surface) and readableText
+                          (pick the text token that clears 4.5:1 on it) — the
+                          same guards LabelChip uses at every other call site. */}
+                      {(() => {
+                        const swatch = assertContrast(label.color || DEFAULT_LABEL_COLOR);
+                        return (
+                          <span
+                            className="inline-flex items-center text-caption px-2 py-0.5 rounded-full font-[510]"
+                            style={{ backgroundColor: swatch, color: readableText(swatch) }}
+                          >
+                            {label.name}
+                          </span>
+                        );
+                      })()}
                       <span className="text-caption text-subtle-foreground">{label.usageCount} task{label.usageCount === 1 ? '' : 's'}</span>
                       <div className="flex-1" />
                       <Button
@@ -550,7 +563,7 @@ export const ProjectSettings = () => {
                         className="text-caption text-danger/80 hover:text-danger font-[590] flex items-center"
                         variant="destructive" size="default"
                       >
-                        <Trash2 className="w-3.5 h-3.5 mr-1" strokeWidth={1.75} /> Delete
+                        <Trash2 className="w-4 h-4 mr-1" strokeWidth={1.75} /> Delete
                       </Button>
                     </>
                   )}
@@ -561,7 +574,7 @@ export const ProjectSettings = () => {
         </div>
 
         <div className="border border-danger-border bg-danger-muted rounded-lg p-6">
-          <h2 className="text-heading font-[590] text-danger mb-2 flex items-center">
+          <h2 className="text-h2 font-[590] text-danger mb-2 flex items-center">
             <AlertTriangle className="w-5 h-5 mr-2" strokeWidth={1.75} />
             Danger Zone
           </h2>
@@ -575,7 +588,7 @@ export const ProjectSettings = () => {
                 <h4 className="font-[590] text-foreground">Archive Project</h4>
                 <p className="text-caption text-subtle-foreground">Freeze all activity. Can be restored later.</p>
               </div>
-              <Button onClick={handleArchive} className="px-4 py-2 border border-danger-border text-danger hover:bg-danger-muted text-ui font-[590] rounded-md transition-colors" variant="destructive" size="default">
+              <Button onClick={handleArchive} className="px-4 py-2 border border-danger-border text-danger hover:bg-danger-muted" variant="destructive" size="default">
                 Archive Project
               </Button>
             </div>

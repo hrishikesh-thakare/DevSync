@@ -29,7 +29,7 @@ export const VerifyEmailPage = () => {
       } catch (err: unknown) {
         if (!cancelled) {
           setState('error');
-          setError(err instanceof Error ? err.message : 'Failed to verify your email.');
+          setError(err instanceof Error ? err.message : "Couldn't verify your email. Request a new link and try again.");
         }
       }
     })();
@@ -41,12 +41,9 @@ export const VerifyEmailPage = () => {
 
   return (
     <div className="auth-bg min-h-screen flex items-center justify-center p-4">
-      <div className="auth-shape-1"></div>
-      <div className="auth-shape-2"></div>
-
-      <div className="bg-card border border-border rounded-lg shadow-sm max-w-[400px] w-full p-8 animate-fadeIn relative z-[var(--z-sticky)] text-center">
+            <div className="bg-card rounded-[8px] shadow-sm max-w-[400px] w-full p-8 animate-fadeIn text-center">
         <div className="mb-8">
-          <h1 className="text-heading font-[590] text-foreground mb-2">DevSync</h1>
+          <h1 className="text-h1 font-[590] text-foreground mb-2">DevSync</h1>
           <p className="text-muted-foreground text-ui">Email verification</p>
         </div>
 
@@ -65,8 +62,8 @@ export const VerifyEmailPage = () => {
             <p className="text-foreground">
               Your email has been <strong className="text-success">verified</strong> successfully.
             </p>
-            <Button asChild variant="primary" className="w-full py-3 text-center h-auto">
-              <Link to="/login" className="inline-block bg-primary text-primary-foreground hover:bg-primary-hover rounded-md w-full py-3 text-center">
+            <Button asChild variant="primary" className="w-full py-3 text-center">
+              <Link to="/login" className="inline-flex w-full items-center justify-center rounded-[6px] bg-primary px-4 h-[36px] text-button font-[510] text-primary-foreground transition-colors duration-[--duration-fast] ease-standard hover:bg-primary-hover">
                 Go to sign in
               </Link>
             </Button>
@@ -83,8 +80,8 @@ export const VerifyEmailPage = () => {
               )}
             </div>
             <p className="text-foreground">{error || 'Verification failed.'}</p>
-            <Button asChild variant="primary" className="w-full py-3 text-center h-auto">
-              <Link to="/login" className="inline-block bg-primary text-primary-foreground hover:bg-primary-hover rounded-md w-full py-3 text-center">
+            <Button asChild variant="primary" className="w-full py-3 text-center">
+              <Link to="/login" className="inline-flex w-full items-center justify-center rounded-[6px] bg-primary px-4 h-[36px] text-button font-[510] text-primary-foreground transition-colors duration-[--duration-fast] ease-standard hover:bg-primary-hover">
                 Back to sign in
               </Link>
             </Button>

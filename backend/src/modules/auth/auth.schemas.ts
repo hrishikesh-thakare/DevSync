@@ -32,3 +32,21 @@ export const resetPasswordSchema = z.object({
 export const verifyEmailSchema = z.object({
   token: z.string().min(1, 'Verification token is required'),
 }).strict();
+
+/**
+ * `users.presence` is an unconstrained `varchar(20)` with no DB-level check, so
+ * this schema is the enum. The three values are the ones the design system
+ * renders (AGENTS.md §3 Presence: online / away / offline); anything else would
+ * be written to the column and then fall through to the client's offline
+ * fallback, which is a silent data problem rather than a visible one.
+ */
+export const presenceValues = ['online', 'away', 'offline'] as const;
+
+export const updatePresenceSchema = z.object({
+  presence: z.enum(presenceValues),
+}).strict();
+
+export const updateStatusSchema = z.object({
+  statusText: z.string().max(100, 'Status text must be 100 characters or fewer').optional(),
+  presence: z.enum(presenceValues).optional(),
+}).strict();

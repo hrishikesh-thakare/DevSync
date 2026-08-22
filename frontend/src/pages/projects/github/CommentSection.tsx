@@ -52,7 +52,7 @@ export const CommentSection = ({ slug, keyStr, type, number, onClose }: CommentS
         }
       } catch {
         if (mounted) {
-          setError('Failed to load comments');
+          setError("Couldn't load comments. Try again in a moment.");
         }
       } finally {
         if (mounted) {
@@ -71,7 +71,7 @@ export const CommentSection = ({ slug, keyStr, type, number, onClose }: CommentS
     <div className="mt-2 bg-background border border-border rounded-lg overflow-hidden flex flex-col max-h-[400px]">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card">
         <div className="flex items-center">
-          <MessageSquare className="w-3.5 h-3.5 text-muted-foreground mr-2" strokeWidth={1.75} />
+          <MessageSquare className="w-4 h-4 text-muted-foreground mr-2" strokeWidth={1.75} />
           <span className="text-caption text-muted-foreground font-[510]">
             Comments on {type === 'issue' ? 'Issue' : 'PR'} #{number}
           </span>
@@ -87,7 +87,7 @@ export const CommentSection = ({ slug, keyStr, type, number, onClose }: CommentS
         ) : error ? (
           <div className="text-center py-4 text-caption text-danger">{error}</div>
         ) : comments.length === 0 ? (
-          <div className="text-center py-4 text-caption text-subtle-foreground">No comments yet. Be the first to comment!</div>
+          <div className="text-center py-4 text-caption text-subtle-foreground">No comments yet. Add the first one below.</div>
         ) : (
           comments.map(comment => (
             <div key={comment.id} className="flex space-x-3">

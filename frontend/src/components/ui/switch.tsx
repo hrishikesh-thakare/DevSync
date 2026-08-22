@@ -17,11 +17,12 @@ const Switch = React.forwardRef<HTMLButtonElement, SwitchProps>(
         type="button"
         role="switch"
         aria-checked={checked}
+        data-state={checked ? "checked" : "unchecked"}
         onClick={() => onCheckedChange?.(!checked)}
         className={cn(
-          "inline-flex h-[18px] w-[32px] shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-100 ease-in-out",
+          "inline-flex h-[18px] w-[32px] shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-[--duration-fast] ease-standard",
           "outline-none focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2",
-          "disabled:cursor-not-allowed disabled:opacity-50",
+          "disabled:cursor-not-allowed disabled:text-disabled",
           checked ? "bg-[var(--primary)]" : "bg-muted",
           className
         )}
@@ -29,7 +30,7 @@ const Switch = React.forwardRef<HTMLButtonElement, SwitchProps>(
       >
         <span
           className={cn(
-            "pointer-events-none block h-[14px] w-[14px] rounded-full shadow-sm transition-transform duration-100 ease-in-out",
+            "pointer-events-none block h-[14px] w-[14px] rounded-full shadow-sm transition-colors duration-[--duration-fast] ease-standard",
             checked
               ? "translate-x-[14px] bg-primary-foreground"
               : "translate-x-0 bg-muted-foreground"

@@ -46,7 +46,7 @@ export const CommentInlineForm = ({ slug, keyStr, type, number, onClose, isEmbed
         onClose();
       }, 2000);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to post comment');
+      setError(err instanceof Error ? err.message : "Couldn't post your comment. Try again in a moment.");
     } finally {
       setIsSubmitting(false);
     }
@@ -57,7 +57,7 @@ export const CommentInlineForm = ({ slug, keyStr, type, number, onClose, isEmbed
       <div className="mt-2 p-3 bg-success-muted border border-success-border rounded-lg flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <CheckCircle2 className="w-4 h-4 text-success" strokeWidth={1.75} />
-          <span className="text-ui text-success font-[510]">Comment posted on GitHub!</span>
+          <span className="text-ui text-success font-[510]">Comment posted on GitHub</span>
         </div>
         {success.html_url && (
           <a 
@@ -77,7 +77,7 @@ export const CommentInlineForm = ({ slug, keyStr, type, number, onClose, isEmbed
     <div className={isEmbedded ? "" : "mt-2 bg-background border border-border rounded-lg overflow-hidden"}>
       {!isEmbedded && (
         <div className="flex items-center px-3 py-2 border-b border-border bg-card">
-          <MessageSquare className="w-3.5 h-3.5 text-muted-foreground mr-2" strokeWidth={1.75} />
+          <MessageSquare className="w-4 h-4 text-muted-foreground mr-2" strokeWidth={1.75} />
           <span className="text-caption text-muted-foreground font-[510]">
             Reply to {type === 'issue' ? 'Issue' : 'PR'} #{number}
           </span>
@@ -118,7 +118,7 @@ export const CommentInlineForm = ({ slug, keyStr, type, number, onClose, isEmbed
           <Button
             onClick={handleSubmit}
             disabled={isSubmitting || !body.trim()}
-            className="text-caption bg-primary hover:bg-primary-hover text-primary-foreground font-[590] px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 flex items-center"
+            className="text-caption font-[590] px-3 py-1.5 rounded-md transition-colors disabled:text-disabled flex items-center"
             variant="primary" size="default"
           >
             {isSubmitting ? (

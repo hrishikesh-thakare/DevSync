@@ -15,7 +15,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeVariant } from '@/components/ui/badge';
 
 import { Button } from '@/components/ui/button';
 
@@ -41,23 +41,23 @@ export const NotificationsInbox = () => {
     }
   };
 
-  const getIcon = (type: string): { icon: LucideIcon; variant: any['variant']; className?: string } => {
+  const getIcon = (type: string): { icon: LucideIcon; variant: BadgeVariant; className?: string } => {
     switch (type) {
       case 'task_assigned': return { icon: User, variant: 'success' };
       case 'task_unassigned': return { icon: UserMinus, variant: 'destructive' };
       case 'task_commented': return { icon: MessageSquare, variant: 'success' };
-      case 'task_mentioned': return { icon: AtSign, variant: 'outline', className: 'bg-primary-muted text-primary border-primary-border' };
+      case 'task_mentioned': return { icon: AtSign, variant: 'outline', className: 'bg-primary-muted text-primary-on-muted border-primary-border' };
       case 'task_status_changed': return { icon: ArrowRightLeft, variant: 'warning' };
       case 'sprint_started': return { icon: Play, variant: 'success' };
       case 'sprint_closed': return { icon: CheckCircle2, variant: 'outline' };
-      case 'channel_mentioned': return { icon: Hash, variant: 'outline', className: 'bg-primary-muted text-primary border-primary-border' };
-      case 'dm_received': return { icon: Mail, variant: 'outline', className: 'bg-primary-muted text-primary border-primary-border' };
+      case 'channel_mentioned': return { icon: Hash, variant: 'outline', className: 'bg-primary-muted text-primary-on-muted border-primary-border' };
+      case 'dm_received': return { icon: Mail, variant: 'outline', className: 'bg-primary-muted text-primary-on-muted border-primary-border' };
       case 'commit_linked': 
       case 'commit_unlinked': return { icon: GitBranch, variant: 'outline' };
       case 'ci_passed': return { icon: GitBranch, variant: 'success' };
       case 'ci_failed': return { icon: GitBranch, variant: 'destructive' };
       case 'project_member_added': return { icon: Briefcase, variant: 'success' };
-      case 'workspace_invited': return { icon: Building2, variant: 'outline', className: 'bg-primary-muted text-primary border-primary-border' };
+      case 'workspace_invited': return { icon: Building2, variant: 'outline', className: 'bg-primary-muted text-primary-on-muted border-primary-border' };
       default: return { icon: Bell, variant: 'outline' };
     }
   };
@@ -80,7 +80,7 @@ export const NotificationsInbox = () => {
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-3">
-            <h1 className="text-heading font-[590] text-foreground">Inbox</h1>
+            <h1 className="text-h1 font-[590] text-foreground">Inbox</h1>
             {localUnreadCount > 0 && (
               <span className="bg-danger text-danger-foreground text-caption font-[590] px-2 py-0.5 rounded-full">
                 {localUnreadCount} new
@@ -91,7 +91,7 @@ export const NotificationsInbox = () => {
             onClick={markAllRead}
             disabled={localUnreadCount === 0}
             variant="ghost"
-            className="flex items-center text-ui font-[510] text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors h-auto"
+            className="flex items-center text-ui font-[510] text-muted-foreground hover:text-foreground disabled:text-disabled transition-colors"
           >
             <Check className="w-4 h-4 mr-2" strokeWidth={1.75} />
             Mark all as read
@@ -183,7 +183,7 @@ export const NotificationsInbox = () => {
                           onClick={(e) => { e.stopPropagation(); markRead(notif.notificationId); }}
                           variant="ghost"
                           size="icon"
-                          className="opacity-0 group-hover:opacity-100 p-1.5 text-subtle-foreground hover:text-foreground hover:bg-hover rounded transition-colors h-auto w-auto"
+                          className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 p-1.5 text-subtle-foreground hover:text-foreground hover:bg-hover rounded transition-colors w-auto"
                           aria-label="Mark as read"
                         >
                           <Check className="w-4 h-4" strokeWidth={1.75} />
@@ -199,7 +199,7 @@ export const NotificationsInbox = () => {
             {filtered.length === 0 && (
               <div className="p-12 text-center text-subtle-foreground">
                 <Bell className="w-12 h-12 mx-auto mb-4 opacity-50" strokeWidth={1.5} />
-                <p>{viewMode === 'unread' ? 'No unread notifications.' : "You're all caught up!"}</p>
+                <p>{viewMode === 'unread' ? 'Nothing unread right now.' : 'Nothing unread. New mentions and assignments will land here.'}</p>
               </div>
             )}
           </div>

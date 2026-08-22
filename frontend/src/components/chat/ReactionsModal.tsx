@@ -60,7 +60,7 @@ export function ReactionsModal({
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full justify-start flex-wrap h-auto">
+          <TabsList className="w-full justify-start flex-wrap">
             <TabsTrigger value="all" className="flex-none">All</TabsTrigger>
             {aggregated.map(([emoji, count]) => (
               <TabsTrigger key={emoji} value={emoji} className="flex-none">
@@ -91,7 +91,7 @@ export function ReactionsModal({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="justify-start px-0 h-auto text-caption text-subtle-foreground hover:text-destructive"
+                        className="justify-start px-0 text-caption text-subtle-foreground hover:text-danger-on-muted"
                         onClick={() => onRemoveReaction(rx.emoji)}
                       >
                         Click to remove
@@ -99,7 +99,7 @@ export function ReactionsModal({
                     )}
                   </div>
                 </div>
-                <div className="text-heading" aria-hidden="true">
+                <div className="text-h2" aria-hidden="true">
                   {rx.emoji}
                 </div>
               </div>

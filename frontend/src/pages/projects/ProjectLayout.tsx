@@ -57,8 +57,8 @@ export const ProjectLayout = () => {
               <Kanban className="w-5 h-5 text-primary" strokeWidth={1.75} />
             </div>
             <div>
-              <div className="text-caption font-[590] text-subtle-foreground uppercase tracking-widest mb-0.5">Project / {key}</div>
-              <h2 className="text-heading font-[590] text-foreground">{currentProject?.name || 'Loading Project...'}</h2>
+              <div className="text-caption font-[590] text-subtle-foreground uppercase mb-0.5">Project / {key}</div>
+              <h2 className="text-h2 font-[590] text-foreground">{currentProject?.name || 'Loading Project...'}</h2>
             </div>
           </div>
 
@@ -68,7 +68,7 @@ export const ProjectLayout = () => {
               <div className="w-8 h-8 rounded-full bg-hover border-2 border-background z-[var(--z-sticky)]"></div>
               <div className="w-8 h-8 rounded-full bg-hover border-2 border-background flex items-center justify-center text-caption text-foreground z-[var(--z-base)]">+3</div>
             </div>
-            <Button className="p-2 text-muted-foreground hover:text-foreground hover:bg-hover rounded-lg transition-colors" size="icon" variant="ghost">
+            <Button className="p-2 text-muted-foreground hover:text-foreground hover:bg-hover rounded-lg transition-colors" size="icon" variant="ghost" aria-label="Filter tasks">
               <Filter className="w-5 h-5" strokeWidth={1.75} />
             </Button>
           </div>

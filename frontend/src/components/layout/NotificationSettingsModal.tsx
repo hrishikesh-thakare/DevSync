@@ -33,7 +33,7 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
       });
       onClose();
     } catch {
-      alert('Failed to save preferences');
+      alert("Couldn't save your notification preferences. Try again in a moment.");
     } finally {
       setIsSaving(false);
     }
@@ -56,7 +56,7 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
 
         <div className="space-y-6">
           <fieldset className="space-y-4">
-            <legend className="text-ui font-[510] text-muted-foreground uppercase tracking-wider">
+            <legend className="text-ui font-[510] text-muted-foreground uppercase">
               Filtering &amp; Throttling
             </legend>
             <label className="flex items-start justify-between gap-4 cursor-pointer group">

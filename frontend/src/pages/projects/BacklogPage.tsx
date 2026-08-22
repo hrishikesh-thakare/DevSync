@@ -90,7 +90,7 @@ export const BacklogPage = () => {
       fetchLabels(slug, key);
       apiFetch(`/workspaces/${slug}/projects/${key}/sprints`)
         .then(data => setSprints(data.sprints || []))
-        .catch(err => console.error('Failed to load sprints', err));
+        .catch(err => console.error("Couldn't load sprints. Check your connection and try again.", err));
     }
   }, [slug, key, fetchTasks, fetchMembers, fetchLabels]);
 
@@ -146,7 +146,7 @@ export const BacklogPage = () => {
       setBulkValue('');
       fetchTasks(slug, key);
     } catch {
-      alert('Failed to apply bulk action');
+      alert("Couldn't apply that change to the selected tasks. Try again in a moment.");
     } finally {
       setIsApplyingBulk(false);
     }
@@ -189,7 +189,7 @@ export const BacklogPage = () => {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search backlog..." 
-              className="w-full bg-card border border-border rounded-md pl-9 pr-4 py-2 text-ui text-foreground focus:border-ring focus:ring-1 focus:ring-ring transition-colors h-auto"
+              className="w-full bg-card pl-9 pr-4 py-2 text-ui text-foreground transition-colors"
             />
           </div>
           
@@ -271,14 +271,14 @@ export const BacklogPage = () => {
                   value={bulkValue}
                   onChange={e => setBulkValue(e.target.value)}
                   placeholder="Points (empty = clear)"
-                  className="bg-background text-ui text-foreground border border-border rounded-md px-2 py-1 focus:border-ring focus:ring-1 focus:ring-ring mr-2 w-32"
+                  className="bg-background text-ui text-foreground px-2 py-1 mr-2 w-32"
                 />
               )}
 
               <Button 
                 onClick={handleBulkApply} 
                 disabled={isApplyingBulk || !bulkAction || (bulkAction !== 'clearPoints' && !bulkValue)} 
-                className="text-caption bg-primary hover:bg-primary-hover text-primary-foreground font-[590] px-3 py-1 rounded-md disabled:opacity-50"
+                className="text-caption font-[590] px-3 py-1 rounded-md disabled:text-disabled"
                 variant="primary" size="default"
               >
                 {isApplyingBulk ? <Loader2 className="w-3 h-3 animate-spin text-primary-foreground" strokeWidth={1.75} /> : 'Apply'}
@@ -287,7 +287,7 @@ export const BacklogPage = () => {
           )}
 
           {canEditTask && (
-            <Button className="flex items-center px-3 py-2 bg-primary hover:bg-primary-hover text-primary-foreground text-ui font-[590] rounded-md transition-colors" variant="primary" size="default">
+            <Button className="flex items-center px-3 py-2" variant="primary" size="default">
               <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
               Create Task
             </Button>
@@ -298,7 +298,7 @@ export const BacklogPage = () => {
       {/* Table Container */}
       <div className="flex-1 bg-card border border-border rounded-lg overflow-hidden flex flex-col">
         {/* Table Header */}
-        <div className="grid grid-cols-12 gap-4 px-6 py-3 border-b border-border bg-muted text-caption font-[590] text-subtle-foreground uppercase tracking-wider shrink-0 items-center">
+        <div className="grid grid-cols-12 gap-4 px-6 py-3 border-b border-border bg-muted text-caption font-[590] text-subtle-foreground uppercase shrink-0 items-center">
           <div className="col-span-2 flex items-center space-x-3">
             {canEditTask && (
               <Checkbox
@@ -398,7 +398,7 @@ export const BacklogPage = () => {
                   <span className={clsx(
                     "text-micro font-[590] px-2.5 py-1 rounded-sm uppercase tracking-wide",
                     task.status === 'todo' ? "bg-muted text-muted-foreground" :
-                    task.status === 'in_progress' ? "bg-primary-muted text-primary border border-primary-border" :
+                    task.status === 'in_progress' ? "bg-primary-muted text-primary-on-muted border border-primary-border" :
                     task.status === 'in_review' ? "bg-warning-muted text-warning border border-warning-border" :
                     "bg-success-muted text-success border border-success-border"
                   )}>
@@ -411,7 +411,7 @@ export const BacklogPage = () => {
                   {task.storyPoints != null ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Badge variant="secondary" className="bg-primary-muted text-primary border-primary-border font-[590]">
+                        <Badge variant="secondary" className="bg-primary-muted text-primary-on-muted border-primary-border font-[590]">
                           {task.storyPoints}
                         </Badge>
                       </TooltipTrigger>
@@ -443,7 +443,7 @@ export const BacklogPage = () => {
                 <div className="col-span-1 text-caption text-subtle-foreground flex items-center">
                   {task.dueDate ? (
                     <>
-                      <Calendar className="w-3.5 h-3.5 mr-1" strokeWidth={1.75} />
+                      <Calendar className="w-4 h-4 mr-1" strokeWidth={1.75} />
                       {format(new Date(task.dueDate), 'MMM d')}
                     </>
                   ) : '—'}
@@ -476,7 +476,7 @@ export const BacklogPage = () => {
 
                 {/* Actions */}
                 <div className="col-span-1 flex justify-end">
-                  <Button onClick={(e) => { e.stopPropagation(); /* would open menu */ }} className="p-1.5 text-subtle-foreground hover:text-foreground hover:bg-hover rounded-md transition-colors opacity-0 group-hover:opacity-100" size="icon" variant="ghost">
+                  <Button onClick={(e) => { e.stopPropagation(); /* would open menu */ }} className="p-1.5 text-subtle-foreground hover:text-foreground hover:bg-hover rounded-md transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100" size="icon" variant="ghost">
                     <MoreHorizontal className="w-4 h-4" strokeWidth={1.75} />
                   </Button>
                 </div>

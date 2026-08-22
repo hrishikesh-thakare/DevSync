@@ -64,7 +64,7 @@ export const WorkspaceAuditLogs = () => {
             <ShieldAlert className="w-5 h-5 text-muted-foreground" strokeWidth={1.75} />
           </div>
           <div>
-            <h2 className="text-heading font-[590] text-foreground mb-0.5">Audit Logs</h2>
+            <h2 className="text-h2 font-[590] text-foreground mb-0.5">Audit Logs</h2>
             <p className="text-ui text-subtle-foreground">A read-only log of destructive and administrative actions in this workspace.</p>
           </div>
         </div>
@@ -73,7 +73,7 @@ export const WorkspaceAuditLogs = () => {
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="border-b border-border bg-muted text-caption uppercase tracking-wider text-subtle-foreground font-[590]">
+            <tr className="border-b border-border bg-muted text-caption uppercase text-subtle-foreground font-[590]">
               <th className="px-6 py-4">Action</th>
               <th className="px-6 py-4">Performed By</th>
               <th className="px-6 py-4">Date</th>

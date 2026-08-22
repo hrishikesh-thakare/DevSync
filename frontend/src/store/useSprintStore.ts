@@ -62,7 +62,7 @@ export const useSprintStore = create<SprintState>((set, get) => ({
 
       set({ sprints: mappedSprints, activeSprint, isLoading: false });
     } catch (err) {
-      console.error('Failed to fetch sprints:', err);
+      console.error("Couldn't load sprints. Check your connection and try again.:", err);
       set({ isLoading: false });
     }
   },

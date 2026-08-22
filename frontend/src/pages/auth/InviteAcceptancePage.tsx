@@ -30,10 +30,10 @@ export const InviteAcceptancePage = () => {
 
         {status === 'idle' && (
           <div className="py-2">
-            <div className="w-16 h-16 bg-primary-muted text-primary border border-primary-border rounded-lg flex items-center justify-center mx-auto mb-6">
+            <div className="w-16 h-16 bg-primary-muted text-primary-on-muted border border-primary-border rounded-lg flex items-center justify-center mx-auto mb-6">
               <UserPlus className="w-8 h-8" strokeWidth={1.5} />
             </div>
-            <h2 className="text-heading font-[590] text-foreground mb-2">Workspace Invitation</h2>
+            <h2 className="text-h2 font-[590] text-foreground mb-2">Workspace Invitation</h2>
             <p className="text-ui text-muted-foreground mb-8">
               You've been invited to join the workspace <strong className="text-foreground">{inviteToken}</strong>.
             </p>
@@ -41,14 +41,14 @@ export const InviteAcceptancePage = () => {
               <Button 
                 onClick={acceptInvite}
                 variant="primary"
-                className="w-full py-3 bg-primary hover:bg-primary-hover text-primary-foreground font-[590] rounded-lg transition-colors flex items-center justify-center h-auto"
+                className="w-full py-3 font-[590] rounded-lg transition-colors flex items-center justify-center"
               >
                 Accept Invitation
               </Button>
               <Button 
                 onClick={() => navigate('/workspaces')}
                 variant="ghost"
-                className="w-full py-3 bg-transparent hover:bg-hover text-muted-foreground font-[510] rounded-lg transition-colors h-auto"
+                className="w-full py-3 bg-transparent hover:bg-hover text-muted-foreground font-[510] rounded-lg transition-colors"
               >
                 Decline & Return Home
               </Button>
@@ -59,7 +59,7 @@ export const InviteAcceptancePage = () => {
         {status === 'loading' && (
           <div className="py-6">
             <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-6" strokeWidth={1.5} />
-            <h2 className="text-heading font-[590] text-foreground mb-2">Accepting Invitation...</h2>
+            <h2 className="text-h2 font-[590] text-foreground mb-2">Accepting Invitation...</h2>
             <p className="text-muted-foreground">Please wait while we set up your workspace access.</p>
           </div>
         )}
@@ -69,12 +69,12 @@ export const InviteAcceptancePage = () => {
             <div className="w-16 h-16 bg-success-muted text-success border border-success-border rounded-lg flex items-center justify-center mx-auto mb-6">
               <CheckCircle2 className="w-8 h-8" strokeWidth={1.5} />
             </div>
-            <h2 className="text-heading font-[590] text-foreground mb-2">Invite Accepted</h2>
+            <h2 className="text-h2 font-[590] text-foreground mb-2">Invite Accepted</h2>
             <p className="text-muted-foreground mb-8">Your invitation has been accepted. You can now access all projects and channels.</p>
             <Button 
               onClick={() => navigate(`/w/${inviteToken}`)}
               variant="primary"
-              className="w-full py-3 bg-primary text-primary-foreground font-[590] rounded-lg flex items-center justify-center gap-2 hover:bg-primary-hover transition-colors h-auto"
+              className="w-full py-3 bg-primary text-primary-foreground font-[590] rounded-lg flex items-center justify-center gap-2 hover:bg-primary-hover transition-colors"
             >
               <span>Go to Workspace</span>
               <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
@@ -84,15 +84,15 @@ export const InviteAcceptancePage = () => {
 
         {status === 'error' && (
           <div className="py-6">
-            <div className="w-16 h-16 bg-danger-muted text-danger border border-danger-border rounded-lg flex items-center justify-center mx-auto mb-6">
+            <div className="w-16 h-16 bg-danger-muted text-danger-on-muted border border-danger-border rounded-lg flex items-center justify-center mx-auto mb-6">
               <XCircle className="w-8 h-8" strokeWidth={1.5} />
             </div>
-            <h2 className="text-heading font-[590] text-foreground mb-2">Invalid or Expired Invite</h2>
+            <h2 className="text-h2 font-[590] text-foreground mb-2">Invalid or Expired Invite</h2>
             <p className="text-muted-foreground mb-8">This invitation link is no longer valid. Please ask your administrator to send a new one.</p>
             <Button 
               onClick={() => navigate('/workspaces')}
               variant="secondary"
-              className="w-full py-3 bg-hover hover:bg-hover text-foreground font-[590] rounded-lg transition-colors h-auto"
+              className="w-full py-3 bg-hover hover:bg-hover text-foreground font-[590] rounded-lg transition-colors"
             >
               Return to Dashboard
             </Button>

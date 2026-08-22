@@ -72,19 +72,19 @@ const PRIORITY_OPTIONS = [
 const STATUS_COLORS: Record<string, string> = {
   backlog: 'bg-muted text-muted-foreground border border-border',
   todo: 'bg-muted text-muted-foreground border border-border',
-  in_progress: 'bg-primary-muted text-primary border border-primary-border',
+  in_progress: 'bg-primary-muted text-primary-on-muted border border-primary-border',
   in_review: 'bg-warning-muted text-warning border border-warning-border',
   done: 'bg-success-muted text-success border border-success-border',
 };
 
 const PRIORITY_INDICATORS: Record<string, string> = {
-  urgent: 'bg-danger-muted text-danger border border-danger-border',
-  critical: 'bg-danger-muted text-danger border border-danger-border',
-  P0: 'bg-danger-muted text-danger border border-danger-border',
+  urgent: 'bg-danger-muted text-danger-on-muted border border-danger-border',
+  critical: 'bg-danger-muted text-danger-on-muted border border-danger-border',
+  P0: 'bg-danger-muted text-danger-on-muted border border-danger-border',
   high: 'bg-warning-muted text-warning border border-warning-border',
   P1: 'bg-warning-muted text-warning border border-warning-border',
-  medium: 'bg-primary-muted text-primary border border-primary-border',
-  P2: 'bg-primary-muted text-primary border border-primary-border',
+  medium: 'bg-primary-muted text-primary-on-muted border border-primary-border',
+  P2: 'bg-primary-muted text-primary-on-muted border border-primary-border',
   low: 'bg-muted text-muted-foreground border border-border',
   P3: 'bg-muted text-muted-foreground border border-border',
 };
@@ -258,11 +258,11 @@ export const GlobalSearchResults = () => {
           navigate(`/w/${slug}/projects/${task.projectKey}/tasks/${task.taskKey}`);
         }
       }}
-      className="group flex items-start p-4 bg-card border border-border rounded-lg hover:bg-hover hover:border-border-strong cursor-pointer transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex items-start p-4 bg-card border border-border rounded-lg hover:bg-hover hover:border-border-strong cursor-pointer transition-colors duration-[--duration-base] focus-visible:ring-2 focus-visible:ring-ring"
     >
       {/* Task Key Badge */}
       <div className="mr-4 shrink-0 mt-0.5">
-        <span className="inline-flex items-center px-2 py-1 text-micro font-mono font-[590] text-foreground bg-hover border border-border rounded-md">
+        <span className="inline-flex items-center px-2 py-1 text-micro font-mono font-[590] text-foreground bg-hover">
           {task.taskKey}
         </span>
       </div>
@@ -274,7 +274,7 @@ export const GlobalSearchResults = () => {
             {task.title}
           </h4>
           {task.status && (
-            <span className={`shrink-0 px-2 py-0.5 rounded text-micro font-[590] uppercase tracking-wider ${STATUS_COLORS[task.status] || 'bg-muted text-muted-foreground border border-border'}`}>
+            <span className={`shrink-0 px-2 py-0.5 rounded text-micro font-[590] uppercase ${STATUS_COLORS[task.status] || 'bg-muted text-muted-foreground border border-border'}`}>
               {task.status.replace('_', ' ')}
             </span>
           )}
@@ -327,7 +327,7 @@ export const GlobalSearchResults = () => {
           navigate(`/w/${slug}/channels/${msg.channelId}`);
         }
       }}
-      className="group flex items-start p-4 bg-card border border-border rounded-lg hover:bg-hover hover:border-border-strong cursor-pointer transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex items-start p-4 bg-card border border-border rounded-lg hover:bg-hover hover:border-border-strong cursor-pointer transition-colors duration-[--duration-base] focus-visible:ring-2 focus-visible:ring-ring"
     >
       {/* Avatar */}
       <div className="mr-4 shrink-0 mt-0.5">
@@ -397,7 +397,7 @@ export const GlobalSearchResults = () => {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search tasks, messages..."
-              className="w-full bg-card border border-border rounded-lg pl-12 pr-4 py-3.5 text-foreground focus:border-ring focus:ring-1 focus:ring-ring text-heading transition-colors h-auto md:text-heading"
+              className="w-full bg-card border border-border rounded-lg pl-12 pr-4 py-3.5 text-body text-foreground transition-colors"
               autoFocus
             />
           </div>
@@ -427,10 +427,10 @@ export const GlobalSearchResults = () => {
                   onClick={() => setFilterType(tab.key)}
                   variant="ghost"
                   className={`px-3.5 py-1.5 rounded-md text-caption font-[590] transition-colors h-auto ${
-                    filterType === tab.key
-                      ? 'bg-hover text-foreground shadow-sm'
-                      : 'text-subtle-foreground hover:text-foreground'
-                  }`}
+ filterType === tab.key
+ ? 'bg-hover text-foreground shadow-sm'
+ : 'text-subtle-foreground hover:text-foreground'
+ }`}
                 >
                   {tab.label}
                 </Button>
@@ -525,7 +525,7 @@ export const GlobalSearchResults = () => {
               <Button
                 onClick={clearAllFilters}
                 variant="ghost"
-                className="flex items-center gap-1 px-3 py-1.5 text-caption text-subtle-foreground hover:text-foreground transition-colors h-auto"
+                className="flex items-center gap-1 px-3 py-1.5 text-caption text-subtle-foreground hover:text-foreground transition-colors"
               >
                 <X className="w-3 h-3" strokeWidth={1.75} />
                 Clear filters
@@ -547,18 +547,18 @@ export const GlobalSearchResults = () => {
             <div className="flex flex-col items-center justify-center py-20">
               {recentSearches.length > 0 ? (
                 <div className="w-full max-w-md">
-                  <p className="text-micro font-[590] text-subtle-foreground uppercase tracking-wider mb-4">Recent Searches</p>
+                  <p className="text-micro font-[590] text-subtle-foreground uppercase mb-4">Recent Searches</p>
                   <div className="space-y-1">
                     {recentSearches.map((term, i) => (
                       <Button
                         key={i}
                         onClick={() => setQuery(term)}
                         variant="secondary"
-                        className="w-full flex items-center px-4 py-3 rounded-lg text-ui text-foreground bg-card border border-border hover:bg-hover hover:border-border-strong transition-colors group h-auto"
+                        className="w-full flex items-center px-4 py-3 rounded-lg text-ui text-foreground bg-card border border-border hover:bg-hover hover:border-border-strong transition-colors group"
                       >
                         <Clock className="w-4 h-4 text-subtle-foreground mr-3 shrink-0" strokeWidth={1.75} />
                         <span className="truncate">{term}</span>
-                        <Search className="w-3.5 h-3.5 text-subtle-foreground ml-auto opacity-0 group-hover:opacity-100 transition-opacity" strokeWidth={1.75} />
+                        <Search className="w-4 h-4 text-subtle-foreground ml-auto opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity" strokeWidth={1.75} />
                       </Button>
                     ))}
                   </div>
@@ -566,7 +566,7 @@ export const GlobalSearchResults = () => {
               ) : (
                 <div className="text-center">
                   <Search className="w-12 h-12 text-subtle-foreground/40 mx-auto mb-4" strokeWidth={1.5} />
-                  <p className="text-subtle-foreground text-heading">Search across your workspace</p>
+                  <p className="text-subtle-foreground text-body">Search across your workspace</p>
                   <p className="text-subtle-foreground text-ui mt-1">Find tasks, messages, and more</p>
                 </div>
               )}
@@ -579,7 +579,7 @@ export const GlobalSearchResults = () => {
               <div className="w-16 h-16 rounded-lg bg-card border border-border flex items-center justify-center mb-5">
                 <AlertCircle className="w-7 h-7 text-subtle-foreground" strokeWidth={1.5} />
               </div>
-              <h3 className="text-heading font-[590] text-foreground mb-2">No results for "{debouncedQuery}"</h3>
+              <h3 className="text-h3 font-[590] text-foreground mb-2">No results for "{debouncedQuery}"</h3>
               <div className="space-y-1.5 text-ui text-subtle-foreground mt-2">
                 <p>• Check your spelling</p>
                 <p>• Try fewer or different keywords</p>
@@ -594,8 +594,8 @@ export const GlobalSearchResults = () => {
               {/* Tasks Section */}
               {tasks.length > 0 && (
                 <div>
-                  <h3 className="text-micro font-[590] text-subtle-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  <h3 className="text-micro font-[590] text-subtle-foreground uppercase mb-4 flex items-center gap-2">
+                    <FileText className="w-4 h-4" strokeWidth={1.75} />
                     Tasks
                     <span className="text-subtle-foreground font-normal">({taskCount})</span>
                   </h3>
@@ -606,7 +606,7 @@ export const GlobalSearchResults = () => {
                     <Button
                       onClick={() => { setFilterType('tasks'); setPage(0); }}
                       variant="ghost"
-                      className="mt-3 text-ui text-primary hover:text-primary-hover transition-colors flex items-center gap-1 h-auto"
+                      className="mt-3 text-ui text-primary hover:text-primary-hover transition-colors flex items-center gap-1"
                     >
                       Show all {taskCount} tasks
                       <ChevronRight className="w-4 h-4" strokeWidth={1.75} />
@@ -618,8 +618,8 @@ export const GlobalSearchResults = () => {
               {/* Messages Section */}
               {messages.length > 0 && (
                 <div>
-                  <h3 className="text-micro font-[590] text-subtle-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <Hash className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  <h3 className="text-micro font-[590] text-subtle-foreground uppercase mb-4 flex items-center gap-2">
+                    <Hash className="w-4 h-4" strokeWidth={1.75} />
                     Messages
                     <span className="text-subtle-foreground font-normal">({messageCount})</span>
                   </h3>
@@ -630,7 +630,7 @@ export const GlobalSearchResults = () => {
                     <Button
                       onClick={() => { setFilterType('messages'); setPage(0); }}
                       variant="ghost"
-                      className="mt-3 text-ui text-primary hover:text-primary-hover transition-colors flex items-center gap-1 h-auto"
+                      className="mt-3 text-ui text-primary hover:text-primary-hover transition-colors flex items-center gap-1"
                     >
                       Show all {messageCount} messages
                       <ChevronRight className="w-4 h-4" strokeWidth={1.75} />
@@ -653,7 +653,7 @@ export const GlobalSearchResults = () => {
                     onClick={() => setPage(p => Math.max(0, p - 1))}
                     disabled={page === 0}
                     variant="ghost"
-                    className="flex items-center gap-1 px-3 py-1.5 text-ui text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors h-auto"
+                    className="flex items-center gap-1 px-3 py-1.5 text-ui text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronLeft className="w-4 h-4" strokeWidth={1.75} /> Previous
                   </Button>
@@ -664,7 +664,7 @@ export const GlobalSearchResults = () => {
                     onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                     disabled={page >= totalPages - 1}
                     variant="ghost"
-                    className="flex items-center gap-1 px-3 py-1.5 text-ui text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors h-auto"
+                    className="flex items-center gap-1 px-3 py-1.5 text-ui text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   >
                     Next <ChevronRight className="w-4 h-4" strokeWidth={1.75} />
                   </Button>
@@ -685,7 +685,7 @@ export const GlobalSearchResults = () => {
                     onClick={() => setPage(p => Math.max(0, p - 1))}
                     disabled={page === 0}
                     variant="ghost"
-                    className="flex items-center gap-1 px-3 py-1.5 text-ui text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors h-auto"
+                    className="flex items-center gap-1 px-3 py-1.5 text-ui text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronLeft className="w-4 h-4" strokeWidth={1.75} /> Previous
                   </Button>
@@ -696,7 +696,7 @@ export const GlobalSearchResults = () => {
                     onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                     disabled={page >= totalPages - 1}
                     variant="ghost"
-                    className="flex items-center gap-1 px-3 py-1.5 text-ui text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors h-auto"
+                    className="flex items-center gap-1 px-3 py-1.5 text-ui text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   >
                     Next <ChevronRight className="w-4 h-4" strokeWidth={1.75} />
                   </Button>

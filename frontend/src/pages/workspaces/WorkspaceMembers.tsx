@@ -105,7 +105,7 @@ export const WorkspaceMembers = () => {
       setInviteEmail('');
       fetchMembers();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to invite member.');
+      toast.error(err instanceof Error ? err.message : "Couldn't invite member. Try again in a moment.");
     } finally {
       setIsInviting(false);
     }
@@ -119,7 +119,7 @@ export const WorkspaceMembers = () => {
       });
       fetchMembers();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update role.');
+      toast.error(err instanceof Error ? err.message : "Couldn't update role. Try again in a moment.");
     }
     setActiveDropdown(null);
   };
@@ -130,7 +130,7 @@ export const WorkspaceMembers = () => {
       await apiFetch(`/workspaces/${slug}/members/${userId}`, { method: 'DELETE' });
       fetchMembers();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to remove member.');
+      toast.error(err instanceof Error ? err.message : "Couldn't remove member. Try again in a moment.");
     }
     setActiveDropdown(null);
   };
@@ -142,7 +142,7 @@ export const WorkspaceMembers = () => {
       toast.success('You have left the workspace.');
       navigate('/workspaces');
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to leave workspace.');
+      toast.error(err instanceof Error ? err.message : "Couldn't leave workspace. Try again in a moment.");
     }
   };
 
@@ -168,7 +168,7 @@ export const WorkspaceMembers = () => {
       
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-heading font-[590] text-foreground mb-1">Workspace Members</h1>
+          <h1 className="text-h1 font-[590] text-foreground mb-1">Workspace Members</h1>
           <p className="text-ui text-muted-foreground">Manage access and roles for your team. {members.length} total members.</p>
         </div>
         {/* Only admin+ can invite */}
@@ -177,7 +177,7 @@ export const WorkspaceMembers = () => {
             <Button 
               onClick={handleLeave}
               variant="destructive"
-              className="flex items-center px-4 py-2 border border-danger-border text-danger hover:bg-danger-muted rounded-md transition-colors font-[590] h-auto"
+              className="flex items-center px-4 py-2 border border-danger-border text-danger hover:bg-danger-muted rounded-md transition-colors font-[590]"
             >
               <LogOut className="w-4 h-4 mr-2" strokeWidth={1.75} />
               Leave Workspace
@@ -187,7 +187,7 @@ export const WorkspaceMembers = () => {
             <Button 
               onClick={() => setShowModal(true)}
               variant="primary"
-              className="flex items-center px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground font-[590] rounded-md transition-colors h-auto"
+              className="flex items-center px-4 py-2 font-[590] rounded-md transition-colors"
             >
               <UserPlus className="w-4 h-4 mr-2" strokeWidth={1.75} />
               Invite Members
@@ -205,7 +205,7 @@ export const WorkspaceMembers = () => {
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search by name or email..."
-            className="w-full bg-card border border-border rounded-md pl-9 pr-4 py-2 text-ui text-foreground focus:border-ring focus:ring-1 focus:ring-ring h-auto"
+            className="w-full bg-card pl-9 pr-4 py-2 text-ui text-foreground"
           />
         </div>
         <Select value={filterRole} onValueChange={setFilterRole}>
@@ -287,7 +287,7 @@ export const WorkspaceMembers = () => {
         ) : (
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-border bg-muted text-caption uppercase tracking-wider text-subtle-foreground font-[590]">
+              <tr className="border-b border-border bg-muted text-caption uppercase text-subtle-foreground font-[590]">
                 <th className="px-6 py-4">User</th>
                 <th className="px-6 py-4">Status</th>
                 <th className="px-6 py-4">Role</th>
@@ -319,7 +319,7 @@ export const WorkspaceMembers = () => {
                   <td className="px-6 py-4">
                     <Badge
                       variant={member.state === 'active' ? 'success' : member.state === 'invited' ? 'warning' : 'destructive'}
-                      className="h-auto px-2 py-0.5 rounded uppercase font-[590] tracking-wide"
+                      className="px-2 py-0.5 rounded uppercase font-[590] tracking-wide"
                     >
                       {member.state}
                     </Badge>
@@ -348,7 +348,7 @@ export const WorkspaceMembers = () => {
                       >
                         <DropdownMenuTrigger asChild>
                           <Button
-                            className="p-1.5 text-subtle-foreground hover:text-foreground hover:bg-hover rounded transition-colors h-auto w-auto"
+                            className="p-1.5 text-subtle-foreground hover:text-foreground hover:bg-hover rounded transition-colors w-auto"
                             variant="ghost"
                             size="icon"
                             aria-label={`Actions for ${member.fullName}`}

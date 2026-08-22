@@ -1,21 +1,31 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
-/* ── Card ──────────────────────────────────────────────────────── */
+/**
+ * §8 Cards: `--bg-surface`, 8px radius, 24px padding, and a RING SHADOW rather
+ * than a CSS border — §10, "Use ring shadows for contained elements
+ * (`0 0 0 1px var(--border-subtle)`) instead of CSS `border`."
+ *
+ * `interactive` opts into the hover treatment §8 describes: background shifts
+ * to `--bg-surface-hover`. Colour only — no scale, no opacity (§9).
+ */
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  interactive?: boolean
+}
 
-const Card = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn(
-      "rounded-[8px] bg-card p-6 transition-colors duration-100 ease-in-out",
-      className
-    )}
-    {...props}
-  />
-))
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, interactive = false, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn(
+        "rounded-[8px] bg-card p-6 shadow-sm transition-colors duration-[--duration-fast] ease-standard",
+        interactive && "hover:bg-hover",
+        className
+      )}
+      {...props}
+    />
+  )
+)
 Card.displayName = "Card"
 
 const CardHeader = React.forwardRef<
@@ -24,7 +34,7 @@ const CardHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("flex flex-col space-y-1.5 pb-4", className)}
+    className={cn("flex flex-col gap-1.5 pb-4", className)}
     {...props}
   />
 ))
@@ -36,10 +46,7 @@ const CardTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <h3
     ref={ref}
-    className={cn(
-      "text-heading font-[590] leading-[1.5] text-foreground",
-      className
-    )}
+    className={cn("text-h3 font-[590] text-foreground", className)}
     {...props}
   />
 ))
@@ -51,10 +58,7 @@ const CardDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <p
     ref={ref}
-    className={cn(
-      "text-body font-normal text-muted-foreground",
-      className
-    )}
+    className={cn("text-ui font-normal text-muted-foreground", className)}
     {...props}
   />
 ))

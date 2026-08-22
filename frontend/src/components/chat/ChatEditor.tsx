@@ -85,7 +85,7 @@ function processInline(text: string): string {
   );
   // @mentions
   text = text.replace(/@([\w\s]+?)(?=\s|$|[^a-zA-Z0-9_ ])/g,
-    '<span class="text-primary bg-primary-muted px-1 rounded font-[510]">@$1</span>'
+    '<span class="text-primary-on-muted bg-primary-muted px-1 rounded font-[510]">@$1</span>'
   );
 
   return text;
@@ -245,7 +245,7 @@ export const ChatEditor = ({
       {mentionQuery !== null && filteredMembers.length > 0 && (
         <div className="absolute bottom-full left-0 mb-2 w-64 z-(--z-dropdown) overflow-hidden rounded-lg border border-border bg-card shadow-md">
           <Command shouldFilter={false} className="rounded-none">
-            <div className="px-3 py-1.5 text-micro text-muted-foreground font-[590] uppercase tracking-wider border-b border-border">Members</div>
+            <div className="px-3 py-1.5 text-micro text-muted-foreground font-[590] uppercase border-b border-border">Members</div>
             <CommandList>
               {filteredMembers.map(m => (
                 <CommandItem key={m.userId} value={m.fullName} onSelect={() => insertMention(m)} className="flex items-center gap-2.5 px-3 py-2 text-ui">
@@ -353,7 +353,7 @@ export const ChatEditor = ({
                   onClick={handleSubmit}
                   disabled={isSending || !value.trim()}
                   aria-label="Send message"
-                  className="flex items-center justify-center p-2 rounded-lg bg-primary hover:bg-primary-hover text-primary-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   size="icon" variant="primary"
                 >
                   <SendHorizontal className="w-4 h-4" strokeWidth={1.75} />
