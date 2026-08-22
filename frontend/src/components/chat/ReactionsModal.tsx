@@ -1,5 +1,13 @@
 import { useState, useMemo } from 'react';
-import { X } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 interface Reaction {
   emoji: string;
@@ -40,91 +48,66 @@ export function ReactionsModal({
     return reactions.filter(rx => rx.emoji === activeTab);
   }, [reactions, activeTab]);
 
-  if (!isOpen) return null;
-
   return (
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div 
-        className="absolute left-0 top-full mt-2 z-50 bg-gray-900 rounded-xl shadow-2xl w-full sm:w-[320px] max-w-[90vw] border border-gray-800/50 overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700/50">
-          <h2 className="text-gray-200 font-semibold">{reactions.length} reactions</h2>
-          <button 
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-200 transition-colors rounded-full p-1 hover:bg-gray-700/50"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="sm:max-w-[340px]">
+        <DialogHeader>
+          <DialogTitle>{reactions.length} reactions</DialogTitle>
+          <DialogDescription>
+            People who reacted to this message
+          </DialogDescription>
+        </DialogHeader>
 
         {/* Tabs */}
-        <div className="flex px-2 pt-2 border-b border-gray-700/50 overflow-x-auto scrollbar-hide">
-          <button
-            onClick={() => setActiveTab('all')}
-            className={`flex items-center space-x-1.5 px-3 py-2 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${
-              activeTab === 'all'
-                ? 'border-blue-500 text-blue-400 bg-blue-500/10 rounded-t-lg'
-                : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-800/50 rounded-t-lg'
-            }`}
-          >
-            All
-          </button>
-          
-          {aggregated.map(([emoji, count]) => (
-            <button
-              key={emoji}
-              onClick={() => setActiveTab(emoji)}
-              className={`flex items-center space-x-1.5 px-3 py-2 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${
-                activeTab === emoji
-                  ? 'border-blue-500 text-blue-400 bg-blue-500/10 rounded-t-lg'
-                  : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-800/50 rounded-t-lg'
-              }`}
-            >
-              <span>{emoji}</span>
-              <span>{count}</span>
-            </button>
-          ))}
-        </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="w-full justify-start flex-wrap h-auto">
+            <TabsTrigger value="all" className="flex-none">All</TabsTrigger>
+            {aggregated.map(([emoji, count]) => (
+              <TabsTrigger key={emoji} value={emoji} className="flex-none">
+                {emoji} <span className="text-xs text-muted-foreground ml-1">({count})</span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
-        {/* User List */}
-        <div className="max-h-[60vh] overflow-y-auto">
+          {/* User List */}
+          <TabsContent value={activeTab} className="max-h-[60vh] overflow-y-auto">
           {displayedReactions.map((rx, idx) => {
             const isMe = rx.userId === currentUserId;
-            
+
             return (
-              <div 
+              <div
                 key={`${rx.userId}-${rx.emoji}-${idx}`}
-                className="flex items-center justify-between px-4 py-3 hover:bg-gray-800/30 transition-colors group"
+                className="flex items-center justify-between px-4 py-3 hover:bg-hover transition-colors group"
               >
                 <div className="flex items-center space-x-3">
-                  <div className="w-9 h-9 rounded-md bg-gradient-to-br from-gray-700 to-gray-500 flex items-center justify-center text-white font-bold shadow-md border border-gray-800 flex-shrink-0">
+                  <div className="w-9 h-9 rounded-md bg-hover flex items-center justify-center text-foreground font-bold shadow-md border border-border flex-shrink-0">
                     {(rx.userName?.[0] || 'U').toUpperCase()}
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-gray-200 font-medium">
+                    <span className="text-foreground font-medium">
                       {isMe ? 'You' : (rx.userName || 'Unknown User')}
                     </span>
                     {isMe && (
-                      <button 
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="justify-start px-0 h-auto text-xs text-subtle-foreground hover:text-destructive"
                         onClick={() => onRemoveReaction(rx.emoji)}
-                        className="text-xs text-gray-500 hover:text-red-400 text-left transition-colors"
                       >
                         Click to remove
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
-                <div className="text-xl">
+                <div className="text-xl" aria-hidden="true">
                   {rx.emoji}
                 </div>
               </div>
             );
           })}
-        </div>
-      </div>
-    </>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   );
 }

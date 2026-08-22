@@ -1,11 +1,18 @@
-import { useToastStore } from '../store/toastStore.js';
+import { toast } from 'sonner';
 
-export const useToast = () => {
-  const addToast = useToastStore((state) => state.addToast);
+interface ToastOptions {
+  description?: string;
+  duration?: number;
+}
 
-  return {
-    success: (message: string, duration?: number) => addToast({ type: 'success', message, duration }),
-    error: (message: string, duration?: number) => addToast({ type: 'error', message, duration }),
-    info: (message: string, duration?: number) => addToast({ type: 'info', message, duration }),
-  };
-};
+export interface ToastApi {
+  success: (message: string, options?: ToastOptions) => void;
+  error: (message: string, options?: ToastOptions) => void;
+  info: (message: string, options?: ToastOptions) => void;
+}
+
+export const useToast = (): ToastApi => ({
+  success: (message, options) => toast.success(message, options),
+  error: (message, options) => toast.error(message, options),
+  info: (message, options) => toast.info(message, options),
+});

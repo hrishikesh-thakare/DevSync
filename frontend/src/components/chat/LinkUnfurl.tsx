@@ -55,10 +55,10 @@ export const LinkUnfurl: React.FC<LinkUnfurlProps> = ({ url, workspaceSlug }) =>
       href={url} 
       target="_blank" 
       rel="noopener noreferrer"
-      className="mt-2 flex flex-col md:flex-row border border-gray-700/50 rounded-lg overflow-hidden max-w-2xl bg-gray-900/50 hover:bg-gray-800/80 transition-colors group no-underline text-left"
+      className="mt-2 flex flex-col md:flex-row border border-border rounded-lg overflow-hidden max-w-2xl bg-card hover:bg-hover transition-colors group no-underline text-left"
     >
       {data.image && (
-        <div className="md:w-1/3 bg-gray-800 shrink-0">
+        <div className="md:w-1/3 bg-muted shrink-0">
           <img 
             src={data.image} 
             alt={data.title || 'Preview'} 
@@ -69,15 +69,15 @@ export const LinkUnfurl: React.FC<LinkUnfurlProps> = ({ url, workspaceSlug }) =>
       )}
       <div className="p-4 flex flex-col justify-center flex-1 min-w-0">
         {data.domain && (
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 truncate">
+          <div className="text-xs font-semibold text-subtle-foreground uppercase tracking-wider mb-1 truncate">
             {data.domain}
           </div>
         )}
-        <div className="text-sm font-bold text-gray-200 mb-1.5 group-hover:text-blue-400 transition-colors line-clamp-2">
+        <div className="text-sm font-bold text-foreground mb-1.5 group-hover:text-primary transition-colors line-clamp-2">
           {data.title || url}
         </div>
         {data.description && (
-          <div className="text-xs text-gray-400 line-clamp-3">
+          <div className="text-xs text-muted-foreground line-clamp-3">
             {data.description}
           </div>
         )}

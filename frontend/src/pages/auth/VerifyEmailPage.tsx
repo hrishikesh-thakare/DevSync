@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Loader2, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { apiFetch } from '../../lib/api.js';
+import { Button } from '@/components/ui/button';
 
 type VerifyState = 'verifying' | 'verified' | 'error';
 
@@ -43,30 +44,32 @@ export const VerifyEmailPage = () => {
       <div className="auth-shape-1"></div>
       <div className="auth-shape-2"></div>
 
-      <div className="glass-card-strong max-w-md w-full p-8 animate-fadeIn glow-purple relative z-10 text-center">
+      <div className="bg-card border border-border rounded-lg shadow-sm max-w-md w-full p-8 animate-fadeIn relative z-10 text-center">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold gradient-text mb-2">DevSync</h1>
-          <p className="text-text-secondary text-sm">Email verification</p>
+          <h1 className="text-4xl font-bold text-foreground mb-2">DevSync</h1>
+          <p className="text-muted-foreground text-sm">Email verification</p>
         </div>
 
         {state === 'verifying' && (
           <div className="flex flex-col items-center gap-4 py-6">
-            <Loader2 className="h-12 w-12 animate-spin text-primary-400" />
-            <p className="text-text-secondary text-sm">Verifying your email address…</p>
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <p className="text-muted-foreground text-sm">Verifying your email address…</p>
           </div>
         )}
 
         {state === 'verified' && (
           <div className="space-y-6 py-2">
             <div className="flex justify-center">
-              <CheckCircle2 className="h-16 w-16 text-green-400" />
+              <CheckCircle2 className="h-16 w-16 text-success" />
             </div>
-            <p className="text-text-primary">
-              Your email has been <strong className="text-green-400">verified</strong> successfully.
+            <p className="text-foreground">
+              Your email has been <strong className="text-success">verified</strong> successfully.
             </p>
-            <Link to="/login" className="inline-block gradient-btn w-full py-3 text-center">
-              Go to sign in
-            </Link>
+            <Button asChild variant="default" className="w-full py-3 text-center h-auto">
+              <Link to="/login" className="inline-block bg-primary text-primary-foreground hover:bg-primary-hover rounded-md w-full py-3 text-center">
+                Go to sign in
+              </Link>
+            </Button>
           </div>
         )}
 
@@ -74,15 +77,17 @@ export const VerifyEmailPage = () => {
           <div className="space-y-6 py-2">
             <div className="flex justify-center">
               {token ? (
-                <XCircle className="h-16 w-16 text-red-400" />
+                <XCircle className="h-16 w-16 text-danger" />
               ) : (
-                <AlertTriangle className="h-16 w-16 text-amber-400" />
+                <AlertTriangle className="h-16 w-16 text-warning" />
               )}
             </div>
-            <p className="text-text-primary">{error || 'Something went wrong.'}</p>
-            <Link to="/login" className="inline-block gradient-btn w-full py-3 text-center">
-              Back to sign in
-            </Link>
+            <p className="text-foreground">{error || 'Something went wrong.'}</p>
+            <Button asChild variant="default" className="w-full py-3 text-center h-auto">
+              <Link to="/login" className="inline-block bg-primary text-primary-foreground hover:bg-primary-hover rounded-md w-full py-3 text-center">
+                Back to sign in
+              </Link>
+            </Button>
           </div>
         )}
       </div>

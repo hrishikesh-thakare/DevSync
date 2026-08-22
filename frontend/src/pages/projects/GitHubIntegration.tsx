@@ -9,6 +9,22 @@ import { useAuthStore } from '../../store/auth.js';
 import { CreatePRModal } from './github/CreatePRModal.js';
 import { CommentSection } from './github/CommentSection.js';
 import { CiLogsModal } from './github/CiLogsModal.js';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 
 interface GithubConnection {
   connectionId?: string;
@@ -74,17 +90,18 @@ interface GithubIssue {
 
 export const GitHubIntegration = () => {
   const { slug, key } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as 'prs' | 'issues' | 'ci' | 'commits' | null;
-  const [activeTab, setActiveTab] = useState<'prs' | 'issues' | 'ci' | 'commits'>(
-    tabParam && ['prs', 'issues', 'ci', 'commits'].includes(tabParam) ? tabParam : 'prs'
-  );
+  const activeTab: 'prs' | 'issues' | 'ci' | 'commits' =
+    tabParam && ['prs', 'issues', 'ci', 'commits'].includes(tabParam) ? tabParam : 'prs';
 
-  useEffect(() => {
-    if (tabParam && ['prs', 'issues', 'ci', 'commits'].includes(tabParam)) {
-      setActiveTab(tabParam);
-    }
-  }, [tabParam]);
+  const setActiveTab = (tab: 'prs' | 'issues' | 'ci' | 'commits') => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', tab);
+      return next;
+    });
+  };
   
   const { isAdmin } = useCurrentWorkspaceStore();
   const currentUser = useAuthStore(state => state.user);
@@ -232,18 +249,22 @@ export const GitHubIntegration = () => {
   };
 
   return (
-    <div className="h-full flex flex-col font-sans bg-gray-950 text-gray-200">
+    <Tabs
+      value={activeTab}
+      onValueChange={(v) => setActiveTab(v as 'prs' | 'issues' | 'ci' | 'commits')}
+      className="h-full gap-0 font-sans bg-background text-foreground"
+    >
       
       {/* Banner */}
       {!isConnLoading && !connection && (isAdmin() || isProjectAdmin) && (
-        <div className="bg-blue-600 flex items-center justify-between px-6 py-3 text-white">
+        <div className="bg-primary flex items-center justify-between px-6 py-3 text-primary-foreground">
           <div className="flex items-center space-x-3">
             <GitBranch className="w-5 h-5" />
             <span className="font-semibold text-sm">No GitHub repository connected</span>
           </div>
           <Link 
             to={`/w/${slug}/projects/${key}/settings`} 
-            className="bg-white text-blue-700 px-3 py-1.5 rounded text-sm font-bold hover:bg-gray-100 transition-colors"
+            className="bg-background text-primary px-3 py-1.5 rounded text-sm font-bold hover:bg-hover transition-colors"
           >
             Connect a repository in Project Settings
           </Link>
@@ -251,159 +272,153 @@ export const GitHubIntegration = () => {
       )}
 
       {/* Header */}
-      <div className="px-8 pt-8 pb-4 border-b border-gray-800/60 shrink-0">
+      <div className="px-8 pt-8 pb-4 border-b border-border shrink-0">
         <div className="flex items-start justify-between mb-2">
           <div>
-            <h2 className="text-2xl font-bold text-white flex items-center mb-1">
-              <GitBranch className="w-6 h-6 mr-3 text-white" />
+            <h2 className="text-2xl font-bold text-foreground flex items-center mb-1">
+              <GitBranch className="w-6 h-6 mr-3 text-foreground" />
               GitHub Integration
             </h2>
-            <p className="text-sm text-gray-400 mb-6">Track pull requests and CI/CD pipelines connected to project tasks.</p>
+            <p className="text-sm text-muted-foreground mb-6">Track pull requests and CI/CD pipelines connected to project tasks.</p>
           </div>
           <div className="flex items-center space-x-4">
             {connection && (
               <a 
                 href={`https://github.com/${connection.githubRepoFullName}`}
                 target="_blank" rel="noopener noreferrer"
-                className="flex items-center text-sm font-semibold text-gray-300 hover:text-white bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-lg transition-colors"
+                className="flex items-center text-sm font-semibold text-muted-foreground hover:text-foreground bg-card border border-border px-3 py-1.5 rounded-lg transition-colors"
               >
                 {connection.githubRepoFullName}
-                <ExternalLink className="w-4 h-4 ml-2 text-gray-500" />
+                <ExternalLink className="w-4 h-4 ml-2 text-subtle-foreground" />
               </a>
             )}
-            <button 
+            <Button 
               onClick={handleRefresh}
               disabled={isLoading}
-              className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50"
+              className="p-2 text-muted-foreground hover:text-foreground hover:bg-hover rounded-lg transition-colors disabled:opacity-50"
+              size="icon" variant="ghost"
             >
               <RefreshCw className={clsx("w-5 h-5", isLoading && "animate-spin")} />
-            </button>
+            </Button>
           </div>
         </div>
         
         <div className="flex items-center justify-between">
-          <div className="flex space-x-6">
-
-            <button 
-              onClick={() => setActiveTab('prs')}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'prs' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
-            >
-              Pull Requests {prsTotal > 0 && <span className="ml-1.5 bg-gray-800 text-gray-300 py-0.5 px-2 rounded-full text-xs">{prsTotal}</span>}
-            </button>
-            <button 
-              onClick={() => setActiveTab('issues')}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'issues' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
-            >
-              Issues {issuesTotal > 0 && <span className="ml-1.5 bg-gray-800 text-gray-300 py-0.5 px-2 rounded-full text-xs">{issuesTotal}</span>}
-            </button>
-            <button 
-              onClick={() => setActiveTab('ci')}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'ci' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
-            >
-              CI Runs {ciTotal > 0 && <span className="ml-1.5 bg-gray-800 text-gray-300 py-0.5 px-2 rounded-full text-xs">{ciTotal}</span>}
-            </button>
-            <button 
-              onClick={() => setActiveTab('commits')}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'commits' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
-            >
-              Commits {commitsTotal > 0 && <span className="ml-1.5 bg-gray-800 text-gray-300 py-0.5 px-2 rounded-full text-xs">{commitsTotal}</span>}
-            </button>
-          </div>
+          <TabsList variant="line" className="w-full justify-start gap-6 border-b border-border px-1">
+            <TabsTrigger value="prs" className="flex-1">
+              Pull Requests {prsTotal > 0 && <span className="ml-1.5 bg-secondary text-secondary-foreground py-0.5 px-2 rounded-full text-xs">{prsTotal}</span>}
+            </TabsTrigger>
+            <TabsTrigger value="issues">
+              Issues {issuesTotal > 0 && <span className="ml-1.5 bg-secondary text-secondary-foreground py-0.5 px-2 rounded-full text-xs">{issuesTotal}</span>}
+            </TabsTrigger>
+            <TabsTrigger value="ci">
+              CI Runs {ciTotal > 0 && <span className="ml-1.5 bg-secondary text-secondary-foreground py-0.5 px-2 rounded-full text-xs">{ciTotal}</span>}
+            </TabsTrigger>
+            <TabsTrigger value="commits">
+              Commits {commitsTotal > 0 && <span className="ml-1.5 bg-secondary text-secondary-foreground py-0.5 px-2 rounded-full text-xs">{commitsTotal}</span>}
+            </TabsTrigger>
+          </TabsList>
 
           <div className="flex items-center space-x-3 mb-2">
 
             
             {activeTab === 'ci' && (
-              <select 
-                value={ciConclusionFilter}
-                onChange={e => setCiConclusionFilter(e.target.value)}
-                className="bg-gray-900 border border-gray-800 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none"
-              >
-                <option value="all">All Statuses</option>
-                <option value="success">Passed</option>
-                <option value="failure">Failed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
+              <Select value={ciConclusionFilter} onValueChange={setCiConclusionFilter}>
+                <SelectTrigger className="bg-elevated">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="success">Passed</SelectItem>
+                  <SelectItem value="failure">Failed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
             )}
 
             {activeTab === 'prs' && (
               <div className="flex space-x-2">
-                <select 
-                  value={prStateFilter}
-                  onChange={e => setPrStateFilter(e.target.value)}
-                  className="bg-gray-900 border border-gray-800 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none"
-                >
-                  <option value="all">All States</option>
-                  <option value="open">Open</option>
-                  <option value="closed">Closed</option>
-                  <option value="merged">Merged</option>
-                </select>
-                <button 
+                <Select value={prStateFilter} onValueChange={setPrStateFilter}>
+                  <SelectTrigger className="bg-elevated">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All States</SelectItem>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
+                    <SelectItem value="merged">Merged</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button 
                   onClick={() => setShowCreatePR(true)}
-                  className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-3 py-1.5 rounded-lg flex items-center transition-colors"
+                  className="bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-semibold px-3 py-1.5 rounded-lg flex items-center transition-colors"
+                  variant="default" size="default"
                 >
                   <Plus className="w-4 h-4 mr-1" /> New PR
-                </button>
+                </Button>
               </div>
             )}
             
             {activeTab === 'issues' && (
               <div className="flex space-x-2">
-                <select 
-                  value={issueStateFilter}
-                  onChange={e => setIssueStateFilter(e.target.value as 'all' | 'open' | 'closed')}
-                  className="bg-gray-900 border border-gray-800 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none"
-                >
-                  <option value="all">All States</option>
-                  <option value="open">Open</option>
-                  <option value="closed">Closed</option>
-                </select>
+                <Select value={issueStateFilter} onValueChange={(v) => setIssueStateFilter(v as 'all' | 'open' | 'closed')}>
+                  <SelectTrigger className="bg-elevated">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All States</SelectItem>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             )}
 
 
             {(activeTab === 'ci' || activeTab === 'commits') && (
               <div className="flex space-x-2">
-                <select 
-                  value={branchFilter}
-                  onChange={e => setBranchFilter(e.target.value)}
-                  className="bg-gray-900 border border-gray-800 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none max-w-[200px]"
-                >
-                  <option value="all">All Branches</option>
-                  {branchesList.map(b => (
-                    <option key={b} value={b}>{b}</option>
-                  ))}
-                </select>
+                <Select value={branchFilter} onValueChange={setBranchFilter}>
+                  <SelectTrigger className="bg-elevated max-w-[200px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Branches</SelectItem>
+                    {branchesList.map(b => (
+                      <SelectItem key={b} value={b}>{b}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-8 custom-scrollbar relative">
+      <div className="flex-1 overflow-y-auto p-8 relative">
         {isLoading && (
-          <div className="absolute inset-0 bg-gray-950/50 backdrop-blur-[1px] z-10 flex items-start justify-center pt-24">
-            <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
+          <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-(--z-sticky) flex items-start justify-center pt-24">
+            <Loader2 className="w-8 h-8 animate-spin text-subtle-foreground" />
           </div>
         )}
 
         {error ? (
-          <div className="text-center py-12 border border-dashed border-red-500/30 bg-red-500/5 rounded-xl">
-            <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-3" />
-            <p className="text-red-400">{error}</p>
+          <div className="text-center py-12 border border-dashed border-danger-border bg-danger-muted rounded-lg">
+            <AlertCircle className="w-8 h-8 text-destructive mx-auto mb-3" />
+            <p className="text-destructive">{error}</p>
           </div>
-        ) : activeTab === 'prs' ? (
-          <div className="space-y-4 max-w-5xl">
+        ) : (
+          <>
+          <TabsContent value="prs" className="space-y-4 max-w-5xl">
             {prs.length === 0 && !isLoading ? (
-              <div className="text-center py-16 border border-dashed border-gray-800 rounded-xl bg-gray-900/30">
-                <GitPullRequest className="w-10 h-10 text-gray-700 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-gray-300 mb-1">No pull requests found</h3>
+              <div className="text-center py-16 border border-dashed border-border rounded-lg bg-card">
+                <GitPullRequest className="w-10 h-10 text-subtle-foreground/40 mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-foreground mb-1">No pull requests found</h3>
               </div>
             ) : (
-              <div className="border border-gray-800 rounded-xl overflow-hidden bg-gray-900/30">
+              <div className="border border-border rounded-lg overflow-hidden bg-card">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-gray-900/80 border-b border-gray-800 text-xs font-semibold text-gray-400 tracking-wider">
+                    <tr className="bg-muted border-b border-border text-xs font-semibold text-muted-foreground tracking-wider">
                       <th className="px-4 py-3 w-24">PR</th>
                       <th className="px-4 py-3">Title</th>
                       <th className="px-4 py-3 w-32">Status</th>
@@ -412,38 +427,44 @@ export const GitHubIntegration = () => {
                       <th className="px-4 py-3 w-24 text-right">Link</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-800/60">
+                  <tbody className="divide-y divide-border">
                     {prs.map(pr => (
                       <tr key={pr.id} className="group">
                         <td colSpan={6} className="p-0">
-                          <div className="hover:bg-gray-800/30 transition-colors px-4 py-3 grid" style={{ gridTemplateColumns: '6rem 1fr 8rem 8rem 10rem 6rem' }}>
-                            <span className="text-sm font-mono text-gray-400">#{pr.prNumber}</span>
-                            <span className="text-sm text-gray-200">{pr.title}</span>
+                          <div className="hover:bg-hover transition-colors px-4 py-3 grid" style={{ gridTemplateColumns: '6rem 1fr 8rem 8rem 10rem 6rem' }}>
+                            <span className="text-sm font-mono text-muted-foreground">#{pr.prNumber}</span>
+                            <span className="text-sm text-foreground">{pr.title}</span>
                             <span>
-                              {pr.state === 'open' && <span className="text-green-400 text-xs px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-full">Open</span>}
-                              {pr.state === 'merged' && <span className="text-purple-400 text-xs px-2 py-1 bg-purple-500/10 border border-purple-500/20 rounded-full">Merged</span>}
-                              {pr.state === 'closed' && <span className="text-red-400 text-xs px-2 py-1 bg-red-500/10 border border-red-500/20 rounded-full">Closed</span>}
+                              {pr.state === 'open' && <Badge variant="success" className="h-auto py-1">Open</Badge>}
+                              {pr.state === 'merged' && <Badge variant="outline" className="bg-special-muted text-special border-special-border h-auto py-1">Merged</Badge>}
+                              {pr.state === 'closed' && <Badge variant="destructive" className="h-auto py-1">Closed</Badge>}
                             </span>
                             <span>
-                              {pr.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${pr.taskKey}`} className="inline-flex bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{pr.taskKey}</Link> : <span className="text-gray-600">—</span>}
+                              {pr.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${pr.taskKey}`} className="inline-flex bg-secondary hover:bg-hover text-foreground border border-border text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{pr.taskKey}</Link> : <span className="text-subtle-foreground">—</span>}
                             </span>
-                            <span className="text-xs text-gray-400">
+                            <span className="text-xs text-muted-foreground">
                               {pr.headBranch} → {pr.baseBranch}
                             </span>
                             <span className="flex items-center justify-end space-x-2">
-                              <button
-                                onClick={() => setCommentingOn(commentingOn?.type === 'pr' && commentingOn.number === pr.prNumber ? null : { type: 'pr', number: pr.prNumber })}
-                                className={clsx(
-                                  'text-xs px-2 py-1 rounded transition-colors flex items-center',
-                                  commentingOn?.type === 'pr' && commentingOn.number === pr.prNumber
-                                    ? 'text-blue-400 bg-blue-500/10 border border-blue-500/20'
-                                    : 'text-gray-500 hover:text-gray-300 opacity-0 group-hover:opacity-100'
-                                )}
-                                title="Add comment"
-                              >
-                                <MessageSquare className="w-3.5 h-3.5" />
-                              </button>
-                              {pr.htmlUrl && <a href={pr.htmlUrl} target="_blank" rel="noreferrer" className="inline-flex text-gray-400 hover:text-white"><ExternalLink className="w-4 h-4" /></a>}
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    onClick={() => setCommentingOn(commentingOn?.type === 'pr' && commentingOn.number === pr.prNumber ? null : { type: 'pr', number: pr.prNumber })}
+                                    className={clsx(
+                                      'text-xs px-2 py-1 rounded transition-colors flex items-center',
+                                      commentingOn?.type === 'pr' && commentingOn.number === pr.prNumber
+                                        ? 'text-primary bg-primary-muted border border-primary-border'
+                                        : 'text-subtle-foreground hover:text-foreground opacity-0 group-hover:opacity-100'
+                                    )}
+                                    aria-label="Add comment"
+                                    size="icon" variant="ghost"
+                                  >
+                                    <MessageSquare className="w-3.5 h-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Add comment</TooltipContent>
+                              </Tooltip>
+                              {pr.htmlUrl && <a href={pr.htmlUrl} target="_blank" rel="noreferrer" className="inline-flex text-muted-foreground hover:text-foreground"><ExternalLink className="w-4 h-4" /></a>}
                             </span>
                           </div>
                           {commentingOn?.type === 'pr' && commentingOn.number === pr.prNumber && (
@@ -464,19 +485,18 @@ export const GitHubIntegration = () => {
                 </table>
               </div>
             )}
-          </div>
-        ) : activeTab === 'issues' ? (
-          <div className="space-y-4 max-w-5xl">
+          </TabsContent>
+          <TabsContent value="issues" className="space-y-4 max-w-5xl">
             {issues.length === 0 && !isLoading ? (
-              <div className="text-center py-16 border border-dashed border-gray-800 rounded-xl bg-gray-900/30">
-                <AlertCircle className="w-10 h-10 text-gray-700 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-gray-300 mb-1">No issues found</h3>
+              <div className="text-center py-16 border border-dashed border-border rounded-lg bg-card">
+                <AlertCircle className="w-10 h-10 text-subtle-foreground/40 mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-foreground mb-1">No issues found</h3>
               </div>
             ) : (
-              <div className="border border-gray-800 rounded-xl overflow-hidden bg-gray-900/30">
+              <div className="border border-border rounded-lg overflow-hidden bg-card">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-gray-900/80 border-b border-gray-800 text-xs font-semibold text-gray-400 tracking-wider">
+                    <tr className="bg-muted border-b border-border text-xs font-semibold text-muted-foreground tracking-wider">
                       <th className="px-4 py-3 w-16">#</th>
                       <th className="px-4 py-3">Title</th>
                       <th className="px-4 py-3 w-28">Status</th>
@@ -487,29 +507,29 @@ export const GitHubIntegration = () => {
                       <th className="px-4 py-3 w-16 text-right">Link</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-800/60">
+                  <tbody className="divide-y divide-border">
                     {issues.map(issue => (
-                      <tr key={issue.id} className="hover:bg-gray-800/30 transition-colors">
-                        <td className="px-4 py-3 text-xs font-mono text-gray-500">#{issue.githubIssueNumber}</td>
-                        <td className="px-4 py-3 text-sm text-gray-200 font-medium truncate max-w-sm" title={issue.title}>{issue.title}</td>
+                      <tr key={issue.id} className="hover:bg-hover transition-colors">
+                        <td className="px-4 py-3 text-xs font-mono text-subtle-foreground">#{issue.githubIssueNumber}</td>
+                        <td className="px-4 py-3 text-sm text-foreground font-medium truncate max-w-sm" title={issue.title}>{issue.title}</td>
                         <td className="px-4 py-3">
                           {issue.state === 'open' 
-                            ? <span className="inline-flex items-center text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20"><AlertCircle className="w-3 h-3 mr-1" /> Open</span>
-                            : <span className="inline-flex items-center text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20"><AlertCircle className="w-3 h-3 mr-1" /> Closed</span>
+                            ? <Badge variant="success" className="text-[10px] h-auto uppercase font-bold tracking-wider"><AlertCircle className="w-3 h-3 mr-1" /> Open</Badge>
+                            : <Badge variant="destructive" className="text-[10px] h-auto uppercase font-bold tracking-wider"><AlertCircle className="w-3 h-3 mr-1" /> Closed</Badge>
                           }
                         </td>
                         <td className="px-4 py-3">
-                          <span className="text-xs text-gray-400 truncate w-24">{issue.authorGithubLogin || 'Unknown'}</span>
+                          <span className="text-xs text-muted-foreground truncate w-24">{issue.authorGithubLogin || 'Unknown'}</span>
                         </td>
-                        <td className="px-4 py-3 text-xs text-gray-400 truncate max-w-xs" title={(issue.labels || []).join(', ')}>
+                        <td className="px-4 py-3 text-xs text-muted-foreground truncate max-w-xs" title={(issue.labels || []).join(', ')}>
                           {(issue.labels || []).join(', ') || '—'}
                         </td>
                         <td className="px-4 py-3">
-                          {issue.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${issue.taskKey}`} className="inline-flex bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{issue.taskKey}</Link> : <span className="text-gray-600">—</span>}
+                          {issue.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${issue.taskKey}`} className="inline-flex bg-secondary hover:bg-hover text-foreground border border-border text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{issue.taskKey}</Link> : <span className="text-subtle-foreground">—</span>}
                         </td>
-                        <td className="px-4 py-3 text-xs text-gray-500">{formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}</td>
+                        <td className="px-4 py-3 text-xs text-subtle-foreground">{formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}</td>
                         <td className="px-4 py-3 text-right">
-                          <a href={issue.htmlUrl} target="_blank" rel="noreferrer" className="inline-flex text-gray-400 hover:text-white"><ExternalLink className="w-4 h-4" /></a>
+                          <a href={issue.htmlUrl} target="_blank" rel="noreferrer" className="inline-flex text-muted-foreground hover:text-foreground"><ExternalLink className="w-4 h-4" /></a>
                         </td>
                       </tr>
                     ))}
@@ -517,19 +537,18 @@ export const GitHubIntegration = () => {
                 </table>
               </div>
             )}
-          </div>
-        ) : activeTab === 'commits' ? (
-          <div className="space-y-4 max-w-5xl">
+          </TabsContent>
+          <TabsContent value="commits" className="space-y-4 max-w-5xl">
             {commits.length === 0 && !isLoading ? (
-              <div className="text-center py-16 border border-dashed border-gray-800 rounded-xl bg-gray-900/30">
-                <GitBranch className="w-10 h-10 text-gray-700 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-gray-300 mb-1">No commits found</h3>
+              <div className="text-center py-16 border border-dashed border-border rounded-lg bg-card">
+                <GitBranch className="w-10 h-10 text-subtle-foreground/40 mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-foreground mb-1">No commits found</h3>
               </div>
             ) : (
-              <div className="border border-gray-800 rounded-xl overflow-hidden bg-gray-900/30">
+              <div className="border border-border rounded-lg overflow-hidden bg-card">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-gray-900/80 border-b border-gray-800 text-xs font-semibold text-gray-400 tracking-wider">
+                    <tr className="bg-muted border-b border-border text-xs font-semibold text-muted-foreground tracking-wider">
                       <th className="px-4 py-3 w-24">SHA</th>
                       <th className="px-4 py-3">Message</th>
                       <th className="px-4 py-3 w-32">Author</th>
@@ -539,30 +558,34 @@ export const GitHubIntegration = () => {
                       <th className="px-4 py-3 w-16 text-right">Link</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-800/60">
+                  <tbody className="divide-y divide-border">
                     {commits.map(commit => (
-                      <tr key={commit.id} className="hover:bg-gray-800/30 transition-colors">
-                        <td className="px-4 py-3 text-xs font-mono text-blue-400">{commit.commitSha.substring(0, 7)}</td>
-                        <td className="px-4 py-3 text-sm text-gray-200 truncate max-w-xs" title={commit.messageHeadline}>{commit.messageHeadline}</td>
+                      <tr key={commit.id} className="hover:bg-hover transition-colors">
+                        <td className="px-4 py-3 text-xs font-mono text-primary">{commit.commitSha.substring(0, 7)}</td>
+                        <td className="px-4 py-3 text-sm text-foreground truncate max-w-xs" title={commit.messageHeadline}>{commit.messageHeadline}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center space-x-2">
                             {commit.authorAvatar ? (
-                              <img src={commit.authorAvatar} alt="" className="w-5 h-5 rounded-full" />
+                              <Avatar size="sm" className="size-5">
+                                <AvatarImage src={commit.authorAvatar} alt="" />
+                              </Avatar>
                             ) : (
-                              <div className="w-5 h-5 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-[10px] text-gray-400 font-bold">
-                                {(commit.authorName || '?').charAt(0).toUpperCase()}
-                              </div>
+                              <Avatar size="sm" className="size-5 border border-border">
+                                <AvatarFallback className="bg-secondary text-[10px] text-muted-foreground font-bold">
+                                  {(commit.authorName || '?').charAt(0).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
                             )}
-                            <span className="text-xs text-gray-400 truncate w-24">{commit.authorName || 'Unknown'}</span>
+                            <span className="text-xs text-muted-foreground truncate w-24">{commit.authorName || 'Unknown'}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-xs font-mono text-gray-400 truncate w-40" title={commit.branchName || ''}>{commit.branchName || '—'}</td>
+                        <td className="px-4 py-3 text-xs font-mono text-muted-foreground truncate w-40" title={commit.branchName || ''}>{commit.branchName || '—'}</td>
                         <td className="px-4 py-3">
-                          {commit.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${commit.taskKey}`} className="inline-flex bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{commit.taskKey}</Link> : <span className="text-gray-600">—</span>}
+                          {commit.taskId ? <Link to={`/w/${slug}/projects/${key}/tasks/${commit.taskKey}`} className="inline-flex bg-secondary hover:bg-hover text-foreground border border-border text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">{commit.taskKey}</Link> : <span className="text-subtle-foreground">—</span>}
                         </td>
-                        <td className="px-4 py-3 text-xs text-gray-500">{formatDistanceToNow(new Date(commit.committedAt), { addSuffix: true })}</td>
+                        <td className="px-4 py-3 text-xs text-subtle-foreground">{formatDistanceToNow(new Date(commit.committedAt), { addSuffix: true })}</td>
                         <td className="px-4 py-3 text-right">
-                          {commit.url && <a href={commit.url} target="_blank" rel="noreferrer" className="inline-flex text-gray-400 hover:text-white"><ExternalLink className="w-4 h-4" /></a>}
+                          {commit.url && <a href={commit.url} target="_blank" rel="noreferrer" className="inline-flex text-muted-foreground hover:text-foreground"><ExternalLink className="w-4 h-4" /></a>}
                         </td>
                       </tr>
                     ))}
@@ -570,19 +593,18 @@ export const GitHubIntegration = () => {
                 </table>
               </div>
             )}
-          </div>
-        ) : (
-          <div className="space-y-4 max-w-5xl">
+          </TabsContent>
+          <TabsContent value="ci" className="space-y-4 max-w-5xl">
             {ciRuns.length === 0 && !isLoading ? (
-              <div className="text-center py-16 border border-dashed border-gray-800 rounded-xl bg-gray-900/30">
-                <CheckCircle2 className="w-10 h-10 text-gray-700 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-gray-300 mb-1">No workflow runs yet</h3>
+              <div className="text-center py-16 border border-dashed border-border rounded-lg bg-card">
+                <CheckCircle2 className="w-10 h-10 text-subtle-foreground/40 mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-foreground mb-1">No workflow runs yet</h3>
               </div>
             ) : (
-              <div className="border border-gray-800 rounded-xl overflow-hidden bg-gray-900/30">
+              <div className="border border-border rounded-lg overflow-hidden bg-card">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-gray-900/80 border-b border-gray-800 text-xs font-semibold text-gray-400 tracking-wider">
+                    <tr className="bg-muted border-b border-border text-xs font-semibold text-muted-foreground tracking-wider">
                       <th className="px-4 py-3">Workflow</th>
                       <th className="px-4 py-3 w-32">Status</th>
                       <th className="px-4 py-3 w-40">Branch</th>
@@ -591,35 +613,40 @@ export const GitHubIntegration = () => {
                       <th className="px-4 py-3 w-32 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-800/60">
+                  <tbody className="divide-y divide-border">
                     {ciRuns.map(run => (
-                      <tr key={run.id} className="hover:bg-gray-800/30 transition-colors">
-                        <td className="px-4 py-3 text-sm text-gray-200">{run.workflowName || 'Workflow'}</td>
+                      <tr key={run.id} className="hover:bg-hover transition-colors">
+                        <td className="px-4 py-3 text-sm text-foreground">{run.workflowName || 'Workflow'}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center space-x-1.5">
-                            {run.status === 'in_progress' ? <span className="text-blue-400 text-xs px-2 py-1 bg-blue-500/10 border border-blue-500/20 rounded flex items-center"><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Running</span> :
-                             run.status === 'queued' ? <span className="text-gray-400 text-xs px-2 py-1 bg-gray-500/10 border border-gray-500/20 rounded">Queued</span> :
-                             run.conclusion === 'success' ? <span className="text-emerald-400 text-xs px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded flex items-center"><CheckCircle2 className="w-3 h-3 mr-1" /> Passed</span> :
-                             run.conclusion === 'failure' ? <span className="text-red-400 text-xs px-2 py-1 bg-red-500/10 border border-red-500/20 rounded flex items-center"><XCircle className="w-3 h-3 mr-1" /> Failed</span> :
-                             <span className="text-gray-400 text-xs px-2 py-1 bg-gray-500/10 border border-gray-500/20 rounded">Skipped</span>}
+                            {run.status === 'in_progress' ? <Badge variant="outline" className="bg-primary-muted text-primary border-primary-border h-auto py-1"><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Running</Badge> :
+                             run.status === 'queued' ? <Badge variant="outline" className="h-auto py-1">Queued</Badge> :
+                             run.conclusion === 'success' ? <Badge variant="success" className="h-auto py-1"><CheckCircle2 className="w-3 h-3 mr-1" /> Passed</Badge> :
+                             run.conclusion === 'failure' ? <Badge variant="destructive" className="h-auto py-1"><XCircle className="w-3 h-3 mr-1" /> Failed</Badge> :
+                             <Badge variant="outline" className="h-auto py-1">Skipped</Badge>}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-xs font-mono text-gray-400">{run.headBranch || '—'}</td>
-                        <td className="px-4 py-3 text-sm font-mono text-gray-400">{run.headSha?.substring(0, 7) || '—'}</td>
-                        <td className="px-4 py-3 text-xs text-gray-500">{formatDistanceToNow(new Date(run.triggeredAt), { addSuffix: true })}</td>
+                        <td className="px-4 py-3 text-xs font-mono text-muted-foreground">{run.headBranch || '—'}</td>
+                        <td className="px-4 py-3 text-sm font-mono text-muted-foreground">{run.headSha?.substring(0, 7) || '—'}</td>
+                        <td className="px-4 py-3 text-xs text-subtle-foreground">{formatDistanceToNow(new Date(run.triggeredAt), { addSuffix: true })}</td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end space-x-2">
                             {run.conclusion === 'failure' && (
-                                <button 
-                                  onClick={() => setViewingLogsForRunId(run.runId)}
-                                  className="text-xs text-gray-400 hover:text-white border border-gray-600 px-2 py-1 rounded bg-gray-800/50 flex items-center transition-colors"
-                                  title="View Terminal Logs"
-                                >
-                                  <Terminal className="w-3 h-3 mr-1" />
-                                  Debug
-                                </button>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button 
+                                      onClick={() => setViewingLogsForRunId(run.runId)}
+                                      className="text-xs text-muted-foreground hover:text-foreground border border-border px-2 py-1 rounded bg-secondary flex items-center transition-colors"
+                                      variant="outline" size="default"
+                                    >
+                                      <Terminal className="w-3 h-3 mr-1" />
+                                      Debug
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>View Terminal Logs</TooltipContent>
+                                </Tooltip>
                               )}
-                            {run.htmlUrl && <a href={run.htmlUrl} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-white"><ExternalLink className="w-4 h-4" /></a>}
+                            {run.htmlUrl && <a href={run.htmlUrl} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground"><ExternalLink className="w-4 h-4" /></a>}
                           </div>
                         </td>
                       </tr>
@@ -628,7 +655,8 @@ export const GitHubIntegration = () => {
                 </table>
               </div>
             )}
-          </div>
+          </TabsContent>
+          </>
         )}
       </div>
 
@@ -652,6 +680,6 @@ export const GitHubIntegration = () => {
           onClose={() => setViewingLogsForRunId(null)}
         />
       )}
-    </div>
+    </Tabs>
   );
 };

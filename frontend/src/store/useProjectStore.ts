@@ -23,8 +23,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     
     set({ isLoading: true });
     try {
+      interface RawProject {
+        projectKey: string;
+        name: string;
+        description?: string | null;
+        status?: string;
+      }
       const data = await apiFetch(`/workspaces/${workspace.slug}/projects`);
-      let mappedProjects = data.projects.map((p: any) => ({
+      const mappedProjects = data.projects.map((p: RawProject) => ({
         id: p.projectKey, // Using projectKey as id for frontend routing compatibility
         name: p.name,
         description: p.description || '',
@@ -53,7 +59,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         method: 'POST',
         body: JSON.stringify({
           name: project.name,
-          projectKey: (project as any).projectKey || project.name?.substring(0, 3).toUpperCase(),
+          projectKey: project.projectKey || project.name?.substring(0, 3).toUpperCase(),
           description: project.description
         }),
       });

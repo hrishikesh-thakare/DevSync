@@ -4,6 +4,15 @@ import {
   Eye, EyeOff, Quote, Link2,
 } from 'lucide-react';
 import clsx from 'clsx';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Textarea } from '@/components/ui/textarea';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Command, CommandList, CommandItem } from '@/components/ui/command';
+import { Button } from '@/components/ui/button';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useChatStore as useUploadStore } from '../../store/useChatStore.js';
 import DOMPurify from 'dompurify';
@@ -16,7 +25,7 @@ function mrkdwnToHtml(raw: string): string {
 
   // Fenced code block  ```…```
   text = text.replace(/```([\s\S]*?)```/g, (_, code) =>
-    `<pre class="bg-gray-900 border border-gray-700 rounded-md px-3 py-2 text-sm font-mono text-gray-200 whitespace-pre-wrap my-1 overflow-x-auto">${escapeHtml(code.trim())}</pre>`
+    `<pre class="bg-muted border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground whitespace-pre-wrap my-1 overflow-x-auto">${escapeHtml(code.trim())}</pre>`
   );
 
   // Process line-by-line for block-level elements
@@ -28,7 +37,7 @@ function mrkdwnToHtml(raw: string): string {
     // Blockquote
     if (line.startsWith('> ')) {
       if (inList) { html += '</ul>'; inList = false; }
-      html += `<blockquote class="border-l-4 border-gray-600 pl-3 text-gray-400 italic my-0.5">${processInline(line.slice(2))}</blockquote>`;
+      html += `<blockquote class="border-l-4 border-border-strong pl-3 text-muted-foreground italic my-0.5">${processInline(line.slice(2))}</blockquote>`;
       continue;
     }
 
@@ -57,7 +66,7 @@ function processInline(text: string): string {
   // File attachment links: [filename](file:UUID)  — must come before generic links
   text = text.replace(/\[(.*?)\]\(file:([a-zA-Z0-9-]+)\)/g,
     (_, name, id) =>
-      `<a href="#" data-file-id="${id}" class="inline-flex items-center gap-1.5 px-2 py-0.5 mx-0.5 bg-gray-800 rounded border border-gray-700 text-blue-400 hover:bg-gray-700 transition-colors no-underline text-xs font-medium">📎 ${escapeHtml(name)}</a>`
+      `<a href="#" data-file-id="${id}" class="inline-flex items-center gap-1.5 px-2 py-0.5 mx-0.5 bg-secondary rounded border border-border text-primary hover:bg-hover transition-colors no-underline text-xs font-medium">📎 ${escapeHtml(name)}</a>`
   );
 
   // Bold+Italic  ***text***
@@ -69,14 +78,14 @@ function processInline(text: string): string {
   // Strikethrough  ~text~
   text = text.replace(/~(.*?)~/g, '<del>$1</del>');
   // Inline code  `text`
-  text = text.replace(/`([^`\n]+?)`/g, '<code class="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-xs font-mono text-gray-200">$1</code>');
+  text = text.replace(/`([^`\n]+?)`/g, '<code class="bg-secondary border border-border rounded px-1 py-0.5 text-xs font-mono text-foreground">$1</code>');
   // Hyperlinks  [label](url)
   text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
-    '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-400 underline">$1</a>'
+    '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary underline">$1</a>'
   );
   // @mentions
   text = text.replace(/@([\w\s]+?)(?=\s|$|[^a-zA-Z0-9_ ])/g,
-    '<span class="text-blue-400 bg-blue-500/10 px-1 rounded font-medium">@$1</span>'
+    '<span class="text-primary bg-primary-muted px-1 rounded font-medium">@$1</span>'
   );
 
   return text;
@@ -126,7 +135,6 @@ export const ChatEditor = ({
   const [isUploading, setIsUploading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const [mentionIndex, setMentionIndex] = useState(0);
 
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -167,14 +175,6 @@ export const ChatEditor = ({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const ta = taRef.current!;
 
-    // Mention navigation
-    if (mentionQuery !== null && filteredMembers.length > 0) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex(i => Math.min(i + 1, filteredMembers.length - 1)); return; }
-      if (e.key === 'ArrowUp')   { e.preventDefault(); setMentionIndex(i => Math.max(i - 1, 0)); return; }
-      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(filteredMembers[mentionIndex]); return; }
-      if (e.key === 'Escape')    { setMentionQuery(null); return; }
-    }
-
     // Ctrl / Cmd shortcuts
     if (e.ctrlKey || e.metaKey) {
       switch (e.key.toLowerCase()) {
@@ -199,7 +199,7 @@ export const ChatEditor = ({
     setValue(val);
     const caret = e.target.selectionStart;
     const match = val.slice(0, caret).match(/@([\w ]*)$/);
-    if (match) { setMentionQuery(match[1]); setMentionIndex(0); }
+    if (match) { setMentionQuery(match[1]); }
     else setMentionQuery(null);
   };
 
@@ -243,41 +243,36 @@ export const ChatEditor = ({
     <div className="relative">
       {/* @mention popup */}
       {mentionQuery !== null && filteredMembers.length > 0 && (
-        <div className="absolute bottom-full left-0 mb-2 w-64 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-50">
-          <div className="px-3 py-1.5 text-[10px] text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-800">
-            Members
-          </div>
-          {filteredMembers.map((m, i) => (
-            <button
-              key={m.userId}
-              onMouseDown={e => { e.preventDefault(); insertMention(m); }}
-              className={clsx(
-                'w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-left',
-                i === mentionIndex ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800/60',
-              )}
-            >
-              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
-                {m.fullName[0].toUpperCase()}
-              </div>
-              <span>{m.fullName}</span>
-            </button>
-          ))}
+        <div className="absolute bottom-full left-0 mb-2 w-64 z-(--z-dropdown) overflow-hidden rounded-lg border border-border bg-popover shadow-md">
+          <Command shouldFilter={false} className="rounded-none">
+            <div className="px-3 py-1.5 text-[10px] text-muted-foreground font-semibold uppercase tracking-wider border-b border-border">Members</div>
+            <CommandList>
+              {filteredMembers.map(m => (
+                <CommandItem key={m.userId} value={m.fullName} onSelect={() => insertMention(m)} className="flex items-center gap-2.5 px-3 py-2 text-sm">
+                  <Avatar size="sm" className="shrink-0">
+                    <AvatarFallback className="bg-primary text-[10px] font-bold text-primary-foreground">{m.fullName[0].toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <span>{m.fullName}</span>
+                </CommandItem>
+              ))}
+            </CommandList>
+          </Command>
         </div>
       )}
 
       {/* Editor card */}
-      <div className="bg-gray-900 border border-gray-700/60 rounded-xl overflow-hidden shadow-lg focus-within:ring-1 focus-within:ring-white/30 focus-within:border-white/40 transition-all">
+      <div className="bg-card border border-border rounded-lg overflow-hidden shadow-sm focus-within:ring-1 focus-within:ring-ring focus-within:border-ring transition-all">
 
         {/* Preview mode */}
         {showPreview && (
           <div
-            className="px-4 py-3 min-h-[60px] max-h-[300px] overflow-y-auto text-[15px] text-gray-200 leading-relaxed prose prose-invert max-w-none prose-p:my-0"
-            dangerouslySetInnerHTML={{ __html: value.trim() ? DOMPurify.sanitize(mrkdwnToHtml(value)) : DOMPurify.sanitize(`<span class="text-gray-500">${placeholder}</span>`) }}
+            className="message-body px-4 py-3 min-h-[60px] max-h-[300px] overflow-y-auto text-foreground max-w-none"
+            dangerouslySetInnerHTML={{ __html: value.trim() ? DOMPurify.sanitize(mrkdwnToHtml(value)) : DOMPurify.sanitize(`<span class="text-subtle-foreground">${placeholder}</span>`) }}
           />
         )}
 
         {/* Textarea (hidden when preview) */}
-        <textarea
+        <Textarea
           ref={taRef}
           value={value}
           onChange={handleChange}
@@ -285,7 +280,7 @@ export const ChatEditor = ({
           placeholder={placeholder}
           rows={1}
           className={clsx(
-            'w-full bg-transparent resize-none border-none outline-none px-4 pt-3 pb-2 text-[15px] text-gray-200 placeholder:text-gray-500 leading-relaxed',
+            'w-full bg-transparent resize-none border-none outline-none px-4 pt-3 pb-2 text-body text-foreground placeholder:text-subtle-foreground leading-relaxed min-h-0 h-auto md:text-body',
             showPreview && 'hidden',
           )}
           style={{ maxHeight: '300px', overflowY: 'auto' }}
@@ -302,21 +297,21 @@ export const ChatEditor = ({
               { label: '> quote', tip: '' },
               { label: '- list', tip: '' },
             ].map(({ label, tip }) => (
-              <span key={label} className="text-[11px] text-gray-600 font-mono" title={tip}>
+              <span key={label} className="text-[11px] text-subtle-foreground font-mono" title={tip}>
                 {label}
-                {tip && <span className="text-gray-700 ml-1 font-sans not-italic">{tip}</span>}
+                {tip && <span className="text-subtle-foreground ml-1 font-sans not-italic">{tip}</span>}
               </span>
             ))}
           </div>
         )}
 
         {/* Toolbar */}
-        <div className="flex items-center justify-between px-2 py-1.5 bg-gray-950 border-t border-gray-800/60">
+        <div className="flex items-center justify-between px-2 py-1.5 bg-background border-t border-border">
           <div className="flex items-center gap-0.5">
             {/* File attach */}
             <ToolBtn title="Attach file (+)" onClick={() => fileInputRef.current?.click()} disabled={isUploading || isSending}>
               {isUploading
-                ? <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
                 : <Plus className="w-4 h-4" />
               }
             </ToolBtn>
@@ -349,17 +344,23 @@ export const ChatEditor = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-600 hidden sm:block">
+            <span className="text-[10px] text-subtle-foreground hidden sm:block">
               {showPreview ? 'Preview' : 'Enter to send · Shift+Enter for newline'}
             </span>
-            <button
-              onClick={handleSubmit}
-              disabled={isSending || !value.trim()}
-              title="Send (Enter)"
-              className="flex items-center justify-center p-2 rounded-lg bg-white hover:bg-gray-200 text-gray-950 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <SendHorizontal className="w-4 h-4" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isSending || !value.trim()}
+                  aria-label="Send message"
+                  className="flex items-center justify-center p-2 rounded-lg bg-primary hover:bg-primary-hover text-primary-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  size="icon" variant="default"
+                >
+                  <SendHorizontal className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Send (Enter)</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </div>
@@ -368,24 +369,38 @@ export const ChatEditor = ({
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const Sep = () => <div className="w-px h-4 bg-gray-800 mx-1 shrink-0" />;
+const Sep = () => <div className="w-px h-4 bg-border mx-1 shrink-0" />;
 
 const ToolBtn = ({
   children, onClick, disabled = false, title, active = false,
-}: { children: React.ReactNode; onClick: () => void; disabled?: boolean; title?: string; active?: boolean }) => (
-  <button
-    onMouseDown={e => { e.preventDefault(); onClick(); }}
-    disabled={disabled}
-    title={title}
-    className={clsx(
-      'p-1.5 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
-      active
-        ? 'bg-gray-700 text-gray-200'
-        : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800',
-    )}
-  >
-    {children}
-  </button>
-);
+}: { children: React.ReactNode; onClick: () => void; disabled?: boolean; title?: string; active?: boolean }) => {
+  const button = (
+    <button
+      type="button"
+      onMouseDown={e => { e.preventDefault(); }}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={title}
+      aria-pressed={active}
+      className={clsx(
+        'p-1.5 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-ring',
+        active
+          ? 'bg-secondary text-secondary-foreground'
+          : 'text-subtle-foreground hover:text-foreground hover:bg-hover',
+      )}
+    >
+      {children}
+    </button>
+  );
+
+  if (!title) return button;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent>{title}</TooltipContent>
+    </Tooltip>
+  );
+};
 
 export default ChatEditor;

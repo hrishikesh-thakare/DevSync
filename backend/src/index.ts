@@ -84,8 +84,59 @@ import auditRoutes from './modules/audit/audit.routes.js';
 app.use('/api/audit', auditRoutes);
 
 import { createServer } from 'http';
-import { initSocket } from './sockets/index.js';
-import { registerWorkers } from './workers/index.js';
+import { initSocket, getIO } from './sockets/index.js';
+import { registerWorkers, shutdownQueue } from './workers/index.js';
+import { queryClient } from './config/db.js';
+
+// ─── Graceful Shutdown ────────────────────────────────────────────────────────
+let isShuttingDown = false;
+
+const shutdown = async (signal: string) => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`\n🛑 ${signal} received, starting graceful shutdown...`);
+
+  // Stop accepting new connections
+  httpServer.close(() => {
+    console.log('✅ HTTP server closed');
+  });
+
+  // Close Socket.io connections
+  try {
+    const io = getIO();
+    io.close(() => {
+      console.log('✅ Socket.io closed');
+    });
+  } catch {
+    // Socket.io may not be initialized
+  }
+
+  // Drain background job queue
+  shutdownQueue();
+  console.log('✅ Job queue drained');
+
+  // Close database connection
+  try {
+    await queryClient.end({ timeout: 5 });
+    console.log('✅ Database connection closed');
+  } catch (err) {
+    console.error('❌ Database close error:', err);
+  }
+
+  // Force exit after timeout
+  setTimeout(() => {
+    console.error('⏱️  Shutdown timeout, forcing exit');
+    process.exit(1);
+  }, 10_000).unref();
+
+  // Exit cleanly once all handles are closed
+  process.on('exit', () => {
+    console.log('👋 Graceful shutdown complete');
+  });
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 // ─── Start Server ────────────────────────────────────────────────────────────
 const httpServer = createServer(app);

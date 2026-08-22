@@ -36,7 +36,14 @@ class SocketClient {
 
   getSocket() {
     const currentToken = localStorage.getItem('accessToken') || '';
-    if (!this.socket || !this.socket.connected || (this.socket.auth as any)?.token !== currentToken) {
+    // `Socket.auth` is typed as a bag-or-callback union upstream. This client
+    // only ever sets the object form, with the single `token` key assigned in
+    // `connect()` — so narrow to that instead of erasing the type.
+    if (
+      !this.socket ||
+      !this.socket.connected ||
+      (this.socket.auth as { token?: string })?.token !== currentToken
+    ) {
       return this.connect();
     }
     return this.socket;

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Bell, User, UserMinus, MessageSquare, AtSign, 
@@ -9,23 +9,32 @@ import { NotificationSettingsModal } from './NotificationSettingsModal';
 import { useNotificationStore, Notification } from '../../store/useNotificationStore';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace';
 import { socketClient } from '../../lib/socket';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
 
 const getTypeIcon = (type: string) => {
   switch (type) {
-    case 'task_assigned': return <User size={16} className="text-blue-400" />;
-    case 'task_unassigned': return <UserMinus size={16} className="text-red-400" />;
-    case 'task_commented': return <MessageSquare size={16} className="text-green-400" />;
-    case 'task_mentioned': return <AtSign size={16} className="text-purple-400" />;
-    case 'task_status_changed': return <ArrowRightLeft size={16} className="text-yellow-400" />;
-    case 'sprint_started': return <Play size={16} className="text-green-400" />;
-    case 'sprint_closed': return <CheckCircle size={16} className="text-gray-400" />;
-    case 'channel_mentioned': return <Hash size={16} className="text-pink-400" />;
-    case 'dm_received': return <Mail size={16} className="text-indigo-400" />;
-    case 'commit_linked': return <GitCommit size={16} className="text-orange-400" />;
-    case 'ci_failed': return <XCircle size={16} className="text-red-500" />;
-    case 'project_member_added': return <Briefcase size={16} className="text-teal-400" />;
-    case 'workspace_invited': return <Building2 size={16} className="text-blue-500" />;
-    default: return <Bell size={16} className="text-gray-400" />;
+    case 'task_assigned': return <User size={16} className="text-primary" />;
+    case 'task_unassigned': return <UserMinus size={16} className="text-danger" />;
+    case 'task_commented': return <MessageSquare size={16} className="text-success" />;
+    case 'task_mentioned': return <AtSign size={16} className="text-special" />;
+    case 'task_status_changed': return <ArrowRightLeft size={16} className="text-warning" />;
+    case 'sprint_started': return <Play size={16} className="text-success" />;
+    case 'sprint_closed': return <CheckCircle size={16} className="text-muted-foreground" />;
+    case 'channel_mentioned': return <Hash size={16} className="text-special" />;
+    case 'dm_received': return <Mail size={16} className="text-primary" />;
+    case 'commit_linked': return <GitCommit size={16} className="text-warning" />;
+    case 'ci_failed': return <XCircle size={16} className="text-danger" />;
+    case 'project_member_added': return <Briefcase size={16} className="text-success" />;
+    case 'workspace_invited': return <Building2 size={16} className="text-primary" />;
+    default: return <Bell size={16} className="text-muted-foreground" />;
   }
 };
 
@@ -50,7 +59,6 @@ const formatTimeAgo = (dateString: string) => {
 const NotificationDropdown: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { slug } = useCurrentWorkspaceStore();
   const { notifications, unreadCount, fetchNotifications, markAsRead, markAllAsRead, addNotification } = useNotificationStore();
@@ -71,16 +79,6 @@ const NotificationDropdown: React.FC = () => {
       }
     };
   }, [fetchNotifications, addNotification]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const handleNotificationClick = async (notif: Notification) => {
     if (!notif.isRead) {
@@ -107,96 +105,103 @@ const NotificationDropdown: React.FC = () => {
   const displayNotifications = notifications.slice(0, 10);
 
   return (
-    <div className="relative" ref={dropdownRef}>
-      <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-text-secondary hover:text-text-primary transition-colors focus:outline-none"
-      >
-        <Bell size={20} />
-        {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-accent-purple text-[10px] font-bold text-white border-2 border-bg-primary">
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </span>
-        )}
-      </button>
+    <>
+      <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            onClick={() => setIsOpen(!isOpen)}
+            variant="ghost"
+            size="icon"
+            className="relative p-2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none h-auto w-auto"
+            aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'}
+          >
+            <Bell size={20} />
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-primary text-[10px] font-bold text-primary-foreground border-2 border-background">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </Button>
+        </DropdownMenuTrigger>
 
-      {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-bg-elevated border border-border-default rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-border-default flex items-center justify-between bg-bg-tertiary">
-            <h3 className="font-bold text-white text-sm">Notifications</h3>
+        <DropdownMenuContent align="end" className="w-80 sm:w-96 p-0">
+          <DropdownMenuLabel className="flex items-center justify-between px-4 py-3 border-b border-border font-bold text-foreground text-sm">
+            <span>Notifications</span>
             <div className="flex items-center gap-3">
               {unreadCount > 0 && (
-                <button 
+                <Button
                   onClick={() => markAllAsRead()}
-                  className="text-xs text-accent-purple hover:text-accent-purple/80 font-medium"
+                  variant="ghost"
+                  className="text-xs text-primary hover:text-primary-hover font-medium h-auto"
                 >
                   Mark all as read
-                </button>
+                </Button>
               )}
-              <button 
+              <Button
                 onClick={() => { setIsOpen(false); setIsSettingsOpen(true); }}
-                className="text-text-muted hover:text-white transition-colors"
-                title="Notification Settings"
+                variant="ghost"
+                size="icon"
+                className="text-subtle-foreground hover:text-foreground transition-colors h-auto w-auto"
+                aria-label="Notification Settings"
               >
                 <Settings size={14} />
-              </button>
+              </Button>
             </div>
-          </div>
+          </DropdownMenuLabel>
 
-          <div className="flex-1 overflow-y-auto max-h-[400px]">
+          <div className="max-h-[400px] overflow-y-auto">
             {displayNotifications.length === 0 ? (
-              <div className="p-8 text-center text-text-muted flex flex-col items-center">
+              <div className="p-8 text-center text-subtle-foreground flex flex-col items-center">
                 <Bell size={24} className="mb-2 opacity-20" />
                 <p className="text-sm">No notifications yet</p>
               </div>
             ) : (
               displayNotifications.map((notif) => (
-                <div 
+                <DropdownMenuItem
                   key={notif.notificationId}
-                  onClick={() => handleNotificationClick(notif)}
-                  className={`px-4 py-3 border-b border-border-default/50 hover:bg-white/5 cursor-pointer flex gap-3 transition-colors ${!notif.isRead ? 'bg-accent-purple/5' : ''}`}
+                  onSelect={() => handleNotificationClick(notif)}
+                  className={`px-4 py-3 border-b border-border/50 cursor-pointer gap-3 ${!notif.isRead ? 'bg-primary-muted' : ''}`}
                 >
-                  <div className="mt-1 relative flex-shrink-0">
+                  <span className="self-start mt-1 relative flex-shrink-0">
                     {!notif.isRead && (
-                      <span className="absolute -left-3 top-1.5 w-1.5 h-1.5 rounded-full bg-accent-purple"></span>
+                      <span className="absolute -left-3 top-1.5 w-1.5 h-1.5 rounded-full bg-primary"></span>
                     )}
                     {getTypeIcon(notif.type)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-start gap-2">
-                      <p className={`text-sm ${!notif.isRead ? 'font-semibold text-white' : 'font-medium text-gray-300'}`}>
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="flex justify-between items-start gap-2">
+                      <span className={`text-sm ${!notif.isRead ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground'}`}>
                         {notif.title}
-                      </p>
-                      <span className="text-[10px] text-text-muted whitespace-nowrap flex-shrink-0">
+                      </span>
+                      <span className="text-[10px] text-subtle-foreground whitespace-nowrap flex-shrink-0">
                         {formatTimeAgo(notif.createdAt)}
                       </span>
-                    </div>
+                    </span>
                     {notif.body && (
-                      <p className="text-xs text-text-muted mt-1 truncate">
+                      <span className="block text-xs text-subtle-foreground mt-1 truncate">
                         {notif.body}
-                      </p>
+                      </span>
                     )}
-                  </div>
-                </div>
+                  </span>
+                </DropdownMenuItem>
               ))
             )}
           </div>
 
-          <div className="p-2 border-t border-border-default bg-bg-tertiary">
-            <button 
-              onClick={handleViewAll}
-              className="w-full py-2 text-sm text-center text-text-secondary hover:text-white font-medium rounded-md hover:bg-white/5 transition-colors"
-            >
-              View all notifications
-            </button>
-          </div>
-        </div>
-      )}
+          <DropdownMenuSeparator className="my-0" />
+          <DropdownMenuItem
+            onSelect={handleViewAll}
+            className="py-2 justify-center text-sm text-center text-muted-foreground focus:text-foreground font-medium"
+          >
+            View all notifications
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       
       {isSettingsOpen && (
         <NotificationSettingsModal onClose={() => setIsSettingsOpen(false)} />
       )}
-    </div>
+    </>
   );
 };
 

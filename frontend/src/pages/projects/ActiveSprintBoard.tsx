@@ -7,10 +7,35 @@ import { formatDistanceToNow } from 'date-fns';
 import { useAuthStore } from '../../store/auth.js';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 import { useBoardStore } from '../../store/boardStore.js';
+import { Button } from '@/components/ui/button';
+
+/**
+ * A sprint as returned by `GET /workspaces/:slug/projects/:key/sprints`. Only the
+ * fields this header renders are declared. `stats` and `aiSummary` are optional
+ * because the worker writes them after a sprint closes.
+ */
+interface SprintDetail {
+  sprintId: string;
+  name: string;
+  status: 'future' | 'active' | 'closed';
+  goal?: string | null;
+  endDate?: string | null;
+  capacityPoints?: number | null;
+  stats?: {
+    totalPoints?: number;
+    completedPoints?: number;
+    taskCount?: number;
+    completedCount?: number;
+  };
+  aiSummary?: {
+    summary: string;
+    highlights?: string[];
+  } | null;
+}
 
 export const ActiveSprintBoard = () => {
   const { slug, key, sprintId } = useParams();
-  const [activeSprint, setActiveSprint] = useState<any>(null);
+  const [activeSprint, setActiveSprint] = useState<SprintDetail | null>(null);
 
   const currentUser = useAuthStore(state => state.user);
   const { isAdmin } = useCurrentWorkspaceStore();
@@ -25,13 +50,13 @@ export const ActiveSprintBoard = () => {
       try {
         const { apiFetch } = await import('../../lib/api.js');
         const data = await apiFetch(`/workspaces/${slug}/projects/${key}/sprints`);
-        let sprint;
+        let sprint: SprintDetail | undefined;
         if (sprintId) {
-          sprint = data.sprints?.find((s: any) => s.sprintId === sprintId);
+          sprint = data.sprints?.find((s: SprintDetail) => s.sprintId === sprintId);
         } else {
-          sprint = data.sprints?.find((s: any) => s.status === 'active');
+          sprint = data.sprints?.find((s: SprintDetail) => s.status === 'active');
         }
-        setActiveSprint(sprint);
+        setActiveSprint(sprint ?? null);
       } catch (err) {
         console.error('Failed to fetch sprints', err);
       }
@@ -44,17 +69,17 @@ export const ActiveSprintBoard = () => {
       
       {/* Active Sprint Header */}
       {activeSprint && (
-      <div className="bg-gray-900/80 border-b border-gray-800/60 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between shrink-0">
+      <div className="bg-card border-b border-border px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between shrink-0">
         <div>
           <div className="flex items-center space-x-3 mb-1">
-            <h2 className="text-xl font-bold text-white">{activeSprint.name}</h2>
-            <span className="bg-white/10 border border-white/20 text-gray-300 text-[10px] font-bold uppercase px-2 py-0.5 rounded">
+            <h2 className="text-xl font-bold text-foreground">{activeSprint.name}</h2>
+            <span className="bg-secondary border border-border text-muted-foreground text-[10px] font-bold uppercase px-2 py-0.5 rounded">
               {activeSprint.status === 'closed' ? 'Closed' : activeSprint.status === 'future' ? 'Planned' : 'Active'}
             </span>
           </div>
-          <div className="flex items-center text-sm text-gray-400 space-x-4">
+          <div className="flex items-center text-sm text-muted-foreground space-x-4">
             {activeSprint.goal && (
-            <span className="flex items-center text-gray-300">
+            <span className="flex items-center text-foreground">
               <Target className="w-4 h-4 mr-1.5" />
               Goal: {activeSprint.goal}
             </span>
@@ -66,7 +91,7 @@ export const ActiveSprintBoard = () => {
             </span>
             )}
             {activeSprint.status === 'closed' && (
-            <span className="flex items-center text-purple-400 font-mono text-xs">
+            <span className="flex items-center text-special font-mono text-xs">
               {activeSprint.stats?.completedPoints ?? 0} pts completed
             </span>
             )}
@@ -87,22 +112,22 @@ export const ActiveSprintBoard = () => {
           return (
           <div className="mt-4 sm:mt-0 flex items-center space-x-6">
             <div className="flex flex-col items-end">
-              <div className="text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Sprint Progress</div>
+              <div className="text-xs font-semibold text-subtle-foreground mb-1 uppercase tracking-wider">Sprint Progress</div>
               <div className="flex items-center space-x-3">
-                <div className="w-32 h-2.5 bg-gray-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-white rounded-full transition-all" style={{ width: `${pct}%` }}></div>
+                <div className="w-32 h-2.5 bg-secondary rounded-full overflow-hidden">
+                  <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }}></div>
                 </div>
-                <span className="text-sm font-mono text-gray-300">{pct}%</span>
+                <span className="text-sm font-mono text-foreground">{pct}%</span>
               </div>
-              <div className="text-xs text-gray-500 mt-1 font-mono">
+              <div className="text-xs text-subtle-foreground mt-1 font-mono">
                 {hasPoints ? `${completedPoints} / ${totalPoints} pts` : `${completedCount} / ${taskCount} tasks`}
                 {activeSprint.capacityPoints != null && hasPoints && ` · capacity ${activeSprint.capacityPoints}`}
               </div>
             </div>
             {canManageSprint && (
-              <button className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium rounded-lg transition-colors border border-gray-700">
+              <Button className="px-4 py-2 bg-secondary hover:bg-hover text-foreground text-sm font-medium rounded-lg transition-colors border border-border" variant="secondary" size="default">
                 Complete Sprint
-              </button>
+              </Button>
             )}
           </div>
           );
@@ -112,16 +137,16 @@ export const ActiveSprintBoard = () => {
 
       {/* AI Summary for closed sprints */}
       {activeSprint?.status === 'closed' && activeSprint.aiSummary && (
-        <div className="bg-gradient-to-br from-purple-900/20 to-gray-900/40 border-b border-purple-500/20 px-6 py-4 shrink-0">
-          <div className="flex items-center text-xs text-purple-400 font-semibold uppercase tracking-wider mb-1.5">
+        <div className="bg-special-muted border-b border-special-border px-6 py-4 shrink-0">
+          <div className="flex items-center text-xs text-special font-semibold uppercase tracking-wider mb-1.5">
             <Sparkles className="w-3.5 h-3.5 mr-1.5" /> AI Sprint Summary
           </div>
-          <p className="text-sm text-gray-300 leading-relaxed">{activeSprint.aiSummary.summary}</p>
+          <p className="text-sm text-foreground leading-relaxed">{activeSprint.aiSummary.summary}</p>
           {activeSprint.aiSummary.highlights && activeSprint.aiSummary.highlights.length > 0 && (
             <ul className="mt-1.5 space-y-0.5">
               {activeSprint.aiSummary.highlights.map((h: string, idx: number) => (
-                <li key={idx} className="text-xs text-gray-400 flex items-start">
-                  <span className="text-purple-400 mr-1.5">•</span>
+                <li key={idx} className="text-xs text-muted-foreground flex items-start">
+                  <span className="text-special mr-1.5">•</span>
                   {h}
                 </li>
               ))}
@@ -131,7 +156,7 @@ export const ActiveSprintBoard = () => {
       )}
 
       {/* The actual Kanban Board component reused inside this container */}
-      <div className="flex-1 overflow-x-auto relative bg-gray-950">
+      <div className="flex-1 overflow-x-auto relative bg-background">
         <BoardPage sprintId={activeSprint?.sprintId} />
       </div>
     </div>

@@ -1,6 +1,25 @@
 import { useState, useEffect } from 'react';
-import { X, Loader2, GitPullRequest } from 'lucide-react';
+import { Loader2, GitPullRequest } from 'lucide-react';
 import { apiFetch } from '../../../lib/api.js';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface CreatePRModalProps {
   slug: string;
@@ -15,7 +34,7 @@ export const CreatePRModal = ({ slug, keyStr, onClose, onCreated }: CreatePRModa
   const [head, setHead] = useState('');
   const [base, setBase] = useState('main');
   const [taskId, setTaskId] = useState('');
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,7 +50,7 @@ export const CreatePRModal = ({ slug, keyStr, onClose, onCreated }: CreatePRModa
           apiFetch(`/workspaces/${slug}/projects/${keyStr}/github/branches`)
         ]);
         setTasks(taskRes.tasks || []);
-        
+
         // Extract branch names, handling duplicates
         const branchNames = (branchRes.branches || []).map((b: { branchName: string }) => b.branchName);
         setBranches(Array.from(new Set(branchNames)));
@@ -67,141 +86,136 @@ export const CreatePRModal = ({ slug, keyStr, onClose, onCreated }: CreatePRModa
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-gray-900 border border-gray-800 rounded-xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
-        
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-          <div className="flex items-center space-x-2">
-            <GitPullRequest className="w-5 h-5 text-gray-300" />
-            <h2 className="text-lg font-bold text-white">Create Pull Request</h2>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <GitPullRequest className="w-5 h-5 text-foreground" />
+            Create Pull Request
+          </DialogTitle>
+          <DialogDescription>
+            Open a pull request in the connected GitHub repository.
+          </DialogDescription>
+        </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400">
+            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive" role="alert">
               {error}
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-1.5">PR Title *</label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="pr-title">PR Title *</Label>
+            <Input
+              id="pr-title"
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="e.g., feat: implemented new login flow"
-              className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2.5 text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               disabled={isSubmitting}
+              required
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-sm font-semibold text-gray-300">Source (head) *</label>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="pr-head">Source (head) *</Label>
               {branches.length > 0 ? (
-                <select
-                  value={head}
-                  onChange={e => setHead(e.target.value)}
-                  className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  disabled={isSubmitting || isLoadingMeta}
-                >
-                  <option value="">Select source branch</option>
-                  {branches.map(b => (
-                    <option key={b} value={b}>{b}</option>
-                  ))}
-                </select>
+                <Select value={head || undefined} onValueChange={setHead} disabled={isSubmitting || isLoadingMeta}>
+                  <SelectTrigger id="pr-head" className="w-full">
+                    <SelectValue placeholder="Select source branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map(b => (
+                      <SelectItem key={b} value={b}>{b}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               ) : (
-                <input
+                <Input
+                  id="pr-head"
                   type="text"
                   value={head}
                   onChange={e => setHead(e.target.value)}
-                  placeholder={isLoadingMeta ? "Loading branches..." : "e.g., feature/login-fix"}
-                  className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2.5 text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  placeholder={isLoadingMeta ? 'Loading branches...' : 'e.g., feature/login-fix'}
                   disabled={isSubmitting || isLoadingMeta}
                 />
               )}
             </div>
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-sm font-semibold text-gray-300">Target (base) *</label>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="pr-base">Target (base) *</Label>
               {branches.length > 0 ? (
-                <select
-                  value={base}
-                  onChange={e => setBase(e.target.value)}
-                  className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  disabled={isSubmitting || isLoadingMeta}
-                >
-                  {branches.map(b => (
-                    <option key={b} value={b}>{b}</option>
-                  ))}
-                </select>
+                <Select value={base || undefined} onValueChange={setBase} disabled={isSubmitting || isLoadingMeta}>
+                  <SelectTrigger id="pr-base" className="w-full">
+                    <SelectValue placeholder="Select target branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map(b => (
+                      <SelectItem key={b} value={b}>{b}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               ) : (
-                <input
+                <Input
+                  id="pr-base"
                   type="text"
                   value={base}
                   onChange={e => setBase(e.target.value)}
                   placeholder="e.g., main"
-                  className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   disabled={isSubmitting}
                 />
               )}
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-1.5">Description</label>
-            <textarea
+          <div className="space-y-2">
+            <Label htmlFor="pr-body">Description</Label>
+            <Textarea
+              id="pr-body"
               value={body}
               onChange={e => setBody(e.target.value)}
               placeholder="Describe the changes in this PR..."
-              className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2.5 text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-32 resize-none custom-scrollbar"
+              className="h-32 resize-none"
               disabled={isSubmitting}
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-1.5">Link to Task (Optional)</label>
-            <select
-              value={taskId}
-              onChange={e => setTaskId(e.target.value)}
-              className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              disabled={isSubmitting || isLoadingMeta}
-            >
-              <option value="">No task linked</option>
-              {tasks.map(t => (
-                <option key={t.taskId} value={t.taskId}>{t.taskKey} - {t.title}</option>
-              ))}
-            </select>
+          <div className="space-y-2">
+            <Label htmlFor="pr-task">Link to Task (Optional)</Label>
+            <Select value={taskId || undefined} onValueChange={setTaskId} disabled={isSubmitting || isLoadingMeta}>
+              <SelectTrigger id="pr-task" className="w-full">
+                <SelectValue placeholder="No task linked" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No task linked</SelectItem>
+                {tasks.map(t => (
+                  <SelectItem key={t.taskId} value={t.taskId}>{t.taskKey} - {t.title}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          <div className="pt-4 flex justify-end space-x-3">
-            <button
+          <DialogFooter>
+            <Button
               type="button"
+              variant="outline"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 rounded-lg text-sm font-bold text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={isSubmitting || !title || !head || !base}
-              className="px-6 py-2 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-500 transition-colors disabled:opacity-50 flex items-center"
             >
               {isSubmitting ? (
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Creating...</>
               ) : 'Create Pull Request'}
-            </button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };

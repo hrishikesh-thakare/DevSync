@@ -13,6 +13,24 @@ import { CreatePRModal } from './github/CreatePRModal.js';
 import { TaskComments } from './TaskComments.js';
 import { LabelChip } from '../../components/projects/LabelChip.js';
 import { useLabelStore } from '../../store/labelStore.js';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 const STATUSES = [
   { value: 'todo', label: 'To Do' },
@@ -68,12 +86,12 @@ const formatBytes = (bytes: number) => {
 
 const attachmentIcon = (filetype?: string | null) => {
   switch (filetype) {
-    case 'image': return <FileImage className="w-4 h-4 text-purple-400 flex-shrink-0" />;
-    case 'pdf': return <FileText className="w-4 h-4 text-red-400 flex-shrink-0" />;
-    case 'code': return <FileCode2 className="w-4 h-4 text-blue-400 flex-shrink-0" />;
-    case 'video': return <FileVideo2 className="w-4 h-4 text-green-400 flex-shrink-0" />;
-    case 'audio': return <FileAudio2 className="w-4 h-4 text-yellow-400 flex-shrink-0" />;
-    default: return <File className="w-4 h-4 text-gray-400 flex-shrink-0" />;
+    case 'image': return <FileImage className="w-4 h-4 text-special flex-shrink-0" />;
+    case 'pdf': return <FileText className="w-4 h-4 text-destructive flex-shrink-0" />;
+    case 'code': return <FileCode2 className="w-4 h-4 text-primary flex-shrink-0" />;
+    case 'video': return <FileVideo2 className="w-4 h-4 text-success flex-shrink-0" />;
+    case 'audio': return <FileAudio2 className="w-4 h-4 text-warning flex-shrink-0" />;
+    default: return <File className="w-4 h-4 text-muted-foreground flex-shrink-0" />;
   }
 };
 
@@ -376,47 +394,49 @@ export const TaskDetailPage = () => {
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-full">
-        <Loader2 className="w-8 h-8 animate-spin text-white" />
+        <Loader2 className="w-8 h-8 animate-spin text-foreground" />
       </div>
     );
   }
 
   if (!task) {
     return (
-      <div className="p-8 text-center text-gray-500">
-        <h2 className="text-xl font-bold text-white mb-2">Task not found</h2>
-        <button onClick={() => navigate(-1)} className="text-gray-300 hover:underline">Go back</button>
+      <div className="p-8 text-center text-subtle-foreground">
+        <h2 className="text-xl font-bold text-foreground mb-2">Task not found</h2>
+        <Button onClick={() => navigate(-1)} className="text-primary hover:underline" variant="link" size="default">Go back</Button>
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto custom-scrollbar bg-gray-950 font-sans">
-      
+    <div className="h-full overflow-y-auto bg-background font-sans">
+
       {/* Top Breadcrumb & Actions */}
-      <div className="sticky top-0 z-10 flex items-center justify-between px-8 py-4 border-b border-gray-800/60 bg-gray-950/80 backdrop-blur">
+      <div className="sticky top-0 z-(--z-sticky) flex items-center justify-between px-8 py-4 border-b border-border bg-background/80 backdrop-blur">
         <div className="flex items-center space-x-4">
-          <button onClick={() => navigate(-1)} className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+          <Button onClick={() => navigate(-1)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-hover rounded transition-colors" size="icon" variant="ghost">
             <ArrowLeft className="w-5 h-5" />
-          </button>
-          <span className="text-sm font-mono text-gray-400 bg-gray-900 px-2 py-1 rounded border border-gray-800">{task.taskKey}</span>
-          {isSaving && <Loader2 className="w-4 h-4 animate-spin text-gray-500" />}
+          </Button>
+          <span className="text-sm font-mono text-muted-foreground bg-muted px-2 py-1 rounded border border-border">{task.taskKey}</span>
+          {isSaving && <Loader2 className="w-4 h-4 animate-spin text-subtle-foreground" />}
         </div>
         <div className="flex items-center space-x-3">
           {canEditTask && (
-            <button 
+            <Button 
               onClick={handleDeleteTask}
-              className="text-sm font-medium px-3 py-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 rounded transition-colors"
+              className="text-sm font-medium px-3 py-1.5 text-destructive hover:text-destructive/80 hover:bg-danger-muted border border-danger-border rounded transition-colors"
+              size="icon" variant="destructive"
             >
               <Trash2 className="w-4 h-4" />
-            </button>
+            </Button>
           )}
-          <button 
+          <Button 
             onClick={handleDiscussInChannel}
-            className="text-sm font-medium px-3 py-1.5 bg-gray-800 text-gray-300 hover:text-white hover:bg-gray-700 rounded transition-colors flex items-center"
+            className="text-sm font-medium px-3 py-1.5 bg-secondary text-muted-foreground hover:text-foreground hover:bg-hover rounded transition-colors flex items-center"
+            variant="secondary" size="default"
           >
             <MessageSquare className="w-4 h-4 mr-1.5" /> Discuss
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -428,22 +448,33 @@ export const TaskDetailPage = () => {
           <div>
             {isEditingTitle ? (
               <div className="flex items-center space-x-2">
-                <input
+                <Input
                   type="text"
                   value={editTitle}
                   onChange={e => setEditTitle(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleTitleSave(); if (e.key === 'Escape') setIsEditingTitle(false); }}
-                  className="text-3xl font-bold text-gray-100 bg-transparent border-b-2 border-white/50 focus:outline-none flex-1"
+                  className="text-3xl font-bold text-foreground bg-transparent border-0 border-b-2 border-primary px-0 py-0 flex-1 h-auto md:text-3xl"
                   autoFocus
                 />
-                <button onClick={handleTitleSave} className="text-sm text-white bg-white/20 px-3 py-1 rounded">Save</button>
-                <button onClick={() => setIsEditingTitle(false)} className="text-sm text-gray-400 hover:text-white">Cancel</button>
+                <Button onClick={handleTitleSave} className="text-sm text-foreground bg-secondary hover:bg-hover px-3 py-1 rounded" variant="secondary" size="default">Save</Button>
+                <Button onClick={() => setIsEditingTitle(false)} className="text-sm text-muted-foreground hover:text-foreground" variant="ghost" size="default">Cancel</Button>
               </div>
+            ) : canEditTask ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <h1 
+                    className={clsx("text-3xl font-bold text-foreground mb-4 leading-snug transition-colors", canEditTask && "cursor-pointer hover:text-foreground")}
+                    onClick={() => canEditTask && setIsEditingTitle(true)}
+                  >
+                    {task.title}
+                  </h1>
+                </TooltipTrigger>
+                <TooltipContent>Click to edit title</TooltipContent>
+              </Tooltip>
             ) : (
               <h1 
-                className={clsx("text-3xl font-bold text-gray-100 mb-4 leading-snug transition-colors", canEditTask && "cursor-pointer hover:text-white")}
+                className={clsx("text-3xl font-bold text-foreground mb-4 leading-snug transition-colors", canEditTask && "cursor-pointer hover:text-foreground")}
                 onClick={() => canEditTask && setIsEditingTitle(true)}
-                title={canEditTask ? "Click to edit title" : undefined}
               >
                 {task.title}
               </h1>
@@ -453,36 +484,43 @@ export const TaskDetailPage = () => {
           {/* Description — Click to edit */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center space-x-2 text-gray-300 font-semibold">
+              <div className="flex items-center space-x-2 text-foreground font-semibold">
                 <AlignLeft className="w-5 h-5" />
                 <h3>Description</h3>
               </div>
               {canEditTask && !isEditingDesc && (
-                <button onClick={() => setIsEditingDesc(true)} className="text-xs text-gray-500 hover:text-white transition-colors">
+                <Button onClick={() => setIsEditingDesc(true)} className="text-xs text-subtle-foreground hover:text-foreground transition-colors" variant="ghost" size="default">
                   Edit
-                </button>
+                </Button>
               )}
             </div>
             {isEditingDesc ? (
               <div className="space-y-2">
-                <textarea
+                <Textarea
                   value={editDesc}
                   onChange={e => setEditDesc(e.target.value)}
                   rows={6}
-                  className="w-full bg-gray-900/50 border border-gray-700 rounded-xl p-4 text-gray-300 text-sm leading-relaxed focus:outline-none focus:border-white/50"
+                  className="w-full bg-background border border-input rounded-lg p-4 text-foreground text-sm leading-relaxed focus:border-ring h-auto"
                   autoFocus
                 />
                 <div className="flex space-x-2">
-                  <button onClick={handleDescSave} className="text-sm bg-white text-gray-950 px-4 py-1.5 rounded-lg font-bold hover:bg-gray-200">Save</button>
-                  <button onClick={() => { setIsEditingDesc(false); setEditDesc(typeof task.description === 'string' ? task.description : task.descriptionText || ''); }} className="text-sm text-gray-400 hover:text-white">Cancel</button>
+                  <Button onClick={handleDescSave} className="text-sm bg-primary text-primary-foreground px-4 py-1.5 rounded-lg font-bold hover:bg-primary-hover" variant="default" size="default">Save</Button>
+                  <Button onClick={() => { setIsEditingDesc(false); setEditDesc(typeof task.description === 'string' ? task.description : task.descriptionText || ''); }} className="text-sm text-muted-foreground hover:text-foreground" variant="ghost" size="default">Cancel</Button>
                 </div>
               </div>
             ) : (
               <div 
-                className={clsx("bg-gray-900/50 border border-gray-800 rounded-xl p-4 min-h-[100px] transition-colors", canEditTask && "cursor-pointer hover:border-gray-700")}
+                className={clsx("bg-card border border-border rounded-lg p-4 min-h-[100px] transition-colors", canEditTask && "cursor-pointer hover:border-border-strong")}
                 onClick={() => canEditTask && setIsEditingDesc(true)}
               >
-                <p className="text-gray-400 text-sm leading-relaxed whitespace-pre-wrap">
+                {/* Reading content, so `text-body` (15/1.6) and the primary text
+                    tier — the placeholder drops to muted because it isn't content. */}
+                <p className={clsx(
+                  "text-body whitespace-pre-wrap",
+                  (typeof task.description === 'string' && task.description) || task.descriptionText
+                    ? "text-foreground"
+                    : "text-subtle-foreground",
+                )}>
                   {(typeof task.description === 'string' && task.description) || task.descriptionText || (canEditTask ? 'Click to add a description...' : 'No description provided.')}
                 </p>
               </div>
@@ -492,55 +530,71 @@ export const TaskDetailPage = () => {
           {/* Attachments */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center space-x-2 text-gray-300 font-semibold">
+              <div className="flex items-center space-x-2 text-foreground font-semibold">
                 <Paperclip className="w-5 h-5" />
                 <h3>Attachments</h3>
-                {attachments.length > 0 && <span className="text-xs text-gray-500 font-normal">{attachments.length}</span>}
+                {attachments.length > 0 && <span className="text-xs text-subtle-foreground font-normal">{attachments.length}</span>}
               </div>
               {canEditTask && (
                 <>
                   <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
-                  <button
+                  <Button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
-                    className="text-xs text-gray-500 hover:text-white transition-colors flex items-center disabled:opacity-50"
+                    className="text-xs text-subtle-foreground hover:text-foreground transition-colors flex items-center disabled:opacity-50"
+                    variant="ghost" size="default"
                   >
                     {isUploading
                       ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
                       : <Plus className="w-3.5 h-3.5 mr-1" />}
                     {isUploading ? 'Uploading...' : 'Attach'}
-                  </button>
+                  </Button>
                 </>
               )}
             </div>
             {attachments.length === 0 ? (
-              <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-center">
-                <p className="text-xs text-gray-500">No attachments yet.</p>
-              </div>
+              <Card className="[--card-spacing:--spacing(4)] bg-elevated/50 border border-border text-center">
+                <p className="text-xs text-subtle-foreground">No attachments yet.</p>
+              </Card>
             ) : (
               <div className="space-y-1.5">
                 {attachments.map(att => (
-                  <div key={att.fileId} className="flex items-center justify-between bg-gray-900/50 border border-gray-800 rounded-lg px-3 py-2 hover:border-gray-700 transition-colors">
-                    <button
-                      onClick={() => handleDownload(att.fileId)}
-                      className="flex items-center min-w-0 text-left"
-                      title="Download"
-                    >
-                      {attachmentIcon(att.filetype)}
-                      <span className="ml-2 text-sm text-gray-300 truncate">{att.filename}</span>
-                      {att.sizeBytes ? <span className="ml-2 text-xs text-gray-600 flex-shrink-0">{formatBytes(att.sizeBytes)}</span> : null}
-                    </button>
+                  <div key={att.fileId} className="flex items-center justify-between bg-card border border-border rounded-lg px-3 py-2 hover:border-border-strong transition-colors">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={() => handleDownload(att.fileId)}
+                          className="flex items-center min-w-0 text-left"
+                          variant="ghost" size="default"
+                        >
+                          {attachmentIcon(att.filetype)}
+                          <span className="ml-2 text-sm text-foreground truncate">{att.filename}</span>
+                          {att.sizeBytes ? <span className="ml-2 text-xs text-subtle-foreground flex-shrink-0">{formatBytes(att.sizeBytes)}</span> : null}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Download</TooltipContent>
+                    </Tooltip>
                     <div className="flex items-center flex-shrink-0 ml-3">
-                      <span className="text-[10px] text-gray-600 mr-2 hidden sm:inline">
+                      <span className="text-[10px] text-subtle-foreground mr-2 hidden sm:inline">
                         {att.uploaderName || 'Unknown'}{att.createdAt ? ` · ${format(new Date(att.createdAt), 'MMM d')}` : ''}
                       </span>
-                      <button onClick={() => handleDownload(att.fileId)} className="text-gray-500 hover:text-white" title="Download">
-                        <Download className="w-3.5 h-3.5" />
-                      </button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button onClick={() => handleDownload(att.fileId)} className="text-subtle-foreground hover:text-foreground" aria-label="Download" size="icon" variant="ghost">
+                            <Download className="w-3.5 h-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Download</TooltipContent>
+                      </Tooltip>
                       {canEditTask && (
-                        <button onClick={() => handleDeleteAttachment(att.fileId)} className="text-gray-500 hover:text-red-400 ml-2" title="Remove">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button onClick={() => handleDeleteAttachment(att.fileId)} className="text-subtle-foreground hover:text-destructive ml-2" aria-label="Remove" size="icon" variant="destructive">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Remove</TooltipContent>
+                        </Tooltip>
                       )}
                     </div>
                   </div>
@@ -551,92 +605,94 @@ export const TaskDetailPage = () => {
 
           {/* Discussion */}
           <div>
-            <div className="flex items-center space-x-2 text-gray-300 font-semibold mb-4 border-b border-gray-800 pb-2">
+            <div className="flex items-center space-x-2 text-foreground font-semibold mb-4 border-b border-border pb-2">
               <MessageSquare className="w-5 h-5" />
               <h3>Discussion</h3>
             </div>
-            <div className="bg-gray-900/40 border border-gray-800 rounded-xl p-6 text-center">
-              <p className="text-gray-400 mb-4 text-sm">Task discussions have been moved to project channels for better team visibility.</p>
-              <button 
+            <div className="bg-card border border-border rounded-lg p-6 text-center">
+              <p className="text-muted-foreground mb-4 text-sm">Task discussions have been moved to project channels for better team visibility.</p>
+              <Button
                 onClick={handleDiscussInChannel}
-                className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg transition-colors"
+                className="inline-flex items-center justify-center px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground font-medium rounded-lg transition-colors"
+                variant="default" size="default"
               >
                 <MessageSquare className="w-4 h-4 mr-2" />
                 Discuss in Channel
-              </button>
+              </Button>
             </div>
           </div>
         </div>
 
         {/* Right Sidebar Details */}
         <div className="col-span-4 space-y-6">
-          <div className="bg-gray-900/40 border border-gray-800/80 rounded-xl p-5 space-y-5">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Details</h4>
+          <div className="bg-card border border-border rounded-lg p-5 space-y-5">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-subtle-foreground mb-2">Details</h4>
             
             <div className="space-y-4">
               {/* Status */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Status</span>
-                <select
-                  value={task.status}
-                  onChange={e => patchTask({ status: e.target.value })}
-                  disabled={!canEditTask}
-                  className="bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-1 text-sm font-semibold focus:outline-none disabled:opacity-50"
-                >
-                  {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
+                <span className="text-sm text-subtle-foreground">Status</span>
+                <Select value={task.status} onValueChange={(v) => patchTask({ status: v })} disabled={!canEditTask}>
+                  <SelectTrigger className="bg-elevated">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUSES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Issue Type */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Type</span>
-                <select
-                  value={task.type || 'task'}
-                  onChange={e => patchTask({ type: e.target.value })}
-                  disabled={!canEditTask}
-                  className="bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-1 text-sm focus:outline-none disabled:opacity-50"
-                >
-                  {ISSUE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
+                <span className="text-sm text-subtle-foreground">Type</span>
+                <Select value={task.type || 'task'} onValueChange={(v) => patchTask({ type: v })} disabled={!canEditTask}>
+                  <SelectTrigger className="bg-elevated">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ISSUE_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Priority */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Priority</span>
-                <select
-                  value={task.priority}
-                  onChange={e => patchTask({ priority: e.target.value })}
-                  disabled={!canEditTask}
-                  className="bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-1 text-sm focus:outline-none disabled:opacity-50"
-                >
-                  {PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                </select>
+                <span className="text-sm text-subtle-foreground">Priority</span>
+                <Select value={task.priority} onValueChange={(v) => patchTask({ priority: v })} disabled={!canEditTask}>
+                  <SelectTrigger className="bg-elevated">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRIORITIES.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Assignee */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Assignee</span>
-                <select
-                  value={task.assigneeId || ''}
-                  onChange={e => patchTask({ assigneeId: e.target.value || null })}
-                  disabled={!canEditTask}
-                  className="bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-1 text-sm focus:outline-none max-w-[160px] disabled:opacity-50"
-                >
-                  <option value="">Unassigned</option>
-                  {members.map((m: ProjectMember) => (
-                    <option key={m.userId} value={m.userId}>{m.fullName}</option>
-                  ))}
-                </select>
+                <span className="text-sm text-subtle-foreground">Assignee</span>
+                <Select value={task.assigneeId || ''} onValueChange={(v) => patchTask({ assigneeId: v || null })} disabled={!canEditTask}>
+                  <SelectTrigger className="bg-elevated max-w-[160px]">
+                    <SelectValue placeholder="Unassigned" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {members.map((m: ProjectMember) => (
+                      <SelectItem key={m.userId} value={m.userId}>{m.fullName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Reporter */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Reporter</span>
+                <span className="text-sm text-subtle-foreground">Reporter</span>
                 <div className="flex items-center space-x-2">
-                  <div className="w-6 h-6 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-[10px] text-gray-300 font-bold">
-                    {(members.find(m => m.userId === task.reporterId)?.fullName || '?').charAt(0).toUpperCase()}
-                  </div>
-                  <span className="text-sm text-gray-300 font-medium">
+                  <Avatar size="sm" className="border border-border">
+                    <AvatarFallback className="bg-secondary text-[10px] text-foreground font-bold">
+                      {(members.find(m => m.userId === task.reporterId)?.fullName || '?').charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm text-foreground font-medium">
                     {members.find(m => m.userId === task.reporterId)?.fullName || 'System'}
                   </span>
                 </div>
@@ -644,59 +700,57 @@ export const TaskDetailPage = () => {
 
               {/* Due Date */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Due Date</span>
-                <input
+                <span className="text-sm text-subtle-foreground">Due Date</span>
+                <Input
                   type="date"
                   value={task.dueDate ? task.dueDate.substring(0, 10) : ''}
                   onChange={e => patchTask({ dueDate: e.target.value || null })}
                   disabled={!canEditTask}
-                  className="bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-1 text-sm focus:outline-none disabled:opacity-50"
+                  className="bg-background border border-input text-foreground rounded px-2 py-1 text-sm disabled:opacity-50"
                 />
               </div>
 
               {/* Sprint */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Sprint</span>
-                <select
-                  value={task.sprintId || ''}
-                  onChange={e => patchTask({ sprintId: e.target.value || null })}
-                  disabled={!canEditTask}
-                  className="bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-1 text-sm focus:outline-none max-w-[160px] disabled:opacity-50"
-                >
-                  <option value="">Backlog</option>
-                  {sprints.map((s: SprintItem) => (
-                    <option key={s.sprintId} value={s.sprintId}>{s.name}</option>
-                  ))}
-                </select>
+                <span className="text-sm text-subtle-foreground">Sprint</span>
+                <Select value={task.sprintId || ''} onValueChange={(v) => patchTask({ sprintId: v || null })} disabled={!canEditTask}>
+                  <SelectTrigger className="bg-elevated max-w-[160px]">
+                    <SelectValue placeholder="Backlog" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sprints.map((s: SprintItem) => (
+                      <SelectItem key={s.sprintId} value={s.sprintId}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Parent Task */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Parent Task</span>
-                <select
-                  value={task.parentTaskId || ''}
-                  onChange={e => patchTask({ parentTaskId: e.target.value || null })}
-                  disabled={!canEditTask}
-                  className="bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-1 text-sm focus:outline-none max-w-[160px] disabled:opacity-50"
-                >
-                  <option value="">None</option>
-                  {allTasks.filter(t => t.taskId !== task.taskId).map((t: TaskItem) => (
-                    <option key={t.taskId} value={t.taskId}>{t.taskKey} - {t.title.substring(0, 20)}...</option>
-                  ))}
-                </select>
+                <span className="text-sm text-subtle-foreground">Parent Task</span>
+                <Select value={task.parentTaskId || ''} onValueChange={(v) => patchTask({ parentTaskId: v || null })} disabled={!canEditTask}>
+                  <SelectTrigger className="bg-elevated max-w-[160px]">
+                    <SelectValue placeholder="None" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allTasks.filter(t => t.taskId !== task.taskId).map((t: TaskItem) => (
+                      <SelectItem key={t.taskId} value={t.taskId}>{t.taskKey} - {t.title.substring(0, 20)}...</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Points */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Points</span>
-                <input
+                <span className="text-sm text-subtle-foreground">Points</span>
+                <Input
                   type="number"
                   min="0"
                   max="100"
                   value={task.storyPoints ?? ''}
                   onChange={e => patchTask({ storyPoints: e.target.value !== '' ? parseInt(e.target.value) : null })}
                   disabled={!canEditTask}
-                  className="bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-1 text-sm focus:outline-none w-16 text-right disabled:opacity-50"
+                  className="bg-background border border-input text-foreground rounded px-2 py-1 text-sm w-16 text-right disabled:opacity-50"
                   placeholder="—"
                 />
               </div>
@@ -704,8 +758,8 @@ export const TaskDetailPage = () => {
               {/* AI Estimate */}
               {task.aiDurationEstimate != null && (
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">AI Estimate</span>
-                  <span className="flex items-center text-sm text-purple-400 font-medium">
+                  <span className="text-sm text-subtle-foreground">AI Estimate</span>
+                  <span className="flex items-center text-sm text-special font-medium">
                     <Sparkles className="w-3 h-3 mr-1" />
                     {Number(task.aiDurationEstimate)}h
                   </span>
@@ -714,87 +768,98 @@ export const TaskDetailPage = () => {
 
               {/* Labels */}
               <div>
-                <span className="text-sm text-gray-500 block mb-2">Labels</span>
+                <span className="text-sm text-subtle-foreground block mb-2">Labels</span>
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {(task.labels || []).map((label: string, idx: number) => (
                     <span key={idx} className="flex items-center">
                       <LabelChip name={label} />
                       {canEditTask && (
-                        <button onClick={() => removeLabel(label)} className="ml-1.5 text-gray-500 hover:text-white">
+                        <Button onClick={() => removeLabel(label)} className="ml-1.5 text-subtle-foreground hover:text-foreground" size="icon" variant="ghost">
                           <X className="w-3 h-3" />
-                        </button>
+                        </Button>
                       )}
                     </span>
                   ))}
                 </div>
                 {canEditTask && (
                   <div className="flex space-x-2">
-                    <input
+                    <Input
                       type="text"
                       value={labelInput}
                       onChange={e => setLabelInput(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addLabel(); } }}
                       list={`label-suggestions-${key}`}
-                      className="flex-1 bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-1 text-xs focus:outline-none"
+                      className="flex-1 bg-background border border-input text-foreground rounded px-2 py-1 text-xs md:text-xs"
                       placeholder="Add label..."
                     />
                     <datalist id={`label-suggestions-${key}`}>
                       {labelNames.map(name => <option key={name} value={name} />)}
                     </datalist>
-                    <button onClick={addLabel} className="text-xs text-gray-400 hover:text-white">Add</button>
+                    <Button onClick={addLabel} className="text-xs text-muted-foreground hover:text-foreground" variant="ghost" size="default">Add</Button>
                   </div>
                 )}
               </div>
 
               {/* GitHub Activity Sidebar Section */}
-              <div className="pt-4 border-t border-gray-800/80">
+              <div className="pt-4 border-t border-border">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-2">
-                    <GitBranch className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-300 font-semibold">GitHub Activity</span>
+                    <GitBranch className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm text-foreground font-semibold">GitHub Activity</span>
                   </div>
                   {canEditTask && (
                     <div className="flex items-center space-x-1">
 
-                      <button
-                        onClick={() => setShowCreatePR(true)}
-                        className="text-[10px] text-gray-400 hover:text-white hover:bg-gray-800 px-1.5 py-0.5 rounded transition-colors flex items-center"
-                        title="Create Pull Request"
-                      >
-                        <Plus className="w-3 h-3 mr-0.5" />
-                        <GitPullRequest className="w-3 h-3" />
-                      </button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            onClick={() => setShowCreatePR(true)}
+                            className="text-[10px] text-muted-foreground hover:text-foreground hover:bg-hover px-1.5 py-0.5 rounded transition-colors flex items-center"
+                            aria-label="Create Pull Request"
+                            size="icon" variant="ghost"
+                          >
+                            <Plus className="w-3 h-3 mr-0.5" />
+                            <GitPullRequest className="w-3 h-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Create Pull Request</TooltipContent>
+                      </Tooltip>
                     </div>
                   )}
                 </div>
 
                 <div className="space-y-4">
                   {/* Smart Branch Suggestion */}
-                  <div className="bg-gray-900 border border-gray-800 rounded p-3">
+                  <div className="bg-card border border-border rounded p-3">
                     <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center text-xs text-gray-500 font-medium uppercase tracking-wider">
+                      <div className="flex items-center text-xs text-subtle-foreground font-medium uppercase tracking-wider">
                         <GitBranch className="w-3 h-3 mr-1" /> Smart Branch Name
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <code className="flex-1 bg-gray-950 border border-gray-800 text-[10px] text-gray-300 px-2 py-1.5 rounded font-mono truncate">
+                      <code className="flex-1 bg-muted border border-border text-[10px] text-foreground px-2 py-1.5 rounded font-mono truncate">
                         {`feature/${task.taskKey}-${task.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`}
                       </code>
-                      <button
-                        onClick={() => {
-                          const branchName = `feature/${task.taskKey}-${task.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`;
-                          navigator.clipboard.writeText(`git checkout -b ${branchName}`);
-                          setCopiedBranch(true);
-                          setTimeout(() => setCopiedBranch(false), 2000);
-                        }}
-                        className="text-[10px] text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 px-2 py-1.5 rounded transition-colors flex items-center flex-shrink-0"
-                        title="Copy git checkout command"
-                      >
-                        {copiedBranch ? <Check className="w-3 h-3 mr-1 text-green-400" /> : <Copy className="w-3 h-3 mr-1" />}
-                        {copiedBranch ? 'Copied' : 'Copy'}
-                      </button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            onClick={() => {
+                              const branchName = `feature/${task.taskKey}-${task.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`;
+                              navigator.clipboard.writeText(`git checkout -b ${branchName}`);
+                              setCopiedBranch(true);
+                              setTimeout(() => setCopiedBranch(false), 2000);
+                            }}
+                            className="text-[10px] text-muted-foreground hover:text-foreground bg-secondary hover:bg-hover px-2 py-1.5 rounded transition-colors flex items-center flex-shrink-0"
+                            variant="secondary" size="default"
+                          >
+                            {copiedBranch ? <Check className="w-3 h-3 mr-1 text-success" /> : <Copy className="w-3 h-3 mr-1" />}
+                            {copiedBranch ? 'Copied' : 'Copy'}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Copy git checkout command</TooltipContent>
+                      </Tooltip>
                     </div>
-                    <p className="text-[10px] text-gray-500 mt-2">
+                    <p className="text-[10px] text-subtle-foreground mt-2">
                       One-click copy to enable sync, linking, and traceability
                     </p>
                   </div>
@@ -802,19 +867,19 @@ export const TaskDetailPage = () => {
                   {/* Pull Requests */}
                   {githubActivity.pullRequests?.length > 0 && (
                     <div>
-                      <div className="flex items-center text-xs text-gray-500 font-medium mb-1.5 uppercase tracking-wider">
+                      <div className="flex items-center text-xs text-subtle-foreground font-medium mb-1.5 uppercase tracking-wider">
                         <GitPullRequest className="w-3 h-3 mr-1" /> Pull Requests
                       </div>
                       <div className="space-y-1.5">
                         {githubActivity.pullRequests.map(pr => (
-                          <a key={pr.id} href={pr.htmlUrl} target="_blank" rel="noopener noreferrer" className="block bg-gray-900 border border-gray-800 rounded p-2 hover:border-gray-600 transition-colors">
+                          <a key={pr.id} href={pr.htmlUrl} target="_blank" rel="noopener noreferrer" className="block bg-card border border-border rounded p-2 hover:border-border-strong transition-colors">
                             <div className="flex items-start justify-between">
-                              <span className="text-xs text-gray-300 font-medium line-clamp-2 pr-2">{pr.title}</span>
-                              {pr.state === 'open' && <span className="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded flex-shrink-0">Open</span>}
-                              {pr.state === 'merged' && <span className="text-[10px] text-purple-400 bg-purple-500/10 border border-purple-500/20 px-1.5 py-0.5 rounded flex-shrink-0">Merged</span>}
-                              {pr.state === 'closed' && <span className="text-[10px] text-red-400 bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded flex-shrink-0">Closed</span>}
+                              <span className="text-xs text-foreground font-medium line-clamp-2 pr-2">{pr.title}</span>
+                              {pr.state === 'open' && <Badge variant="success" className="text-[10px] h-auto px-1.5 flex-shrink-0">Open</Badge>}
+                            {pr.state === 'merged' && <Badge variant="outline" className="bg-special-muted text-special border-special-border text-[10px] h-auto px-1.5 flex-shrink-0">Merged</Badge>}
+                              {pr.state === 'closed' && <Badge variant="destructive" className="text-[10px] h-auto px-1.5 flex-shrink-0">Closed</Badge>}
                             </div>
-                            <div className="text-[10px] font-mono text-gray-500 mt-1">#{pr.prNumber}</div>
+                            <div className="text-[10px] font-mono text-subtle-foreground mt-1">#{pr.prNumber}</div>
                           </a>
                         ))}
                       </div>
@@ -824,18 +889,18 @@ export const TaskDetailPage = () => {
                   {/* Branches */}
                   {githubActivity.branches?.length > 0 && (
                     <div>
-                      <div className="flex items-center text-xs text-gray-500 font-medium mb-1.5 uppercase tracking-wider">
+                      <div className="flex items-center text-xs text-subtle-foreground font-medium mb-1.5 uppercase tracking-wider">
                         <GitBranch className="w-3 h-3 mr-1" /> Branches
                       </div>
                       <div className="space-y-1.5">
                         {githubActivity.branches.map(b => (
-                          <div key={b.id} className="flex flex-col bg-gray-900 border border-gray-800 rounded p-2">
+                          <div key={b.id} className="flex flex-col bg-card border border-border rounded p-2">
                             <div className="flex items-start justify-between">
-                              <span className="text-xs font-mono text-blue-400 break-all">{b.branchName}</span>
-                              {b.isDeleted && <span className="text-[10px] text-gray-400 bg-gray-500/10 border border-gray-500/20 px-1.5 py-0.5 rounded ml-2 flex-shrink-0">Deleted</span>}
+                              <span className="text-xs font-mono text-primary break-all">{b.branchName}</span>
+                              {b.isDeleted && <span className="text-[10px] text-muted-foreground bg-secondary border border-border px-1.5 py-0.5 rounded ml-2 flex-shrink-0">Deleted</span>}
                             </div>
                             {b.htmlUrl && !b.isDeleted && (
-                              <a href={b.htmlUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-gray-500 hover:text-white mt-1 flex items-center">
+                              <a href={b.htmlUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-subtle-foreground hover:text-foreground mt-1 flex items-center">
                                 View on GitHub <ExternalLink className="w-3 h-3 ml-1" />
                               </a>
                             )}
@@ -848,17 +913,17 @@ export const TaskDetailPage = () => {
                   {/* Issues */}
                   {githubActivity.issues?.length > 0 && (
                     <div>
-                      <div className="flex items-center text-xs text-gray-500 font-medium mb-1.5 uppercase tracking-wider">
+                      <div className="flex items-center text-xs text-subtle-foreground font-medium mb-1.5 uppercase tracking-wider">
                         <AlertCircle className="w-3 h-3 mr-1" /> Issues
                       </div>
                       <div className="space-y-1.5">
                         {githubActivity.issues.map(issue => (
-                          <a key={issue.id} href={issue.htmlUrl} target="_blank" rel="noopener noreferrer" className="block bg-gray-900 border border-gray-800 rounded p-2 hover:border-gray-600 transition-colors">
+                          <a key={issue.id} href={issue.htmlUrl} target="_blank" rel="noopener noreferrer" className="block bg-card border border-border rounded p-2 hover:border-border-strong transition-colors">
                             <div className="flex items-start justify-between">
-                              <span className="text-xs text-gray-300 font-medium line-clamp-2 pr-2">{issue.title}</span>
-                              {issue.state === 'open' ? <span className="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded flex-shrink-0">Open</span> : <span className="text-[10px] text-red-400 bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded flex-shrink-0">Closed</span>}
+                              <span className="text-xs text-foreground font-medium line-clamp-2 pr-2">{issue.title}</span>
+                              {issue.state === 'open' ? <Badge variant="success" className="text-[10px] h-auto px-1.5 flex-shrink-0">Open</Badge> : <Badge variant="destructive" className="text-[10px] h-auto px-1.5 flex-shrink-0">Closed</Badge>}
                             </div>
-                            <div className="text-[10px] font-mono text-gray-500 mt-1">#{issue.githubIssueNumber}</div>
+                            <div className="text-[10px] font-mono text-subtle-foreground mt-1">#{issue.githubIssueNumber}</div>
                           </a>
                         ))}
                       </div>
@@ -868,17 +933,17 @@ export const TaskDetailPage = () => {
                   {/* Commits */}
                   {githubActivity.commits?.length > 0 && (
                     <div>
-                      <div className="flex items-center text-xs text-gray-500 font-medium mb-1.5 uppercase tracking-wider">
+                      <div className="flex items-center text-xs text-subtle-foreground font-medium mb-1.5 uppercase tracking-wider">
                         <GitCommit className="w-3 h-3 mr-1" /> Commits
                       </div>
                       <div className="space-y-1.5">
                         {githubActivity.commits.map(c => (
-                          <a key={c.commitSha} href={c.url} target="_blank" rel="noopener noreferrer" className="block bg-gray-900 border border-gray-800 rounded p-2 hover:border-gray-600 transition-colors">
+                          <a key={c.commitSha} href={c.url} target="_blank" rel="noopener noreferrer" className="block bg-card border border-border rounded p-2 hover:border-border-strong transition-colors">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="font-mono text-xs text-blue-400">{c.commitSha.substring(0, 7)}</span>
-                              <span className="text-[10px] text-gray-500">{format(new Date(c.committedAt), 'MMM d')}</span>
+                              <span className="font-mono text-xs text-primary">{c.commitSha.substring(0, 7)}</span>
+                              <span className="text-[10px] text-subtle-foreground">{format(new Date(c.committedAt), 'MMM d')}</span>
                             </div>
-                            <p className="text-xs text-gray-300 truncate" title={c.messageHeadline}>{c.messageHeadline}</p>
+                            <p className="text-xs text-foreground truncate" title={c.messageHeadline}>{c.messageHeadline}</p>
                           </a>
                         ))}
                       </div>
@@ -887,10 +952,10 @@ export const TaskDetailPage = () => {
 
                   {/* Empty State */}
                   {githubActivity.commits.length === 0 && githubActivity.pullRequests.length === 0 && githubActivity.issues.length === 0 && githubActivity.branches.length === 0 && (
-                    <div className="text-center py-4 bg-gray-900/40 border border-gray-800/80 rounded-lg">
-                      <p className="text-xs text-gray-400 mb-2 font-medium">No GitHub activity yet</p>
-                      <p className="text-[10px] text-gray-500 max-w-[200px] mx-auto leading-relaxed">
-                        Mention <span className="font-mono text-gray-300 bg-gray-800 px-1 rounded">{taskKey}</span> in branches, PRs, issues or commits.
+                    <div className="text-center py-4 bg-card border border-border rounded-lg">
+                      <p className="text-xs text-muted-foreground mb-2 font-medium">No GitHub activity yet</p>
+                      <p className="text-[10px] text-subtle-foreground max-w-[200px] mx-auto leading-relaxed">
+                        Mention <span className="font-mono text-foreground bg-muted px-1 rounded">{taskKey}</span> in branches, PRs, issues or commits.
                       </p>
                     </div>
                   )}
@@ -903,14 +968,14 @@ export const TaskDetailPage = () => {
               <TaskComments slug={slug as string} projectKey={key as string} taskKey={taskKey as string} />
 
               {/* Created / Updated */}
-              <div className="pt-6 mt-6 border-t border-gray-800 space-y-2">
+              <div className="pt-6 mt-6 border-t border-border space-y-2">
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-600">Created</span>
-                  <span className="text-gray-500">{task.createdAt ? format(new Date(task.createdAt), 'MMM d, yyyy') : '—'}</span>
+                  <span className="text-subtle-foreground">Created</span>
+                  <span className="text-subtle-foreground">{task.createdAt ? format(new Date(task.createdAt), 'MMM d, yyyy') : '—'}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-600">Updated</span>
-                  <span className="text-gray-500">{task.updatedAt ? format(new Date(task.updatedAt), 'MMM d, yyyy') : '—'}</span>
+                  <span className="text-subtle-foreground">Updated</span>
+                  <span className="text-subtle-foreground">{task.updatedAt ? format(new Date(task.updatedAt), 'MMM d, yyyy') : '—'}</span>
                 </div>
               </div>
             </div>

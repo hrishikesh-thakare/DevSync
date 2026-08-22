@@ -1,6 +1,15 @@
 export type UserRole = 'owner' | 'admin' | 'member';
 export type UserStatus = 'online' | 'away' | 'offline';
 
+/**
+ * A parsed JSON value. Used for the `jsonb` columns whose shape is owned by the
+ * producer rather than by this client — TipTap/Lexical documents, worker-written
+ * sprint reports, message metadata. Deliberately not `any`: consumers must
+ * narrow before reaching into one, which is what keeps a schema change on the
+ * producing side from silently becoming a runtime crash here.
+ */
+export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
+
 export interface User {
   id: string;
   fullName: string;
@@ -73,13 +82,13 @@ export interface Task {
   sprintId: string | null;
   parentTaskId: string | null;
   title: string;
-  description: any; // TipTap content
+  description: Json; // TipTap content
   status: TaskStatus;
   priority: Priority;
   assigneeId: string | null;
   dueDate: string | null;
   estimatedHours: number | null;
-  activityLog: any[];
+  activityLog: Json[];
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -92,8 +101,8 @@ export interface Sprint {
   startDate: string;
   endDate: string;
   status: 'planning' | 'active' | 'closed';
-  summary: any | null;
-  contributionReport: any | null;
+  summary: Json | null;
+  contributionReport: Json | null;
   closedAt: string | null;
 }
 
@@ -104,7 +113,7 @@ export interface Message {
   body: string;
   type: 'text' | 'file';
   parentMessageId: string | null;
-  metadata: any | null;
+  metadata: Json | null;
   isPinned: boolean;
   editedAt: string | null;
   createdAt: string;

@@ -3,6 +3,10 @@ import { KeyRound, Loader2, ShieldCheck } from 'lucide-react';
 import { apiFetch } from '../lib/api.js';
 import { useToast } from '../hooks/useToast.js';
 import { useAuthStore } from '../store/auth.js';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export const AccountSettingsPage = () => {
   const { user } = useAuthStore();
@@ -41,25 +45,25 @@ export const AccountSettingsPage = () => {
   };
 
   const inputClass =
-    'w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/60 transition-all';
+    'w-full bg-background border border-border rounded-md px-4 py-2.5 text-foreground focus:border-ring focus:ring-1 focus:ring-ring transition-colors h-auto';
 
   return (
-    <div className="h-full overflow-y-auto p-8 font-sans bg-gray-950 text-gray-200">
+    <div className="h-full overflow-y-auto p-8 font-sans bg-background text-foreground">
       <div className="max-w-2xl relative">
-        <h1 className="text-2xl font-bold text-white mb-1">Account Settings</h1>
-        <p className="text-sm text-gray-400 mb-8">
-          Signed in as <span className="text-gray-200">{user?.email}</span>
+        <h1 className="text-2xl font-bold text-foreground mb-1">Account Settings</h1>
+        <p className="text-sm text-muted-foreground mb-8">
+          Signed in as <span className="text-foreground">{user?.email}</span>
         </p>
 
         {/* Change Password */}
-        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 mb-8">
+        <Card className="[--card-spacing:--spacing(6)] bg-elevated/50 border border-border mb-8">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
-              <KeyRound className="h-5 w-5 text-indigo-400" />
+            <div className="p-2 rounded-lg bg-primary-muted border border-primary-border">
+              <KeyRound className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">Change Password</h2>
-              <p className="text-xs text-gray-400">
+              <h2 className="text-lg font-bold text-foreground">Change Password</h2>
+              <p className="text-xs text-muted-foreground">
                 Changing your password signs out every other device.
               </p>
             </div>
@@ -67,10 +71,10 @@ export const AccountSettingsPage = () => {
 
           <form onSubmit={handleChangePassword} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1.5">
+              <Label className="block text-sm font-medium text-muted-foreground mb-1.5">
                 Current Password
-              </label>
-              <input
+              </Label>
+              <Input
                 type="password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
@@ -81,10 +85,10 @@ export const AccountSettingsPage = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1.5">
+              <Label className="block text-sm font-medium text-muted-foreground mb-1.5">
                 New Password
-              </label>
-              <input
+              </Label>
+              <Input
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
@@ -92,16 +96,16 @@ export const AccountSettingsPage = () => {
                 placeholder="At least 8 characters"
                 required
               />
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-subtle-foreground">
                 Must include uppercase, lowercase, a number, and a special character.
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1.5">
+              <Label className="block text-sm font-medium text-muted-foreground mb-1.5">
                 Confirm New Password
-              </label>
-              <input
+              </Label>
+              <Input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -112,15 +116,16 @@ export const AccountSettingsPage = () => {
             </div>
 
             {fieldError && (
-              <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
+              <div className="rounded-lg bg-danger-muted border border-danger-border p-3 text-sm text-danger">
                 {fieldError}
               </div>
             )}
 
-            <button
+            <Button
               type="submit"
               disabled={isSaving}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors disabled:opacity-60"
+              variant="default"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-semibold transition-colors disabled:opacity-60 h-auto"
             >
               {isSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -128,9 +133,9 @@ export const AccountSettingsPage = () => {
                 <ShieldCheck className="h-4 w-4" />
               )}
               Update Password
-            </button>
+            </Button>
           </form>
-        </div>
+        </Card>
       </div>
     </div>
   );

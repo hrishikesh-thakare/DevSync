@@ -1,9 +1,22 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
-import { Save, AlertTriangle, Image as ImageIcon, X } from 'lucide-react';
+import { Save, AlertTriangle, Image as ImageIcon } from 'lucide-react';
 import { apiFetch } from '../../lib/api.js';
 import { useToast } from '../../hooks/useToast.js';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Card } from '@/components/ui/card';
 
 export const WorkspaceSettings = () => {
   const { slug } = useParams();
@@ -33,8 +46,8 @@ export const WorkspaceSettings = () => {
         body: JSON.stringify({ name: wsName, description }),
       });
       toast.success('Workspace updated successfully.');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update workspace.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update workspace.');
     } finally {
       setIsSaving(false);
     }
@@ -45,120 +58,118 @@ export const WorkspaceSettings = () => {
     try {
       await apiFetch(`/workspaces/${slug}`, { method: 'DELETE' });
       navigate('/workspaces');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to delete workspace.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete workspace.');
       setIsDeleting(false);
     }
   };
 
   return (
-    <div className="h-full overflow-y-auto p-8 font-sans bg-gray-950 text-gray-200">
+    <div className="h-full overflow-y-auto p-8 font-sans bg-background text-foreground">
       <div className="max-w-3xl relative">
-        <h1 className="text-2xl font-bold text-white mb-8">Workspace Settings</h1>
+        <h1 className="text-2xl font-bold text-foreground mb-8">Workspace Settings</h1>
 
         {/* General Settings */}
-        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 mb-8">
-          <h2 className="text-lg font-bold text-white mb-6">General Information</h2>
+        <Card className="[--card-spacing:--spacing(6)] bg-elevated/50 border border-border mb-8">
+          <h2 className="text-lg font-bold text-foreground mb-6">General Information</h2>
 
           <div className="space-y-6">
             <div className="flex items-start space-x-6">
               <div className="shrink-0">
-                <div className="w-20 h-20 rounded-xl bg-gray-800 border border-gray-700 flex items-center justify-center cursor-pointer hover:border-white/50 hover:bg-gray-700 transition-colors group relative overflow-hidden">
-                  <ImageIcon className="w-8 h-8 text-gray-500 group-hover:opacity-0 transition-opacity" />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="w-20 h-20 rounded-lg bg-secondary border border-border flex items-center justify-center cursor-pointer hover:border-border-strong hover:bg-hover transition-colors group relative overflow-hidden">
+                  <ImageIcon className="w-8 h-8 text-subtle-foreground group-hover:opacity-0 transition-opacity" />
+                  <div className="absolute inset-0 flex items-center justify-center bg-overlay opacity-0 group-hover:opacity-100 transition-opacity">
                     <span className="text-xs font-semibold">Change</span>
                   </div>
                 </div>
               </div>
               <div className="flex-1 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1.5">Workspace Name</label>
-                  <input 
+                  <Label className="block text-sm font-medium text-muted-foreground mb-1.5">Workspace Name</Label>
+                  <Input 
                     type="text" 
                     value={wsName}
                     onChange={(e) => setWsName(e.target.value)}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/50 transition-all"
+                    className="w-full bg-background border border-border rounded-md px-4 py-2.5 text-foreground focus:border-ring focus:ring-1 focus:ring-ring transition-colors h-auto"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1.5">Description</label>
-                  <textarea 
+                  <Label className="block text-sm font-medium text-muted-foreground mb-1.5">Description</Label>
+                  <Textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     rows={3}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/50 transition-all"
+                    className="w-full bg-background border border-border rounded-md px-4 py-2.5 text-foreground focus:border-ring focus:ring-1 focus:ring-ring transition-colors h-auto"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end pt-4 border-t border-gray-800/60">
-              <button onClick={handleSave} disabled={isSaving} className="flex items-center px-5 py-2.5 bg-white hover:bg-gray-200 text-gray-950 text-sm font-bold rounded-lg transition-colors disabled:opacity-50">
+            <div className="flex justify-end pt-4 border-t border-border">
+              <Button onClick={handleSave} disabled={isSaving} variant="default" className="flex items-center px-5 py-2.5 bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-bold rounded-md transition-colors disabled:opacity-50 h-auto">
                 <Save className="w-4 h-4 mr-2" />
                 {isSaving ? 'Saving...' : 'Save Changes'}
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Danger Zone */}
         {isOwner() && (
-          <div className="border border-red-500/20 bg-red-500/5 rounded-xl p-6">
-            <h2 className="text-lg font-bold text-red-500 mb-2 flex items-center">
+          <div className="border border-danger-border bg-danger-muted rounded-lg p-6">
+            <h2 className="text-lg font-bold text-danger mb-2 flex items-center">
               <AlertTriangle className="w-5 h-5 mr-2" />
               Danger Zone
             </h2>
-            <p className="text-gray-400 text-sm mb-6">
+            <p className="text-muted-foreground text-sm mb-6">
               Deleting this workspace will permanently remove all projects, channels, tasks, and messages associated with it. This action cannot be undone.
             </p>
             
-            <div className="flex items-center justify-between p-4 bg-gray-950 border border-red-500/20 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-background border border-danger-border rounded-lg">
               <div>
-                <h4 className="font-semibold text-gray-200">Delete Workspace</h4>
-                <p className="text-xs text-gray-500">Permanently remove everything.</p>
+                <h4 className="font-semibold text-foreground">Delete Workspace</h4>
+                <p className="text-xs text-subtle-foreground">Permanently remove everything.</p>
               </div>
-              <button onClick={() => setDeleteModalOpen(true)} className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-bold rounded-lg transition-colors">
+              <Button onClick={() => setDeleteModalOpen(true)} variant="destructive" className="px-4 py-2 bg-danger hover:bg-danger/90 text-danger-foreground text-sm font-bold rounded-md transition-colors h-auto">
                 Delete Workspace
-              </button>
+              </Button>
             </div>
           </div>
         )}
 
         {/* Delete Confirm Modal */}
         {deleteModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-            <div className="bg-gray-900 border border-gray-800 w-full max-w-md rounded-xl shadow-2xl p-6 relative">
-              <button onClick={() => setDeleteModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-              <div className="flex items-center mb-4 text-red-500">
-                <AlertTriangle className="w-6 h-6 mr-2" />
-                <h2 className="text-xl font-bold">Delete Workspace</h2>
-              </div>
-              <p className="text-gray-300 text-sm mb-6">
-                This action is permanent. Please type <span className="font-mono font-bold text-white bg-gray-800 px-1 py-0.5 rounded">DEVSYNC</span> to confirm.
-              </p>
-              <input 
+          <Dialog open onOpenChange={(open) => { if (!open) setDeleteModalOpen(false); }}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="w-6 h-6" />
+                  Delete Workspace
+                </DialogTitle>
+                <DialogDescription>
+                  This action is permanent. Please type <span className="font-mono font-bold text-foreground bg-hover px-1 py-0.5 rounded">DEVSYNC</span> to confirm.
+                </DialogDescription>
+              </DialogHeader>
+              <Input
                 type="text"
                 value={deleteConfirmText}
                 onChange={(e) => setDeleteConfirmText(e.target.value)}
                 placeholder="DEVSYNC"
-                className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 mb-6"
+                aria-label="Type DEVSYNC to confirm deletion"
+                className="focus:border-destructive focus:ring-destructive"
               />
-              <div className="flex justify-end space-x-3">
-                <button onClick={() => setDeleteModalOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors">
-                  Cancel
-                </button>
-                <button 
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDeleteModalOpen(false)}>Cancel</Button>
+                <Button
+                  variant="destructive"
                   onClick={handleDelete}
                   disabled={deleteConfirmText !== 'DEVSYNC' || isDeleting}
-                  className="px-4 py-2 text-sm font-bold bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isDeleting ? 'Deleting...' : 'Delete Forever'}
-                </button>
-              </div>
-            </div>
-          </div>
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         )}
 
       </div>

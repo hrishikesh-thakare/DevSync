@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useBoardStore, Task } from '../../store/boardStore.js';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
@@ -9,29 +9,56 @@ import { useLabelStore } from '../../store/labelStore.js';
 import { Search, Loader2, MoreHorizontal, CheckSquare, Zap, BookOpen, Bug, Layers, ArrowUpDown, Calendar, Plus } from 'lucide-react';
 import clsx from 'clsx';
 import { format } from 'date-fns';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 const ISSUE_TYPES = [
-  { value: 'epic', icon: Zap, color: 'text-purple-400' },
-  { value: 'story', icon: BookOpen, color: 'text-blue-400' },
-  { value: 'task', icon: CheckSquare, color: 'text-gray-300' },
-  { value: 'bug', icon: Bug, color: 'text-red-400' },
-  { value: 'subtask', icon: Layers, color: 'text-gray-500' },
+  { value: 'epic', icon: Zap, color: 'text-special' },
+  { value: 'story', icon: BookOpen, color: 'text-primary' },
+  { value: 'task', icon: CheckSquare, color: 'text-foreground' },
+  { value: 'bug', icon: Bug, color: 'text-danger' },
+  { value: 'subtask', icon: Layers, color: 'text-subtle-foreground' },
 ];
 
 const IssueTypeIcon = ({ type }: { type: string }) => {
   const found = ISSUE_TYPES.find(t => t.value === type);
   if (!found) {
     return (
-      <span title={type} className="flex items-center justify-center">
-        <CheckSquare className="w-4 h-4 text-gray-500" />
-      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="flex items-center justify-center">
+            <CheckSquare className="w-4 h-4 text-subtle-foreground" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{type}</TooltipContent>
+      </Tooltip>
     );
   }
   const Icon = found.icon;
   return (
-    <span title={type} className="flex items-center justify-center">
-      <Icon className={clsx("w-4 h-4", found.color)} />
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="flex items-center justify-center">
+          <Icon className={clsx("w-4 h-4", found.color)} />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{type}</TooltipContent>
+    </Tooltip>
   );
 };
 
@@ -76,8 +103,7 @@ export const BacklogPage = () => {
     }
   };
 
-  const toggleSelect = (e: React.ChangeEvent<HTMLInputElement>, taskId: string) => {
-    e.stopPropagation();
+  const toggleSelect = (taskId: string) => {
     if (!canEditTask) return;
     const newSet = new Set(selectedTasks);
     if (newSet.has(taskId)) newSet.delete(taskId);
@@ -157,131 +183,155 @@ export const BacklogPage = () => {
       <div className="flex items-center justify-between mb-6 shrink-0">
         <div className="flex items-center space-x-4">
           <div className="relative w-72">
-            <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input 
+            <Search className="w-4 h-4 text-subtle-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+            <Input 
               type="text" 
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search backlog..." 
-              className="w-full bg-gray-900 border border-gray-800 rounded-lg pl-9 pr-4 py-2 text-sm text-gray-200 focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/50 transition-all"
+              className="w-full bg-card border border-border rounded-md pl-9 pr-4 py-2 text-sm text-foreground focus:border-ring focus:ring-1 focus:ring-ring transition-colors h-auto"
             />
           </div>
           
-          <button 
+          <Button 
             onClick={() => setShowOnlyBacklog(!showOnlyBacklog)}
             className={clsx(
-              "px-3 py-2 text-sm font-medium rounded-lg border transition-colors",
-              showOnlyBacklog ? "bg-white/10 border-white/20 text-white" : "bg-gray-900 border-gray-800 text-gray-400 hover:text-gray-200"
+              "px-3 py-2 text-sm font-medium rounded-md border transition-colors",
+              showOnlyBacklog ? "bg-primary-muted border-primary-border text-primary" : "bg-card border-border text-muted-foreground hover:text-foreground"
             )}
+            variant="outline" size="default"
           >
             Backlog Only
-          </button>
+          </Button>
         </div>
 
         <div className="flex items-center space-x-3">
           {selectedTasks.size > 0 && (
-            <div className="flex items-center bg-gray-800 rounded-lg border border-gray-700 px-3 py-1.5 animate-in fade-in slide-in-from-right-4">
-              <span className="text-sm font-semibold text-white mr-3">{selectedTasks.size} selected</span>
-              <select 
-                value={bulkAction} 
-                onChange={e => { setBulkAction(e.target.value); setBulkValue(''); }} 
-                className="bg-gray-900 text-sm text-gray-300 border border-gray-700 rounded px-2 py-1 focus:outline-none mr-2"
-              >
-                <option value="">Select Action...</option>
-                <option value="status">Change Status</option>
-                <option value="priority">Change Priority</option>
-                <option value="sprint">Assign Sprint</option>
-                <option value="points">Set Story Points</option>
-                <option value="clearPoints">Clear Story Points</option>
-              </select>
+            <div className="flex items-center bg-secondary rounded-md border border-border px-3 py-1.5 animate-in fade-in slide-in-from-right-4">
+              <span className="text-sm font-semibold text-foreground mr-3">{selectedTasks.size} selected</span>
+              <Select value={bulkAction} onValueChange={(v) => { setBulkAction(v); setBulkValue(''); }}>
+                <SelectTrigger className="bg-elevated mr-2">
+                  <SelectValue placeholder="Select Action..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Select Action...</SelectItem>
+                  <SelectItem value="status">Change Status</SelectItem>
+                  <SelectItem value="priority">Change Priority</SelectItem>
+                  <SelectItem value="sprint">Assign Sprint</SelectItem>
+                  <SelectItem value="points">Set Story Points</SelectItem>
+                  <SelectItem value="clearPoints">Clear Story Points</SelectItem>
+                </SelectContent>
+              </Select>
               
               {bulkAction === 'sprint' && (
-                <select value={bulkValue} onChange={e => setBulkValue(e.target.value)} className="bg-gray-900 text-sm text-gray-300 border border-gray-700 rounded px-2 py-1 focus:outline-none mr-2">
-                  <option value="">Select Sprint...</option>
-                  <option value="backlog">Backlog (Remove Sprint)</option>
-                  {sprints.map((s: { sprintId: string; name: string }) => <option key={s.sprintId} value={s.sprintId}>{s.name}</option>)}
-                </select>
+                <Select value={bulkValue} onValueChange={setBulkValue}>
+                  <SelectTrigger className="bg-elevated mr-2">
+                    <SelectValue placeholder="Select Sprint..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Select Sprint...</SelectItem>
+                    <SelectItem value="backlog">Backlog (Remove Sprint)</SelectItem>
+                    {sprints.map((s: { sprintId: string; name: string }) => <SelectItem key={s.sprintId} value={s.sprintId}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               )}
               {bulkAction === 'status' && (
-                <select value={bulkValue} onChange={e => setBulkValue(e.target.value)} className="bg-gray-900 text-sm text-gray-300 border border-gray-700 rounded px-2 py-1 focus:outline-none mr-2">
-                  <option value="">Select Status...</option>
-                  <option value="todo">To Do</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="in_review">In Review</option>
-                  <option value="done">Done</option>
-                </select>
+                <Select value={bulkValue} onValueChange={setBulkValue}>
+                  <SelectTrigger className="bg-elevated mr-2">
+                    <SelectValue placeholder="Select Status..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Select Status...</SelectItem>
+                    <SelectItem value="todo">To Do</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="in_review">In Review</SelectItem>
+                    <SelectItem value="done">Done</SelectItem>
+                  </SelectContent>
+                </Select>
               )}
               {bulkAction === 'priority' && (
-                <select value={bulkValue} onChange={e => setBulkValue(e.target.value)} className="bg-gray-900 text-sm text-gray-300 border border-gray-700 rounded px-2 py-1 focus:outline-none mr-2">
-                  <option value="">Select Priority...</option>
-                  <option value="critical">Critical</option>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
-                </select>
+                <Select value={bulkValue} onValueChange={setBulkValue}>
+                  <SelectTrigger className="bg-elevated mr-2">
+                    <SelectValue placeholder="Select Priority..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Select Priority...</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
               )}
               {bulkAction === 'points' && (
-                <input
+                <Input
                   type="number"
                   min="0"
                   max="100"
                   value={bulkValue}
                   onChange={e => setBulkValue(e.target.value)}
                   placeholder="Points (empty = clear)"
-                  className="bg-gray-900 text-sm text-gray-300 border border-gray-700 rounded px-2 py-1 focus:outline-none mr-2 w-32"
+                  className="bg-background text-sm text-foreground border border-border rounded-md px-2 py-1 focus:border-ring focus:ring-1 focus:ring-ring mr-2 w-32"
                 />
               )}
 
-              <button 
+              <Button 
                 onClick={handleBulkApply} 
                 disabled={isApplyingBulk || !bulkAction || (bulkAction !== 'clearPoints' && !bulkValue)} 
-                className="text-xs bg-white text-gray-900 font-bold px-3 py-1 rounded disabled:opacity-50"
+                className="text-xs bg-primary hover:bg-primary-hover text-primary-foreground font-bold px-3 py-1 rounded-md disabled:opacity-50"
+                variant="default" size="default"
               >
-                {isApplyingBulk ? <Loader2 className="w-3 h-3 animate-spin text-gray-900" /> : 'Apply'}
-              </button>
+                {isApplyingBulk ? <Loader2 className="w-3 h-3 animate-spin text-primary-foreground" /> : 'Apply'}
+              </Button>
             </div>
           )}
 
           {canEditTask && (
-            <button className="flex items-center px-3 py-2 bg-white hover:bg-gray-200 text-gray-950 text-sm font-semibold rounded-lg transition-colors">
+            <Button className="flex items-center px-3 py-2 bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-semibold rounded-md transition-colors" variant="default" size="default">
               <Plus className="w-4 h-4 mr-1.5" />
               Create Task
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
       {/* Table Container */}
-      <div className="flex-1 bg-gray-900/50 border border-gray-800 rounded-xl overflow-hidden flex flex-col">
+      <div className="flex-1 bg-card border border-border rounded-lg overflow-hidden flex flex-col">
         {/* Table Header */}
-        <div className="grid grid-cols-12 gap-4 px-6 py-3 border-b border-gray-800 bg-gray-900/80 text-xs font-semibold text-gray-500 uppercase tracking-wider shrink-0 items-center">
+        <div className="grid grid-cols-12 gap-4 px-6 py-3 border-b border-border bg-muted text-xs font-semibold text-subtle-foreground uppercase tracking-wider shrink-0 items-center">
           <div className="col-span-2 flex items-center space-x-3">
             {canEditTask && (
-              <input 
-                type="checkbox" 
-                checked={selectedTasks.size > 0 && selectedTasks.size === filteredTasks.length}
-                onChange={toggleSelectAll}
-                className="w-4 h-4 rounded border-gray-700 bg-gray-800 focus:ring-0 cursor-pointer" 
+              <Checkbox
+                aria-label="Select all tasks"
+                checked={
+                  filteredTasks.length > 0 && selectedTasks.size === filteredTasks.length
+                    ? true
+                    : selectedTasks.size > 0
+                      ? 'indeterminate'
+                      : false
+                }
+                onCheckedChange={toggleSelectAll}
+                className="cursor-pointer"
               />
             )}
-            <button onClick={() => handleSort('taskKey')} className="flex items-center hover:text-gray-300">
+            <Button onClick={() => handleSort('taskKey')} className="flex items-center hover:text-foreground" variant="ghost" size="default">
               Key <ArrowUpDown className="w-3 h-3 ml-1" />
-            </button>
+            </Button>
           </div>
           <div className="col-span-3">
-            <button onClick={() => handleSort('title')} className="flex items-center hover:text-gray-300">
+            <Button onClick={() => handleSort('title')} className="flex items-center hover:text-foreground" variant="ghost" size="default">
               Summary <ArrowUpDown className="w-3 h-3 ml-1" />
-            </button>
+            </Button>
           </div>
           <div className="col-span-2">
-            <button onClick={() => handleSort('status')} className="flex items-center hover:text-gray-300">
+            <Button onClick={() => handleSort('status')} className="flex items-center hover:text-foreground" variant="ghost" size="default">
               Status <ArrowUpDown className="w-3 h-3 ml-1" />
-            </button>
+            </Button>
           </div>
           <div className="col-span-1">
-            <button onClick={() => handleSort('storyPoints')} className="flex items-center hover:text-gray-300">
+            <Button onClick={() => handleSort('storyPoints')} className="flex items-center hover:text-foreground" variant="ghost" size="default">
               Points <ArrowUpDown className="w-3 h-3 ml-1" />
-            </button>
+            </Button>
           </div>
           <div className="col-span-1">Priority</div>
           <div className="col-span-1">Due Date</div>
@@ -290,46 +340,54 @@ export const BacklogPage = () => {
         </div>
 
         {/* Table Body */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+        <div className="flex-1 overflow-y-auto relative">
           {isLoading ? (
             <div className="absolute inset-0 flex justify-center items-center">
-              <Loader2 className="w-8 h-8 animate-spin text-white" />
+              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             </div>
           ) : filteredTasks.length === 0 ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 bg-gray-900/30 border border-dashed border-gray-800/50 m-6 rounded-xl">
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-subtle-foreground bg-card border border-dashed border-border m-6 rounded-lg">
               <p>No tasks found.</p>
             </div>
           ) : (
             filteredTasks.map((task) => (
               <div 
                 key={task.taskId} 
+                role="button"
+                tabIndex={0}
                 onClick={() => navigate(`/w/${slug}/projects/${key}/tasks/${task.taskKey}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigate(`/w/${slug}/projects/${key}/tasks/${task.taskKey}`);
+                  }
+                }}
                 className={clsx(
-                  "grid grid-cols-12 gap-4 px-6 py-3 border-b border-gray-800/60 hover:bg-gray-800/60 cursor-pointer transition-colors items-center group",
-                  selectedTasks.has(task.taskId) && "bg-white/5 border-white/10"
+                  "grid grid-cols-12 gap-4 px-6 py-3 border-b border-border hover:bg-hover cursor-pointer transition-colors items-center group focus-visible:ring-2 focus-visible:ring-ring",
+                  selectedTasks.has(task.taskId) && "bg-secondary border-border-strong"
                 )}
               >
                 {/* Checkbox & Key */}
                 <div className="col-span-2 flex items-center space-x-3">
                   {canEditTask && (
-                    <input 
-                      type="checkbox" 
+                    <Checkbox
+                      aria-label={`Select ${task.taskKey}`}
                       checked={selectedTasks.has(task.taskId)}
-                      onChange={(e) => toggleSelect(e, task.taskId)}
+                      onCheckedChange={() => toggleSelect(task.taskId)}
                       onClick={(e) => e.stopPropagation()}
-                      className="w-4 h-4 rounded border-gray-700 bg-gray-800 focus:ring-0 cursor-pointer" 
+                      className="cursor-pointer"
                     />
                   )}
                   <div className="flex items-center space-x-2">
                     <IssueTypeIcon type={task.type || task.issueType || 'task'} />
-                    <span className="text-sm font-mono text-gray-500 group-hover:text-gray-300 transition-colors">
+                    <span className="text-sm font-mono text-subtle-foreground group-hover:text-primary transition-colors">
                       {task.taskKey}
                     </span>
                   </div>
                 </div>
                 
                 {/* Title */}
-                <div className="col-span-3 text-sm font-medium text-gray-200 truncate pr-4">
+                <div className="col-span-3 text-sm font-medium text-foreground truncate pr-4">
                   {task.title}
                   {task.labels && task.labels.length > 0 && (
                     <span className="flex flex-wrap gap-1 mt-1">
@@ -344,10 +402,10 @@ export const BacklogPage = () => {
                 <div className="col-span-2">
                   <span className={clsx(
                     "text-[10px] font-bold px-2.5 py-1 rounded-sm uppercase tracking-wide",
-                    task.status === 'todo' ? "bg-gray-800 text-gray-400" :
-                    task.status === 'in_progress' ? "bg-blue-500/20 text-blue-400 border border-blue-500/20" :
-                    task.status === 'in_review' ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/20" :
-                    "bg-emerald-500/20 text-emerald-400 border border-emerald-500/20"
+                    task.status === 'todo' ? "bg-muted text-muted-foreground" :
+                    task.status === 'in_progress' ? "bg-primary-muted text-primary border border-primary-border" :
+                    task.status === 'in_review' ? "bg-warning-muted text-warning border border-warning-border" :
+                    "bg-success-muted text-success border border-success-border"
                   )}>
                     {task.status.replace('_', ' ')}
                   </span>
@@ -356,11 +414,16 @@ export const BacklogPage = () => {
                 {/* Story Points */}
                 <div className="col-span-1">
                   {task.storyPoints != null ? (
-                    <span className="inline-flex text-xs font-bold bg-purple-500/10 border border-purple-500/30 text-purple-400 px-2 py-0.5 rounded" title="Story Points">
-                      {task.storyPoints}
-                    </span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge variant="outline" className="bg-primary-muted text-primary border-primary-border font-bold">
+                          {task.storyPoints}
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>Story Points</TooltipContent>
+                    </Tooltip>
                   ) : (
-                    <span className="text-xs text-gray-600">—</span>
+                    <span className="text-xs text-subtle-foreground">—</span>
                   )}
                 </div>
 
@@ -368,21 +431,21 @@ export const BacklogPage = () => {
                 <div className="col-span-1">
                   <span className={clsx(
                     "flex items-center text-xs font-semibold capitalize",
-                    task.priority === 'critical' ? 'text-red-400' :
-                    task.priority === 'high' ? 'text-orange-400' :
-                    task.priority === 'medium' ? 'text-yellow-400' : 'text-gray-400'
+                    task.priority === 'critical' ? 'text-danger' :
+                    task.priority === 'high' ? 'text-warning' :
+                    task.priority === 'medium' ? 'text-primary' : 'text-muted-foreground'
                   )}>
-                    <span className={clsx("w-2 h-2 rounded-full mr-1.5", 
-                      task.priority === 'critical' ? 'bg-red-500' :
-                      task.priority === 'high' ? 'bg-orange-500' :
-                      task.priority === 'medium' ? 'bg-yellow-500' : 'bg-gray-500'
+                    <span className={clsx("w-2 h-2 rounded-full mr-1.5",
+                      task.priority === 'critical' ? 'bg-danger' :
+                      task.priority === 'high' ? 'bg-warning' :
+                      task.priority === 'medium' ? 'bg-primary' : 'bg-subtle-foreground'
                     )}></span>
                     {task.priority || 'medium'}
                   </span>
                 </div>
 
                 {/* Due Date */}
-                <div className="col-span-1 text-xs text-gray-500 flex items-center">
+                <div className="col-span-1 text-xs text-subtle-foreground flex items-center">
                   {task.dueDate ? (
                     <>
                       <Calendar className="w-3.5 h-3.5 mr-1" />
@@ -394,21 +457,33 @@ export const BacklogPage = () => {
                 {/* Assignee */}
                 <div className="col-span-1 flex items-center">
                   {task.assigneeId ? (
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-gray-600 to-gray-500 flex items-center justify-center text-[10px] font-bold text-white shadow-sm border border-gray-900" title="Assigned">
-                      U
-                    </div>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Avatar size="sm" className="border border-border shadow-sm">
+                          <AvatarFallback className="bg-secondary text-[10px] font-bold text-foreground">
+                            U
+                          </AvatarFallback>
+                        </Avatar>
+                      </TooltipTrigger>
+                      <TooltipContent>Assigned</TooltipContent>
+                    </Tooltip>
                   ) : (
-                    <div className="w-6 h-6 rounded-full border border-dashed border-gray-700 flex items-center justify-center text-gray-600" title="Unassigned">
-                      ?
-                    </div>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Avatar size="sm">
+                          <AvatarFallback className="border border-dashed border-border text-subtle-foreground bg-transparent" />
+                        </Avatar>
+                      </TooltipTrigger>
+                      <TooltipContent>Unassigned</TooltipContent>
+                    </Tooltip>
                   )}
                 </div>
 
                 {/* Actions */}
                 <div className="col-span-1 flex justify-end">
-                  <button onClick={(e) => { e.stopPropagation(); /* would open menu */ }} className="p-1.5 text-gray-500 hover:text-white hover:bg-gray-700 rounded transition-colors opacity-0 group-hover:opacity-100">
+                  <Button onClick={(e) => { e.stopPropagation(); /* would open menu */ }} className="p-1.5 text-subtle-foreground hover:text-foreground hover:bg-hover rounded-md transition-colors opacity-0 group-hover:opacity-100" size="icon" variant="ghost">
                     <MoreHorizontal className="w-4 h-4" />
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))

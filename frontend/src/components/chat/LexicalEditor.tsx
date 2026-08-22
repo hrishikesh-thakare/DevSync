@@ -21,25 +21,32 @@ import {
   Plus, Quote, List
 } from 'lucide-react';
 import clsx from 'clsx';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { useChatStore as useUploadStore } from '../../store/useChatStore.js';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
 
 
 const theme = {
   text: {
-    bold: 'font-bold text-gray-100',
-    italic: 'italic text-gray-300',
+    bold: 'font-bold text-foreground',
+    italic: 'italic text-foreground',
     strikethrough: 'line-through',
-    code: 'bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-xs font-mono text-gray-200',
+    code: 'bg-secondary border border-border rounded px-1 py-0.5 text-xs font-mono text-foreground',
   },
-  link: 'text-blue-400 font-medium hover:text-blue-300 cursor-pointer bg-blue-500/10 px-2 py-0.5 rounded font-mono text-xs border border-blue-500/20 no-underline inline-flex items-center gap-1 my-0.5',
-  quote: 'border-l-4 border-gray-600 pl-3 text-gray-400 italic my-0.5 block',
+  link: 'text-primary font-medium hover:text-primary-hover cursor-pointer bg-primary-muted px-2 py-0.5 rounded font-mono text-xs border border-primary-border no-underline inline-flex items-center gap-1 my-0.5',
+  quote: 'border-l-4 border-border-strong pl-3 text-muted-foreground italic my-0.5 block',
   list: {
     ul: 'list-disc list-inside space-y-0.5 my-0.5',
     ol: 'list-decimal list-inside space-y-0.5 my-0.5',
-    listitem: 'marker:text-gray-500',
+    listitem: 'marker:text-subtle-foreground',
   },
-  code: 'bg-gray-900 border border-gray-700 rounded-md px-3 py-2 text-sm font-mono text-gray-200 whitespace-pre-wrap my-1 block',
+  code: 'bg-muted border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground whitespace-pre-wrap my-1 block',
 };
 
 
@@ -135,7 +142,7 @@ function ToolbarPlugin({ isSending, onUploadClick }: ToolbarPluginProps) {
   };
   
   return (
-    <div className="flex items-center justify-between px-2 py-1.5 bg-gray-950 border-t border-gray-800/60">
+    <div className="flex items-center justify-between px-2 py-1.5 bg-background border-t border-border">
       <div className="flex items-center gap-0.5">
         <ToolBtn title="Attach file" onClick={onUploadClick} disabled={isSending}>
           <Plus className="w-4 h-4" />
@@ -279,7 +286,8 @@ function SubmitPlugin({ onSubmit, isSending, setIsEmpty, submitTrigger, onSubmit
 interface WorkspaceMember {
   userId: string;
   fullName: string;
-  displayName?: string;
+  /** Nullable in the API payload, so this mirrors the store's `WorkspaceMember`. */
+  displayName?: string | null;
 }
 
 interface TaskItem {
@@ -372,7 +380,7 @@ function MentionsPlugin({ members, tasks = [] }: { members: WorkspaceMember[]; t
 
   return (
     <div 
-      className="fixed z-50 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-72 overflow-hidden"
+      className="fixed z-(--z-dropdown) bg-card border border-border rounded-lg shadow-md w-72 overflow-hidden"
       style={{ 
         left: Math.max(16, Math.min(coords.x, window.innerWidth - 300)),
         top: openUpward ? undefined : coords.y + 4,
@@ -382,17 +390,19 @@ function MentionsPlugin({ members, tasks = [] }: { members: WorkspaceMember[]; t
       <div className="max-h-56 overflow-y-auto py-1">
         {filteredMembers.length > 0 && (
           <div>
-            <div className="px-3 py-1 text-[10px] font-bold text-gray-500 uppercase tracking-wider bg-gray-950/60">Members</div>
+            <div className="px-3 py-1 text-[10px] font-bold text-subtle-foreground uppercase tracking-wider bg-muted">Members</div>
             {filteredMembers.map((m) => (
               <div 
                 key={m.userId}
-                className="px-3 py-1.5 hover:bg-gray-800 cursor-pointer flex items-center space-x-2"
+                className="px-3 py-1.5 hover:bg-hover cursor-pointer flex items-center space-x-2"
                 onMouseDown={(e) => { e.preventDefault(); handleSelect(m.fullName.replace(/\s+/g, '')); }}
               >
-                <div className="w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center text-[10px] text-white font-bold shrink-0">
-                  {m.fullName[0]}
-                </div>
-                <span className="text-sm text-gray-200 truncate">{m.fullName}</span>
+                <Avatar size="sm" className="size-5 shrink-0">
+                  <AvatarFallback className="bg-secondary text-[10px] text-foreground font-bold">
+                    {m.fullName[0]}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-sm text-foreground truncate">{m.fullName}</span>
               </div>
             ))}
           </div>
@@ -400,15 +410,15 @@ function MentionsPlugin({ members, tasks = [] }: { members: WorkspaceMember[]; t
 
         {filteredTasks.length > 0 && (
           <div>
-            <div className="px-3 py-1 text-[10px] font-bold text-gray-500 uppercase tracking-wider bg-gray-950/60 border-t border-gray-800">Project Tasks</div>
+            <div className="px-3 py-1 text-[10px] font-bold text-subtle-foreground uppercase tracking-wider bg-muted border-t border-border">Project Tasks</div>
             {filteredTasks.map((t) => (
               <div 
                 key={t.id}
-                className="px-3 py-1.5 hover:bg-gray-800 cursor-pointer flex items-center justify-between space-x-2"
+                className="px-3 py-1.5 hover:bg-hover cursor-pointer flex items-center justify-between space-x-2"
                 onMouseDown={(e) => { e.preventDefault(); handleSelect(t.taskKey || t.id); }}
               >
-                <span className="text-xs font-mono font-bold text-blue-400 shrink-0">{t.taskKey || t.id}</span>
-                <span className="text-xs text-gray-300 truncate flex-1 text-right">{t.title}</span>
+                <span className="text-xs font-mono font-bold text-primary shrink-0">{t.taskKey || t.id}</span>
+                <span className="text-xs text-foreground truncate flex-1 text-right">{t.title}</span>
               </div>
             ))}
           </div>
@@ -514,13 +524,13 @@ export const LexicalEditor = ({
   return (
     <LexicalComposer initialConfig={initialConfig}>
       <div className="relative">
-        <div className="bg-gray-900 border border-gray-700/60 rounded-xl overflow-hidden shadow-lg focus-within:ring-1 focus-within:ring-white/30 focus-within:border-white/40 transition-all">
+        <div className="bg-card border border-border rounded-lg overflow-hidden shadow-sm focus-within:ring-1 focus-within:ring-ring focus-within:border-ring transition-all">
           <div className="relative">
             <RichTextPlugin
               contentEditable={
-                <ContentEditable className="prose prose-invert max-w-none focus:outline-none min-h-[52px] max-h-[300px] overflow-y-auto px-4 py-3 text-[15px] text-gray-200 leading-relaxed cursor-text" />
+                <ContentEditable className="message-body max-w-none focus:outline-none min-h-[52px] max-h-[300px] overflow-y-auto px-4 py-3 text-foreground cursor-text" />
               }
-              placeholder={<div className="absolute top-3 left-4 text-[15px] text-gray-500 pointer-events-none select-none z-10">{placeholder}</div>}
+              placeholder={<div className="absolute top-3 left-4 text-body text-subtle-foreground pointer-events-none select-none z-10">{placeholder}</div>}
               ErrorBoundary={LexicalErrorBoundary}
             />
             <HistoryPlugin />
@@ -539,23 +549,29 @@ export const LexicalEditor = ({
           />
           <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
           
-          <button
-              onClick={() => {
-                setSubmitTrigger(t => t + 1);
-              }}
-              disabled={isSending || isUploading || isEmpty}
-              title="Send (Enter)"
-              className="absolute right-2 bottom-1.5 flex items-center justify-center p-2 rounded-lg bg-white hover:bg-gray-200 text-gray-950 transition-colors disabled:opacity-40 disabled:cursor-not-allowed z-20"
-            >
-              <SendHorizontal className="w-4 h-4" />
-          </button>
+<Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={() => {
+                    setSubmitTrigger(t => t + 1);
+                  }}
+                  disabled={isSending || isUploading || isEmpty}
+                  aria-label="Send message"
+                  className="absolute right-2 bottom-1.5 flex items-center justify-center p-2 rounded-lg bg-primary hover:bg-primary-hover text-primary-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed z-20"
+                  size="icon" variant="default"
+                >
+                  <SendHorizontal className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Send (Enter)</TooltipContent>
+            </Tooltip>
         </div>
       </div>
     </LexicalComposer>
   );
 };
 
-const Sep = () => <div className="w-px h-4 bg-gray-800 mx-1 shrink-0" />;
+const Sep = () => <div className="w-px h-4 bg-border mx-1 shrink-0" />;
 
 const ToolBtn = ({
   children, onClick, disabled = false, title, active = false,
@@ -565,20 +581,34 @@ const ToolBtn = ({
   disabled?: boolean;
   title?: string;
   active?: boolean;
-}) => (
-  <button
-    onMouseDown={e => { e.preventDefault(); onClick(); }}
-    disabled={disabled}
-    title={title}
-    className={clsx(
-      'p-1.5 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
-      active
-        ? 'bg-gray-700 text-white'
-        : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800',
-    )}
-  >
-    {children}
-  </button>
-);
+}) => {
+  const button = (
+    <button
+      type="button"
+      onMouseDown={e => { e.preventDefault(); }}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={title}
+      aria-pressed={active}
+      className={clsx(
+        'p-1.5 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-ring',
+        active
+          ? 'bg-secondary text-secondary-foreground'
+          : 'text-subtle-foreground hover:text-foreground hover:bg-hover',
+      )}
+    >
+      {children}
+    </button>
+  );
+
+  if (!title) return button;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent>{title}</TooltipContent>
+    </Tooltip>
+  );
+};
 
 export default LexicalEditor;

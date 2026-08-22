@@ -11,7 +11,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.CI ? 1 : 2,
   reporter: process.env.CI
     ? [['list'], ['github'], ['html', { open: 'never' }]]
     : [['list'], ['html', { open: 'on-failure' }]],
@@ -62,6 +62,8 @@ export default defineConfig({
         SMTP_HOST: '',
         SMTP_USER: '',
         SMTP_PASS: '',
+        // Disable Gemini to avoid quota exhaustion & libuv crashes under parallelism
+        GEMINI_API_KEY: '',
         // Turn on email-verification enforcement so CI covers the blocked
         // login path (specs that register then sign in verify first).
         REQUIRE_EMAIL_VERIFICATION: 'true',
@@ -95,6 +97,7 @@ export default defineConfig({
         SMTP_USER: '',
         SMTP_PASS: '',
         TRUST_PROXY_HOPS: '1',
+        GEMINI_API_KEY: '',
       },
       port: 3002,
       reuseExistingServer: false,

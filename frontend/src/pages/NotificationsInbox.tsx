@@ -1,8 +1,23 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Check, MessageSquare, CheckCircle2, User, UserMinus, AtSign, ArrowRightLeft, Play, Hash, Mail, Briefcase, Building2, GitBranch } from 'lucide-react';
+import { Bell, Check, MessageSquare, CheckCircle2, User, UserMinus, AtSign, ArrowRightLeft, Play, Hash, Mail, Briefcase, Building2, GitBranch, type LucideIcon } from 'lucide-react';
 import clsx from 'clsx';
 import { useNotificationStore } from '../store/useNotificationStore';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Badge, badgeVariants } from '@/components/ui/badge';
+import type { VariantProps } from 'class-variance-authority';
+import { Button } from '@/components/ui/button';
 
 
 export const NotificationsInbox = () => {
@@ -26,24 +41,24 @@ export const NotificationsInbox = () => {
     }
   };
 
-  const getIcon = (type: string) => {
+  const getIcon = (type: string): { icon: LucideIcon; variant: VariantProps<typeof badgeVariants>['variant']; className?: string } => {
     switch (type) {
-      case 'task_assigned': return { icon: User, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' };
-      case 'task_unassigned': return { icon: UserMinus, color: 'text-red-400 bg-red-500/10 border-red-500/20' };
-      case 'task_commented': return { icon: MessageSquare, color: 'text-green-400 bg-green-500/10 border-green-500/20' };
-      case 'task_mentioned': return { icon: AtSign, color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' };
-      case 'task_status_changed': return { icon: ArrowRightLeft, color: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20' };
-      case 'sprint_started': return { icon: Play, color: 'text-green-400 bg-green-500/10 border-green-500/20' };
-      case 'sprint_closed': return { icon: CheckCircle2, color: 'text-gray-400 bg-gray-500/10 border-gray-500/20' };
-      case 'channel_mentioned': return { icon: Hash, color: 'text-pink-400 bg-pink-500/10 border-pink-500/20' };
-      case 'dm_received': return { icon: Mail, color: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20' };
+      case 'task_assigned': return { icon: User, variant: 'success' };
+      case 'task_unassigned': return { icon: UserMinus, variant: 'destructive' };
+      case 'task_commented': return { icon: MessageSquare, variant: 'success' };
+      case 'task_mentioned': return { icon: AtSign, variant: 'outline', className: 'bg-primary-muted text-primary border-primary-border' };
+      case 'task_status_changed': return { icon: ArrowRightLeft, variant: 'warning' };
+      case 'sprint_started': return { icon: Play, variant: 'success' };
+      case 'sprint_closed': return { icon: CheckCircle2, variant: 'outline' };
+      case 'channel_mentioned': return { icon: Hash, variant: 'outline', className: 'bg-primary-muted text-primary border-primary-border' };
+      case 'dm_received': return { icon: Mail, variant: 'outline', className: 'bg-primary-muted text-primary border-primary-border' };
       case 'commit_linked': 
-      case 'commit_unlinked': return { icon: GitBranch, color: 'text-gray-200 bg-gray-700/50 border-gray-600/50' };
-      case 'ci_passed': return { icon: GitBranch, color: 'text-green-400 bg-green-500/10 border-green-500/20' };
-      case 'ci_failed': return { icon: GitBranch, color: 'text-red-500 bg-red-500/10 border-red-500/20' };
-      case 'project_member_added': return { icon: Briefcase, color: 'text-teal-400 bg-teal-500/10 border-teal-500/20' };
-      case 'workspace_invited': return { icon: Building2, color: 'text-blue-500 bg-blue-500/10 border-blue-500/20' };
-      default: return { icon: Bell, color: 'text-gray-400 bg-white/10 border-white/20' };
+      case 'commit_unlinked': return { icon: GitBranch, variant: 'outline' };
+      case 'ci_passed': return { icon: GitBranch, variant: 'success' };
+      case 'ci_failed': return { icon: GitBranch, variant: 'destructive' };
+      case 'project_member_added': return { icon: Briefcase, variant: 'success' };
+      case 'workspace_invited': return { icon: Building2, variant: 'outline', className: 'bg-primary-muted text-primary border-primary-border' };
+      default: return { icon: Bell, variant: 'outline' };
     }
   };
 
@@ -61,64 +76,68 @@ export const NotificationsInbox = () => {
   }
 
   return (
-    <div className="h-full overflow-y-auto p-8 font-sans bg-gray-950 text-gray-200">
+    <div className="h-full overflow-y-auto p-8 font-sans bg-background text-foreground">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-3">
-            <h1 className="text-2xl font-bold text-white">Inbox</h1>
+            <h1 className="text-2xl font-bold text-foreground">Inbox</h1>
             {localUnreadCount > 0 && (
-              <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+              <span className="bg-danger text-danger-foreground text-xs font-bold px-2 py-0.5 rounded-full">
                 {localUnreadCount} new
               </span>
             )}
           </div>
-          <button 
+          <Button 
             onClick={markAllRead}
             disabled={localUnreadCount === 0}
-            className="flex items-center text-sm font-medium text-gray-400 hover:text-white disabled:opacity-50 transition-colors"
+            variant="ghost"
+            className="flex items-center text-sm font-medium text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors h-auto"
           >
             <Check className="w-4 h-4 mr-2" />
             Mark all as read
-          </button>
+          </Button>
         </div>
 
         {/* All / Unread Toggle + Type Filter */}
         <div className="flex items-center space-x-4 mb-6">
-          <div className="flex bg-gray-900 rounded-lg border border-gray-800 overflow-hidden">
-            <button
+          <div className="flex bg-card rounded-md border border-border overflow-hidden">
+            <Button
               onClick={() => setViewMode('all')}
-              className={clsx("px-4 py-2 text-sm font-medium transition-colors", viewMode === 'all' ? "bg-white/10 text-white" : "text-gray-400 hover:text-gray-200")}
+              variant="ghost"
+              className={clsx("px-4 py-2 text-sm font-medium transition-colors h-auto", viewMode === 'all' ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground")}
             >
               All
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => setViewMode('unread')}
-              className={clsx("px-4 py-2 text-sm font-medium transition-colors", viewMode === 'unread' ? "bg-white/10 text-white" : "text-gray-400 hover:text-gray-200")}
+              variant="ghost"
+              className={clsx("px-4 py-2 text-sm font-medium transition-colors h-auto", viewMode === 'unread' ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground")}
             >
               Unread
-            </button>
+            </Button>
           </div>
 
-          <select
-            value={filterType}
-            onChange={e => setFilterType(e.target.value)}
-            className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none"
-          >
-            <option value="all">All Types</option>
-            <option value="tasks">Tasks</option>
-            <option value="sprints">Sprints</option>
-            <option value="messages">Messages</option>
-            <option value="github">GitHub</option>
-            <option value="membership">Membership</option>
-          </select>
+          <Select value={filterType} onValueChange={setFilterType}>
+            <SelectTrigger className="bg-elevated">
+              <SelectValue placeholder="All Types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="tasks">Tasks</SelectItem>
+              <SelectItem value="sprints">Sprints</SelectItem>
+              <SelectItem value="messages">Messages</SelectItem>
+              <SelectItem value="github">GitHub</SelectItem>
+              <SelectItem value="membership">Membership</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {isLoading ? (
-          <div className="text-center text-gray-500 py-12">Loading...</div>
+          <div className="text-center text-subtle-foreground py-12">Loading...</div>
         ) : (
-          <div className="bg-gray-900/50 border border-gray-800 rounded-xl overflow-hidden shadow-lg divide-y divide-gray-800/60">
+          <div className="bg-card border border-border rounded-lg overflow-hidden shadow-sm divide-y divide-border">
             {filtered.map(notif => {
-              const { icon: Icon, color } = getIcon(notif.type);
+              const { icon: Icon, variant, className } = getIcon(notif.type);
               return (
                 <div 
                   key={notif.notificationId}
@@ -133,42 +152,52 @@ export const NotificationsInbox = () => {
                     }
                   }}
                   className={clsx(
-                    "flex items-start p-5 hover:bg-gray-800/40 cursor-pointer transition-colors relative group",
-                    !notif.isRead ? "bg-gray-800/20" : ""
+                    "flex items-start p-5 hover:bg-hover cursor-pointer transition-colors relative group",
+                    !notif.isRead ? "bg-primary-muted" : ""
                   )}
                 >
                   {!notif.isRead && (
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500 rounded-r-full"></div>
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full"></div>
                   )}
                   
                   <div className="mt-1 mr-4">
-                    <div className={clsx("w-8 h-8 rounded-full flex items-center justify-center border", color)}>
+                    <Badge
+                      variant={variant}
+                      className={clsx("h-8 w-8 rounded-full px-0 py-0 border [&>svg]:!size-4", className)}
+                    >
                       <Icon className="w-4 h-4" />
-                    </div>
+                    </Badge>
                   </div>
 
                   <div className="flex-1">
-                    <p className={clsx("text-sm mb-1", !notif.isRead ? "text-gray-100 font-bold" : "text-gray-300 font-medium")}>
+                    <p className={clsx("text-sm mb-1", !notif.isRead ? "text-foreground font-bold" : "text-muted-foreground font-medium")}>
                       {notif.title}
                     </p>
-                    <span className="text-xs text-gray-500">{notif.body}</span>
+                    <span className="text-xs text-subtle-foreground">{notif.body}</span>
                   </div>
 
                   {!notif.isRead && (
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); markRead(notif.notificationId); }}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-500 hover:text-white hover:bg-gray-800 rounded transition-all"
-                      title="Mark as read"
-                    >
-                      <Check className="w-4 h-4" />
-                    </button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          onClick={(e) => { e.stopPropagation(); markRead(notif.notificationId); }}
+                          variant="ghost"
+                          size="icon"
+                          className="opacity-0 group-hover:opacity-100 p-1.5 text-subtle-foreground hover:text-foreground hover:bg-hover rounded transition-all h-auto w-auto"
+                          aria-label="Mark as read"
+                        >
+                          <Check className="w-4 h-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Mark as read</TooltipContent>
+                    </Tooltip>
                   )}
                 </div>
               );
             })}
             
             {filtered.length === 0 && (
-              <div className="p-12 text-center text-gray-500">
+              <div className="p-12 text-center text-subtle-foreground">
                 <Bell className="w-12 h-12 mx-auto mb-4 opacity-50" />
                 <p>{viewMode === 'unread' ? 'No unread notifications.' : "You're all caught up!"}</p>
               </div>

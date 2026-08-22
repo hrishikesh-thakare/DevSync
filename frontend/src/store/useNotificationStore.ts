@@ -41,8 +41,11 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       const notifs: Notification[] = data.notifications || [];
       const unreadCount = notifs.filter((n) => !n.isRead).length;
       set({ notifications: notifs, unreadCount, isLoading: false });
-    } catch (err: any) {
-      set({ error: err.message, isLoading: false });
+    } catch (err: unknown) {
+      set({
+        error: err instanceof Error ? err.message : 'Failed to load notifications',
+        isLoading: false,
+      });
     }
   },
 

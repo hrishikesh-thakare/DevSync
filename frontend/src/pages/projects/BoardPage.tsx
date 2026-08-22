@@ -2,13 +2,38 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useBoardStore, Task, TaskStatus } from '../../store/boardStore.js';
 import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
-import { Loader2, AlertCircle, Plus, X, Bug, BookOpen, Zap, CheckSquare, Layers, Trash2 } from 'lucide-react';
+import { Loader2, AlertCircle, Plus, Bug, BookOpen, Zap, CheckSquare, Layers, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuthStore } from '../../store/auth.js';
 import { useToast } from '../../hooks/useToast.js';
 import { useConfirm } from '../../hooks/useConfirm.js';
 import { LabelChip } from '../../components/projects/LabelChip.js';
 import { useLabelStore } from '../../store/labelStore.js';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   DndContext,
   closestCorners,
@@ -24,25 +49,25 @@ import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrate
 import { CSS } from '@dnd-kit/utilities';
 
 const COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
-  { id: 'todo', title: 'To Do', color: 'bg-gray-500' },
-  { id: 'in_progress', title: 'In Progress', color: 'bg-blue-500' },
-  { id: 'in_review', title: 'In Review', color: 'bg-yellow-500' },
-  { id: 'done', title: 'Done', color: 'bg-emerald-500' },
+  { id: 'todo', title: 'To Do', color: 'bg-subtle-foreground' },
+  { id: 'in_progress', title: 'In Progress', color: 'bg-primary' },
+  { id: 'in_review', title: 'In Review', color: 'bg-warning' },
+  { id: 'done', title: 'Done', color: 'bg-success' },
 ];
 
 const ISSUE_TYPES = [
-  { value: 'epic', label: 'Epic', icon: Zap, color: 'text-purple-400' },
-  { value: 'story', label: 'Story', icon: BookOpen, color: 'text-blue-400' },
-  { value: 'task', label: 'Task', icon: CheckSquare, color: 'text-gray-300' },
-  { value: 'bug', label: 'Bug', icon: Bug, color: 'text-red-400' },
-  { value: 'subtask', label: 'Subtask', icon: Layers, color: 'text-gray-500' },
+  { value: 'epic', label: 'Epic', icon: Zap, color: 'text-special' },
+  { value: 'story', label: 'Story', icon: BookOpen, color: 'text-primary' },
+  { value: 'task', label: 'Task', icon: CheckSquare, color: 'text-foreground' },
+  { value: 'bug', label: 'Bug', icon: Bug, color: 'text-danger' },
+  { value: 'subtask', label: 'Subtask', icon: Layers, color: 'text-subtle-foreground' },
 ];
 
 const PRIORITIES = [
-  { value: 'critical', label: 'Critical', color: 'bg-red-500' },
-  { value: 'high', label: 'High', color: 'bg-orange-500' },
-  { value: 'medium', label: 'Medium', color: 'bg-yellow-500' },
-  { value: 'low', label: 'Low', color: 'bg-gray-500' },
+  { value: 'critical', label: 'Critical', color: 'bg-danger' },
+  { value: 'high', label: 'High', color: 'bg-warning' },
+  { value: 'medium', label: 'Medium', color: 'bg-primary' },
+  { value: 'low', label: 'Low', color: 'bg-subtle-foreground' },
 ];
 
 const IssueTypeIcon = ({ type, className = '' }: { type: string; className?: string }) => {
@@ -155,7 +180,7 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
   if (isLoading) {
     return (
       <div className="absolute inset-0 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-white" />
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -200,43 +225,47 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
     <div className="h-full flex flex-col">
       {/* Filter Bar */}
       <div className="px-6 pt-4 pb-2 flex items-center space-x-3 shrink-0">
-        <button 
+        <Button 
           onClick={() => setShowFilters(!showFilters)}
           className={clsx(
-            "flex items-center text-sm px-3 py-1.5 rounded-lg border transition-colors",
-            hasActiveFilters ? "border-white/30 text-white bg-white/10" : "border-gray-800 text-gray-400 hover:text-gray-200 bg-gray-900"
+            "flex items-center text-sm px-3 py-1.5 rounded-md border transition-colors h-auto",
+            hasActiveFilters ? "border-primary-border text-primary bg-primary-muted" : "border-border text-muted-foreground hover:text-foreground bg-card"
           )}
+          variant="outline" size="default"
         >
           <AlertCircle className="w-3.5 h-3.5 mr-2" />
           Filters
-          {hasActiveFilters && <span className="ml-2 w-1.5 h-1.5 bg-white rounded-full"></span>}
-        </button>
+          {hasActiveFilters && <span className="ml-2 w-1.5 h-1.5 bg-primary rounded-full"></span>}
+        </Button>
 
         {showFilters && (
           <>
-            <select 
-              value={filterPriority} 
-              onChange={e => setFilterPriority(e.target.value)}
-              className="bg-gray-900 border border-gray-800 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none"
-            >
-              <option value="all">All Priorities</option>
-              {PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select>
-            <select 
-              value={filterType} 
-              onChange={e => setFilterType(e.target.value)}
-              className="bg-gray-900 border border-gray-800 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none"
-            >
-              <option value="all">All Types</option>
-              {ISSUE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
+            <Select value={filterPriority} onValueChange={setFilterPriority}>
+              <SelectTrigger className="bg-elevated">
+                <SelectValue placeholder="All Priorities" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Priorities</SelectItem>
+                {PRIORITIES.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger className="bg-elevated">
+                <SelectValue placeholder="All Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                {ISSUE_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
             {hasActiveFilters && (
-              <button 
+              <Button 
                 onClick={() => { setFilterPriority('all'); setFilterType('all'); }}
-                className="text-xs text-gray-500 hover:text-white transition-colors"
+                className="text-xs text-subtle-foreground hover:text-foreground transition-colors"
+                variant="ghost" size="default"
               >
                 Clear
-              </button>
+              </Button>
             )}
           </>
         )}
@@ -244,13 +273,14 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
         <div className="flex-1" />
         <div className="flex items-center space-x-3">
           {canEditTask && (
-            <button 
+            <Button 
               onClick={() => { setNewTaskStatus('todo'); setShowTaskModal(true); }}
-              className="flex items-center px-3 py-2 bg-white hover:bg-gray-200 text-gray-950 text-sm font-semibold rounded-lg transition-colors"
+              className="flex items-center px-3 py-2 bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-semibold rounded-md transition-colors"
+              variant="default" size="default"
             >
               <Plus className="w-4 h-4 mr-1.5" />
               Create Task
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -287,23 +317,21 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
 
       {/* CREATE TASK MODAL — Full fields */}
       {showTaskModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between p-6 border-b border-gray-800 shrink-0">
-              <h3 className="text-xl font-bold text-white">Create Task</h3>
-              <button onClick={() => setShowTaskModal(false)} className="text-gray-500 hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleCreateTask} className="p-6 space-y-4 overflow-y-auto flex-1">
+        <Dialog open onOpenChange={(open) => { if (!open) setShowTaskModal(false); }}>
+          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Create Task</DialogTitle>
+              <DialogDescription>Add a new task to this project.</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleCreateTask} className="space-y-4">
               {/* Title */}
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Title *</label>
-                <input 
-                  type="text" 
+              <div className="space-y-2">
+                <Label htmlFor="task-title">Title *</Label>
+                <Input
+                  id="task-title"
+                  type="text"
                   value={newTaskTitle}
                   onChange={e => setNewTaskTitle(e.target.value)}
-                  className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white transition-colors"
                   placeholder="E.g. Fix login bug"
                   required
                   autoFocus
@@ -312,86 +340,90 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
 
               {/* Issue Type + Priority Row */}
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Issue Type</label>
-                  <select 
-                    value={newTaskType} 
-                    onChange={e => setNewTaskType(e.target.value)}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white transition-colors"
-                  >
-                    {ISSUE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
+                <div className="space-y-2">
+                  <Label htmlFor="task-type">Issue Type</Label>
+                  <Select value={newTaskType} onValueChange={setNewTaskType}>
+                    <SelectTrigger id="task-type" className="w-full bg-elevated">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ISSUE_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Priority</label>
-                  <select 
-                    value={newTaskPriority} 
-                    onChange={e => setNewTaskPriority(e.target.value)}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white transition-colors"
-                  >
-                    {PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                  </select>
+                <div className="space-y-2">
+                  <Label htmlFor="task-priority">Priority</Label>
+                  <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
+                    <SelectTrigger id="task-priority" className="w-full bg-elevated">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PRIORITIES.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
               {/* Status, Sprint and Story Points Row */}
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Status</label>
-                  <select 
-                    value={newTaskStatus} 
-                    onChange={e => setNewTaskStatus(e.target.value as TaskStatus)}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white transition-colors"
-                  >
-                    {COLUMNS.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
-                  </select>
+                <div className="space-y-2">
+                  <Label htmlFor="task-status">Status</Label>
+                  <Select value={newTaskStatus} onValueChange={(v) => setNewTaskStatus(v as TaskStatus)}>
+                    <SelectTrigger id="task-status" className="w-full bg-elevated">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COLUMNS.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Sprint</label>
-                  <select 
-                    value={newTaskSprintId} 
-                    onChange={e => setNewTaskSprintId(e.target.value)}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white transition-colors"
-                  >
-                    <option value="">Backlog</option>
-                    {sprints.map((s: { sprintId: string; name: string }) => <option key={s.sprintId} value={s.sprintId}>{s.name}</option>)}
-                  </select>
+                <div className="space-y-2">
+                  <Label htmlFor="task-sprint">Sprint</Label>
+                  <Select value={newTaskSprintId} onValueChange={setNewTaskSprintId}>
+                    <SelectTrigger id="task-sprint" className="w-full bg-elevated">
+                      <SelectValue placeholder="Backlog" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Backlog</SelectItem>
+                      {sprints.map((s: { sprintId: string; name: string }) => <SelectItem key={s.sprintId} value={s.sprintId}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Story Points</label>
-                  <input
+                <div className="space-y-2">
+                  <Label htmlFor="task-points">Story Points</Label>
+                  <Input
+                    id="task-points"
                     type="number"
                     min="0"
                     max="100"
                     value={newTaskPoints}
                     onChange={e => setNewTaskPoints(e.target.value)}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white transition-colors"
                     placeholder="e.g. 5"
                   />
                 </div>
               </div>
 
               {/* Description */}
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Description</label>
-                <textarea 
+              <div className="space-y-2">
+                <Label htmlFor="task-description">Description</Label>
+                <Textarea
+                  id="task-description"
                   rows={3}
                   value={newTaskDescription}
                   onChange={e => setNewTaskDescription(e.target.value)}
-                  className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white transition-colors"
                   placeholder="Describe the task..."
                 />
               </div>
 
               {/* Labels */}
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Labels</label>
-                <input 
-                  type="text" 
+              <div className="space-y-2">
+                <Label htmlFor="task-labels">Labels</Label>
+                <Input
+                  id="task-labels"
+                  type="text"
                   value={newTaskLabels}
                   onChange={e => setNewTaskLabels(e.target.value)}
                   list={`label-suggestions-${key}`}
-                  className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white transition-colors"
                   placeholder="frontend, auth, urgent (comma separated)"
                 />
                 <datalist id={`label-suggestions-${key}`}>
@@ -400,15 +432,15 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
               </div>
 
               <div className="pt-4 flex justify-end space-x-3">
-                <button type="button" onClick={() => setShowTaskModal(false)} className="px-4 py-2 text-gray-400 hover:text-white transition-colors font-medium">Cancel</button>
-                <button type="submit" disabled={isCreatingTask} className="px-6 py-2 bg-white text-gray-950 hover:bg-gray-200 font-bold rounded-lg transition-colors disabled:opacity-50 flex items-center">
+                <Button type="button" variant="outline" onClick={() => setShowTaskModal(false)}>Cancel</Button>
+                <Button type="submit" disabled={isCreatingTask}>
                   {isCreatingTask && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   Create Task
-                </button>
+                </Button>
               </div>
             </form>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
@@ -417,19 +449,19 @@ export const BoardPage = ({ sprintId }: { sprintId?: string }) => {
 // --- Column Component ---
 const KanbanColumn = ({ column, tasks, onAddClick }: { column: { id: string; title: string; color: string }, tasks: Task[], onAddClick: () => void }) => {
   return (
-    <div className="flex flex-col w-80 shrink-0 bg-gray-900/50 rounded-xl border border-gray-800 max-h-full overflow-hidden" id={column.id}>
-      <div className="p-4 flex items-center justify-between border-b border-gray-800/60 bg-gray-900/80 group">
+    <div className="flex flex-col w-80 shrink-0 bg-muted rounded-lg border border-border max-h-full overflow-hidden" id={column.id}>
+      <div className="p-4 flex items-center justify-between border-b border-border group">
         <div className="flex items-center space-x-2">
           <div className={`w-2.5 h-2.5 rounded-full ${column.color}`}></div>
-          <h3 className="font-semibold text-gray-200 text-sm">{column.title}</h3>
-          <span className="bg-gray-800 text-gray-400 text-xs px-2 py-0.5 rounded-full">{tasks.length}</span>
+          <h3 className="font-semibold text-foreground text-sm">{column.title}</h3>
+          <span className="bg-card text-muted-foreground text-xs px-2 py-0.5 rounded-full">{tasks.length}</span>
         </div>
         <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={onAddClick} className="p-1 text-gray-500 hover:text-white hover:bg-gray-800 rounded"><Plus className="w-4 h-4" /></button>
+          <Button onClick={onAddClick} className="p-1 text-subtle-foreground hover:text-foreground hover:bg-hover rounded-md" size="icon" variant="ghost"><Plus className="w-4 h-4" /></Button>
         </div>
       </div>
 
-      <div className="p-3 flex-1 overflow-y-auto custom-scrollbar space-y-3">
+      <div className="p-3 flex-1 overflow-y-auto space-y-3">
         <SortableContext items={tasks.map(t => t.taskId)} strategy={verticalListSortingStrategy}>
           {tasks.map(task => (
             <SortableTaskCard key={task.taskId} task={task} />
@@ -472,53 +504,64 @@ const KanbanCard = ({ task, isOverlay = false }: { task: Task, isOverlay?: boole
         }
       }}
       className={clsx(
-      "bg-gray-950 border rounded-lg p-3 cursor-grab active:cursor-grabbing hover:border-gray-600 transition-colors group relative",
-      isOverlay ? "border-white/50 shadow-2xl shadow-white/10 rotate-2 scale-105" : "border-gray-800 shadow-sm"
+      "bg-card border rounded-md p-3 cursor-grab active:cursor-grabbing hover:border-border-strong transition-colors group relative",
+      isOverlay ? "border-primary shadow-md rotate-2 scale-105" : "border-border shadow-sm"
     )}>
       {/* Priority Indicator Line */}
-      <div className={clsx("absolute left-0 top-0 bottom-0 w-1 rounded-l-lg", 
-        task.priority === 'critical' ? 'bg-red-500' :
-        task.priority === 'high' ? 'bg-orange-500' :
-        task.priority === 'medium' ? 'bg-yellow-500' : 'bg-gray-600'
+      <div className={clsx("absolute left-0 top-0 bottom-0 w-1 rounded-l-md",
+        task.priority === 'critical' ? 'bg-danger' :
+        task.priority === 'high' ? 'bg-warning' :
+        task.priority === 'medium' ? 'bg-primary' : 'bg-border-strong'
       )} />
 
       <div className="pl-2">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center space-x-1.5">
             <IssueTypeIcon type={task.type || task.issueType || 'task'} />
-            <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-400 transition-colors">
+            <span className="text-[11px] font-mono text-subtle-foreground group-hover:text-muted-foreground transition-colors">
               {task.taskKey}
             </span>
             {task.storyPoints != null && (
-              <span className="text-[10px] font-bold bg-purple-500/10 border border-purple-500/30 text-purple-400 px-1.5 py-0 rounded" title="Story Points">
-                {task.storyPoints}
-              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="bg-primary-muted text-primary border-primary-border text-[10px] h-auto px-1.5 font-bold">
+                    {task.storyPoints}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>Story Points</TooltipContent>
+              </Tooltip>
             )}
           </div>
           {task.priority && (
-            <span className={clsx(
-              "w-2 h-2 rounded-full",
-              task.priority === 'critical' ? 'bg-red-500' :
-              task.priority === 'high' ? 'bg-orange-500' :
-              task.priority === 'medium' ? 'bg-yellow-500' : 'bg-gray-600'
-            )} title={task.priority}></span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className={clsx(
+                  "w-2 h-2 rounded-full",
+                  task.priority === 'critical' ? 'bg-danger' :
+                  task.priority === 'high' ? 'bg-warning' :
+                  task.priority === 'medium' ? 'bg-primary' : 'bg-subtle-foreground'
+                )}></span>
+              </TooltipTrigger>
+              <TooltipContent>{task.priority}</TooltipContent>
+            </Tooltip>
           )}
           {!isOverlay && slug && key && (
-            <button
-              className="ml-auto opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 p-1 rounded-md transition-all hover:bg-red-500/10"
+            <Button
+              className="ml-auto opacity-0 group-hover:opacity-100 text-subtle-foreground hover:text-danger p-1 rounded-md transition-all hover:bg-danger-muted"
               onClick={async (e) => {
                 e.stopPropagation();
                 if (await confirm({ message: 'Are you sure you want to delete this task?', isDestructive: true })) {
                   useBoardStore.getState().deleteTask(slug, key, task.taskKey);
                 }
               }}
+              size="icon" variant="destructive"
             >
               <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            </Button>
           )}
         </div>
         
-        <p className="text-sm font-medium text-gray-200 mb-4 leading-snug line-clamp-2">
+        <p className="text-sm font-medium text-foreground mb-4 leading-snug line-clamp-2">
           {task.title}
         </p>
 
@@ -533,41 +576,61 @@ const KanbanCard = ({ task, isOverlay = false }: { task: Task, isOverlay?: boole
           <div className="flex items-center space-x-1">
             {/* Reporter Avatar (smaller, left side) */}
             {task.reporterId && (
-              <div 
-                className="w-5 h-5 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-[9px] text-gray-400 font-medium"
-                title={`Reporter: ${members?.find(m => m.userId === task.reporterId)?.fullName || 'System'}`}
-              >
-                {(members?.find(m => m.userId === task.reporterId)?.fullName || 'S').charAt(0).toUpperCase()}
-              </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Avatar size="sm" className="size-5 border border-border">
+                    <AvatarFallback className="bg-secondary text-[9px] text-muted-foreground font-medium">
+                      {(members?.find(m => m.userId === task.reporterId)?.fullName || 'S').charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                </TooltipTrigger>
+                <TooltipContent>{`Reporter: ${members?.find(m => m.userId === task.reporterId)?.fullName || 'System'}`}</TooltipContent>
+              </Tooltip>
             )}
             
             {/* Assignee Avatar (larger, interactive) */}
             <div className="flex items-center space-x-2 relative group/avatar">
               {task.assigneeId ? (
-                <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-gray-600 to-gray-500 border border-gray-950 flex items-center justify-center text-[10px] text-white font-bold" title={`Assignee: ${members?.find(m => m.userId === task.assigneeId)?.fullName || 'Assigned'}`}>
-                  {(members?.find(m => m.userId === task.assigneeId)?.fullName || 'U').charAt(0).toUpperCase()}
-                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Avatar size="sm" className="border border-border">
+                      <AvatarFallback className="bg-secondary text-[10px] text-foreground font-bold">
+                        {(members?.find(m => m.userId === task.assigneeId)?.fullName || 'U').charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  </TooltipTrigger>
+                  <TooltipContent>{`Assignee: ${members?.find(m => m.userId === task.assigneeId)?.fullName || 'Assigned'}`}</TooltipContent>
+                </Tooltip>
               ) : (
-                <div className="w-6 h-6 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-[10px] text-gray-500" title="Unassigned">
-                  ?
-                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Avatar size="sm" className="border border-border">
+                      <AvatarFallback className="bg-secondary text-subtle-foreground" />
+                    </Avatar>
+                  </TooltipTrigger>
+                  <TooltipContent>Unassigned</TooltipContent>
+                </Tooltip>
               )}
             {!isOverlay && slug && key && (
-              <select
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              <Select
                 value={task.assigneeId || 'unassigned'}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => {
-                  e.stopPropagation();
-                  const val = e.target.value;
+                onValueChange={(val) => {
                   useBoardStore.getState().updateTaskAssignee(slug, key, task.taskKey, val === 'unassigned' ? null : val);
                 }}
               >
-                <option value="unassigned">Unassigned</option>
-                {members?.map(m => (
-                  <option key={m.userId} value={m.userId}>{m.fullName}</option>
-                ))}
-              </select>
+                <SelectTrigger
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {members?.map(m => (
+                    <SelectItem key={m.userId} value={m.userId}>{m.fullName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
             </div>
           </div>

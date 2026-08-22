@@ -5,6 +5,17 @@ import { apiFetch } from '../lib/api.js';
 import { useCurrentWorkspaceStore } from '../store/currentWorkspace.js';
 import { formatDistanceToNow, format } from 'date-fns';
 import DOMPurify from 'dompurify';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface TaskResult {
@@ -55,18 +66,27 @@ const PRIORITY_OPTIONS = [
   { value: 'low', label: 'Low' },
 ];
 
+// Domain mapping per design system §1.4, extended to cover the values the spec
+// omits: `backlog` (coldest tier, one below todo) and the P0–P3 scale, which is
+// an alias of urgent/high/medium/low rather than a second dimension.
 const STATUS_COLORS: Record<string, string> = {
-  todo: 'bg-gray-700 text-gray-300',
-  in_progress: 'bg-white/15 text-white border border-white/30',
-  in_review: 'bg-white/10 text-gray-300 border border-white/20',
-  done: 'bg-white/20 text-white border border-white',
+  backlog: 'bg-muted text-muted-foreground border border-border',
+  todo: 'bg-muted text-muted-foreground border border-border',
+  in_progress: 'bg-primary-muted text-primary border border-primary-border',
+  in_review: 'bg-warning-muted text-warning border border-warning-border',
+  done: 'bg-success-muted text-success border border-success-border',
 };
 
 const PRIORITY_INDICATORS: Record<string, string> = {
-  critical: 'bg-white text-black',
-  high: 'bg-white/40 text-white',
-  medium: 'bg-white/20 text-gray-300',
-  low: 'bg-white/10 text-gray-500',
+  urgent: 'bg-danger-muted text-danger border border-danger-border',
+  critical: 'bg-danger-muted text-danger border border-danger-border',
+  P0: 'bg-danger-muted text-danger border border-danger-border',
+  high: 'bg-warning-muted text-warning border border-warning-border',
+  P1: 'bg-warning-muted text-warning border border-warning-border',
+  medium: 'bg-primary-muted text-primary border border-primary-border',
+  P2: 'bg-primary-muted text-primary border border-primary-border',
+  low: 'bg-muted text-muted-foreground border border-border',
+  P3: 'bg-muted text-muted-foreground border border-border',
 };
 
 const RECENT_SEARCHES_KEY = 'devsync_recent_searches';
@@ -229,12 +249,20 @@ export const GlobalSearchResults = () => {
   const renderTaskCard = (task: TaskResult) => (
     <div
       key={task.taskId}
+      role="button"
+      tabIndex={0}
       onClick={() => navigate(`/w/${slug}/projects/${task.projectKey}/tasks/${task.taskKey}`)}
-      className="group flex items-start p-4 bg-gray-900/50 border border-gray-800/60 rounded-xl hover:bg-gray-800/50 hover:border-gray-700/60 cursor-pointer transition-all duration-200"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          navigate(`/w/${slug}/projects/${task.projectKey}/tasks/${task.taskKey}`);
+        }
+      }}
+      className="group flex items-start p-4 bg-card border border-border rounded-lg hover:bg-hover hover:border-border-strong cursor-pointer transition-all duration-200 focus-visible:ring-2 focus-visible:ring-ring"
     >
       {/* Task Key Badge */}
       <div className="mr-4 shrink-0 mt-0.5">
-        <span className="inline-flex items-center px-2 py-1 text-[11px] font-mono font-bold text-gray-300 bg-gray-800 border border-gray-700 rounded-md">
+        <span className="inline-flex items-center px-2 py-1 text-[11px] font-mono font-bold text-foreground bg-secondary border border-border rounded-md">
           {task.taskKey}
         </span>
       </div>
@@ -242,30 +270,35 @@ export const GlobalSearchResults = () => {
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-3 mb-1.5">
-          <h4 className="text-[15px] font-semibold text-gray-200 group-hover:text-white transition-colors truncate">
+          <h4 className="text-body font-semibold text-foreground group-hover:text-primary transition-colors truncate">
             {task.title}
           </h4>
           {task.status && (
-            <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${STATUS_COLORS[task.status] || 'bg-gray-800 text-gray-400'}`}>
+            <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${STATUS_COLORS[task.status] || 'bg-muted text-muted-foreground border border-border'}`}>
               {task.status.replace('_', ' ')}
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <span className="font-medium text-gray-400">{task.projectName}</span>
+        <div className="flex items-center gap-2 text-xs text-subtle-foreground">
+          <span className="font-medium text-muted-foreground">{task.projectName}</span>
           {task.assigneeName && (
             <>
-              <span className="text-gray-700">·</span>
-              <span>assigned to <span className="text-gray-400">{task.assigneeName}</span></span>
+              <span className="text-subtle-foreground">·</span>
+              <span>assigned to <span className="text-muted-foreground">{task.assigneeName}</span></span>
             </>
           )}
-          <span className="text-gray-700">·</span>
+          <span className="text-subtle-foreground">·</span>
           <span>{task.createdAt ? format(new Date(task.createdAt), 'MMM d, yyyy') : ''}</span>
           {task.priority && (
             <>
-              <span className="text-gray-700">·</span>
-              <span className={`inline-block w-2 h-2 rounded-full ${PRIORITY_INDICATORS[task.priority] || ''}`} title={task.priority} />
+              <span className="text-subtle-foreground">·</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className={`inline-block w-2 h-2 rounded-full ${PRIORITY_INDICATORS[task.priority] || ''}`} />
+                </TooltipTrigger>
+                <TooltipContent>{task.priority}</TooltipContent>
+              </Tooltip>
               <span className="capitalize">{task.priority}</span>
             </>
           )}
@@ -274,7 +307,7 @@ export const GlobalSearchResults = () => {
         {/* Snippet */}
         {task.snippet && (
           <p
-            className="mt-2 text-sm text-gray-500 line-clamp-2 leading-relaxed"
+            className="mt-2 text-sm text-subtle-foreground line-clamp-2 leading-relaxed"
             dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(task.snippet) }}
           />
         )}
@@ -285,37 +318,49 @@ export const GlobalSearchResults = () => {
   const renderMessageCard = (msg: MessageResult) => (
     <div
       key={msg.messageId}
+      role="button"
+      tabIndex={0}
       onClick={() => navigate(`/w/${slug}/channels/${msg.channelId}`)}
-      className="group flex items-start p-4 bg-gray-900/50 border border-gray-800/60 rounded-xl hover:bg-gray-800/50 hover:border-gray-700/60 cursor-pointer transition-all duration-200"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          navigate(`/w/${slug}/channels/${msg.channelId}`);
+        }
+      }}
+      className="group flex items-start p-4 bg-card border border-border rounded-lg hover:bg-hover hover:border-border-strong cursor-pointer transition-all duration-200 focus-visible:ring-2 focus-visible:ring-ring"
     >
       {/* Avatar */}
       <div className="mr-4 shrink-0 mt-0.5">
         {msg.authorAvatar ? (
-          <img src={msg.authorAvatar} alt={msg.authorName || ''} className="w-9 h-9 rounded-full border border-gray-700" />
+          <Avatar className="size-9 border border-border">
+            <AvatarImage src={msg.authorAvatar} alt={msg.authorName || ''} />
+          </Avatar>
         ) : (
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-white text-xs font-bold border border-gray-700">
-            {msg.authorName?.[0]?.toUpperCase() || '?'}
-          </div>
+          <Avatar className="size-9 border border-border">
+            <AvatarFallback className="bg-secondary text-foreground text-xs font-bold">
+              {msg.authorName?.[0]?.toUpperCase() || '?'}
+            </AvatarFallback>
+          </Avatar>
         )}
       </div>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-sm font-semibold text-gray-300">{msg.authorName || 'Unknown'}</span>
-          <span className="text-xs text-gray-600">in</span>
-          <span className="text-xs text-gray-400 flex items-center">
+          <span className="text-sm font-semibold text-foreground">{msg.authorName || 'Unknown'}</span>
+          <span className="text-xs text-subtle-foreground">in</span>
+          <span className="text-xs text-muted-foreground flex items-center">
             <Hash className="w-3 h-3 mr-0.5 opacity-60" />
             {msg.channelName || 'unknown'}
           </span>
-          <span className="text-gray-700">·</span>
-          <span className="text-xs text-gray-600">
+          <span className="text-subtle-foreground">·</span>
+          <span className="text-xs text-subtle-foreground">
             {msg.createdAt ? formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true }) : ''}
           </span>
         </div>
 
         <p
-          className="text-sm text-gray-400 line-clamp-2 leading-relaxed"
+          className="text-sm text-muted-foreground line-clamp-2 leading-relaxed"
           dangerouslySetInnerHTML={{ __html: `"${DOMPurify.sanitize(msg.snippet || msg.bodyText?.substring(0, 150) || '')}"` }}
         />
       </div>
@@ -325,11 +370,11 @@ export const GlobalSearchResults = () => {
   const renderSkeleton = (count: number) => (
     <div className="space-y-3">
       {Array.from({ length: count }, (_, i) => (
-        <div key={i} className="flex items-start p-4 bg-gray-900/40 border border-gray-800/60 rounded-xl animate-pulse">
-          <div className="w-16 h-7 rounded-md bg-gray-800 mr-4 shrink-0" />
+        <div key={i} className="flex items-start p-4 bg-card border border-border rounded-lg animate-pulse">
+          <div className="w-16 h-7 rounded-md bg-muted mr-4 shrink-0" />
           <div className="flex-1 space-y-2.5">
-            <div className="h-4 bg-gray-800 rounded w-2/3" />
-            <div className="h-3 bg-gray-800 rounded w-1/2" />
+            <div className="h-4 bg-muted rounded w-2/3" />
+            <div className="h-3 bg-muted rounded w-1/2" />
           </div>
         </div>
       ))}
@@ -340,27 +385,27 @@ export const GlobalSearchResults = () => {
 
   // ─── Render ─────────────────────────────────────────────────────────────
   return (
-    <div className="h-full flex flex-col font-sans bg-gray-950 text-gray-200">
+    <div className="h-full flex flex-col font-sans bg-background text-foreground">
 
       {/* ── Header with Search Input ─────────────────────────────────────── */}
-      <div className="px-8 pt-8 pb-5 border-b border-gray-800/60 bg-gray-950 shrink-0">
+      <div className="px-8 pt-8 pb-5 border-b border-border bg-background shrink-0">
         <div className="max-w-4xl">
           <div className="relative">
-            <Search className="w-5 h-5 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" />
-            <input
+            <Search className="w-5 h-5 text-subtle-foreground absolute left-4 top-1/2 -translate-y-1/2" />
+            <Input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search tasks, messages..."
-              className="w-full bg-gray-900 border border-gray-800 rounded-xl pl-12 pr-4 py-3.5 text-gray-100 focus:outline-none focus:border-gray-600 focus:ring-1 focus:ring-gray-600 text-lg transition-all"
+              className="w-full bg-card border border-border rounded-lg pl-12 pr-4 py-3.5 text-foreground focus:border-ring focus:ring-1 focus:ring-ring text-lg transition-all h-auto md:text-lg"
               autoFocus
             />
           </div>
 
           {/* Results count */}
           {debouncedQuery && !isLoading && (
-            <p className="mt-3 text-sm text-gray-500">
-              <span className="text-gray-300 font-semibold">{totalCount}</span> results for "<span className="text-gray-300">{debouncedQuery}</span>"
+            <p className="mt-3 text-sm text-subtle-foreground">
+              <span className="text-foreground font-semibold">{totalCount}</span> results for "<span className="text-foreground">{debouncedQuery}</span>"
             </p>
           )}
         </div>
@@ -368,104 +413,107 @@ export const GlobalSearchResults = () => {
 
       {/* ── Filter Bar ───────────────────────────────────────────────────── */}
       {debouncedQuery && (
-        <div className="px-8 py-3 border-b border-gray-800/40 bg-gray-950/80 shrink-0">
+        <div className="px-8 py-3 border-b border-border bg-background/80 shrink-0">
           <div className="max-w-4xl flex flex-wrap items-center gap-2">
             {/* Type Tabs */}
-            <div className="flex items-center bg-gray-900 rounded-lg border border-gray-800 p-0.5 mr-2">
+            <div className="flex items-center bg-card rounded-lg border border-border p-0.5 mr-2">
               {([
                 { key: 'all', label: 'All' },
                 { key: 'tasks', label: `Tasks${taskCount ? ` (${taskCount})` : ''}` },
                 { key: 'messages', label: `Messages${messageCount ? ` (${messageCount})` : ''}` },
               ] as const).map(tab => (
-                <button
+                <Button
                   key={tab.key}
                   onClick={() => setFilterType(tab.key)}
-                  className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                  variant="ghost"
+                  className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all h-auto ${
                     filterType === tab.key
-                      ? 'bg-white/10 text-white shadow-sm'
-                      : 'text-gray-500 hover:text-gray-300'
+                      ? 'bg-secondary text-foreground shadow-sm'
+                      : 'text-subtle-foreground hover:text-foreground'
                   }`}
                 >
                   {tab.label}
-                </button>
+                </Button>
               ))}
             </div>
 
             {/* Task Filters (shown when Tasks tab or All tab) */}
             {(filterType === 'tasks' || filterType === 'all') && (
               <>
-                <select
-                  value={filterProjectId}
-                  onChange={e => setFilterProjectId(e.target.value)}
-                  className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-gray-600 transition-colors cursor-pointer"
-                >
-                  <option value="">All Projects</option>
-                  {projects.map(p => (
-                    <option key={p.projectId} value={p.projectId}>{p.name} ({p.key})</option>
-                  ))}
-                </select>
+                <Select value={filterProjectId} onValueChange={setFilterProjectId}>
+                  <SelectTrigger className="bg-elevated">
+                    <SelectValue placeholder="All Projects" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map(p => (
+                      <SelectItem key={p.projectId} value={p.projectId}>{p.name} ({p.key})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-                <select
-                  value={filterStatus}
-                  onChange={e => setFilterStatus(e.target.value)}
-                  className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-gray-600 transition-colors cursor-pointer"
-                >
-                  {STATUS_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="bg-elevated">
+                    <SelectValue placeholder="All Statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.filter(opt => opt.value).map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-                <select
-                  value={filterAssigneeId}
-                  onChange={e => setFilterAssigneeId(e.target.value)}
-                  className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-gray-600 transition-colors cursor-pointer"
-                >
-                  <option value="">All Assignees</option>
-                  {members.map((m: { userId: string; fullName: string }) => (
-                    <option key={m.userId} value={m.userId}>{m.fullName}</option>
-                  ))}
-                </select>
+                <Select value={filterAssigneeId} onValueChange={setFilterAssigneeId}>
+                  <SelectTrigger className="bg-elevated">
+                    <SelectValue placeholder="All Assignees" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {members.map((m: { userId: string; fullName: string }) => (
+                      <SelectItem key={m.userId} value={m.userId}>{m.fullName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-                <select
-                  value={filterPriority}
-                  onChange={e => setFilterPriority(e.target.value)}
-                  className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-gray-600 transition-colors cursor-pointer"
-                >
-                  {PRIORITY_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
+                <Select value={filterPriority} onValueChange={setFilterPriority}>
+                  <SelectTrigger className="bg-elevated">
+                    <SelectValue placeholder="All Priorities" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRIORITY_OPTIONS.filter(opt => opt.value).map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </>
             )}
 
             {/* Message Filters (shown when Messages tab) */}
             {filterType === 'messages' && (
               <>
-                <select
-                  value={filterChannelId}
-                  onChange={e => setFilterChannelId(e.target.value)}
-                  className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-gray-600 transition-colors cursor-pointer"
-                >
-                  <option value="">All Channels</option>
-                  {channels.filter(c => c.type !== 'dm' && c.type !== 'group_dm').map(c => (
-                    <option key={c.channelId} value={c.channelId}>#{c.name}</option>
-                  ))}
-                </select>
+                <Select value={filterChannelId} onValueChange={setFilterChannelId}>
+                  <SelectTrigger className="bg-elevated">
+                    <SelectValue placeholder="All Channels" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {channels.filter(c => c.type !== 'dm' && c.type !== 'group_dm').map(c => (
+                      <SelectItem key={c.channelId} value={c.channelId}>#{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
                 <div className="flex items-center gap-1.5">
-                  <input
+                  <Input
                     type="date"
                     value={filterDateFrom}
                     onChange={e => setFilterDateFrom(e.target.value)}
-                    className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-gray-600 transition-colors cursor-pointer"
+                    className="bg-card border border-border rounded-lg px-3 py-1.5 text-xs text-foreground focus:border-ring transition-colors cursor-pointer md:text-xs"
                     placeholder="From"
                   />
-                  <span className="text-gray-600 text-xs">—</span>
-                  <input
+                  <span className="text-subtle-foreground text-xs">—</span>
+                  <Input
                     type="date"
                     value={filterDateTo}
                     onChange={e => setFilterDateTo(e.target.value)}
-                    className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-gray-600 transition-colors cursor-pointer"
+                    className="bg-card border border-border rounded-lg px-3 py-1.5 text-xs text-foreground focus:border-ring transition-colors cursor-pointer md:text-xs"
                     placeholder="To"
                   />
                 </div>
@@ -474,20 +522,21 @@ export const GlobalSearchResults = () => {
 
             {/* Clear filters */}
             {hasActiveFilters && (
-              <button
+              <Button
                 onClick={clearAllFilters}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                variant="ghost"
+                className="flex items-center gap-1 px-3 py-1.5 text-xs text-subtle-foreground hover:text-foreground transition-colors h-auto"
               >
                 <X className="w-3 h-3" />
                 Clear filters
-              </button>
+              </Button>
             )}
           </div>
         </div>
       )}
 
       {/* ── Results Area ─────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-8">
         <div className="max-w-4xl">
 
           {/* Loading state with delayed skeleton */}
@@ -498,26 +547,27 @@ export const GlobalSearchResults = () => {
             <div className="flex flex-col items-center justify-center py-20">
               {recentSearches.length > 0 ? (
                 <div className="w-full max-w-md">
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-4">Recent Searches</p>
+                  <p className="text-[11px] font-semibold text-subtle-foreground uppercase tracking-wider mb-4">Recent Searches</p>
                   <div className="space-y-1">
                     {recentSearches.map((term, i) => (
-                      <button
+                      <Button
                         key={i}
                         onClick={() => setQuery(term)}
-                        className="w-full flex items-center px-4 py-3 rounded-xl text-sm text-gray-300 bg-gray-900/40 border border-gray-800/60 hover:bg-gray-800/50 hover:border-gray-700/60 transition-all group"
+                        variant="secondary"
+                        className="w-full flex items-center px-4 py-3 rounded-lg text-sm text-foreground bg-card border border-border hover:bg-hover hover:border-border-strong transition-all group h-auto"
                       >
-                        <Clock className="w-4 h-4 text-gray-600 mr-3 shrink-0" />
+                        <Clock className="w-4 h-4 text-subtle-foreground mr-3 shrink-0" />
                         <span className="truncate">{term}</span>
-                        <Search className="w-3.5 h-3.5 text-gray-700 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </button>
+                        <Search className="w-3.5 h-3.5 text-subtle-foreground ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </Button>
                     ))}
                   </div>
                 </div>
               ) : (
                 <div className="text-center">
-                  <Search className="w-12 h-12 text-gray-800 mx-auto mb-4" />
-                  <p className="text-gray-500 text-lg">Search across your workspace</p>
-                  <p className="text-gray-600 text-sm mt-1">Find tasks, messages, and more</p>
+                  <Search className="w-12 h-12 text-subtle-foreground/40 mx-auto mb-4" />
+                  <p className="text-subtle-foreground text-lg">Search across your workspace</p>
+                  <p className="text-subtle-foreground text-sm mt-1">Find tasks, messages, and more</p>
                 </div>
               )}
             </div>
@@ -526,11 +576,11 @@ export const GlobalSearchResults = () => {
           {/* Empty state */}
           {debouncedQuery && !isLoading && totalCount === 0 && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center mb-5">
-                <AlertCircle className="w-7 h-7 text-gray-600" />
+              <div className="w-16 h-16 rounded-lg bg-card border border-border flex items-center justify-center mb-5">
+                <AlertCircle className="w-7 h-7 text-subtle-foreground" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-300 mb-2">No results for "{debouncedQuery}"</h3>
-              <div className="space-y-1.5 text-sm text-gray-500 mt-2">
+              <h3 className="text-lg font-semibold text-foreground mb-2">No results for "{debouncedQuery}"</h3>
+              <div className="space-y-1.5 text-sm text-subtle-foreground mt-2">
                 <p>• Check your spelling</p>
                 <p>• Try fewer or different keywords</p>
                 <p>• Search is scoped to projects and channels you have access to</p>
@@ -544,22 +594,23 @@ export const GlobalSearchResults = () => {
               {/* Tasks Section */}
               {tasks.length > 0 && (
                 <div>
-                  <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <h3 className="text-[11px] font-bold text-subtle-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
                     <FileText className="w-3.5 h-3.5" />
                     Tasks
-                    <span className="text-gray-600 font-normal">({taskCount})</span>
+                    <span className="text-subtle-foreground font-normal">({taskCount})</span>
                   </h3>
                   <div className="space-y-2.5">
                     {(showAllTasks ? tasks : tasks.slice(0, 5)).map(renderTaskCard)}
                   </div>
                   {taskCount > 5 && !showAllTasks && (
-                    <button
+                    <Button
                       onClick={() => { setFilterType('tasks'); setPage(0); }}
-                      className="mt-3 text-sm text-gray-400 hover:text-gray-200 transition-colors flex items-center gap-1"
+                      variant="ghost"
+                      className="mt-3 text-sm text-primary hover:text-primary-hover transition-colors flex items-center gap-1 h-auto"
                     >
                       Show all {taskCount} tasks
                       <ChevronRight className="w-4 h-4" />
-                    </button>
+                    </Button>
                   )}
                 </div>
               )}
@@ -567,22 +618,23 @@ export const GlobalSearchResults = () => {
               {/* Messages Section */}
               {messages.length > 0 && (
                 <div>
-                  <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <h3 className="text-[11px] font-bold text-subtle-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
                     <Hash className="w-3.5 h-3.5" />
                     Messages
-                    <span className="text-gray-600 font-normal">({messageCount})</span>
+                    <span className="text-subtle-foreground font-normal">({messageCount})</span>
                   </h3>
                   <div className="space-y-2.5">
                     {(showAllMessages ? messages : messages.slice(0, 5)).map(renderMessageCard)}
                   </div>
                   {messageCount > 5 && !showAllMessages && (
-                    <button
+                    <Button
                       onClick={() => { setFilterType('messages'); setPage(0); }}
-                      className="mt-3 text-sm text-gray-400 hover:text-gray-200 transition-colors flex items-center gap-1"
+                      variant="ghost"
+                      className="mt-3 text-sm text-primary hover:text-primary-hover transition-colors flex items-center gap-1 h-auto"
                     >
                       Show all {messageCount} messages
                       <ChevronRight className="w-4 h-4" />
-                    </button>
+                    </Button>
                   )}
                 </div>
               )}
@@ -596,24 +648,26 @@ export const GlobalSearchResults = () => {
                 {tasks.map(renderTaskCard)}
               </div>
               {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-800/60">
-                  <button
+                <div className="flex items-center justify-between mt-6 pt-4 border-t border-border">
+                  <Button
                     onClick={() => setPage(p => Math.max(0, p - 1))}
                     disabled={page === 0}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    variant="ghost"
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors h-auto"
                   >
                     <ChevronLeft className="w-4 h-4" /> Previous
-                  </button>
-                  <span className="text-xs text-gray-500">
+                  </Button>
+                  <span className="text-xs text-subtle-foreground">
                     Page {page + 1} of {totalPages}
                   </span>
-                  <button
+                  <Button
                     onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                     disabled={page >= totalPages - 1}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    variant="ghost"
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors h-auto"
                   >
                     Next <ChevronRight className="w-4 h-4" />
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -626,24 +680,26 @@ export const GlobalSearchResults = () => {
                 {messages.map(renderMessageCard)}
               </div>
               {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-800/60">
-                  <button
+                <div className="flex items-center justify-between mt-6 pt-4 border-t border-border">
+                  <Button
                     onClick={() => setPage(p => Math.max(0, p - 1))}
                     disabled={page === 0}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    variant="ghost"
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors h-auto"
                   >
                     <ChevronLeft className="w-4 h-4" /> Previous
-                  </button>
-                  <span className="text-xs text-gray-500">
+                  </Button>
+                  <span className="text-xs text-subtle-foreground">
                     Page {page + 1} of {totalPages}
                   </span>
-                  <button
+                  <Button
                     onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                     disabled={page >= totalPages - 1}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    variant="ghost"
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors h-auto"
                   >
                     Next <ChevronRight className="w-4 h-4" />
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>

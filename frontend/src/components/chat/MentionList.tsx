@@ -1,6 +1,21 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 
-const MentionList = forwardRef((props: any, ref) => {
+interface MentionItem {
+  id: string;
+  label: string;
+}
+
+/**
+ * The subset of TipTap's suggestion render props this list actually reads.
+ * TipTap passes more (`editor`, `range`, `clientRect`, …); declaring only what
+ * is used keeps the contract honest without importing the plugin's types.
+ */
+interface MentionListProps {
+  items: MentionItem[];
+  command: (item: MentionItem) => void;
+}
+
+const MentionList = forwardRef((props: MentionListProps, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const selectItem = (index: number) => {
@@ -48,18 +63,18 @@ const MentionList = forwardRef((props: any, ref) => {
 
   if (!props.items || props.items.length === 0) {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded-lg shadow-xl p-2 text-sm text-gray-500">
+      <div className="bg-card border border-border rounded-lg shadow-md p-2 text-sm text-subtle-foreground">
         No results
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg shadow-xl overflow-y-auto max-h-60 py-1 min-w-[150px]">
-      {props.items.map((item: any, index: number) => (
+    <div className="bg-card border border-border rounded-lg shadow-md overflow-y-auto max-h-60 py-1 min-w-[150px]">
+      {props.items.map((item: MentionItem, index: number) => (
         <button
           className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-            index === selectedIndex ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800/50'
+            index === selectedIndex ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-hover'
           }`}
           key={index}
           onClick={() => selectItem(index)}

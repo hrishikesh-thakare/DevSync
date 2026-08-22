@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../../lib/api.js';
 import { supabase } from '../../lib/supabase.js';
 import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export const GithubCallbackPage = () => {
   const navigate = useNavigate();
@@ -27,9 +28,9 @@ export const GithubCallbackPage = () => {
 
         const returnTo = searchParams.get('returnTo') || '/workspaces';
         navigate(returnTo, { replace: true });
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('GitHub OAuth Exchange Error:', err);
-        setError(err.message || 'Failed to connect GitHub account.');
+        setError(err instanceof Error ? err.message : 'Failed to connect GitHub account.');
       }
     };
 
@@ -38,26 +39,26 @@ export const GithubCallbackPage = () => {
 
   if (error) {
     return (
-      <div className="flex flex-col h-screen w-screen items-center justify-center bg-gray-950 px-4 text-center">
-        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-6 rounded-xl max-w-md">
+      <div className="flex flex-col h-screen w-screen items-center justify-center bg-background px-4 text-center">
+        <div className="bg-danger-muted border border-danger-border text-danger p-6 rounded-lg max-w-md">
           <h2 className="text-lg font-bold mb-2">GitHub Connection Error</h2>
           <p className="text-sm mb-6">{error}</p>
-          <button 
+          <Button
+            variant="outline"
             onClick={() => navigate('/workspaces', { replace: true })}
-            className="px-4 py-2 bg-gray-900 border border-gray-800 text-white rounded-lg hover:bg-gray-800 transition-colors"
           >
             Return to Dashboard
-          </button>
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen items-center justify-center bg-gray-950">
-      <Loader2 className="h-10 w-10 animate-spin text-white mb-4" />
-      <h2 className="text-xl font-bold text-white mb-2">Connecting GitHub</h2>
-      <p className="text-gray-400 text-sm">Please wait while we securely link your account...</p>
+    <div className="flex flex-col h-screen w-screen items-center justify-center bg-background">
+      <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+      <h2 className="text-xl font-bold text-foreground mb-2">Connecting GitHub</h2>
+      <p className="text-muted-foreground text-sm">Please wait while we securely link your account...</p>
     </div>
   );
 };

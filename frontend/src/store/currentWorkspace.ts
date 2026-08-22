@@ -18,6 +18,25 @@ interface Channel {
 export type WorkspaceRole = 'owner' | 'admin' | 'member';
 export type ProjectRole = 'project_admin' | 'developer' | 'viewer';
 
+/**
+ * A row from `GET /workspaces/:slug`'s members list. `presence`, `statusText`
+ * and `statusEmoji` are optional because they arrive later, over the socket,
+ * via `updateMemberPresence` rather than in the initial payload.
+ */
+export interface WorkspaceMember {
+  userId: string;
+  fullName: string;
+  email: string;
+  role: WorkspaceRole;
+  displayName?: string | null;
+  avatarUrl?: string | null;
+  state?: string;
+  joinedAt?: string;
+  presence?: string;
+  statusText?: string | null;
+  statusEmoji?: string | null;
+}
+
 interface CurrentWorkspaceState {
   workspaceId: string;
   name: string;
@@ -25,7 +44,7 @@ interface CurrentWorkspaceState {
   description: string;
   myRole: WorkspaceRole;
   memberCount: number;
-  members: any[];
+  members: WorkspaceMember[];
   projects: Project[];
   channels: Channel[];
   isLoading: boolean;
@@ -70,7 +89,7 @@ export const useCurrentWorkspaceStore = create<CurrentWorkspaceState>((set, get)
       const { useAuthStore } = await import('./auth.js');
       const currentUserId = useAuthStore.getState().user?.userId;
       const myMembership = (data.members || []).find(
-        (m: any) => m.userId === currentUserId
+        (m: WorkspaceMember) => m.userId === currentUserId
       );
 
       // Also fetch projects and channels for sidebar
@@ -91,9 +110,12 @@ export const useCurrentWorkspaceStore = create<CurrentWorkspaceState>((set, get)
         channels: channelsData.channels || [],
         isLoading: false,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to load workspace data:', err);
-      set({ error: err.message || 'Failed to load workspace', isLoading: false });
+      set({
+        error: err instanceof Error ? err.message : 'Failed to load workspace',
+        isLoading: false,
+      });
     }
   },
 

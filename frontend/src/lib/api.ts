@@ -3,8 +3,24 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 /**
  * Custom fetch wrapper that automatically includes credentials (cookies)
  * and intercepts 401 Unauthorized errors to attempt a token refresh.
+ *
+ * The return type is a generic defaulting to `any`, which is the one deliberate
+ * `any` left in this codebase. Two reasons it stays:
+ *
+ *  - Callers that *do* know the shape get it for free by annotating the target
+ *    (`const p: Project[] = await apiFetch(...)` infers `T = Project[]`), so the
+ *    escape hatch costs nothing where types exist.
+ *  - Narrowing the default to `unknown` is not a lint fix but a data-layer
+ *    refactor. Several stores currently assign a partially-built object literal
+ *    to a fully-specified interface (see `useTaskStore.fetchTasks`, which omits
+ *    `projectId`, `activityLog`, `createdBy` and more) and only typecheck
+ *    because `any` flows through. Tightening this signature means completing
+ *    those interfaces against the real API responses first.
+ *
+ * Prefer annotating the call site over widening this.
  */
-export async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<any> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function apiFetch<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_URL}${endpoint}`;
   
   const token = localStorage.getItem('accessToken');

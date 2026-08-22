@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Lock, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { apiFetch } from '../../lib/api.js';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export const ResetPasswordPage = () => {
   const [searchParams] = useSearchParams();
@@ -39,17 +42,19 @@ export const ResetPasswordPage = () => {
   if (!token) {
     return (
       <div className="auth-bg min-h-screen flex items-center justify-center p-4">
-        <div className="glass-card-strong max-w-md w-full p-8 animate-fadeIn glow-purple relative z-10 text-center">
-          <AlertTriangle className="h-12 w-12 text-amber-400 mx-auto mb-4" />
-          <p className="text-text-primary mb-6">
+        <div className="bg-card border border-border rounded-lg shadow-sm max-w-md w-full p-8 animate-fadeIn relative z-10 text-center">
+          <AlertTriangle className="h-12 w-12 text-warning mx-auto mb-4" />
+          <p className="text-foreground mb-6">
             This reset link is invalid. Please request a new password reset link.
           </p>
-          <Link
-            to="/forgot-password"
-            className="inline-block gradient-btn w-full py-3 text-center"
-          >
-            Request a new link
-          </Link>
+          <Button asChild variant="default" className="w-full py-3 text-center h-auto">
+            <Link
+              to="/forgot-password"
+              className="inline-block bg-primary text-primary-foreground hover:bg-primary-hover rounded-md w-full py-3 text-center"
+            >
+              Request a new link
+            </Link>
+          </Button>
         </div>
       </div>
     );
@@ -60,86 +65,89 @@ export const ResetPasswordPage = () => {
       <div className="auth-shape-1"></div>
       <div className="auth-shape-2"></div>
 
-      <div className="glass-card-strong max-w-md w-full p-8 animate-fadeIn glow-purple relative z-10">
+      <div className="bg-card border border-border rounded-lg shadow-sm max-w-md w-full p-8 animate-fadeIn relative z-10">
         <div className="mb-10 text-center">
-          <h1 className="text-4xl font-bold gradient-text mb-2">DevSync</h1>
-          <p className="text-text-secondary text-sm">Choose a new password</p>
+          <h1 className="text-4xl font-bold text-foreground mb-2">DevSync</h1>
+          <p className="text-muted-foreground text-sm">Choose a new password</p>
         </div>
 
         {done ? (
           <div className="text-center space-y-6">
             <div className="flex justify-center">
-              <CheckCircle2 className="h-16 w-16 text-green-400" />
+              <CheckCircle2 className="h-16 w-16 text-success" />
             </div>
-            <p className="text-text-primary">
+            <p className="text-foreground">
               Your password has been reset. All devices were signed out — log in again with your
               new password.
             </p>
-            <Link to="/login" className="inline-block gradient-btn w-full py-3 text-center">
-              Go to sign in
-            </Link>
+            <Button asChild variant="default" className="w-full py-3 text-center h-auto">
+              <Link to="/login" className="inline-block bg-primary text-primary-foreground hover:bg-primary-hover rounded-md w-full py-3 text-center">
+                Go to sign in
+              </Link>
+            </Button>
           </div>
         ) : (
           <>
             {error && (
-              <div className="mb-6 rounded-lg bg-red-500/10 border border-red-500/20 p-4 text-sm text-red-400 text-center">
+              <div className="mb-6 rounded-lg bg-danger-muted border border-danger-border p-4 text-sm text-danger text-center">
                 {error}
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">
+                <Label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
                   New Password
-                </label>
+                </Label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-text-secondary" />
+                    <Lock className="h-5 w-5 text-muted-foreground" />
                   </div>
-                  <input
+                  <Input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-bg-primary/50 border border-border-light rounded-xl text-text-primary placeholder-text-secondary focus:outline-none focus:ring-1 focus:ring-primary-500 transition-all duration-200"
+                    className="w-full pl-11 pr-4 py-3 bg-background border border-border rounded-md text-foreground placeholder:text-subtle-foreground focus:ring-1 focus:ring-ring focus:border-ring transition-colors duration-200 h-auto"
                     placeholder="At least 8 characters"
                     required
                   />
                 </div>
-                <p className="mt-1.5 text-xs text-text-secondary">
+                <p className="mt-1.5 text-xs text-muted-foreground">
                   Must include uppercase, lowercase, a number, and a special character.
                 </p>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">
+                <Label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
                   Confirm Password
-                </label>
+                </Label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-text-secondary" />
+                    <Lock className="h-5 w-5 text-muted-foreground" />
                   </div>
-                  <input
+                  <Input
                     type="password"
                     value={confirm}
                     onChange={(e) => setConfirm(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-bg-primary/50 border border-border-light rounded-xl text-text-primary placeholder-text-secondary focus:outline-none focus:ring-1 focus:ring-primary-500 transition-all duration-200"
+                    className="w-full pl-11 pr-4 py-3 bg-background border border-border rounded-md text-foreground placeholder:text-subtle-foreground focus:ring-1 focus:ring-ring focus:border-ring transition-colors duration-200 h-auto"
                     placeholder="Re-enter new password"
                     required
                   />
                 </div>
               </div>
 
-              <button
+              <Button
                 type="submit"
                 disabled={isLoading}
-                className="gradient-btn w-full py-3 flex justify-center items-center mt-8 disabled:opacity-70"
+                variant="default"
+                className="bg-primary text-primary-foreground hover:bg-primary-hover rounded-md w-full py-3 flex justify-center items-center mt-8 disabled:opacity-70 h-auto"
               >
                 {isLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin text-bg-primary" />
+                  <Loader2 className="h-5 w-5 animate-spin text-foreground" />
                 ) : (
                   'Reset password'
                 )}
-              </button>
+              </Button>
             </form>
           </>
         )}

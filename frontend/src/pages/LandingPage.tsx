@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
+import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/layout/ThemeToggle';
 import {
   ArrowRight,
   GitBranch,
@@ -46,25 +48,26 @@ const FadeIn = ({
 const FAQItem = ({ question, answer }: { question: string; answer: string }) => {
   const [open, setOpen] = useState(false);
   return (
-    <div className="border-b border-white/10">
-      <button
+    <div className="border-b border-border">
+      <Button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between py-6 text-left group cursor-pointer"
+        variant="ghost" size="default"
       >
-        <span className="text-lg font-semibold text-white group-hover:text-gray-300 transition-colors pr-8">
+        <span className="text-lg font-semibold text-foreground group-hover:text-muted-foreground transition-colors pr-8">
           {question}
         </span>
         <ChevronDown
-          className={`w-5 h-5 text-gray-400 shrink-0 transition-transform duration-300 ${open ? 'rotate-180' : ''}`}
+          className={`w-5 h-5 text-muted-foreground shrink-0 transition-transform duration-300 ${open ? 'rotate-180' : ''}`}
         />
-      </button>
+      </Button>
       <motion.div
         initial={false}
         animate={{ height: open ? 'auto' : 0, opacity: open ? 1 : 0 }}
         transition={{ duration: 0.3, ease: 'easeInOut' }}
         className="overflow-hidden"
       >
-        <p className="pb-6 text-gray-400 leading-relaxed">{answer}</p>
+        <p className="pb-6 text-muted-foreground leading-relaxed">{answer}</p>
       </motion.div>
     </div>
   );
@@ -153,36 +156,39 @@ export const LandingPage = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-[#050505] font-sans text-gray-200 overflow-hidden selection:bg-white/20">
+    <div className="dark min-h-screen bg-background font-sans text-foreground overflow-hidden selection:bg-primary-muted">
       {/* ─── NAVBAR ─── */}
-      <nav className="fixed top-0 w-full z-50 bg-[#050505]/60 backdrop-blur-xl border-b border-white/[0.06]">
+      <nav className="fixed top-0 w-full z-(--z-sticky) bg-background/60 backdrop-blur-xl border-b border-border">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-lg shadow-white/10">
-              <Zap className="w-4.5 h-4.5 text-black fill-current" />
+            <div className="w-8 h-8 bg-foreground rounded-lg flex items-center justify-center shadow-md">
+              <Zap className="w-4.5 h-4.5 text-inverse fill-current" />
             </div>
-            <span className="font-extrabold text-xl tracking-tight text-white">
-              Dev<span className="text-gray-400">Sync</span>
+            <span className="font-extrabold text-xl tracking-tight text-foreground">
+              Dev<span className="text-muted-foreground">Sync</span>
             </span>
           </div>
           <div className="hidden md:flex items-center space-x-8">
-            <a href="#features" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Features</a>
-            <a href="#how-it-works" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">How it Works</a>
-            <a href="#faq" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">FAQ</a>
+            <a href="#features" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Features</a>
+            <a href="#how-it-works" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">How it Works</a>
+            <a href="#faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">FAQ</a>
           </div>
           <div className="flex items-center space-x-4">
-            <button
+            <ThemeToggle />
+            <Button
               onClick={() => navigate('/login')}
-              className="text-sm font-medium text-gray-300 hover:text-white transition-colors cursor-pointer"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              variant="ghost" size="default"
             >
               Sign in
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => navigate('/register')}
-              className="text-sm font-semibold bg-white text-black px-5 py-2 rounded-full hover:bg-gray-200 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              className="text-sm font-semibold bg-foreground text-inverse px-5 py-2 rounded-full hover:bg-foreground/90 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              variant="default" size="default"
             >
               Get Started
-            </button>
+            </Button>
           </div>
         </div>
       </nav>
@@ -191,16 +197,16 @@ export const LandingPage = () => {
       <section className="relative pt-36 pb-8 lg:pt-48 lg:pb-12 px-6">
         {/* Background glows */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-5xl h-full pointer-events-none">
-          <div className="absolute top-10 left-1/3 w-[600px] h-[600px] bg-white/[0.04] rounded-full blur-[120px]" />
-          <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-white/[0.03] rounded-full blur-[150px]" />
+          <div className="absolute top-10 left-1/3 w-[600px] h-[600px] bg-foreground/[0.04] rounded-full blur-[120px]" />
+          <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-foreground/[0.03] rounded-full blur-[150px]" />
         </div>
 
         <div className="relative z-10 max-w-4xl mx-auto text-center">
           {/* Badge */}
           <FadeIn>
-            <div className="inline-flex items-center space-x-2 bg-white/[0.06] border border-white/[0.08] rounded-full px-4 py-1.5 mb-8 backdrop-blur-sm">
-              <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs font-medium text-gray-300 uppercase tracking-widest">
+            <div className="inline-flex items-center space-x-2 bg-card border border-border rounded-full px-4 py-1.5 mb-8">
+              <span className="flex h-2 w-2 rounded-full bg-success animate-pulse" />
+              <span className="text-xs font-medium text-foreground uppercase tracking-widest">
                 DevSync v1.0 is live
               </span>
             </div>
@@ -208,7 +214,7 @@ export const LandingPage = () => {
 
           {/* Headline */}
           <FadeIn delay={0.1}>
-            <h1 className="text-5xl md:text-7xl lg:text-[5.2rem] font-extrabold text-white tracking-tight leading-[1.08] mb-7">
+            <h1 className="text-5xl md:text-7xl lg:text-[5.2rem] font-extrabold text-foreground tracking-tight leading-[1.08] mb-7">
               The unified workspace{' '}
               <br className="hidden md:block" />
               for your dev team.
@@ -217,7 +223,7 @@ export const LandingPage = () => {
 
           {/* Subheading */}
           <FadeIn delay={0.2}>
-            <p className="text-lg md:text-xl text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
               Replace Jira, Slack, and GitHub dashboards with one blazing-fast
               platform. Track issues, chat in real-time, and monitor commits
               — all in one place.
@@ -227,18 +233,19 @@ export const LandingPage = () => {
           {/* CTAs */}
           <FadeIn delay={0.3}>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <button
+              <Button
                 onClick={() => navigate('/register')}
-                className="w-full sm:w-auto flex items-center justify-center px-8 py-4 text-base font-bold text-black bg-white hover:bg-gray-100 rounded-full transition-all shadow-[0_0_40px_-8px_rgba(255,255,255,0.3)] hover:shadow-[0_0_50px_-5px_rgba(255,255,255,0.4)] hover:-translate-y-0.5 cursor-pointer"
+                className="w-full sm:w-auto flex items-center justify-center px-8 py-4 text-base font-bold text-inverse bg-foreground hover:bg-foreground/90 rounded-full transition-all shadow-md hover:-translate-y-0.5 cursor-pointer"
+                variant="default" size="default"
               >
                 Start Building for Free
                 <ArrowRight className="ml-2 w-5 h-5" />
-              </button>
+              </Button>
               <a
                 href="https://github.com"
                 target="_blank"
                 rel="noreferrer"
-                className="w-full sm:w-auto flex items-center justify-center px-8 py-4 text-base font-bold text-white bg-white/[0.06] border border-white/[0.1] hover:bg-white/[0.1] rounded-full transition-all"
+                className="w-full sm:w-auto flex items-center justify-center px-8 py-4 text-base font-bold text-foreground bg-card border border-border hover:bg-hover rounded-full transition-all"
               >
                 <GitBranch className="mr-2 w-5 h-5" />
                 View Source
@@ -249,14 +256,14 @@ export const LandingPage = () => {
 
         {/* Hero Screenshot */}
         <FadeIn delay={0.45} className="relative z-10 max-w-5xl mx-auto mt-16">
-          <div className="relative rounded-2xl overflow-hidden border border-white/[0.08] shadow-[0_20px_80px_-20px_rgba(0,0,0,0.8)]">
+          <div className="relative rounded-lg overflow-hidden border border-border shadow-md">
             {/* Window chrome */}
-            <div className="bg-[#0e0e0e] border-b border-white/[0.06] px-4 py-3 flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-white/10" />
-              <div className="w-3 h-3 rounded-full bg-white/10" />
-              <div className="w-3 h-3 rounded-full bg-white/10" />
+            <div className="bg-elevated border-b border-border px-4 py-3 flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-border-strong" />
+              <div className="w-3 h-3 rounded-full bg-border-strong" />
+              <div className="w-3 h-3 rounded-full bg-border-strong" />
               <div className="flex-1 flex justify-center">
-                <div className="bg-white/[0.06] rounded-md px-16 py-1 text-xs text-gray-500">devsync.app</div>
+                <div className="bg-hover rounded-md px-16 py-1 text-xs text-subtle-foreground">devsync.app</div>
               </div>
             </div>
             <img
@@ -265,7 +272,7 @@ export const LandingPage = () => {
               className="w-full block"
             />
             {/* Bottom glow */}
-            <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#050505] to-transparent pointer-events-none" />
+            <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-background to-transparent pointer-events-none" />
           </div>
         </FadeIn>
       </section>
@@ -273,18 +280,18 @@ export const LandingPage = () => {
       {/* ─── SOCIAL PROOF QUOTE ─── */}
       <FadeIn>
         <section className="max-w-3xl mx-auto px-6 py-20 text-center">
-          <blockquote className="text-2xl md:text-3xl font-bold text-white leading-snug mb-6">
+          <blockquote className="text-2xl md:text-3xl font-bold text-foreground leading-snug mb-6">
             "The teams who ship fastest are the teams who stop context-switching.{' '}
-            <span className="text-gray-500">DevSync makes that the default.</span>"
+            <span className="text-subtle-foreground">DevSync makes that the default.</span>"
           </blockquote>
         </section>
       </FadeIn>
 
       {/* ─── Tech badges ticker ─── */}
-      <div className="border-y border-white/[0.06] py-5 overflow-hidden">
+      <div className="border-y border-border py-5 overflow-hidden">
         <div className="flex items-center justify-center gap-8 md:gap-14 flex-wrap px-6">
           {techBadges.map((badge) => (
-            <span key={badge} className="text-sm font-semibold text-gray-500 uppercase tracking-widest whitespace-nowrap">
+            <span key={badge} className="text-sm font-semibold text-subtle-foreground uppercase tracking-widest whitespace-nowrap">
               {badge}
             </span>
           ))}
@@ -294,10 +301,10 @@ export const LandingPage = () => {
       {/* ─── FEATURES GRID ─── */}
       <section id="features" className="max-w-7xl mx-auto px-6 py-28">
         <FadeIn className="text-center mb-20">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-[0.2em] mb-4 block">
+          <span className="text-xs font-semibold text-subtle-foreground uppercase tracking-[0.2em] mb-4 block">
             What's inside
           </span>
-          <h2 className="text-4xl md:text-5xl font-extrabold text-white leading-tight">
+          <h2 className="text-4xl md:text-5xl font-extrabold text-foreground leading-tight">
             Everything a dev team needs{' '}
             <br className="hidden md:block" />
             to ship with confidence.
@@ -307,12 +314,12 @@ export const LandingPage = () => {
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {features.map((f, i) => (
             <FadeIn key={f.title} delay={i * 0.08}>
-              <div className="group bg-white/[0.02] border border-white/[0.06] rounded-2xl p-7 hover:bg-white/[0.05] hover:border-white/[0.12] transition-all duration-300">
-                <div className="w-12 h-12 bg-white/[0.06] border border-white/[0.1] rounded-xl flex items-center justify-center mb-5 text-gray-300 group-hover:bg-white/[0.1] group-hover:text-white transition-all">
+              <div className="group bg-card border border-border rounded-lg p-7 hover:bg-hover hover:border-border-strong transition-all duration-300">
+                <div className="w-12 h-12 bg-hover border border-border rounded-lg flex items-center justify-center mb-5 text-muted-foreground group-hover:bg-secondary group-hover:text-foreground transition-all">
                   {f.icon}
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2.5">{f.title}</h3>
-                <p className="text-gray-400 leading-relaxed text-[15px]">{f.desc}</p>
+                <h3 className="text-lg font-bold text-foreground mb-2.5">{f.title}</h3>
+                <p className="text-muted-foreground leading-relaxed text-body">{f.desc}</p>
               </div>
             </FadeIn>
           ))}
@@ -320,31 +327,31 @@ export const LandingPage = () => {
       </section>
 
       {/* ─── HOW IT WORKS — 3 Steps ─── */}
-      <section id="how-it-works" className="max-w-7xl mx-auto px-6 py-28 border-t border-white/[0.06]">
+      <section id="how-it-works" className="max-w-7xl mx-auto px-6 py-28 border-t border-border">
         <FadeIn className="text-center mb-20">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-[0.2em] mb-4 block">
+          <span className="text-xs font-semibold text-subtle-foreground uppercase tracking-[0.2em] mb-4 block">
             How it works
           </span>
-          <h2 className="text-4xl md:text-5xl font-extrabold text-white leading-tight">
+          <h2 className="text-4xl md:text-5xl font-extrabold text-foreground leading-tight">
             Three steps.{' '}
-            <span className="text-gray-500">No friction.</span>
+            <span className="text-subtle-foreground">No friction.</span>
           </h2>
         </FadeIn>
 
         <div className="grid md:grid-cols-3 gap-6">
           {steps.map((s, i) => (
             <FadeIn key={s.num} delay={i * 0.12}>
-              <div className="relative bg-white/[0.02] border border-white/[0.06] rounded-2xl p-8 hover:bg-white/[0.04] transition-all duration-300 overflow-hidden">
+              <div className="relative bg-card border border-border rounded-lg p-8 hover:bg-hover transition-all duration-300 overflow-hidden">
                 {/* Big number */}
-                <span className="text-[5rem] font-black text-white/[0.04] absolute top-2 right-4 leading-none select-none">
+                <span className="text-[5rem] font-black text-foreground/5 absolute top-2 right-4 leading-none select-none">
                   {s.num}
                 </span>
                 <div className="relative z-10">
-                  <span className="inline-block text-sm font-bold text-white bg-white/[0.08] border border-white/[0.12] rounded-lg px-3 py-1 mb-5">
+                  <span className="inline-block text-sm font-bold text-foreground bg-hover border border-border-strong rounded-lg px-3 py-1 mb-5">
                     {s.num}
                   </span>
-                  <h3 className="text-xl font-bold text-white mb-3">{s.title}</h3>
-                  <p className="text-gray-400 leading-relaxed">{s.desc}</p>
+                  <h3 className="text-xl font-bold text-foreground mb-3">{s.title}</h3>
+                  <p className="text-muted-foreground leading-relaxed">{s.desc}</p>
                 </div>
               </div>
             </FadeIn>
@@ -353,20 +360,20 @@ export const LandingPage = () => {
       </section>
 
       {/* ─── PRODUCT SHOWCASE ─── */}
-      <section className="max-w-7xl mx-auto px-6 py-28 border-t border-white/[0.06]">
+      <section className="max-w-7xl mx-auto px-6 py-28 border-t border-border">
         <div className="grid lg:grid-cols-2 gap-16 items-center">
           {/* Left — Text */}
           <FadeIn>
             <div>
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-[0.2em] mb-4 block">
+              <span className="text-xs font-semibold text-subtle-foreground uppercase tracking-[0.2em] mb-4 block">
                 Built to impress
               </span>
-              <h2 className="text-4xl md:text-5xl font-extrabold text-white leading-tight mb-6">
+              <h2 className="text-4xl md:text-5xl font-extrabold text-foreground leading-tight mb-6">
                 A finished product,{' '}
                 <br className="hidden md:block" />
                 not a boilerplate.
               </h2>
-              <p className="text-gray-400 text-lg leading-relaxed mb-8">
+              <p className="text-muted-foreground text-lg leading-relaxed mb-8">
                 DevSync isn't a starter template. It's a fully working,
                 production-grade platform with real-time chat, Kanban boards,
                 sprint management, and deep GitHub integration — all battle-tested
@@ -381,10 +388,10 @@ export const LandingPage = () => {
                   'PostgreSQL full-text search across everything',
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-3">
-                    <div className="mt-1 w-5 h-5 rounded-full bg-white/[0.08] border border-white/[0.15] flex items-center justify-center shrink-0">
-                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                    <div className="mt-1 w-5 h-5 rounded-full bg-hover border border-border-strong flex items-center justify-center shrink-0">
+                      <div className="w-1.5 h-1.5 rounded-full bg-foreground" />
                     </div>
-                    <span className="text-gray-300">{item}</span>
+                    <span className="text-foreground">{item}</span>
                   </li>
                 ))}
               </ul>
@@ -394,7 +401,7 @@ export const LandingPage = () => {
           {/* Right — Screenshot */}
           <FadeIn delay={0.2}>
             <div className="relative">
-              <div className="rounded-2xl overflow-hidden border border-white/[0.08] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)]">
+              <div className="rounded-lg overflow-hidden border border-border shadow-md">
                 <img
                   src={chatImg}
                   alt="DevSync Real-Time Chat"
@@ -402,8 +409,8 @@ export const LandingPage = () => {
                 />
               </div>
               {/* Floating decorative element */}
-              <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-white/[0.03] rounded-2xl border border-white/[0.06] backdrop-blur-xl flex items-center justify-center">
-                <MessageSquare className="w-8 h-8 text-gray-500" />
+              <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-card rounded-lg border border-border flex items-center justify-center">
+                <MessageSquare className="w-8 h-8 text-subtle-foreground" />
               </div>
             </div>
           </FadeIn>
@@ -411,9 +418,9 @@ export const LandingPage = () => {
       </section>
 
       {/* ─── FAQ ─── */}
-      <section id="faq" className="max-w-3xl mx-auto px-6 py-28 border-t border-white/[0.06]">
+      <section id="faq" className="max-w-3xl mx-auto px-6 py-28 border-t border-border">
         <FadeIn className="mb-14">
-          <h2 className="text-4xl md:text-5xl font-extrabold text-white text-center">
+          <h2 className="text-4xl md:text-5xl font-extrabold text-foreground text-center">
             The honest answers.
           </h2>
         </FadeIn>
@@ -430,53 +437,62 @@ export const LandingPage = () => {
       {/* ─── CTA BANNER ─── */}
       <section className="px-6 pb-20">
         <FadeIn>
-          <div className="max-w-5xl mx-auto relative overflow-hidden rounded-3xl bg-white py-20 px-8 text-center">
-            {/* Subtle grid pattern overlay */}
+          {/* Inverted panel: `bg-foreground` + `text-inverse` is the system's
+              inversion pair, so this flips correctly in either mode instead of
+              being hardcoded white-on-black. */}
+          <div className="max-w-5xl mx-auto relative overflow-hidden rounded-lg bg-foreground py-20 px-8 text-center">
+            {/* Subtle grid pattern overlay. Inlined rather than a `.cta-grid`
+                helper class so the legacy decoration block in index.css could be
+                deleted outright (design system §5). Lines are drawn in the
+                inverse text color because the panel itself is inverted. */}
             <div
-              className="absolute inset-0 opacity-[0.03]"
+              className="absolute inset-0 opacity-[0.06]"
               style={{
-                backgroundImage: `linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px)`,
+                backgroundImage:
+                  'linear-gradient(var(--inverse) 1px, transparent 1px), linear-gradient(90deg, var(--inverse) 1px, transparent 1px)',
                 backgroundSize: '40px 40px',
               }}
+              aria-hidden="true"
             />
             <div className="relative z-10">
-              <h2 className="text-4xl md:text-6xl font-extrabold text-black leading-tight mb-4">
+              <h2 className="text-4xl md:text-6xl font-extrabold text-inverse leading-tight mb-4">
                 Make your team{' '}
-                <span className="bg-clip-text text-transparent bg-gradient-to-r from-gray-700 via-gray-500 to-gray-700">
+                <span className="text-inverse/60">
                   sync.
                 </span>
               </h2>
-              <p className="text-gray-600 text-lg mb-8 max-w-lg mx-auto">
+              <p className="text-inverse/70 text-lg mb-8 max-w-lg mx-auto">
                 Join the workspace where every commit, message, and task lives in one place.
               </p>
-              <button
+              <Button
                 onClick={() => navigate('/register')}
-                className="inline-flex items-center px-8 py-4 text-base font-bold text-white bg-black hover:bg-gray-900 rounded-full transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                className="inline-flex items-center px-8 py-4 text-base font-bold text-foreground bg-inverse hover:bg-inverse/90 rounded-full transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                variant="default" size="default"
               >
                 Get Started — Free
                 <ArrowRight className="ml-2 w-5 h-5" />
-              </button>
+              </Button>
             </div>
           </div>
         </FadeIn>
       </section>
 
       {/* ─── FOOTER ─── */}
-      <footer className="border-t border-white/[0.06] bg-[#050505] py-14">
+      <footer className="border-t border-border bg-background py-14">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center space-x-2.5">
-              <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center">
-                <Zap className="w-4 h-4 text-black fill-current" />
+              <div className="w-7 h-7 bg-foreground rounded-lg flex items-center justify-center">
+                <Zap className="w-4 h-4 text-inverse fill-current" />
               </div>
-              <span className="font-bold text-lg text-white tracking-tight">DevSync</span>
+              <span className="font-bold text-lg text-foreground tracking-tight">DevSync</span>
             </div>
             <div className="flex items-center gap-8">
-              <a href="#features" className="text-sm text-gray-500 hover:text-white transition-colors">Features</a>
-              <a href="#how-it-works" className="text-sm text-gray-500 hover:text-white transition-colors">How it Works</a>
-              <a href="#faq" className="text-sm text-gray-500 hover:text-white transition-colors">FAQ</a>
+              <a href="#features" className="text-sm text-subtle-foreground hover:text-foreground transition-colors">Features</a>
+              <a href="#how-it-works" className="text-sm text-subtle-foreground hover:text-foreground transition-colors">How it Works</a>
+              <a href="#faq" className="text-sm text-subtle-foreground hover:text-foreground transition-colors">FAQ</a>
             </div>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-subtle-foreground">
               © 2026 DevSync. Built for the final year project.
             </p>
           </div>

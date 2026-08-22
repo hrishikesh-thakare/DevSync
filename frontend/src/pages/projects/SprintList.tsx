@@ -1,11 +1,29 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api.js';
-import { Play, CheckCircle2, Calendar, Target, Loader2, Plus, X, Trash2, Sparkles } from 'lucide-react';
+import { Play, CheckCircle2, Calendar, Target, Loader2, Plus, Trash2, Sparkles } from 'lucide-react';
 
 import { format } from 'date-fns';
 import { useToast } from '../../hooks/useToast.js';
 import { useConfirm } from '../../hooks/useConfirm.js';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface Sprint {
   sprintId: string;
@@ -61,12 +79,13 @@ export const SprintList = () => {
       });
       toast.success('Sprint capacity updated.');
       fetchSprintsAndMembers();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update capacity.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update capacity.');
     }
   };
 
-  const fetchSprintsAndMembers = async () => {
+  const fetchSprintsAndMembers = useCallback(async () => {
+    if (!slug || !key) return;
     setIsLoading(true);
     try {
       const [sprintsData, membersData] = await Promise.all([
@@ -80,7 +99,7 @@ export const SprintList = () => {
       const currentUser = useAuthStore.getState().user;
       const isAdmin = useCurrentWorkspaceStore.getState().isAdmin();
       
-      const myMembership = (membersData.members || []).find((m: any) => m.userId === currentUser?.userId);
+      const myMembership = (membersData.members || []).find((m: { userId: string; role: string }) => m.userId === currentUser?.userId);
       const isProjectAdmin = myMembership?.role === 'project_admin';
       
       setCanManageSprint(isAdmin || isProjectAdmin);
@@ -89,11 +108,21 @@ export const SprintList = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [slug, key]);
 
   useEffect(() => {
-    if (slug && key) fetchSprintsAndMembers();
-  }, [slug, key]);
+    let isCancelled = false;
+    const init = async () => {
+      await Promise.resolve();
+      if (!isCancelled) {
+        fetchSprintsAndMembers();
+      }
+    };
+    init();
+    return () => {
+      isCancelled = true;
+    };
+  }, [fetchSprintsAndMembers]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,8 +144,8 @@ export const SprintList = () => {
       setNewGoal('');
       setNewCapacityPoints('');
       fetchSprintsAndMembers();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to create sprint.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create sprint.');
     } finally {
       setIsCreating(false);
     }
@@ -135,8 +164,8 @@ export const SprintList = () => {
       });
       setShowStartModal(null);
       fetchSprintsAndMembers();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to start sprint.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to start sprint.');
     } finally {
       setIsStarting(false);
     }
@@ -151,8 +180,8 @@ export const SprintList = () => {
       });
       setShowCloseModal(null);
       fetchSprintsAndMembers();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to close sprint.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to close sprint.');
     } finally {
       setIsClosing(false);
     }
@@ -163,15 +192,15 @@ export const SprintList = () => {
     try {
       await apiFetch(`/workspaces/${slug}/projects/${key}/sprints/${sprintId}`, { method: 'DELETE' });
       fetchSprintsAndMembers();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to delete sprint.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete sprint.');
     }
   };
 
   if (isLoading) {
     return (
       <div className="flex justify-center items-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-white" />
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -181,86 +210,89 @@ export const SprintList = () => {
   const closedSprints = sprints.filter(s => s.status === 'closed');
 
   return (
-    <div className="h-full p-8 font-sans overflow-y-auto custom-scrollbar">
+    <div className="h-full p-8 font-sans overflow-y-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h2 className="text-2xl font-bold text-gray-100">Sprints</h2>
-          <p className="text-gray-400 text-sm">Manage iterations and view historical velocity.</p>
+          <h2 className="text-2xl font-bold text-foreground">Sprints</h2>
+          <p className="text-muted-foreground text-sm">Manage iterations and view historical velocity.</p>
         </div>
         {canManageSprint && (
-          <button 
+          <Button 
             onClick={() => {
               setNewName(`Sprint ${sprints.length + 1}`);
               setShowCreateModal(true);
             }}
-            className="flex items-center px-4 py-2 bg-white hover:bg-gray-200 text-gray-950 text-sm font-semibold rounded-lg transition-colors"
+            className="flex items-center px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-semibold rounded-md transition-colors"
+            variant="default" size="default"
           >
             <Plus className="w-4 h-4 mr-2" />
             Create Sprint
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Active Sprint */}
       {activeSprint && (
-        <div className="mb-10 bg-gradient-to-r from-gray-700/40 to-gray-700/20 border border-white/30 rounded-2xl p-6 shadow-lg shadow-white/5 relative overflow-hidden">
-          <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-[40px] pointer-events-none"></div>
-          
+        <div className="mb-10 bg-primary-muted border border-primary-border rounded-lg p-6 shadow-sm relative overflow-hidden">
+
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
-              <div className="px-2.5 py-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-xs font-bold uppercase tracking-wider rounded-md">
+              <div className="px-2.5 py-1 bg-success-muted border border-success-border text-success text-xs font-bold uppercase tracking-wider rounded-md">
                 Active Sprint
               </div>
-              <h3 className="text-xl font-bold text-white">{activeSprint.name}</h3>
+              <h3 className="text-xl font-bold text-foreground">{activeSprint.name}</h3>
             </div>
             <div className="flex items-center space-x-3">
-              <button 
+              <Button
                 onClick={() => navigate(`/w/${slug}/projects/${key}/sprints/active`)}
-                className="text-sm font-semibold bg-white text-gray-950 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
+                className="text-sm font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary-hover transition-colors"
+                variant="default" size="default"
               >
                 View Board
-              </button>
+              </Button>
               {canManageSprint && (
-                <button 
+                <Button
                   onClick={() => setShowCloseModal(activeSprint)}
-                  className="text-sm font-semibold bg-gray-800 text-gray-300 px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700"
+                  className="text-sm font-semibold bg-secondary text-foreground px-4 py-2 rounded-md hover:bg-hover transition-colors border border-border"
+                  variant="secondary" size="default"
                 >
                   Close Sprint
-                </button>
+                </Button>
               )}
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center gap-6 text-sm text-gray-300">
-            <div className="flex items-center text-gray-300">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-6 text-sm text-muted-foreground">
+            <div className="flex items-center text-muted-foreground">
               <Target className="w-4 h-4 mr-2" />
-              <span className="font-medium text-gray-200">{activeSprint.goal || 'No sprint goal set'}</span>
+              <span className="font-medium text-foreground">{activeSprint.goal || 'No sprint goal set'}</span>
             </div>
             <div className="flex items-center">
-              <Calendar className="w-4 h-4 mr-2 text-gray-500" />
+              <Calendar className="w-4 h-4 mr-2 text-subtle-foreground" />
               {activeSprint.startDate ? format(new Date(activeSprint.startDate), 'MMM d') : '-'} – {activeSprint.endDate ? format(new Date(activeSprint.endDate), 'MMM d, yyyy') : '-'}
             </div>
             <div className="flex items-center gap-2 text-xs font-mono">
-              <span className="bg-gray-900 px-2 py-1 border border-gray-800 rounded">{activeSprint.stats?.taskCount ?? 0} tasks</span>
-              <span className="bg-purple-500/10 border border-purple-500/30 text-purple-400 px-2 py-1 rounded">
+              <span className="bg-secondary px-2 py-1 border border-border rounded">{activeSprint.stats?.taskCount ?? 0} tasks</span>
+              <Badge variant="outline" className="bg-primary-muted text-primary border-primary-border h-auto py-1">
                 {activeSprint.stats?.completedPoints ?? 0} / {activeSprint.stats?.totalPoints ?? 0} pts
-              </span>
+              </Badge>
               {canManageSprint ? (
-                <label className="flex items-center gap-1.5 bg-gray-900 px-2 py-1 border border-gray-800 rounded text-gray-400">
+                <label className="flex items-center gap-1.5 bg-secondary px-2 py-1 border border-border rounded text-muted-foreground">
                   capacity
-                  <input
+                  <Input
                     type="number"
                     min="0"
+                    aria-label={`Capacity in points for sprint ${activeSprint.name}`}
                     value={capacityDrafts[activeSprint.sprintId] ?? activeSprint.capacityPoints ?? ''}
                     onChange={e => setCapacityDrafts(d => ({ ...d, [activeSprint.sprintId]: e.target.value }))}
                     onBlur={() => saveCapacity(activeSprint.sprintId)}
                     onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                    className="w-14 bg-transparent border border-gray-700 rounded px-1 py-0.5 text-gray-300 focus:outline-none focus:border-white"
+                    className="w-14 h-auto rounded-sm border-border px-1 py-0.5 text-xs font-mono md:text-xs"
                   />
                   pts
                 </label>
               ) : activeSprint.capacityPoints != null ? (
-                <span className="bg-gray-900 px-2 py-1 border border-gray-800 rounded text-gray-400">
+                <span className="bg-secondary px-2 py-1 border border-border rounded text-muted-foreground">
                   capacity {activeSprint.capacityPoints} pts
                 </span>
               ) : null}
@@ -272,59 +304,62 @@ export const SprintList = () => {
       {/* Future Sprints */}
       {futureSprints.length > 0 && (
         <div className="mb-8">
-          <h3 className="text-lg font-bold text-gray-200 mb-4">Planned Sprints</h3>
+          <h3 className="text-lg font-bold text-foreground mb-4">Planned Sprints</h3>
           <div className="space-y-4">
             {futureSprints.map(sprint => (
-              <div key={sprint.sprintId} className="flex items-center justify-between p-5 bg-gray-900/50 border border-gray-800/60 rounded-xl hover:bg-gray-800/40 transition-colors">
+              <div key={sprint.sprintId} className="flex items-center justify-between p-5 bg-card border border-border rounded-lg hover:bg-hover transition-colors">
                 <div>
                   <div className="flex items-center space-x-3 mb-1.5">
-                    <h4 className="text-base font-bold text-gray-200">{sprint.name}</h4>
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm bg-white/10 text-gray-300 border border-white/20">
+                    <h4 className="text-base font-bold text-foreground">{sprint.name}</h4>
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm bg-primary-muted text-primary border border-primary-border">
                       future
                     </span>
                   </div>
-                  <div className="flex items-center text-xs text-gray-500 space-x-4">
+                  <div className="flex items-center text-xs text-subtle-foreground space-x-4">
                     {sprint.goal && <span>{sprint.goal}</span>}
-                    <span className="font-mono bg-gray-950 px-1.5 py-0.5 rounded border border-gray-800">{sprint.stats?.taskCount ?? 0} tasks</span>
-                    <span className="font-mono bg-gray-950 px-1.5 py-0.5 rounded border border-gray-800 text-purple-400/80">{sprint.stats?.totalPoints ?? 0} pts</span>
+                    <span className="font-mono bg-muted px-1.5 py-0.5 rounded border border-border">{sprint.stats?.taskCount ?? 0} tasks</span>
+                    <span className="font-mono bg-muted px-1.5 py-0.5 rounded border border-border text-special">{sprint.stats?.totalPoints ?? 0} pts</span>
                     {canManageSprint ? (
-                      <label className="flex items-center gap-1 bg-gray-950 px-1.5 py-0.5 rounded border border-gray-800 text-gray-500">
+                      <label className="flex items-center gap-1 bg-muted px-1.5 py-0.5 rounded border border-border text-subtle-foreground">
                         cap
-                        <input
+                        <Input
                           type="number"
                           min="0"
+                          aria-label={`Capacity in points for sprint ${sprint.name}`}
                           value={capacityDrafts[sprint.sprintId] ?? sprint.capacityPoints ?? ''}
                           onChange={e => setCapacityDrafts(d => ({ ...d, [sprint.sprintId]: e.target.value }))}
                           onBlur={() => saveCapacity(sprint.sprintId)}
                           onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                          className="w-12 bg-transparent border border-gray-700 rounded px-1 py-0 text-gray-300 focus:outline-none focus:border-white"
+                          className="w-12 h-auto rounded-sm border-border px-1 py-0 text-xs font-mono md:text-xs"
                         />
                       </label>
                     ) : sprint.capacityPoints != null ? (
-                      <span className="font-mono bg-gray-950 px-1.5 py-0.5 rounded border border-gray-800">cap {sprint.capacityPoints}</span>
+                      <span className="font-mono bg-muted px-1.5 py-0.5 rounded border border-border">cap {sprint.capacityPoints}</span>
                     ) : null}
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
                   {canManageSprint && (
                     <>
-                      <button 
+                      <Button 
                         onClick={() => {
                           setStartDate(new Date().toISOString().substring(0, 10));
                           setStartEndDate('');
                           setShowStartModal(sprint);
                         }}
-                        className="flex items-center text-sm font-medium text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded transition-colors"
+                        className="flex items-center text-sm font-medium text-muted-foreground hover:text-foreground bg-secondary hover:bg-hover px-3 py-1.5 rounded transition-colors"
+                        variant="secondary" size="default"
                       >
-                        <Play className="w-4 h-4 mr-2 text-emerald-400" />
+                        <Play className="w-4 h-4 mr-2 text-success" />
                         Start
-                      </button>
-                      <button 
+                      </Button>
+                      <Button
                         onClick={() => handleDelete(sprint.sprintId)}
-                        className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-gray-800 rounded transition-colors"
+                        className="p-1.5 text-subtle-foreground hover:text-danger hover:bg-hover rounded transition-colors"
+                        size="icon" variant="destructive"
                       >
                         <Trash2 className="w-4 h-4" />
-                      </button>
+                      </Button>
                     </>
                   )}
                 </div>
@@ -337,65 +372,71 @@ export const SprintList = () => {
       {/* Closed Sprints */}
       {closedSprints.length > 0 && (
         <div>
-          <h3 className="text-lg font-bold text-gray-200 mb-4">Completed Sprints</h3>
+          <h3 className="text-lg font-bold text-foreground mb-4">Completed Sprints</h3>
           <div className="space-y-4">
             {closedSprints.map(sprint => (
-              <div key={sprint.sprintId} className="p-5 bg-gray-900/50 border border-gray-800/60 rounded-xl">
+              <div key={sprint.sprintId} className="p-5 bg-card border border-border rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex items-center space-x-3 mb-1.5">
-                      <h4 className="text-base font-bold text-gray-200">{sprint.name}</h4>
-                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm bg-gray-800 text-gray-500">
+                      <h4 className="text-base font-bold text-foreground">{sprint.name}</h4>
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm bg-secondary text-subtle-foreground">
                         closed
                       </span>
                     </div>
-                    <div className="flex items-center text-xs text-gray-500 space-x-4">
+                    <div className="flex items-center text-xs text-subtle-foreground space-x-4">
                       <span className="flex items-center"><Calendar className="w-3.5 h-3.5 mr-1.5" /> 
                         {sprint.startDate ? format(new Date(sprint.startDate), 'MMM d') : 'N/A'} – {sprint.endDate ? format(new Date(sprint.endDate), 'MMM d') : 'N/A'}
                       </span>
-                      <span className="font-mono bg-gray-950 px-1.5 py-0.5 rounded border border-gray-800">{sprint.stats?.taskCount ?? 0} tasks</span>
-                      <span className="font-mono bg-purple-500/10 border border-purple-500/30 text-purple-400 px-1.5 py-0.5 rounded" title="Velocity: story points completed">
-                        {sprint.stats?.completedPoints ?? 0} pts done
-                      </span>
+                      <span className="font-mono bg-muted px-1.5 py-0.5 rounded border border-border">{sprint.stats?.taskCount ?? 0} tasks</span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge variant="outline" className="bg-primary-muted text-primary border-primary-border px-1.5 font-mono">
+                            {sprint.stats?.completedPoints ?? 0} pts done
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>Velocity: story points completed</TooltipContent>
+                      </Tooltip>
                     </div>
                   </div>
                   <div className="flex items-center space-x-4">
-                    <div className="flex items-center text-sm font-medium text-gray-500">
+                    <div className="flex items-center text-sm font-medium text-subtle-foreground">
                       <CheckCircle2 className="w-4 h-4 mr-2" />
                       Completed
                     </div>
-                    <button 
+                    <Button
                       onClick={() => navigate(`/w/${slug}/projects/${key}/sprints/${sprint.sprintId}`)}
-                      className="text-xs font-semibold bg-gray-800 text-gray-300 px-3 py-1.5 rounded hover:bg-gray-700 transition-colors border border-gray-700"
+                      className="text-xs font-semibold bg-secondary text-foreground px-3 py-1.5 rounded hover:bg-hover transition-colors border border-border"
+                      variant="secondary" size="default"
                     >
                       View Details
-                    </button>
+                    </Button>
                   </div>
                 </div>
 
                 {sprint.aiSummary && (
-                  <div className="mt-4 bg-gradient-to-br from-purple-900/20 to-gray-900/40 border border-purple-500/20 rounded-lg p-4">
-                    <div className="flex items-center text-xs text-purple-400 font-semibold uppercase tracking-wider mb-2">
+                  <div className="mt-4 bg-special-muted border border-special-border rounded-lg p-4">
+                    <div className="flex items-center text-xs text-special font-semibold uppercase tracking-wider mb-2">
                       <Sparkles className="w-3.5 h-3.5 mr-1.5" /> AI Sprint Summary
                     </div>
-                    <p className="text-sm text-gray-300 leading-relaxed">{sprint.aiSummary.summary}</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{sprint.aiSummary.summary}</p>
                     {sprint.aiSummary.highlights && sprint.aiSummary.highlights.length > 0 && (
                       <ul className="mt-2 space-y-1">
                         {sprint.aiSummary.highlights.map((h, idx) => (
-                          <li key={idx} className="text-xs text-gray-400 flex items-start">
-                            <span className="text-purple-400 mr-1.5">•</span>
+                          <li key={idx} className="text-xs text-muted-foreground flex items-start">
+                            <span className="text-special mr-1.5">•</span>
                             {h}
                           </li>
                         ))}
                       </ul>
                     )}
                     {sprint.aiContributionReport && sprint.aiContributionReport.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-purple-500/10 space-y-1.5">
+                      <div className="mt-3 pt-3 border-t border-special-border space-y-1.5">
                         {sprint.aiContributionReport.map((c, idx) => (
                           <div key={idx} className="flex items-start text-xs">
-                            <span className="text-gray-300 font-medium w-32 flex-shrink-0 truncate">{c.fullName}</span>
-                            <span className="text-gray-500 flex-1">{c.summary}</span>
-                            <span className="text-purple-400 flex-shrink-0 ml-2 font-mono">{c.tasksCompleted} done</span>
+                            <span className="text-foreground font-medium w-32 flex-shrink-0 truncate">{c.fullName}</span>
+                            <span className="text-subtle-foreground flex-1">{c.summary}</span>
+                            <span className="text-special flex-shrink-0 ml-2 font-mono">{c.tasksCompleted} done</span>
                           </div>
                         ))}
                       </div>
@@ -409,115 +450,114 @@ export const SprintList = () => {
       )}
 
       {sprints.length === 0 && (
-        <div className="text-center py-12 border border-dashed border-gray-800 rounded-xl bg-gray-900/30">
-          <p className="text-gray-500">No sprints created yet. Build your backlog and plan your first iteration.</p>
+        <div className="text-center py-12 border border-dashed border-border rounded-lg bg-card">
+          <p className="text-subtle-foreground">No sprints created yet. Build your backlog and plan your first iteration.</p>
         </div>
       )}
 
       {/* CREATE SPRINT MODAL */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between p-6 border-b border-gray-800">
-              <h3 className="text-xl font-bold text-white">Create Sprint</h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
-            </div>
-            <form onSubmit={handleCreate} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Sprint Name</label>
-                <input type="text" value={newName} onChange={e => setNewName(e.target.value)} required
-                  className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white" />
+        <Dialog open onOpenChange={(open) => { if (!open) setShowCreateModal(false); }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Create Sprint</DialogTitle>
+              <DialogDescription>Plan your next time-boxed iteration.</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleCreate} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="sprint-name">Sprint Name</Label>
+                <Input id="sprint-name" type="text" value={newName} onChange={e => setNewName(e.target.value)} required />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Goal (optional)</label>
-                <textarea rows={2} value={newGoal} onChange={e => setNewGoal(e.target.value)}
-                  className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white" />
+              <div className="space-y-2">
+                <Label htmlFor="sprint-goal">Goal (optional)</Label>
+                <Textarea id="sprint-goal" rows={2} value={newGoal} onChange={e => setNewGoal(e.target.value)} />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Start Date</label>
-                  <input type="date" value={newStartDate} onChange={e => setNewStartDate(e.target.value)}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white" />
+                <div className="space-y-2">
+                  <Label htmlFor="sprint-start">Start Date</Label>
+                  <Input id="sprint-start" type="date" value={newStartDate} onChange={e => setNewStartDate(e.target.value)} />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">End Date</label>
-                  <input type="date" value={newEndDate} onChange={e => setNewEndDate(e.target.value)}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white" />
+                <div className="space-y-2">
+                  <Label htmlFor="sprint-end">End Date</Label>
+                  <Input id="sprint-end" type="date" value={newEndDate} onChange={e => setNewEndDate(e.target.value)} />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Capacity (story points, optional)</label>
-                <input type="number" min="0" max="10000" value={newCapacityPoints} onChange={e => setNewCapacityPoints(e.target.value)}
+              <div className="space-y-2">
+                <Label htmlFor="sprint-capacity">Capacity (story points, optional)</Label>
+                <Input
+                  id="sprint-capacity"
+                  type="number"
+                  min="0"
+                  max="10000"
+                  value={newCapacityPoints}
+                  onChange={e => setNewCapacityPoints(e.target.value)}
                   placeholder="e.g. 40 — your team's estimated velocity"
-                  className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white" />
+                />
               </div>
-              <div className="pt-4 flex justify-end space-x-3">
-                <button type="button" onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-gray-400 hover:text-white font-medium">Cancel</button>
-                <button type="submit" disabled={isCreating} className="px-6 py-2 bg-white text-gray-950 hover:bg-gray-200 font-bold rounded-lg disabled:opacity-50 flex items-center">
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isCreating}>
                   {isCreating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   Create
-                </button>
-              </div>
+                </Button>
+              </DialogFooter>
             </form>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* START SPRINT MODAL */}
       {showStartModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between p-6 border-b border-gray-800">
-              <h3 className="text-xl font-bold text-white">Start Sprint: {showStartModal.name}</h3>
-              <button onClick={() => setShowStartModal(null)} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
-            </div>
-            <div className="p-6 space-y-4">
+        <Dialog open onOpenChange={(open) => { if (!open) setShowStartModal(null); }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Start Sprint: {showStartModal.name}</DialogTitle>
+              <DialogDescription>Set the date range for this iteration.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Start Date</label>
-                  <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white" />
+                <div className="space-y-2">
+                  <Label htmlFor="start-date">Start Date</Label>
+                  <Input id="start-date" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">End Date</label>
-                  <input type="date" value={startEndDate} onChange={e => setStartEndDate(e.target.value)}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white" />
+                <div className="space-y-2">
+                  <Label htmlFor="end-date">End Date</Label>
+                  <Input id="end-date" type="date" value={startEndDate} onChange={e => setStartEndDate(e.target.value)} />
                 </div>
               </div>
-              <div className="pt-4 flex justify-end space-x-3">
-                <button onClick={() => setShowStartModal(null)} className="px-4 py-2 text-gray-400 hover:text-white font-medium">Cancel</button>
-                <button onClick={handleStart} disabled={isStarting} className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg disabled:opacity-50 flex items-center">
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowStartModal(null)}>Cancel</Button>
+                <Button onClick={handleStart} disabled={isStarting}>
                   {isStarting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   Start Sprint
-                </button>
-              </div>
+                </Button>
+              </DialogFooter>
             </div>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* CLOSE SPRINT MODAL */}
       {showCloseModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between p-6 border-b border-gray-800">
-              <h3 className="text-xl font-bold text-white">Close Sprint: {showCloseModal.name}</h3>
-              <button onClick={() => setShowCloseModal(null)} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-gray-300 text-sm">
+        <Dialog open onOpenChange={(open) => { if (!open) setShowCloseModal(null); }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Close Sprint: {showCloseModal.name}</DialogTitle>
+              <DialogDescription>
                 Closing this sprint will mark it as completed. Any incomplete tasks will remain in the backlog.
-              </p>
-              <div className="pt-4 flex justify-end space-x-3">
-                <button onClick={() => setShowCloseModal(null)} className="px-4 py-2 text-gray-400 hover:text-white font-medium">Cancel</button>
-                <button onClick={handleClose} disabled={isClosing} className="px-6 py-2 bg-white text-gray-950 hover:bg-gray-200 font-bold rounded-lg disabled:opacity-50 flex items-center">
-                  {isClosing && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Close Sprint
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowCloseModal(null)}>Cancel</Button>
+              <Button onClick={handleClose} disabled={isClosing}>
+                {isClosing && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Close Sprint
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthGuard, GuestGuard } from './components/auth/AuthGuard.js';
-import { ToastProvider } from './components/ui/ToastProvider.js';
+import { ToastProvider } from './components/providers/ToastProvider.js';
 import {
   LandingPage,
   LoginPage,
@@ -38,8 +38,15 @@ import {
 function App() {
   return (
     <BrowserRouter>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-(--z-tooltip) focus:px-4 focus:py-2 focus:rounded-md focus:bg-primary focus:text-primary-foreground focus:font-semibold"
+      >
+        Skip to main content
+      </a>
       <ToastProvider />
-      <Routes>
+      <main id="main-content" tabIndex={-1} className="outline-none">
+        <Routes>
         {/* --- Auth & Public Screens (3 + Landing) --- */}
         <Route path="/" element={<LandingPage />} />
         
@@ -104,6 +111,7 @@ function App() {
         {/* Catch-all 404 */}
         <Route path="*" element={<Navigate to="/workspaces" replace />} />
       </Routes>
+      </main>
     </BrowserRouter>
   );
 }

@@ -4,6 +4,8 @@ import { useAuthStore } from '../../store/auth';
 import { format } from 'date-fns';
 import { Send, Loader2 } from 'lucide-react';
 import { socketClient } from '../../lib/socket';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 
 interface Comment {
   commentId: string;
@@ -104,19 +106,19 @@ export const TaskComments: React.FC<TaskCommentsProps> = ({ slug, projectKey, ta
   };
 
   return (
-    <div className="flex flex-col bg-gray-900 border border-gray-800 rounded-lg overflow-hidden mt-6">
-      <div className="px-4 py-3 border-b border-gray-800 bg-gray-950/50">
-        <h3 className="text-sm font-semibold text-gray-300">Activity & Comments</h3>
-        <p className="text-[10px] text-gray-500 mt-0.5">Synced with project channel</p>
+    <div className="flex flex-col bg-card border border-border rounded-lg overflow-hidden mt-6">
+      <div className="px-4 py-3 border-b border-border bg-background">
+        <h3 className="text-sm font-semibold text-foreground">Activity & Comments</h3>
+        <p className="text-[10px] text-subtle-foreground mt-0.5">Synced with project channel</p>
       </div>
       
-      <div className="flex-1 max-h-[400px] overflow-y-auto p-4 space-y-4 custom-scrollbar">
+      <div className="flex-1 max-h-[400px] overflow-y-auto p-4 space-y-4">
         {isLoading ? (
           <div className="flex justify-center py-8">
-            <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
+            <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
           </div>
         ) : comments.length === 0 ? (
-          <p className="text-center text-xs text-gray-500 py-4">No activity yet.</p>
+          <p className="text-center text-xs text-subtle-foreground py-4">No activity yet.</p>
         ) : (
           comments.map(comment => {
             const isMe = comment.authorId === currentUser?.userId;
@@ -124,7 +126,7 @@ export const TaskComments: React.FC<TaskCommentsProps> = ({ slug, projectKey, ta
             if (comment.isSystem) {
               return (
                 <div key={comment.commentId} className="flex justify-center my-2">
-                  <span className="text-[10px] bg-gray-800 text-gray-400 px-2 py-1 rounded-full border border-gray-700">
+                  <span className="text-[10px] bg-secondary text-muted-foreground px-2 py-1 rounded-full border border-border">
                     {comment.bodyText}
                   </span>
                 </div>
@@ -134,14 +136,14 @@ export const TaskComments: React.FC<TaskCommentsProps> = ({ slug, projectKey, ta
             return (
               <div key={comment.commentId} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                 <div className="flex items-baseline space-x-2 mb-1 mx-1">
-                  <span className="text-xs font-medium text-gray-300">
+                  <span className="text-xs font-medium text-foreground">
                     {isMe ? 'You' : comment.authorName || 'Unknown'}
                   </span>
-                  <span className="text-[9px] text-gray-500">
+                  <span className="text-[9px] text-subtle-foreground">
                     {format(new Date(comment.createdAt), 'MMM d, h:mm a')}
                   </span>
                 </div>
-                <div className={`px-3 py-2 rounded-lg max-w-[85%] text-sm ${isMe ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-gray-800 text-gray-200 rounded-tl-sm border border-gray-700'}`}>
+                <div className={`px-3 py-2 rounded-lg max-w-[85%] text-sm ${isMe ? 'bg-primary text-primary-foreground rounded-tr-sm' : 'bg-secondary text-foreground rounded-tl-sm border border-border'}`}>
                   {comment.bodyText}
                 </div>
               </div>
@@ -151,14 +153,14 @@ export const TaskComments: React.FC<TaskCommentsProps> = ({ slug, projectKey, ta
         <div ref={bottomRef} />
       </div>
 
-      <div className="p-3 bg-gray-950/50 border-t border-gray-800">
+      <div className="p-3 bg-background border-t border-border">
         <form onSubmit={handleSubmit} className="flex items-end gap-2">
           <div className="flex-1 relative">
-            <textarea
+            <Textarea
               value={newComment}
               onChange={e => setNewComment(e.target.value)}
               placeholder="Add a comment... (Syncs to channel)"
-              className="w-full bg-gray-900 border border-gray-700 text-sm text-gray-200 rounded-lg pl-3 pr-10 py-2.5 focus:outline-none focus:border-blue-500 min-h-[44px] max-h-[120px] resize-y custom-scrollbar"
+              className="bg-card border-border text-sm rounded-lg pl-3 pr-10 py-2.5 min-h-[44px] max-h-[120px] resize-y placeholder:text-subtle-foreground md:text-sm"
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -167,13 +169,14 @@ export const TaskComments: React.FC<TaskCommentsProps> = ({ slug, projectKey, ta
               }}
             />
           </div>
-          <button
+          <Button
             type="submit"
             disabled={!newComment.trim() || isSubmitting}
-            className="h-[44px] px-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center justify-center shrink-0"
+            aria-label="Post comment"
+            className="h-[44px] px-4 shrink-0"
           >
             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          </button>
+          </Button>
         </form>
       </div>
     </div>

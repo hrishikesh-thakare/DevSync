@@ -36,8 +36,18 @@ export const useSprintStore = create<SprintState>((set, get) => ({
 
     set({ isLoading: true });
     try {
+      interface RawSprint {
+        sprintId: string;
+        projectId: string;
+        name: string;
+        goal?: string | null;
+        status: string;
+        startDate: string;
+        endDate: string;
+        createdAt: string;
+      }
       const data = await apiFetch(`/workspaces/${workspace.slug}/projects/${project.id}/sprints`);
-      const mappedSprints: Sprint[] = data.sprints.map((s: any) => ({
+      const mappedSprints: Sprint[] = data.sprints.map((s: RawSprint) => ({
         id: s.sprintId,
         projectId: s.projectId,
         name: s.name,

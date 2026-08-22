@@ -11,6 +11,13 @@ import { LexicalEditor } from '../../components/chat/LexicalEditor.js';
 import { renderMessageContent } from '../../components/chat/renderMessageContent.js';
 import { LinkUnfurl } from '../../components/chat/LinkUnfurl.js';
 import { ReactionsModal } from '../../components/chat/ReactionsModal.js';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 import { Hash, Lock, Users, Loader2, Smile, MessageSquare, X, Edit2, Search } from 'lucide-react';
 import { format } from 'date-fns';
@@ -20,11 +27,11 @@ import { useConfirm } from '../../hooks/useConfirm.js';
 import { socketClient } from '../../lib/socket.js';
 
 
-const getStatusDotClass = (presence?: string, statusText?: string) => {
-  if (presence === 'offline' || statusText === 'Away') return 'bg-gray-500';
-  if (statusText === 'In a meeting' || statusText === 'Focusing') return 'bg-red-500';
-  if (statusText === 'Commuting' || statusText === 'Out sick' || statusText === 'Vacationing') return 'bg-amber-500';
-  return 'bg-green-500';
+const getStatusDotClass = (presence?: string, statusText?: string | null) => {
+  if (presence === 'offline' || statusText === 'Away') return 'bg-subtle-foreground';
+  if (statusText === 'In a meeting' || statusText === 'Focusing') return 'bg-danger';
+  if (statusText === 'Commuting' || statusText === 'Out sick' || statusText === 'Vacationing') return 'bg-warning';
+  return 'bg-success';
 };
 
 function FileImagePreview({ slug, fileId, fileName }: { slug: string; fileId: string; fileName: string }) {
@@ -46,8 +53,8 @@ function FileImagePreview({ slug, fileId, fileName }: { slug: string; fileId: st
 
   if (loading) {
     return (
-      <div className="w-48 h-32 bg-gray-800/60 animate-pulse rounded-lg flex items-center justify-center border border-gray-700/50">
-        <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
+      <div className="w-48 h-32 bg-secondary animate-pulse rounded-lg flex items-center justify-center border border-border">
+        <Loader2 className="w-5 h-5 text-subtle-foreground animate-spin" />
       </div>
     );
   }
@@ -59,12 +66,12 @@ function FileImagePreview({ slug, fileId, fileName }: { slug: string; fileId: st
       href={imageUrl}
       target="_blank"
       rel="noreferrer"
-      className="block my-1.5 overflow-hidden rounded-xl border border-gray-700/60 bg-gray-900 max-w-sm group transition-transform hover:scale-[1.01]"
+      className="block my-1.5 overflow-hidden rounded-lg border border-border bg-card max-w-sm group transition-transform hover:scale-[1.01]"
     >
       <img
         src={imageUrl}
         alt={fileName}
-        className="max-h-64 max-w-full object-cover rounded-xl"
+        className="max-h-64 max-w-full object-cover rounded-lg"
         loading="lazy"
       />
     </a>
@@ -80,7 +87,7 @@ export const ChannelPage = () => {
   const taskKeyQuery = searchParams.get('task');
 
   const initialChatContent = taskKeyQuery
-    ? `<p><span class="text-blue-400 bg-blue-500/10 px-1 rounded font-medium">@${taskKeyQuery}</span> </p>`
+    ? `<p><span class="text-primary bg-primary-muted px-1 rounded font-medium">@${taskKeyQuery}</span> </p>`
     : '';
 
 
@@ -367,8 +374,8 @@ export const ChannelPage = () => {
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
           // Flash effect
-          el.classList.add('bg-blue-900/30', 'transition-all', 'duration-1000');
-          setTimeout(() => el.classList.remove('bg-blue-900/30'), 2000);
+          el.classList.add('bg-primary-muted', 'transition-all', 'duration-1000');
+          setTimeout(() => el.classList.remove('bg-primary-muted'), 2000);
         }
       } else {
         scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -575,16 +582,16 @@ export const ChannelPage = () => {
         key={msg.messageId} 
         id={msg.messageId}
         className={`group flex items-start py-1.5 transition-colors relative ${isThreadContext ? '' : '-mx-4 px-4'} ${
-          isMentioned ? 'bg-blue-950/40 hover:bg-blue-950/60 border-l-4 border-blue-500 rounded-r-lg font-medium' : 'hover:bg-gray-900/40 rounded-lg'
+          isMentioned ? 'bg-primary-muted hover:bg-primary-muted/70 border-l-4 border-primary rounded-r-lg font-medium' : 'hover:bg-hover rounded-lg'
         }`}
       >
         <div className="w-10 flex-shrink-0 flex justify-center">
           {showHeader && (
             <div className="relative mt-1">
-              <div className="w-9 h-9 rounded-md bg-gradient-to-br from-gray-700 to-gray-500 flex items-center justify-center text-white font-bold shadow-md border border-gray-800">
+              <div className="w-9 h-9 rounded-md bg-secondary flex items-center justify-center text-foreground font-bold shadow-sm border border-border">
                 {msg.authorName?.[0]?.toUpperCase() || 'U'}
               </div>
-              <div className={`absolute -bottom-1 -right-1 w-2.5 h-2.5 ${getStatusDotClass(authorMember?.presence, authorMember?.statusText)} border-2 border-gray-950 rounded-full`}></div>
+              <div className={`absolute -bottom-1 -right-1 w-2.5 h-2.5 ${getStatusDotClass(authorMember?.presence, authorMember?.statusText)} border-2 border-background rounded-full`}></div>
             </div>
           )}
         </div>
@@ -592,27 +599,32 @@ export const ChannelPage = () => {
         <div className="ml-3 flex-1 min-w-0">
           {showHeader && (
             <div className="flex items-baseline space-x-2 mb-0.5">
-              <span className="font-semibold text-gray-100">{msg.authorName || 'Unknown User'}</span>
+              <span className="font-semibold text-foreground">{msg.authorName || 'Unknown User'}</span>
               {authorMember?.statusText && (
-                <span className="text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded font-normal" title={authorMember.statusText}>{authorMember.statusText}</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="text-[10px] bg-secondary text-muted-foreground px-1.5 py-0.5 rounded font-normal">{authorMember.statusText}</span>
+                  </TooltipTrigger>
+                  <TooltipContent>{authorMember.statusText}</TooltipContent>
+                </Tooltip>
               )}
-              <span className="text-xs text-gray-500">{msg.createdAt ? format(new Date(msg.createdAt), 'h:mm a') : ''}</span>
+              <span className="text-xs text-subtle-foreground">{msg.createdAt ? format(new Date(msg.createdAt), 'h:mm a') : ''}</span>
             </div>
           )}
           {editingMessageId === msg.messageId ? (
-            <div className="mt-1 bg-gray-950/50 p-2 rounded-lg border border-gray-700 shadow-sm">
+            <div className="mt-1 bg-background p-2 rounded-lg border border-border shadow-sm">
               <LexicalEditor 
                 onSubmit={(content) => handleSaveEdit(msg.messageId, content)} 
                 initialContent={msg.bodyText} 
                 placeholder="Edit your message..."
               />
-              <button onClick={() => setEditingMessageId(null)} className="text-xs font-medium text-gray-400 hover:text-white mt-2 ml-1 transition-colors">
+              <Button onClick={() => setEditingMessageId(null)} className="text-xs font-medium text-muted-foreground hover:text-foreground mt-2 ml-1 transition-colors" variant="ghost" size="default">
                 Cancel
-              </button>
+              </Button>
             </div>
           ) : (
             <div 
-              className="text-gray-300 text-[15px] leading-relaxed prose prose-invert max-w-none prose-p:my-0 prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-800 prose-code:before:content-none prose-code:after:content-none"
+              className="message-body text-foreground max-w-none"
               dangerouslySetInnerHTML={{ __html: htmlContent }}
               onClick={async (e) => {
               const target = e.target as HTMLElement;
@@ -706,27 +718,29 @@ export const ChannelPage = () => {
 
           {!isThreadContext && !msg.isDeleted && (msg.replyCount ?? msg.threadCount ?? 0) > 0 && (
             <div className="mt-2 flex items-center gap-3">
-              <button 
+              <Button 
                 onClick={() => toggleThreadInline(msg.messageId)}
-                className="flex items-center text-sm font-medium text-blue-400 hover:text-blue-300 px-1 py-0.5 rounded transition-colors"
+                className="flex items-center text-sm font-medium text-primary hover:text-primary-hover px-1 py-0.5 rounded transition-colors"
+                variant="ghost" size="default"
               >
                 <span className="font-mono font-bold mr-1.5 text-lg leading-none">{expandedThreads.has(msg.messageId) ? '[-]' : '[+]'}</span>
                 {msg.replyCount ?? msg.threadCount} {(msg.replyCount ?? msg.threadCount) === 1 ? 'reply' : 'replies'} inline
-              </button>
+              </Button>
 
-              <button 
+              <Button 
                 onClick={() => loadThread(msg.messageId)}
-                className="flex items-center text-sm font-medium text-gray-400 hover:text-gray-300 bg-gray-800/50 hover:bg-gray-800 px-2 py-1 rounded transition-colors"
+                className="flex items-center text-sm font-medium text-muted-foreground hover:text-foreground bg-secondary hover:bg-hover px-2 py-1 rounded transition-colors"
+                variant="secondary" size="default"
               >
                 <MessageSquare className="w-4 h-4 mr-1.5" />
                 Sidebar
-              </button>
+              </Button>
             </div>
           )}
 
           {/* Inline Nested Replies */}
           {!isThreadContext && !msg.isDeleted && expandedThreads.has(msg.messageId) && threadsCache[msg.messageId] && (
-            <div className="mt-3 ml-2 pl-4 border-l-2 border-gray-800 space-y-2">
+            <div className="mt-3 ml-2 pl-4 border-l-2 border-border space-y-2">
               {threadsCache[msg.messageId].map((reply: Message) => (
                 <div key={reply.messageId} className="relative">
                   {renderMessage(reply, true)}
@@ -749,19 +763,24 @@ export const ChannelPage = () => {
               ).map(([emoji, data]) => {
                 const hasReacted = data.userIds.includes(user?.userId || '');
                 return (
-                  <button
-                    key={emoji}
-                    onClick={() => openReactionsModal(msg)}
-                    title={data.userNames.join(', ')}
-                    className={`flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-xs font-medium border transition-colors ${
-                      hasReacted 
-                        ? 'bg-blue-500/20 border-blue-500/30 text-blue-300 hover:bg-blue-500/30' 
-                        : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-gray-800'
-                    }`}
-                  >
-                    <span>{emoji}</span>
-                    <span>{data.count}</span>
-                  </button>
+                  <Tooltip key={emoji}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => openReactionsModal(msg)}
+                        aria-label={data.userNames.join(', ')}
+                        className={`flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-xs font-medium border transition-colors ${
+                          hasReacted
+                            ? 'bg-primary-muted border-primary-border text-primary hover:bg-primary-muted/70'
+                            : 'bg-secondary border-border text-muted-foreground hover:bg-hover'
+                        }`}
+                        variant="outline" size="default"
+                      >
+                        <span>{emoji}</span>
+                        <span>{data.count}</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{data.userNames.join(', ')}</TooltipContent>
+                  </Tooltip>
                 );
               })}
 
@@ -778,49 +797,67 @@ export const ChannelPage = () => {
           )}
         </div>
 
-        <div className="opacity-0 group-hover:opacity-100 flex items-center space-x-1 bg-gray-900 border border-gray-800 rounded-md p-1 shadow-sm absolute right-12 -mt-3 transition-opacity">
-          
+        <div className="opacity-0 group-hover:opacity-100 flex items-center space-x-1 bg-popover border border-border rounded-md p-1 shadow-sm absolute right-12 -mt-3 transition-opacity">
+
           <div className="relative group/react">
-            <button className="p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-800 rounded">
+            <Button className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-hover rounded" size="icon" variant="ghost">
               <Smile className="w-4 h-4" />
-            </button>
-            <div className="absolute right-full top-1/2 -translate-y-1/2 pr-2 hidden group-hover/react:block z-50">
-              <div className="flex items-center space-x-1 bg-gray-900 p-1.5 rounded-full shadow-lg border border-gray-700">
+            </Button>
+            <div className="absolute right-full top-1/2 -translate-y-1/2 pr-2 hidden group-hover/react:block z-(--z-dropdown)">
+              <div className="flex items-center space-x-1 bg-popover p-1.5 rounded-full shadow-md border border-border">
                 {['👍', '❤️', '😂', '🎉', '👀'].map(emoji => (
-                  <button 
-                    key={emoji} 
-                    onClick={() => toggleReaction(msg.messageId, emoji)} 
-                    className="hover:bg-gray-700 rounded-full w-7 h-7 flex items-center justify-center text-sm transition-transform hover:scale-110"
+                  <Button
+                    key={emoji}
+                    onClick={() => toggleReaction(msg.messageId, emoji)}
+                    className="hover:bg-hover rounded-full w-7 h-7 flex items-center justify-center text-sm transition-transform hover:scale-110"
+                    size="icon" variant="ghost"
                   >
                     {emoji}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
           </div>
 
           {!isThreadContext && (
-            <button 
-              onClick={() => loadThread(msg.messageId)}
-              className="p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-800 rounded" 
-              title="Reply in thread"
-            >
-              <MessageSquare className="w-4 h-4" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  onClick={() => loadThread(msg.messageId)}
+                  className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-hover rounded"
+                  aria-label="Reply in thread"
+                  size="icon" variant="ghost"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Reply in thread</TooltipContent>
+            </Tooltip>
           )}
           {(isMe || isAdmin()) && (
-            <button 
-              onClick={() => setEditingMessageId(msg.messageId)} 
-              className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded" 
-              title="Edit Message"
-            >
-              <Edit2 className="w-4 h-4" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  onClick={() => setEditingMessageId(msg.messageId)} 
+                  className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-hover rounded"
+                  aria-label="Edit Message"
+                  size="icon" variant="ghost"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Edit Message</TooltipContent>
+            </Tooltip>
           )}
           {(isMe || isAdmin()) && (
-            <button onClick={() => deleteMessage(msg.messageId)} className="p-1.5 text-red-400 hover:text-red-300 hover:bg-gray-800 rounded" title="Delete Message">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={() => deleteMessage(msg.messageId)} className="p-1.5 text-danger hover:text-danger/80 hover:bg-hover rounded" aria-label="Delete Message" size="icon" variant="destructive">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Delete Message</TooltipContent>
+            </Tooltip>
           )}
         </div>
       </div>
@@ -830,61 +867,78 @@ export const ChannelPage = () => {
   const parentMessage = messages.find(m => m.messageId === activeThreadMessageId);
 
   return (
-    <div className="flex h-full bg-gray-950 font-sans overflow-hidden">
-      
+    <div className="flex h-full bg-background font-sans overflow-hidden">
+
       {/* Main Channel Area */}
       <div className="flex flex-col flex-1 min-w-0">
         {/* Top Header */}
-        <div className="h-14 border-b border-gray-800/60 bg-gray-950/80 backdrop-blur px-6 flex items-center justify-between shrink-0">
+        <div className="h-14 border-b border-border bg-background px-6 flex items-center justify-between shrink-0">
           <div className="flex items-center">
             {currentChannel?.type === 'private' ? (
-              <Lock className="w-5 h-5 text-gray-500 mr-2" />
+              <Lock className="w-5 h-5 text-subtle-foreground mr-2" />
             ) : (
-              <Hash className="w-5 h-5 text-gray-500 mr-2" />
+              <Hash className="w-5 h-5 text-subtle-foreground mr-2" />
             )}
-            <h2 className="font-bold text-gray-100 mr-2">{currentChannel?.name || 'Loading...'}</h2>
+            <h2 className="font-bold text-foreground mr-2">{currentChannel?.name || 'Loading...'}</h2>
             {isAdmin() && (
-              <button 
-                onClick={handleUpdateChannelName}
-                className="text-gray-500 hover:text-gray-300 transition-colors"
-                title="Edit Channel Name"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={handleUpdateChannelName}
+                    className="text-subtle-foreground hover:text-foreground transition-colors"
+                    aria-label="Edit Channel Name"
+                    size="icon" variant="ghost"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Edit Channel Name</TooltipContent>
+              </Tooltip>
             )}
           </div>
           <div className="flex items-center space-x-4">
             {isSearchOpen ? (
               <form onSubmit={handleSearchSubmit} className="relative flex items-center">
-                <Search className="w-4 h-4 text-gray-500 absolute left-2.5" />
-                <input
+                <Search className="w-4 h-4 text-subtle-foreground absolute left-2.5" />
+                <Input
                   type="text"
                   autoFocus
                   placeholder="Search channel..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-gray-900 border border-gray-700 rounded-md pl-8 pr-8 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-gray-500 w-64"
+                  className="bg-card border border-border rounded-md pl-8 pr-8 py-1.5 text-sm text-foreground focus:border-ring focus:ring-1 focus:ring-ring w-64"
                 />
-                <button type="button" onClick={handleClearSearch} className="absolute right-2 text-gray-400 hover:text-gray-200">
+                <Button type="button" onClick={handleClearSearch} className="absolute right-2 text-muted-foreground hover:text-foreground" size="icon" variant="ghost">
                   <X className="w-4 h-4" />
-                </button>
+                </Button>
               </form>
             ) : (
-              <button onClick={() => setIsSearchOpen(true)} className="text-gray-500 hover:text-gray-300 transition-colors" title="Search Channel">
-                <Search className="w-5 h-5" />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={() => setIsSearchOpen(true)} className="text-subtle-foreground hover:text-foreground transition-colors" aria-label="Search Channel" size="icon" variant="ghost">
+                    <Search className="w-5 h-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Search Channel</TooltipContent>
+              </Tooltip>
             )}
             
             {isAdmin() && (
-              <button 
-                onClick={handleDeleteChannel}
-                className="text-red-500 hover:text-red-400 text-sm font-medium transition-colors"
-                title="Delete Channel"
-              >
-                Delete Channel
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    onClick={handleDeleteChannel}
+                    className="text-danger hover:text-danger/80 text-sm font-medium transition-colors"
+                    aria-label="Delete Channel"
+                    variant="destructive" size="default"
+                  >
+                    Delete Channel
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Delete Channel</TooltipContent>
+              </Tooltip>
             )}
-            <div className="flex items-center text-gray-400 hover:text-gray-200 cursor-pointer transition-colors">
+            <div className="flex items-center text-muted-foreground hover:text-foreground cursor-pointer transition-colors">
               <Users className="w-4 h-4 mr-1.5" />
               <span className="text-sm font-medium">{memberCount}</span>
             </div>
@@ -895,24 +949,24 @@ export const ChannelPage = () => {
         <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>
           {isLoading || isSearching ? (
             <div className="flex justify-center py-10">
-              <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+              <Loader2 className="w-8 h-8 text-primary animate-spin" />
             </div>
           ) : isSearchOpen && searchQuery.trim().length >= 2 ? (
             searchResults.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+              <div className="flex flex-col items-center justify-center py-12 text-subtle-foreground">
                 <Search className="w-12 h-12 mb-3 opacity-20" />
                 <p>No messages match your search.</p>
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="text-sm font-semibold text-gray-400 pb-2 border-b border-gray-800">
+                <div className="text-sm font-semibold text-muted-foreground pb-2 border-b border-border">
                   Search Results for "{searchQuery}"
                 </div>
                 {searchResults.map(msg => renderMessage(msg, false))}
               </div>
             )
           ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-500">
+            <div className="flex flex-col items-center justify-center h-full text-subtle-foreground">
               <Hash className="w-16 h-16 mb-4 opacity-20" />
               <p className="text-lg">Welcome to #{currentChannel?.name}!</p>
               <p className="text-sm">This is the start of the channel.</p>
@@ -932,33 +986,41 @@ export const ChannelPage = () => {
               tasks={currentProject ? tasks : []}
             />
           ) : (
-            <div 
-              title={currentChannel?.isAnnouncementOnly ? "Only admins can post here" : "You are a viewer and cannot send messages in this channel"}
-              className="text-gray-500 text-sm text-center p-3 bg-gray-900/50 rounded-lg border border-gray-800 cursor-not-allowed"
-            >
-              {currentChannel?.isAnnouncementOnly ? "Only admins can post here" : "You are a viewer and cannot send messages in this channel."}
-            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span tabIndex={-1} className="block">
+                  <div
+                    className="text-subtle-foreground text-sm text-center p-3 bg-muted rounded-lg border border-border cursor-not-allowed"
+                  >
+                    {currentChannel?.isAnnouncementOnly ? "Only admins can post here" : "You are a viewer and cannot send messages in this channel."}
+                  </div>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {currentChannel?.isAnnouncementOnly ? "Only admins can post here" : "You are a viewer and cannot send messages in this channel"}
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
       </div>
 
       {/* Thread Panel */}
       {activeThreadMessageId && (
-        <div className="w-96 border-l border-gray-800/60 bg-gray-900/50 flex flex-col shrink-0">
-          <div className="h-14 border-b border-gray-800/60 flex items-center justify-between px-4 shrink-0">
+        <div className="w-96 border-l border-border bg-card flex flex-col shrink-0">
+          <div className="h-14 border-b border-border flex items-center justify-between px-4 shrink-0">
             <div className="flex items-center">
-              <h3 className="font-bold text-gray-100">Thread</h3>
-              <span className="text-gray-500 text-sm ml-2">#{currentChannel?.name}</span>
+              <h3 className="font-bold text-foreground">Thread</h3>
+              <span className="text-subtle-foreground text-sm ml-2">#{currentChannel?.name}</span>
             </div>
-            <button onClick={() => setActiveThreadMessageId(null)} className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+            <Button onClick={() => setActiveThreadMessageId(null)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-hover rounded transition-colors" size="icon" variant="ghost">
               <X className="w-5 h-5" />
-            </button>
+            </Button>
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col">
+          <div className="flex-1 overflow-y-auto flex flex-col">
             {/* Original Message */}
             {parentMessage && (
-              <div className="p-4 border-b border-gray-800/60 bg-gray-950/50">
+              <div className="p-4 border-b border-border bg-background">
                 {renderMessage(parentMessage, true)}
               </div>
             )}
@@ -966,9 +1028,9 @@ export const ChannelPage = () => {
             {/* Replies */}
             <div ref={threadScrollRef} className="flex-1 p-4 space-y-6">
               {isThreadLoading ? (
-                <div className="flex justify-center py-4"><Loader2 className="w-6 h-6 animate-spin text-gray-500" /></div>
+                <div className="flex justify-center py-4"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
               ) : threadReplies.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm">
+                <div className="text-center py-8 text-subtle-foreground text-sm">
                   <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-30" />
                   No replies yet. Start the conversation!
                 </div>
@@ -979,11 +1041,11 @@ export const ChannelPage = () => {
           </div>
 
           {/* Thread Input Area */}
-          <div className="p-4 bg-gray-950/80 border-t border-gray-800/60 shrink-0">
+          <div className="p-4 bg-background border-t border-border shrink-0">
             {canChat ? (
               <LexicalEditor onSubmit={handleSendThread} placeholder="Reply to thread..." tasks={currentProject ? tasks : []} />
             ) : (
-              <div className="text-gray-500 text-xs text-center p-2 bg-gray-900/50 rounded border border-gray-800">
+              <div className="text-subtle-foreground text-xs text-center p-2 bg-muted rounded border border-border">
                 Read-only
               </div>
             )}

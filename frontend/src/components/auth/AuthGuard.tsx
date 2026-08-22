@@ -12,8 +12,8 @@ export const AuthGuard = ({ children }: { children: React.ReactNode }) => {
 
   if (isInitializing) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-gray-950">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-white border-t-transparent"></div>
+      <div className="flex h-screen w-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
       </div>
     );
   }
@@ -35,8 +35,8 @@ export const GuestGuard = ({ children }: { children: React.ReactNode }) => {
 
   if (isInitializing) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-gray-950">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-white border-t-transparent"></div>
+      <div className="flex h-screen w-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
       </div>
     );
   }
