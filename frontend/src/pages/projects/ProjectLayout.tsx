@@ -1,0 +1,116 @@
+import { useEffect } from 'react';
+import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
+import { TriangleAlertIcon } from 'lucide-react';
+
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
+import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
+import { cn } from '@/lib/utils';
+
+const TABS = [
+  { to: '', label: 'Board', end: true },
+  { to: 'backlog', label: 'Backlog' },
+  { to: 'sprints', label: 'Sprints' },
+  { to: 'channels', label: 'Channels' },
+  { to: 'members', label: 'Members' },
+  { to: 'github', label: 'GitHub' },
+  { to: 'settings', label: 'Settings' },
+] as const;
+
+export function ProjectLayout() {
+  const { slug = '', key = '' } = useParams();
+  const navigate = useNavigate();
+  const { project, isLoading, error, fetchProject, reset } = useProjectStore();
+  const myRole = useMyProjectRole();
+
+  useEffect(() => {
+    if (slug && key) void fetchProject(slug, key);
+    return () => reset();
+  }, [slug, key, fetchProject, reset]);
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto w-full max-w-5xl p-6">
+        <Skeleton className="h-8 w-64 rounded-lg" />
+        <Skeleton className="mt-4 h-9 w-full rounded-lg" />
+        <Skeleton className="mt-6 h-64 w-full rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (error || !project) {
+    return (
+      <Empty className="min-h-[60svh]">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <TriangleAlertIcon aria-hidden="true" />
+          </EmptyMedia>
+          <EmptyTitle>Couldn&apos;t open this project</EmptyTitle>
+          <EmptyDescription>
+            {error ?? 'It may have been archived, or you may not have access to it.'}
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button onClick={() => navigate(`/w/${slug}/projects`)}>Back to projects</Button>
+        </EmptyContent>
+      </Empty>
+    );
+  }
+
+  return (
+    <div className="flex min-h-full flex-col">
+      <div className="border-b px-6 pt-6">
+        <div className="mx-auto w-full max-w-5xl">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+              {project.key}
+            </span>
+            <h1 className="text-xl font-medium text-foreground">{project.name}</h1>
+            {project.status === 'archived' ? <Badge variant="secondary">Archived</Badge> : null}
+            {myRole ? (
+              <Badge variant="outline" className="ml-auto">
+                {myRole.replace('_', ' ')}
+              </Badge>
+            ) : null}
+          </div>
+
+          {/* A real tablist would need roving focus and arrow-key handling; these
+              are navigation links that happen to look like tabs, so they stay
+              links and get an aria-current instead. */}
+          <nav aria-label="Project sections" className="mt-4 -mb-px flex gap-1 overflow-x-auto">
+            {TABS.map((tab) => (
+              <NavLink
+                key={tab.label}
+                to={tab.to ? `/w/${slug}/projects/${key}/${tab.to}` : `/w/${slug}/projects/${key}`}
+                end={'end' in tab ? tab.end : false}
+                className={({ isActive }) =>
+                  cn(
+                    'shrink-0 border-b-2 px-3 py-2 text-sm transition-colors',
+                    isActive
+                      ? 'border-primary font-medium text-foreground'
+                      : 'border-transparent text-muted-foreground hover:text-foreground',
+                  )
+                }
+              >
+                {tab.label}
+              </NavLink>
+            ))}
+          </nav>
+        </div>
+      </div>
+
+      <div className="flex-1">
+        <Outlet />
+      </div>
+    </div>
+  );
+}
