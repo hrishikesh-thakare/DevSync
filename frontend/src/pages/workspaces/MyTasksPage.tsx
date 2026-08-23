@@ -1,8 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { formatDistanceToNow, isPast, isToday, startOfDay } from 'date-fns';
 import { TriangleAlertIcon } from 'lucide-react';
+
 import { apiFetch } from '@/lib/api';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Empty,
@@ -12,40 +17,78 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { TaskCardBody } from '@/pages/projects/board/TaskCard';
-import type { TaskSummary } from '@/types/api';
-import { Link } from 'react-router-dom';
+import { STATUS_META, STATUS_ORDER } from '@/lib/taskMeta';
+import { cn } from '@/lib/utils';
+import type { TaskStatus, TaskSummary } from '@/types/api';
 
 interface MyTask extends TaskSummary {
+  projectId: string;
   projectName: string;
   projectKey: string;
+}
+
+/** Past its due date, and not already finished. */
+function isOverdue(task: MyTask): boolean {
+  if (!task.dueDate || task.status === 'done') return false;
+  const due = new Date(task.dueDate);
+  return isPast(startOfDay(due)) && !isToday(due);
 }
 
 export function MyTasksPage() {
   const { slug: workspaceSlug } = useCurrentWorkspaceStore();
   const [tasks, setTasks] = useState<MyTask[]>([]);
+  const [showDone, setShowDone] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const load = useCallback(
+    async (includeDone: boolean) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        // `open` is the endpoint default; `all` is what the Done toggle asks for.
+        const data = await apiFetch(
+          `/workspaces/${workspaceSlug}/my-tasks?status=${includeDone ? 'all' : 'open'}`,
+        );
+        setTasks(data.tasks ?? []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load tasks');
+        setTasks([]);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [workspaceSlug],
+  );
+
   useEffect(() => {
     if (!workspaceSlug) return;
-    
+    // Refetching when the workspace or the Done filter changes is the
+    // "synchronise with an external system" case the lint rule permits.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsLoading(true);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setError(null);
-    apiFetch(`/workspaces/${workspaceSlug}/my-tasks`)
-      .then((data) => setTasks(data.tasks))
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load tasks'))
-      .finally(() => setIsLoading(false));
-  }, [workspaceSlug]);
+    void load(showDone);
+  }, [workspaceSlug, showDone, load]);
+
+  const overdue = useMemo(() => tasks.filter(isOverdue), [tasks]);
+
+  const byStatus = useMemo(() => {
+    const groups = new Map<TaskStatus, MyTask[]>();
+    for (const status of STATUS_ORDER) groups.set(status, []);
+    for (const task of tasks) {
+      groups.get(task.status)?.push(task);
+    }
+    return STATUS_ORDER.map((status) => ({ status, items: groups.get(status) ?? [] })).filter(
+      (group) => group.items.length > 0,
+    );
+  }, [tasks]);
 
   if (isLoading) {
     return (
-      <div className="flex-1 p-6">
-        <PageHeader title="My Tasks" description="Loading tasks assigned to you..." />
+      <div className="mx-auto w-full max-w-7xl p-6">
+        <PageHeader title="My Tasks" description="Loading tasks assigned to you…" />
         <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-32 w-full rounded-lg" />
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-32 w-full rounded-xl" />
           ))}
         </div>
       </div>
@@ -69,35 +112,101 @@ export function MyTasksPage() {
   return (
     <div className="flex-1 overflow-auto bg-muted/20">
       <div className="mx-auto w-full max-w-7xl p-6">
-        <PageHeader 
-          title="My Tasks" 
-          description="Everything assigned to you across all projects in this workspace." 
+        <PageHeader
+          title="My Tasks"
+          description="Everything assigned to you across every project in this workspace."
         />
-        
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          {overdue.length > 0 ? (
+            <Badge variant="destructive" className="gap-1.5">
+              <TriangleAlertIcon className="size-3.5" aria-hidden="true" />
+              {overdue.length} overdue
+            </Badge>
+          ) : null}
+          <span className="text-sm text-muted-foreground">
+            {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto"
+            aria-pressed={showDone}
+            onClick={() => setShowDone((v) => !v)}
+          >
+            {showDone ? 'Hide done' : 'Show done'}
+          </Button>
+        </div>
+
         {tasks.length === 0 ? (
-          <Empty className="mt-12 bg-background shadow-sm">
+          <Empty className="mt-12 rounded-2xl border bg-background shadow-sm">
             <EmptyHeader>
-              <EmptyTitle>You're all caught up</EmptyTitle>
+              <EmptyTitle>You&rsquo;re all caught up</EmptyTitle>
               <EmptyDescription>
-                You don't have any open tasks assigned to you right now.
+                Nothing is assigned to you right now.
+                {showDone ? '' : ' Completed work is hidden — use Show done to see it.'}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
-          <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {tasks.map((task) => (
-              <div key={task.taskId} className="flex flex-col gap-2">
-                <Link to={`/w/${workspaceSlug}/projects/${task.projectKey}/tasks/${task.taskKey}`} className="text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:underline">
-                  {task.projectName} ({task.projectKey})
-                </Link>
-                <div className="pointer-events-none rounded-lg border bg-card text-card-foreground shadow-sm relative group overflow-hidden border-border/50 transition-colors p-3">
-                  <TaskCardBody task={task} />
+          <div className="mt-8 space-y-8">
+            {byStatus.map(({ status, items }) => (
+              <section key={status}>
+                <h2 className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
+                  <span
+                    className={cn('size-2 rounded-full', STATUS_META[status]?.dot)}
+                    aria-hidden="true"
+                  />
+                  {STATUS_META[status]?.label ?? status}
+                  <span className="text-muted-foreground">({items.length})</span>
+                </h2>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {items.map((task) => (
+                    <MyTaskCard key={task.taskId} task={task} workspaceSlug={workspaceSlug} />
+                  ))}
                 </div>
-              </div>
+              </section>
             ))}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function MyTaskCard({ task, workspaceSlug }: { task: MyTask; workspaceSlug: string }) {
+  const overdue = isOverdue(task);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Link
+        to={`/w/${workspaceSlug}/projects/${task.projectKey}`}
+        className="text-xs font-semibold tracking-wider text-muted-foreground uppercase hover:underline"
+      >
+        {task.projectName} ({task.projectKey})
+      </Link>
+
+      <Link
+        to={`/w/${workspaceSlug}/projects/${task.projectKey}/tasks/${task.taskKey}`}
+        className={cn(
+          'rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          overdue && 'ring-1 ring-destructive/50',
+        )}
+      >
+        <TaskCardBody task={task} />
+      </Link>
+
+      {task.dueDate ? (
+        <p
+          className={cn(
+            'text-xs',
+            overdue ? 'font-medium text-destructive' : 'text-muted-foreground',
+          )}
+        >
+          {overdue ? 'Overdue — due ' : 'Due '}
+          {formatDistanceToNow(new Date(task.dueDate), { addSuffix: true })}
+        </p>
+      ) : null}
     </div>
   );
 }

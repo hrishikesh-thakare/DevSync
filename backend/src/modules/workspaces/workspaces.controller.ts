@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { db } from '../../config/db.js';
 import { workspaces, workspaceMembers, workspaceInvites } from '../../db/schema/workspaces.js';
 import { users } from '../../db/schema/auth.js';
-import { eq, and, isNull, desc } from 'drizzle-orm';
+import { eq, and, ne, isNull, desc, inArray } from 'drizzle-orm';
 import { tasks } from '../../db/schema/tasks.js';
 import { projects } from '../../db/schema/projects.js';
 import { logAuditAction } from '../audit/audit.controller.js';
@@ -670,9 +670,17 @@ export const leaveWorkspace = async (req: Request, res: Response): Promise<void>
     res.status(500).json({ error: 'Server error leaving workspace.' });
   }
 };
+const TASK_STATUSES = ['todo', 'in_progress', 'in_review', 'done'] as const;
+
+// ─── LIST MY ASSIGNED TASKS ACROSS THE WORKSPACE ─────────────────────────────
+// GET /api/workspaces/:slug/my-tasks?status=open|all|todo|in_progress|in_review|done
+//
+// Defaults to `open` — a cross-project "what do I need to do" list is useless
+// once every task you have ever finished accumulates in it. `all` opts back in.
 export const getMyTasks = async (req: Request, res: Response) => {
   try {
     const { slug } = req.params;
+    const { status = 'open' } = req.query as Record<string, string>;
     const userId = req.user!.userId;
 
     const [workspace] = await db
@@ -686,6 +694,33 @@ export const getMyTasks = async (req: Request, res: Response) => {
       return;
     }
 
+    const conditions = [
+      eq(projects.workspaceId, workspace.workspaceId),
+      eq(tasks.assigneeId, userId),
+      isNull(tasks.deletedAt),
+    ];
+
+    if (status === 'open') {
+      conditions.push(ne(tasks.status, 'done'));
+    } else if (status !== 'all') {
+      // A comma list ("todo,in_progress") narrows to those columns; anything
+      // outside the known enum is rejected rather than silently ignored.
+      const requested = status.split(',').map((s) => s.trim()).filter(Boolean);
+      const invalid = requested.filter(
+        (s) => !TASK_STATUSES.includes(s as (typeof TASK_STATUSES)[number]),
+      );
+      if (invalid.length > 0) {
+        res.status(400).json({
+          error: `Unknown status: ${invalid.join(', ')}. Expected open, all, or any of ${TASK_STATUSES.join(', ')}.`,
+        });
+        return;
+      }
+      conditions.push(inArray(tasks.status, requested));
+    }
+
+    // The assignee is always the caller, but the join keeps the row shape
+    // identical to the board's TaskSummary — the frontend renders both with the
+    // same card component, which reads assigneeName and linkedCommitsCount.
     const userTasks = await db
       .select({
         taskId: tasks.taskId,
@@ -694,21 +729,25 @@ export const getMyTasks = async (req: Request, res: Response) => {
         status: tasks.status,
         priority: tasks.priority,
         issueType: tasks.issueType,
+        rank: tasks.rank,
+        labels: tasks.labels,
+        storyPoints: tasks.storyPoints,
+        sprintId: tasks.sprintId,
         assigneeId: tasks.assigneeId,
+        assigneeName: users.fullName,
+        assigneeAvatar: users.avatarUrl,
+        reporterId: tasks.reporterId,
+        linkedCommitsCount: tasks.linkedCommitsCount,
         dueDate: tasks.dueDate,
+        createdAt: tasks.createdAt,
         projectId: tasks.projectId,
         projectKey: projects.key,
         projectName: projects.name,
       })
       .from(tasks)
       .innerJoin(projects, eq(tasks.projectId, projects.projectId))
-      .where(
-        and(
-          eq(projects.workspaceId, workspace.workspaceId),
-          eq(tasks.assigneeId, userId),
-          isNull(tasks.deletedAt)
-        )
-      )
+      .leftJoin(users, eq(tasks.assigneeId, users.userId))
+      .where(and(...conditions))
       .orderBy(desc(tasks.updatedAt));
 
     res.json({ tasks: userTasks });

@@ -1,12 +1,14 @@
-import { useEffect } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import {
   ArrowRightIcon,
-  BellIcon,
+  ClockIcon,
   FolderKanbanIcon,
-  HashIcon,
+  HistoryIcon,
+  MailIcon,
   ShieldIcon,
+  TriangleAlertIcon,
   UsersIcon,
 } from 'lucide-react';
 
@@ -14,57 +16,118 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertTitle } from '@/components/ui/alert';
+import { apiFetch } from '@/lib/api';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
-import { useNotificationStore } from '@/store/notificationStore';
 import { initialsOf } from '@/lib/initials';
+import { describeAuditAction } from '@/lib/auditActions';
+import { STATUS_META } from '@/lib/taskMeta';
 import { cn } from '@/lib/utils';
+import type { TaskStatus } from '@/types/api';
 
-const FALLBACK_BLURB =
-  'Jump back into a project or catch up on channel discussions.';
+interface DashboardTask {
+  taskId: string;
+  taskKey: string;
+  title: string;
+  status: TaskStatus;
+  priority: string;
+  dueDate: string | null;
+  projectKey: string | null;
+  projectName: string | null;
+  assigneeName?: string | null;
+  assigneeAvatar?: string | null;
+  updatedAt?: string | null;
+}
 
-/**
- * The signed-in landing page.
- *
- * There is no `/dashboard` endpoint on the backend, so everything here is
- * composed from data the shell has already fetched — the only extra request is
- * the notification list, which is shared with the top-bar bell.
- */
+interface SprintSummary {
+  sprintId: string;
+  name: string;
+  goal: string | null;
+  endDate: string | null;
+  daysRemaining: number | null;
+  totalTasks: number;
+  doneTasks: number;
+  totalPoints: number;
+  donePoints: number;
+  capacityPoints: number | null;
+  projectKey: string | null;
+  projectName: string | null;
+}
+
+interface ProjectRollup {
+  projectId: string;
+  key: string;
+  name: string;
+  totalTasks: number;
+  doneTasks: number;
+  percentComplete: number;
+  memberCount: number;
+  activeSprintName: string | null;
+}
+
+interface Dashboard {
+  role: 'owner' | 'admin' | 'member';
+  myWork: {
+    counts: Record<string, number>;
+    overdue: number;
+    dueSoon: number;
+    tasks: DashboardTask[];
+  };
+  sprints: SprintSummary[];
+  /** Admin and owner only — absent from a member's payload entirely. */
+  projects?: ProjectRollup[];
+  atRisk?: { overdue: DashboardTask[]; stalled: DashboardTask[] };
+  workload?: { userId: string; fullName: string; avatarUrl: string | null; openTasks: number }[];
+  pendingInvites?: {
+    inviteId: string;
+    email: string;
+    role: string;
+    expiresAt: string;
+    invitedByName: string | null;
+  }[];
+  activity?: {
+    logId: string;
+    action: string;
+    createdAt: string;
+    actorName: string | null;
+    actorAvatar: string | null;
+  }[];
+}
+
 export function WorkspaceHome() {
   const { slug = '' } = useParams();
-  const {
-    name,
-    description,
-    projects,
-    channels,
-    members,
-    memberCount,
-    myRole,
-    isLoading,
-    isOwner,
-    isAdmin,
-  } = useCurrentWorkspaceStore();
-  const { notifications, fetchNotifications, markAsRead, resolveUrl } = useNotificationStore();
-  const navigate = useNavigate();
+  const { name, description, memberCount, myRole } = useCurrentWorkspaceStore();
+
+  const [data, setData] = useState<Dashboard | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      setData(await apiFetch(`/workspaces/${slug}/dashboard`));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+      setData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [slug]);
 
   useEffect(() => {
-    void fetchNotifications();
-  }, [fetchNotifications]);
-
-  const openNotification = async (id: string) => {
-    void markAsRead(id);
-    try {
-      navigate(await resolveUrl(id));
-    } catch {
-      // The target may have been deleted since the notification was written.
-      navigate(`/w/${slug}/notifications`);
-    }
-  };
+    if (!slug) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [slug, load]);
 
   if (isLoading) {
     return (
-      <div className="mx-auto w-full max-w-5xl space-y-6 p-6">
-        <Skeleton className="h-36 w-full rounded-2xl" />
+      <div className="mx-auto w-full max-w-6xl space-y-6 p-6">
+        <Skeleton className="h-28 w-full rounded-2xl" />
+        <Skeleton className="h-40 w-full rounded-2xl" />
         <div className="grid gap-6 lg:grid-cols-2">
           <Skeleton className="h-64 w-full rounded-2xl" />
           <Skeleton className="h-64 w-full rounded-2xl" />
@@ -73,12 +136,16 @@ export function WorkspaceHome() {
     );
   }
 
+  const isAdmin = myRole === 'owner' || myRole === 'admin';
+  const open = data?.myWork.counts ?? {};
+  const openTotal = Object.values(open).reduce((sum, n) => sum + n, 0);
+
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 p-6">
+    <div className="mx-auto w-full max-w-6xl space-y-6 p-6">
       <section>
         <h1 className="text-2xl font-medium text-foreground">{name}</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          {description || FALLBACK_BLURB}
+          {description || 'Everything that needs your attention, in one place.'}
         </p>
 
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
@@ -92,205 +159,394 @@ export function WorkspaceHome() {
           </span>
           <span className="flex items-center gap-1.5">
             <FolderKanbanIcon className="size-4" aria-hidden="true" />
-            {projects.length} {projects.length === 1 ? 'project' : 'projects'}
+            {data?.projects?.length ?? '—'} active projects
           </span>
-          <span className="flex items-center gap-1.5">
-            <HashIcon className="size-4" aria-hidden="true" />
-            {channels.length} {channels.length === 1 ? 'channel' : 'channels'}
-          </span>
-        </div>
-
-        <div className="mt-5 flex flex-wrap gap-2">
-          <Button asChild>
-            <Link to={`/w/${slug}/projects`}>View all projects</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link to={`/w/${slug}/notifications`}>Notifications</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link to={`/w/${slug}/members`}>{isAdmin() ? 'Manage members' : 'View members'}</Link>
-          </Button>
-          {isOwner() ? (
-            <Button asChild variant="outline">
-              <Link to={`/w/${slug}/settings`}>Workspace settings</Link>
-            </Button>
-          ) : null}
         </div>
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      {error ? (
+        <Alert variant="destructive">
+          <AlertTitle>{error}</AlertTitle>
+        </Alert>
+      ) : null}
+
+      {/* ── My work: the one section every persona sees first ─────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>My work</CardTitle>
+          <CardAction>
+            <Button asChild variant="ghost" size="sm">
+              <Link to={`/w/${slug}/my-tasks`}>
+                View all
+                <ArrowRightIcon className="size-3.5" aria-hidden="true" />
+              </Link>
+            </Button>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Stat label="Open" value={openTotal} />
+            {(['todo', 'in_progress', 'in_review'] as TaskStatus[]).map((status) => (
+              <Stat
+                key={status}
+                label={STATUS_META[status]?.label ?? status}
+                value={open[status] ?? 0}
+                dot={STATUS_META[status]?.dot}
+              />
+            ))}
+            <Stat label="Overdue" value={data?.myWork.overdue ?? 0} tone="danger" />
+            <Stat label="Due soon" value={data?.myWork.dueSoon ?? 0} tone="warn" />
+          </div>
+
+          {data && data.myWork.tasks.length > 0 ? (
+            <ul className="divide-y rounded-lg border">
+              {data.myWork.tasks.map((task) => (
+                <li key={task.taskId}>
+                  <TaskRow task={task} slug={slug} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Nothing assigned to you right now.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Sprint progress. Current ratio only — see the endpoint's note on
+             why there is no burndown line here. ───────────────────────────── */}
+      {data && data.sprints.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Active sprints</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {data.sprints.map((sprint) => {
+              const pct =
+                sprint.totalPoints > 0
+                  ? Math.round((sprint.donePoints / sprint.totalPoints) * 100)
+                  : sprint.totalTasks > 0
+                    ? Math.round((sprint.doneTasks / sprint.totalTasks) * 100)
+                    : 0;
+              const late = sprint.daysRemaining != null && sprint.daysRemaining < 0;
+
+              return (
+                <div key={sprint.sprintId}>
+                  <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2">
+                    <Link
+                      to={`/w/${slug}/projects/${sprint.projectKey}/sprints`}
+                      className="text-sm font-medium text-foreground hover:underline"
+                    >
+                      {sprint.name}
+                    </Link>
+                    <span className="text-xs text-muted-foreground">{sprint.projectName}</span>
+                    <span
+                      className={cn(
+                        'ml-auto text-xs',
+                        late ? 'font-medium text-destructive' : 'text-muted-foreground',
+                      )}
+                    >
+                      {sprint.daysRemaining == null
+                        ? 'No end date'
+                        : late
+                          ? `${Math.abs(sprint.daysRemaining)}d overdue`
+                          : `${sprint.daysRemaining}d left`}
+                    </span>
+                  </div>
+                  <Progress value={pct} />
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    {sprint.doneTasks}/{sprint.totalTasks} tasks
+                    {sprint.totalPoints > 0
+                      ? ` · ${sprint.donePoints}/${sprint.totalPoints} points`
+                      : ' · unestimated'}
+                    {' · '}
+                    {pct}% complete
+                  </p>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* ── Lead and owner sections ──────────────────────────────────────── */}
+      {isAdmin && data?.atRisk ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <FolderKanbanIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-              Recent projects
+              <TriangleAlertIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+              At risk
             </CardTitle>
-            <CardAction>
-              <Button asChild variant="ghost" size="sm">
-                <Link to={`/w/${slug}/projects`}>
-                  View all
-                  <ArrowRightIcon className="size-3.5" aria-hidden="true" />
-                </Link>
-              </Button>
-            </CardAction>
           </CardHeader>
-          <CardContent>
-            {projects.length === 0 ? (
-              <EmptyRow>No projects yet.</EmptyRow>
-            ) : (
-              <ul className="flex flex-col gap-1">
-                {projects.slice(0, 5).map((project) => (
-                  <li key={project.projectId}>
-                    <Link
-                      to={`/w/${slug}/projects/${project.key}`}
-                      className="group flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent"
-                    >
-                      <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-                        {project.key}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                        {project.name}
-                      </span>
-                      {project.leadName ? (
-                        <Avatar className="size-6">
-                          {project.leadAvatar ? <AvatarImage src={project.leadAvatar} alt="" /> : null}
+          <CardContent className="space-y-4">
+            <RiskGroup
+              title={`Overdue (${data.atRisk.overdue.length})`}
+              tasks={data.atRisk.overdue}
+              slug={slug}
+              emptyText="Nothing is past its due date."
+            />
+            <RiskGroup
+              title={`Stalled in review (${data.atRisk.stalled.length})`}
+              tasks={data.atRisk.stalled}
+              slug={slug}
+              emptyText="Nothing has been sitting in review."
+            />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {isAdmin ? (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {data?.projects ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Projects at a glance</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {data.projects.length === 0 ? (
+                  <EmptyRow>No active projects.</EmptyRow>
+                ) : (
+                  <ul className="space-y-3">
+                    {data.projects.map((project) => (
+                      <li key={project.projectId}>
+                        <div className="mb-1 flex items-center gap-2">
+                          <Link
+                            to={`/w/${slug}/projects/${project.key}`}
+                            className="truncate text-sm text-foreground hover:underline"
+                          >
+                            {project.name}
+                          </Link>
+                          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                            {project.percentComplete}%
+                          </span>
+                        </div>
+                        <Progress value={project.percentComplete} />
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {project.doneTasks}/{project.totalTasks} done · {project.memberCount}{' '}
+                          {project.memberCount === 1 ? 'member' : 'members'}
+                          {project.activeSprintName ? ` · ${project.activeSprintName}` : ''}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {data?.workload ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Workload</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {data.workload.length === 0 ? (
+                  <EmptyRow>Nothing is assigned yet.</EmptyRow>
+                ) : (
+                  <ul className="space-y-2">
+                    {data.workload.map((member) => (
+                      <li key={member.userId} className="flex items-center gap-3">
+                        <Avatar className="size-7">
+                          {member.avatarUrl ? <AvatarImage src={member.avatarUrl} alt="" /> : null}
                           <AvatarFallback className="text-[10px]">
-                            {initialsOf(project.leadName)}
+                            {initialsOf(member.fullName)}
                           </AvatarFallback>
                         </Avatar>
-                      ) : null}
-                      <ArrowRightIcon
-                        className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-                        aria-hidden="true"
-                      />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <HashIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-              Channels
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {channels.length === 0 ? (
-              <EmptyRow>No channels yet.</EmptyRow>
-            ) : (
-              <ul className="flex flex-col gap-1">
-                {channels.slice(0, 5).map((channel) => (
-                  <li key={channel.channelId}>
-                    <Link
-                      to={`/w/${slug}/channels/${channel.channelId}`}
-                      className="group flex items-center gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-accent"
-                    >
-                      <HashIcon className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                      <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                        {channel.name}
-                      </span>
-                      <ArrowRightIcon
-                        className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-                        aria-hidden="true"
-                      />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BellIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-              Recent activity
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {notifications.length === 0 ? (
-              <EmptyRow>Activity on your tasks and channels shows up here.</EmptyRow>
-            ) : (
-              <ul className="flex flex-col gap-1">
-                {notifications.slice(0, 5).map((n) => (
-                  <li key={n.notificationId}>
-                    <button
-                      type="button"
-                      onClick={() => void openNotification(n.notificationId)}
-                      className="flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent"
-                    >
-                      <span
-                        className={cn(
-                          'mt-1.5 size-1.5 shrink-0 rounded-full',
-                          n.isRead ? 'bg-transparent' : 'bg-primary',
-                        )}
-                        aria-hidden="true"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span
-                          className={cn(
-                            'block truncate text-sm',
-                            !n.isRead && 'font-medium text-foreground',
-                          )}
-                        >
-                          {n.title}
+                        <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                          {member.fullName}
                         </span>
-                        <span className="block text-xs text-muted-foreground">
-                          {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+                        <Badge variant="outline">{member.openTasks} open</Badge>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <UsersIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-              Members
-            </CardTitle>
-            <CardAction>
-              <Button asChild variant="ghost" size="sm">
-                <Link to={`/w/${slug}/members`}>
-                  View all
-                  <ArrowRightIcon className="size-3.5" aria-hidden="true" />
-                </Link>
-              </Button>
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            {members.length === 0 ? (
-              <EmptyRow>No members loaded.</EmptyRow>
-            ) : (
-              <ul className="flex flex-col gap-1">
-                {members.slice(0, 5).map((member) => (
-                  <li key={member.userId} className="flex items-center gap-3 px-2 py-2">
-                    <Avatar className="size-7">
-                      {member.avatarUrl ? <AvatarImage src={member.avatarUrl} alt="" /> : null}
-                      <AvatarFallback className="text-[10px]">
-                        {initialsOf(member.displayName || member.fullName)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                      {member.displayName || member.fullName}
-                    </span>
-                    <Badge variant="outline">{member.role}</Badge>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+          {data?.pendingInvites ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MailIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+                  Pending invites
+                </CardTitle>
+                <CardAction>
+                  <Button asChild variant="ghost" size="sm">
+                    <Link to={`/w/${slug}/members`}>
+                      Members
+                      <ArrowRightIcon className="size-3.5" aria-hidden="true" />
+                    </Link>
+                  </Button>
+                </CardAction>
+              </CardHeader>
+              <CardContent>
+                {data.pendingInvites.length === 0 ? (
+                  <EmptyRow>No invites are outstanding.</EmptyRow>
+                ) : (
+                  <ul className="space-y-2">
+                    {data.pendingInvites.map((invite) => (
+                      <li key={invite.inviteId} className="flex items-center gap-2 text-sm">
+                        <span className="min-w-0 flex-1 truncate text-foreground">
+                          {invite.email}
+                        </span>
+                        <Badge variant="outline">{invite.role}</Badge>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          expires{' '}
+                          {formatDistanceToNow(new Date(invite.expiresAt), { addSuffix: true })}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {data?.activity ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <HistoryIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+                  Recent activity
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {data.activity.length === 0 ? (
+                  <EmptyRow>No workspace activity recorded yet.</EmptyRow>
+                ) : (
+                  <ul className="space-y-2">
+                    {data.activity.map((entry) => (
+                      <li key={entry.logId} className="flex items-start gap-2 text-sm">
+                        <Avatar className="mt-0.5 size-6 shrink-0">
+                          {entry.actorAvatar ? <AvatarImage src={entry.actorAvatar} alt="" /> : null}
+                          <AvatarFallback className="text-[9px]">
+                            {initialsOf(entry.actorName ?? '?')}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="min-w-0 flex-1">
+                          <span className="text-foreground">
+                            {entry.actorName ?? 'Someone'}
+                          </span>{' '}
+                          <span className="text-muted-foreground">
+                            {describeAuditAction(entry.action)}
+                          </span>
+                          <span className="block text-xs text-muted-foreground">
+                            {formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true })}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  dot,
+  tone,
+}: {
+  label: string;
+  value: number;
+  dot?: string;
+  tone?: 'danger' | 'warn';
+}) {
+  const muted = value === 0;
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-2 rounded-lg border px-3 py-2',
+        tone === 'danger' && !muted && 'border-destructive/40 bg-destructive/5',
+        tone === 'warn' && !muted && 'border-amber-500/40 bg-amber-500/5',
+      )}
+    >
+      {dot ? <span className={cn('size-2 rounded-full', dot)} aria-hidden="true" /> : null}
+      <span
+        className={cn(
+          'text-lg font-medium tabular-nums',
+          muted ? 'text-muted-foreground' : 'text-foreground',
+          tone === 'danger' && !muted && 'text-destructive',
+        )}
+      >
+        {value}
+      </span>
+      <span className="text-xs text-muted-foreground">{label}</span>
+    </div>
+  );
+}
+
+function TaskRow({ task, slug }: { task: DashboardTask; slug: string }) {
+  const overdue = task.dueDate ? new Date(task.dueDate) < new Date() : false;
+  return (
+    <Link
+      to={`/w/${slug}/projects/${task.projectKey}/tasks/${task.taskKey}`}
+      className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-accent/50"
+    >
+      <span
+        className={cn('size-2 shrink-0 rounded-full', STATUS_META[task.status]?.dot)}
+        aria-hidden="true"
+      />
+      <span className="shrink-0 font-mono text-xs text-muted-foreground">{task.taskKey}</span>
+      <span className="min-w-0 flex-1 truncate text-sm text-foreground">{task.title}</span>
+      {task.dueDate ? (
+        <span
+          className={cn(
+            'flex shrink-0 items-center gap-1 text-xs',
+            overdue ? 'font-medium text-destructive' : 'text-muted-foreground',
+          )}
+        >
+          <ClockIcon className="size-3.5" aria-hidden="true" />
+          {formatDistanceToNow(new Date(task.dueDate), { addSuffix: true })}
+        </span>
+      ) : null}
+    </Link>
+  );
+}
+
+function RiskGroup({
+  title,
+  tasks,
+  slug,
+  emptyText,
+}: {
+  title: string;
+  tasks: DashboardTask[];
+  slug: string;
+  emptyText: string;
+}) {
+  return (
+    <div>
+      <h3 className="mb-1.5 text-sm font-medium text-foreground">{title}</h3>
+      {tasks.length === 0 ? (
+        <p className="py-3 text-sm text-muted-foreground">{emptyText}</p>
+      ) : (
+        <ul className="divide-y rounded-lg border">
+          {tasks.map((task) => (
+            <li key={task.taskId} className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <TaskRow task={task} slug={slug} />
+              </div>
+              {task.assigneeName ? (
+                <Avatar className="mr-3 size-6 shrink-0" title={task.assigneeName}>
+                  {task.assigneeAvatar ? <AvatarImage src={task.assigneeAvatar} alt="" /> : null}
+                  <AvatarFallback className="text-[9px]">
+                    {initialsOf(task.assigneeName)}
+                  </AvatarFallback>
+                </Avatar>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

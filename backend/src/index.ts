@@ -81,6 +81,9 @@ app.use('/api/github', githubUserRouter);
 import searchRoutes from './modules/search/search.routes.js';
 app.use('/api/workspaces/:slug/search', searchRoutes);
 
+import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
+app.use('/api/workspaces/:slug/dashboard', dashboardRoutes);
+
 import notificationsRoutes from './modules/notifications/notifications.routes.js';
 app.use('/api/notifications', notificationsRoutes);
 
