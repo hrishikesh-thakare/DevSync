@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import {
   Sheet,
@@ -130,8 +131,9 @@ export function ChannelSettingsSheet({ slug, channel }: { slug: string; channel:
         </Button>
       </SheetTrigger>
 
-      <SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-md">
-        <SheetHeader>
+      <SheetContent className="w-full gap-0 p-0 sm:max-w-md">
+        <ScrollArea className="flex-1">
+        <SheetHeader className="p-6 pb-4">
           <SheetTitle>#{channel.name}</SheetTitle>
           <SheetDescription>
             {channel.type === 'public' ? 'Public channel' : 'Private channel'}
@@ -342,6 +344,7 @@ export function ChannelSettingsSheet({ slug, channel }: { slug: string; channel:
             </p>
           ) : null}
         </div>
+        </ScrollArea>
       </SheetContent>
     </Sheet>
   );

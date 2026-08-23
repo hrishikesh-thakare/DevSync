@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { format, isSameDay } from 'date-fns';
 import { toast } from 'sonner';
-import { HashIcon, Loader2Icon, MessageSquareIcon, SendIcon, SmilePlusIcon, XIcon } from 'lucide-react';
+import { HashIcon, MessageSquareIcon, SmilePlusIcon, XIcon } from 'lucide-react';
 
 import { Alert, AlertTitle } from '@/components/ui/alert';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -18,17 +18,18 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { LinkPreview } from '@/components/LinkPreview';
+import { MessageComposer } from '@/components/chat/MessageComposer';
 import { ChannelSettingsSheet } from '@/pages/channels/ChannelSettingsSheet';
 import { useChatStore } from '@/store/chatStore';
 import { useAuthStore } from '@/store/auth';
 import { socketClient } from '@/lib/socket';
 import { initialsOf } from '@/lib/initials';
 import { firstUrlIn } from '@/lib/messageLinks';
+import { renderMarkdownMessage } from '@/lib/renderMarkdownMessage';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/types/api';
-import { Bubble, BubbleContent, BubbleReactions } from '@/components/ui/bubble';
-import { supabase } from '@/lib/supabase';
+import { Bubble, BubbleContent } from '@/components/ui/bubble';
 import {
   Attachment,
   AttachmentAction,
@@ -39,7 +40,7 @@ import {
   AttachmentTitle,
   AttachmentGroup
 } from '@/components/ui/attachment';
-import { PaperclipIcon, FileTextIcon } from 'lucide-react';
+import { FileTextIcon } from 'lucide-react';
 
 const QUICK_REACTIONS = ['👍', '🎉', '👀', '✅', '❤️', '🚀'];
 
@@ -68,8 +69,6 @@ export function ChannelPage() {
   } = useChatStore();
 
   const me = useAuthStore((s) => s.user);
-  const [draft, setDraft] = useState('');
-  const [replyDraft, setReplyDraft] = useState('');
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -106,16 +105,25 @@ export function ChannelPage() {
     bottomRef.current?.scrollIntoView({ block: 'end' });
   }, [messages.length]);
 
-  const submit = async (body: string, attachments: AttachmentPayload[], threadId: string | null, clear: () => void) => {
-    const text = body.trim();
-    if (!text && attachments.length === 0) return;
+  // `bodyText` is now HTML from the rich composer, so an "empty" check can't
+  // be a bare `.trim()` — the composer itself already gates on Tiptap's own
+  // `editor.isEmpty` before ever calling this, so a call reaching here with
+  // no attachments always has real content. Returns whether it succeeded —
+  // MessageComposer only clears the draft it just sent on `true`.
+  const submit = async (
+    body: string,
+    attachments: AttachmentPayload[],
+    threadId: string | null,
+  ): Promise<boolean> => {
+    if (!body && attachments.length === 0) return false;
     setSending(true);
     try {
-      await send(slug, channelId, text, threadId, attachments);
-      clear();
+      await send(slug, channelId, body, threadId, attachments);
+      return true;
     } catch (err) {
       // 403 in an announcement-only channel when the sender is not an admin.
       toast.error(err instanceof Error ? err.message : 'Could not send the message.');
+      return false;
     } finally {
       setSending(false);
     }
@@ -155,8 +163,15 @@ export function ChannelPage() {
 
   return (
     <div className="flex h-full min-h-0">
-      {/* Main conversation */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      {/* Main conversation.
+          `min-h-0` is what actually makes the message list scroll internally
+          instead of the whole column growing past the viewport — a flex
+          item's default min-height is `auto` ("never shrink below content
+          size"), so without this a `flex-1 overflow-y-auto` child can never
+          activate its own scrollbar. Without it the page itself scrolled
+          instead, taking the composer down with it — not "sticky", the
+          opposite of sticky. */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-2 border-b px-6 py-3">
           <HashIcon className="size-4 text-muted-foreground" aria-hidden="true" />
           <h1 className="font-medium text-foreground">{channel.name}</h1>
@@ -169,63 +184,75 @@ export function ChannelPage() {
           <ChannelSettingsSheet slug={slug} channel={channel} />
         </header>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          {messages.length === 0 ? (
-            <p className="py-12 text-center text-sm text-muted-foreground">
-              No messages yet. Say something.
-            </p>
-          ) : (
-            <ul className="space-y-1">
-              {messages.map((message, i) => (
-                <MessageRow
-                  slug={slug}
-                  key={message.messageId}
-                  message={message}
-                  previous={messages[i - 1]}
-                  currentUserId={me?.userId}
-                  onReply={() => void openThread(slug, channelId, message)}
-                  onReact={(emoji) => void toggleReaction(message, emoji)}
-                  onDelete={() => {
-                    void remove(slug, channelId, message.messageId).catch((err: unknown) =>
-                      toast.error(err instanceof Error ? err.message : 'Could not delete.'),
-                    );
-                  }}
-                />
-              ))}
-            </ul>
-          )}
-          <div ref={bottomRef} />
-        </div>
+        <ScrollArea className="flex-1">
+          {/* `pb-8` rather than `py-4` symmetrically: reactions render in
+              normal flow now (see MessageRow below), but the last message's
+              content can still sit close to this edge — kept for breathing
+              room. */}
+          <div className="px-6 pt-4 pb-8">
+            {messages.length === 0 ? (
+              <p className="py-12 text-center text-sm text-muted-foreground">
+                No messages yet. Say something.
+              </p>
+            ) : (
+              <ul className="space-y-1">
+                {messages.map((message, i) => (
+                  <MessageRow
+                    slug={slug}
+                    key={message.messageId}
+                    message={message}
+                    previous={messages[i - 1]}
+                    currentUserId={me?.userId}
+                    onReply={() => void openThread(slug, channelId, message)}
+                    onReact={(emoji) => void toggleReaction(message, emoji)}
+                    onDelete={() => {
+                      void remove(slug, channelId, message.messageId).catch((err: unknown) =>
+                        toast.error(err instanceof Error ? err.message : 'Could not delete.'),
+                      );
+                    }}
+                  />
+                ))}
+              </ul>
+            )}
+            <div ref={bottomRef} />
+          </div>
+        </ScrollArea>
 
-          <Composer
-            value={draft}
-            onChange={setDraft}
+        {/* Explicit `sticky` on top of the `min-h-0` fix above, belt-and-
+            braces: once the message list is correctly height-capped this is
+            already pinned by ordinary flex layout, but sticky costs nothing
+            extra and holds even if some future change reintroduces page-level
+            scrolling here. */}
+        <div className="sticky bottom-0 z-10 bg-background">
+          <MessageComposer
             disabled={sending}
             placeholder={`Message #${channel.name}`}
-            onSubmit={(attachments) => void submit(draft, attachments, null, () => setDraft(''))}
+            onSend={(bodyText, attachments) => submit(bodyText, attachments, null)}
           />
         </div>
+      </div>
 
-        {/* Thread panel */}
-        {threadRoot ? (
-          <aside className="flex w-96 min-w-0 shrink-0 flex-col border-l">
-            <header className="flex items-center gap-2 border-b px-4 py-3">
-              <MessageSquareIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-              <h2 className="font-medium text-foreground">Thread</h2>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="ml-auto"
-                aria-label="Close thread"
-                onClick={closeThread}
-              >
-                <XIcon className="size-4" aria-hidden="true" />
-              </Button>
-            </header>
+      {/* Thread panel */}
+      {threadRoot ? (
+        <aside className="flex min-h-0 w-96 min-w-0 shrink-0 flex-col border-l">
+          <header className="flex items-center gap-2 border-b px-4 py-3">
+            <MessageSquareIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+            <h2 className="font-medium text-foreground">Thread</h2>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="ml-auto"
+              aria-label="Close thread"
+              onClick={closeThread}
+            >
+              <XIcon className="size-4" aria-hidden="true" />
+            </Button>
+          </header>
 
-            <div className="flex-1 overflow-y-auto px-4 py-3">
+          <ScrollArea className="flex-1">
+            <div className="px-4 pt-3 pb-8">
               <MessageRow
-                  slug={slug}
+                slug={slug}
                 message={threadRoot}
                 currentUserId={me?.userId}
                 compact
@@ -241,7 +268,7 @@ export function ChannelPage() {
                 <ul className="space-y-1">
                   {threadReplies.map((reply) => (
                     <MessageRow
-                  slug={slug}
+                      slug={slug}
                       key={reply.messageId}
                       message={reply}
                       currentUserId={me?.userId}
@@ -257,17 +284,16 @@ export function ChannelPage() {
                 </ul>
               )}
             </div>
+          </ScrollArea>
 
-            <Composer
-              value={replyDraft}
-              onChange={setReplyDraft}
+          <div className="sticky bottom-0 z-10 bg-background">
+            <MessageComposer
               disabled={sending}
               placeholder="Reply in thread"
-              onSubmit={(attachments) =>
-                void submit(replyDraft, attachments, threadRoot.messageId, () => setReplyDraft(''))
-              }
+              onSend={(bodyText, attachments) => submit(bodyText, attachments, threadRoot.messageId)}
             />
-          </aside>
+          </div>
+        </aside>
       ) : null}
     </div>
   );
@@ -278,130 +304,6 @@ export interface AttachmentPayload {
   url?: string;
   sizeBytes: number;
   mimetype: string;
-}
-
-function Composer({
-  value,
-  onChange,
-  onSubmit,
-  disabled,
-  placeholder,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onSubmit: (attachments: AttachmentPayload[]) => void;
-  disabled?: boolean;
-  placeholder: string;
-}) {
-  const [attachments, setAttachments] = useState<{ id: string; name: string; sizeBytes: number; state: 'uploading' | 'done' | 'error'; url?: string; type: string }[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
-    const newAttachments = files.map((file) => ({
-      id: crypto.randomUUID(),
-      name: file.name,
-      sizeBytes: file.size,
-      type: file.type,
-      state: 'uploading' as const,
-    }));
-
-    setAttachments((prev) => [...prev, ...newAttachments]);
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const attId = newAttachments[i].id;
-      try {
-        const filePath = `uploads/${Date.now()}_${file.name}`;
-        const { error } = await supabase.storage.from('workspaces').upload(filePath, file);
-        if (error) throw error;
-        
-        const { data: urlData } = supabase.storage.from('workspaces').getPublicUrl(filePath);
-        
-        setAttachments((prev) => prev.map(a => a.id === attId ? { ...a, state: 'done', url: urlData.publicUrl } : a));
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        toast.error(`Upload failed: ${message}`);
-        setAttachments((prev) => prev.map(a => a.id === attId ? { ...a, state: 'error' } : a));
-      }
-    }
-    
-    // Clear input so same file can be selected again
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const removeAttachment = (id: string) => {
-    setAttachments(prev => prev.filter(a => a.id !== id));
-  };
-
-  const handleSubmit = () => {
-    if (attachments.some(a => a.state === 'uploading')) {
-      toast.error('Please wait for uploads to finish.');
-      return;
-    }
-    onSubmit(attachments.filter(a => a.state === 'done').map(a => ({
-      name: a.name,
-      url: a.url,
-      sizeBytes: a.sizeBytes,
-      mimetype: a.type
-    })));
-    setAttachments([]);
-  };
-
-  return (
-    <div className="flex flex-col border-t px-4 py-3 gap-2">
-      {attachments.length > 0 && (
-        <AttachmentGroup>
-          {attachments.map(att => (
-            <Attachment key={att.id} state={att.state}>
-              <AttachmentMedia variant={att.type.startsWith('image/') ? 'image' : 'icon'}>
-                {att.type.startsWith('image/') ? <img src={att.url || URL.createObjectURL(new Blob())} alt="" /> : <FileTextIcon />}
-              </AttachmentMedia>
-              <AttachmentContent>
-                <AttachmentTitle>{att.name}</AttachmentTitle>
-                <AttachmentDescription>{Math.round(att.sizeBytes / 1024)} KB</AttachmentDescription>
-              </AttachmentContent>
-              <AttachmentActions>
-                <AttachmentAction aria-label="Remove" onClick={() => removeAttachment(att.id)}>
-                  <XIcon />
-                </AttachmentAction>
-              </AttachmentActions>
-            </Attachment>
-          ))}
-        </AttachmentGroup>
-      )}
-      <div className="flex items-end gap-2">
-        <input type="file" multiple className="hidden" ref={fileInputRef} onChange={handleFileChange} />
-        <Button variant="ghost" size="icon-sm" className="mb-1" onClick={() => fileInputRef.current?.click()} aria-label="Attach file">
-          <PaperclipIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-        </Button>
-        <Textarea
-          rows={1}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          aria-label={placeholder}
-          className="max-h-40 min-h-10 resize-none"
-          onKeyDown={(e) => {
-            // Enter sends, Shift+Enter inserts a newline.
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              handleSubmit();
-            }
-          }}
-        />
-        <Button className="mb-1" onClick={handleSubmit} disabled={disabled || (!value.trim() && attachments.length === 0)} aria-label="Send message">
-          {disabled ? (
-            <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <SendIcon className="size-4" aria-hidden="true" />
-          )}
-        </Button>
-      </div>
-    </div>
-  );
 }
 
 const OTHER_USER_VARIANTS = ["blue", "green", "amber", "purple", "pink", "teal"] as const;
@@ -450,6 +352,11 @@ function MessageRow({
     (!previous || !isSameDay(new Date(previous.createdAt), new Date(message.createdAt)));
 
   const linkedUrl = useMemo(() => firstUrlIn(message.bodyText ?? ''), [message.bodyText]);
+  // `bodyText` is markdown from the composer (plain `**bold**` syntax typed
+  // into a textarea, not a rich-text editor's HTML) — converted to HTML and
+  // sanitized in one step; see `e2e/tests/channels/messages.spec.ts`'s "XSS
+  // sanitization" suite for exactly what has to survive that inert.
+  const safeBodyHtml = useMemo(() => renderMarkdownMessage(message.bodyText ?? ''), [message.bodyText]);
 
   // Collapse the flat reaction rows into counts per emoji.
   const reactions = useMemo(() => {
@@ -503,13 +410,21 @@ function MessageRow({
             </p>
           ) : null}
 
-          <Bubble
-            variant={getBubbleVariant(isMine, message.authorId)}
-            className={cn(reactions.length > 0 && 'mb-4', 'mt-1')}
-          >
+          <Bubble variant={getBubbleVariant(isMine, message.authorId)} className="mt-1">
             {message.bodyText && (
               <BubbleContent className="whitespace-pre-wrap">
-                {message.bodyText}
+                {/* A separate inner element, not dangerouslySetInnerHTML on
+                    BubbleContent itself — React forbids mixing that prop with
+                    ordinary children, and the "(edited)" marker needs to stay
+                    a normal sibling node. whitespace-pre-wrap stays on the
+                    outer element for legacy plain-text messages sent before
+                    this feature existed: their literal '\n' characters still
+                    need it, while Tiptap's own <p> tags create their visual
+                    breaks regardless. */}
+                <div
+                  className="rich-message-content"
+                  dangerouslySetInnerHTML={{ __html: safeBodyHtml }}
+                />
                 {message.isEdited ? (
                   <span className="ml-1 text-xs opacity-70">(edited)</span>
                 ) : null}
@@ -553,27 +468,35 @@ function MessageRow({
             )}
 
             {reactions.length > 0 ? (
-              <BubbleReactions align="start" side="bottom" className={cn("gap-0 p-0.5 bg-background border shadow-sm ring-background")}>
+              // A normal-flow row, not the absolutely-positioned
+              // `BubbleReactions` overlay: `position: absolute` needs a
+              // reliably-positioned ancestor, and on grouped consecutive
+              // messages (author+day repeated, `-mt-1` applied to tighten
+              // spacing) the pill could end up resolving against the wrong
+              // one — visually a reaction pill floating disconnected from
+              // any bubble, which is what got reported. Normal flow can't
+              // do that: it renders exactly where it sits in the DOM,
+              // directly under the message it belongs to.
+              <div className="mt-1.5 flex flex-wrap items-center gap-1">
                 {reactions.map(([emoji, info]) => (
                   <Tooltip key={emoji}>
-                  <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => onReact(emoji)}
-                    className={cn(
-                      'rounded-full px-2 py-0.5 text-xs transition-colors hover:bg-muted',
-                      info.mine
-                        ? 'text-primary font-medium'
-                        : 'text-muted-foreground'
-                    )}
-                  >
-                    {emoji} {info.count}
-                  </button>
-                  </TooltipTrigger>
-                  <TooltipContent>{info.who.join(', ')}</TooltipContent>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => onReact(emoji)}
+                        className={cn(
+                          'flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-xs shadow-sm transition-colors hover:bg-muted',
+                          info.mine ? 'border-primary/50 text-primary font-medium' : 'text-muted-foreground',
+                        )}
+                      >
+                        <span>{emoji}</span>
+                        <span>{info.count}</span>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>{info.who.join(', ')}</TooltipContent>
                   </Tooltip>
                 ))}
-              </BubbleReactions>
+              </div>
             ) : null}
           </Bubble>
 

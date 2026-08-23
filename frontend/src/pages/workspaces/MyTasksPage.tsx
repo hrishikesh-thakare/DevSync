@@ -109,8 +109,11 @@ export function MyTasksPage() {
     );
   }
 
+  // No `overflow-auto` of its own: `WorkspaceLayout`'s `<main>` now scrolls
+  // the whole page via a `ScrollArea`, and this page has no fixed header of
+  // its own that would need a second, independent scroll region.
   return (
-    <div className="flex-1 overflow-auto bg-muted/20">
+    <div className="bg-muted/20">
       <div className="mx-auto w-full max-w-7xl p-6">
         <PageHeader
           title="My Tasks"

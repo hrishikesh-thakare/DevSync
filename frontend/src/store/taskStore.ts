@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { generateKeyBetween } from 'fractional-indexing';
 import { apiFetch } from '@/lib/api';
 import type { CreateTaskInput, TaskStatus, TaskSummary } from '@/types/api';
 
@@ -66,10 +67,42 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   moveTask: async (slug, key, taskId, status, afterTaskId, beforeTaskId) => {
     const previous = get().tasks;
 
-    // Move optimistically so the card lands where it was dropped. The rank the
-    // server computes is authoritative, so the list is refetched on failure.
+    // Move optimistically so the card lands where it was dropped. Previously
+    // this patched `status` only, leaving `rank` untouched — the card kept its
+    // old rank, got sorted to wherever that stale value fell among its new
+    // column's siblings (visibly the wrong slot), then jumped again once the
+    // PATCH round-trip returned the real rank. Two snaps per drag, which reads
+    // as lag even when the request itself is fast.
+    //
+    // The fix: compute the same rank the server will, from the same neighbours
+    // the caller already resolved, using the identical library the backend
+    // uses (`tasks.controller.ts`'s reorder handler). This can only diverge
+    // from the server's actual value if another client's move races it between
+    // this computation and the request landing — rare, and `onSuccess` below
+    // still adopts the server's authoritative rank when the response returns.
+    let optimisticRank: string | undefined;
+    if (afterTaskId || beforeTaskId) {
+      const byId = new Map(previous.map((t) => [t.taskId, t]));
+      const afterRank = afterTaskId ? (byId.get(afterTaskId)?.rank ?? null) : null;
+      const beforeRank = beforeTaskId ? (byId.get(beforeTaskId)?.rank ?? null) : null;
+      try {
+        optimisticRank = generateKeyBetween(afterRank, beforeRank);
+      } catch {
+        // Equal or malformed neighbour ranks — generateKeyBetween throws
+        // rather than guess. Falling through leaves the old rank in place;
+        // the card still moves columns, just re-settles on the server's
+        // response instead of immediately, exactly like before this fix.
+      }
+    } else {
+      // Dropped with no neighbours at all, i.e. the only card in an empty
+      // column — any key works since there is nothing to sort against.
+      optimisticRank = generateKeyBetween(null, null);
+    }
+
     set((state) => ({
-      tasks: state.tasks.map((t) => (t.taskId === taskId ? { ...t, status } : t)),
+      tasks: state.tasks.map((t) =>
+        t.taskId === taskId ? { ...t, status, ...(optimisticRank ? { rank: optimisticRank } : {}) } : t,
+      ),
     }));
 
     try {

@@ -24,6 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import {
   Select,
@@ -624,31 +625,33 @@ function LabelPicker({
                 No labels in this project yet.
               </p>
             ) : (
-              <ul className="max-h-64 overflow-y-auto">
-                {labels.map((l) => {
-                  const checked = selected.some(
-                    (s) => s.toLowerCase() === l.name.toLowerCase(),
-                  );
-                  return (
-                    <li key={l.labelId}>
-                      <button
-                        type="button"
-                        onClick={() => toggle(l.name)}
-                        aria-pressed={checked}
-                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
-                      >
-                        <span
-                          className="size-2.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: l.color }}
-                          aria-hidden="true"
-                        />
-                        <span className="min-w-0 flex-1 truncate">{l.name}</span>
-                        {checked ? <CheckIcon className="size-3.5 shrink-0" aria-hidden="true" /> : null}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+              <ScrollArea className="max-h-64">
+                <ul>
+                  {labels.map((l) => {
+                    const checked = selected.some(
+                      (s) => s.toLowerCase() === l.name.toLowerCase(),
+                    );
+                    return (
+                      <li key={l.labelId}>
+                        <button
+                          type="button"
+                          onClick={() => toggle(l.name)}
+                          aria-pressed={checked}
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
+                        >
+                          <span
+                            className="size-2.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: l.color }}
+                            aria-hidden="true"
+                          />
+                          <span className="min-w-0 flex-1 truncate">{l.name}</span>
+                          {checked ? <CheckIcon className="size-3.5 shrink-0" aria-hidden="true" /> : null}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </ScrollArea>
             )}
           </PopoverContent>
         </Popover>

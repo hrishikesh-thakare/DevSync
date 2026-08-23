@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 
 import {
@@ -85,18 +86,22 @@ export function WorkspaceBreadcrumbs() {
         {crumbs.map((crumb, i) => {
           const isLast = i === crumbs.length - 1;
           return (
-            <BreadcrumbItem key={`${crumb.label}-${i}`} className="min-w-0">
-              {isLast || !crumb.to ? (
-                <BreadcrumbPage className="truncate">{crumb.label}</BreadcrumbPage>
-              ) : (
-                <>
+            // BreadcrumbItem and BreadcrumbSeparator both render an <li>, so
+            // they must be siblings in the <ol> — nesting the separator
+            // inside the item put an <li> inside an <li>, which is invalid
+            // HTML and logged a hydration-nesting warning.
+            <Fragment key={`${crumb.label}-${i}`}>
+              <BreadcrumbItem className="min-w-0">
+                {isLast || !crumb.to ? (
+                  <BreadcrumbPage className="truncate">{crumb.label}</BreadcrumbPage>
+                ) : (
                   <BreadcrumbLink asChild className="truncate">
                     <Link to={crumb.to}>{crumb.label}</Link>
                   </BreadcrumbLink>
-                  <BreadcrumbSeparator />
-                </>
-              )}
-            </BreadcrumbItem>
+                )}
+              </BreadcrumbItem>
+              {isLast || !crumb.to ? null : <BreadcrumbSeparator />}
+            </Fragment>
           );
         })}
       </BreadcrumbList>

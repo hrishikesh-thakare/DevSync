@@ -137,7 +137,18 @@ function SidebarProvider({
           } as React.CSSProperties
         }
         className={cn(
-          "group/sidebar-wrapper flex min-h-svh w-full has-data-[variant=inset]:bg-sidebar",
+          // `h-svh`, not `min-h-svh`: a *minimum* height doesn't give
+          // descendants a definite height to resolve `h-full` percentages
+          // against — CSS only treats min-height as definite when content
+          // stays under it, which broke the moment any page (the chat view,
+          // wanting its own internally-scrolling message list) needed more
+          // room than the viewport. The whole `h-full` chain went ambiguous,
+          // the page scrolled instead of the message list, and the composer
+          // drifted away with everything else. A fixed height makes `main`'s
+          // `overflow-y-auto` the one designated scroll boundary for pages
+          // that don't manage their own, and lets pages that do (ChannelPage)
+          // get a real height to shrink their own regions into.
+          "group/sidebar-wrapper flex h-svh w-full has-data-[variant=inset]:bg-sidebar",
           className
         )}
         {...props}
