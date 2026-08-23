@@ -71,10 +71,8 @@ export default defineConfig({
         REQUIRE_EMAIL_VERIFICATION: 'true',
       },
       port: 3001,
-      // Never reuse a server on 3001: a leftover dev/other backend would
-      // silently run the suite with the wrong env (no enforcement, real
-      // SMTP). Fail fast instead of testing the wrong thing.
-      reuseExistingServer: false,
+      // Reuse existing server so it doesn't clash with the pre-started CI backend
+      reuseExistingServer: true,
       timeout: 30_000,
     },
     {

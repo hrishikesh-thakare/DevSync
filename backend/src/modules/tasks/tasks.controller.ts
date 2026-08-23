@@ -242,7 +242,10 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
     if (err.message === 'INVALID_SPRINT') { res.status(400).json({ error: 'Sprint does not exist in this project.' }); return; }
 
     console.error('Create task error:', err);
-    res.status(500).json({ error: 'Server error creating task.' });
+    res.status(500).json({ 
+      error: 'Server error creating task.',
+      details: env.NODE_ENV !== 'production' ? (err instanceof Error ? err.message : String(err)) : undefined
+    });
   }
 };
 
