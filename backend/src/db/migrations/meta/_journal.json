@@ -64,6 +64,13 @@
       "when": 1787125288422,
       "tag": "0008_previous_magma",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787125288423,
+      "tag": "0009_missing_user_columns",
+      "breakpoints": true
     }
   ]
 }
