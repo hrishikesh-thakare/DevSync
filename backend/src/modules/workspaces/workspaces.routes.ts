@@ -13,6 +13,7 @@ import {
   updateMemberRole,
   removeMember,
   leaveWorkspace,
+  getMyTasks,
 } from './workspaces.controller.js';
 import { unfurlUrl } from './unfurl.controller.js';
 import { resolveSlug } from '../../middleware/slugs.js';
@@ -29,6 +30,7 @@ router.use(requireAuth);
 
 // ─── Workspace Utilities ───────────────────────────────────────────────────────
 router.get('/:slug/unfurl', requireWorkspaceRole(['owner', 'admin', 'member']), unfurlUrl);
+router.get('/:slug/my-tasks', requireWorkspaceRole(['owner', 'admin', 'member']), getMyTasks);
 
 // ─── Workspace CRUD ──────────────────────────────────────────────────────────
 router.post('/', validate(createWorkspaceSchema), createWorkspace);

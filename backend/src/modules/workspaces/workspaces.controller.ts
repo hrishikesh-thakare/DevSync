@@ -2,7 +2,9 @@ import { Request, Response } from 'express';
 import { db } from '../../config/db.js';
 import { workspaces, workspaceMembers, workspaceInvites } from '../../db/schema/workspaces.js';
 import { users } from '../../db/schema/auth.js';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, desc } from 'drizzle-orm';
+import { tasks } from '../../db/schema/tasks.js';
+import { projects } from '../../db/schema/projects.js';
 import { logAuditAction } from '../audit/audit.controller.js';
 import { createNotification } from '../notifications/notifications.controller.js';
 import { enqueueJob } from '../../workers/queue.js';
@@ -666,5 +668,52 @@ export const leaveWorkspace = async (req: Request, res: Response): Promise<void>
   } catch (err) {
     console.error('Leave workspace error:', err);
     res.status(500).json({ error: 'Server error leaving workspace.' });
+  }
+};
+export const getMyTasks = async (req: Request, res: Response) => {
+  try {
+    const { slug } = req.params;
+    const userId = req.user!.userId;
+
+    const [workspace] = await db
+      .select({ workspaceId: workspaces.workspaceId })
+      .from(workspaces)
+      .where(and(eq(workspaces.slug, slug as string), isNull(workspaces.deletedAt)))
+      .limit(1);
+
+    if (!workspace) {
+      res.status(404).json({ error: 'Workspace not found.' });
+      return;
+    }
+
+    const userTasks = await db
+      .select({
+        taskId: tasks.taskId,
+        taskKey: tasks.taskKey,
+        title: tasks.title,
+        status: tasks.status,
+        priority: tasks.priority,
+        issueType: tasks.issueType,
+        assigneeId: tasks.assigneeId,
+        dueDate: tasks.dueDate,
+        projectId: tasks.projectId,
+        projectKey: projects.key,
+        projectName: projects.name,
+      })
+      .from(tasks)
+      .innerJoin(projects, eq(tasks.projectId, projects.projectId))
+      .where(
+        and(
+          eq(projects.workspaceId, workspace.workspaceId),
+          eq(tasks.assigneeId, userId),
+          isNull(tasks.deletedAt)
+        )
+      )
+      .orderBy(desc(tasks.updatedAt));
+
+    res.json({ tasks: userTasks });
+  } catch (err) {
+    console.error('Get my tasks error:', err);
+    res.status(500).json({ error: 'Server error fetching tasks.' });
   }
 };

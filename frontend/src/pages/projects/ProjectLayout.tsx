@@ -14,7 +14,10 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
+import { useTaskStore } from '@/store/taskStore';
+import { socketClient } from '@/lib/socket';
 import { cn } from '@/lib/utils';
+import type { TaskSummary } from '@/types/api';
 
 const TABS = [
   { to: '', label: 'Board', end: true },
@@ -32,11 +35,34 @@ export function ProjectLayout() {
   const navigate = useNavigate();
   const { project, isLoading, error, fetchProject, reset } = useProjectStore();
   const myRole = useMyProjectRole();
+  const applyTaskUpdate = useTaskStore((s) => s.applyTaskUpdate);
 
   useEffect(() => {
     if (slug && key) void fetchProject(slug, key);
     return () => reset();
   }, [slug, key, fetchProject, reset]);
+
+  // Real-time task updates for the whole project
+  useEffect(() => {
+    if (!project?.projectId) return;
+
+    const socket = socketClient.getSocket();
+    if (!socket) return;
+
+    const room = `project:${project.projectId}`;
+    socket.emit('join_room', room);
+
+    const onTaskUpdated = (task: Partial<TaskSummary> & { taskId: string }) => {
+      applyTaskUpdate(task);
+    };
+
+    socket.on('task_updated', onTaskUpdated);
+
+    return () => {
+      socket.off('task_updated', onTaskUpdated);
+      socket.emit('leave_room', room);
+    };
+  }, [project?.projectId, applyTaskUpdate]);
 
   if (isLoading) {
     return (

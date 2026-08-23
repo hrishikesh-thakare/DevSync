@@ -20,6 +20,7 @@ import { WorkspaceLayout } from '@/pages/workspaces/WorkspaceLayout';
 import { WorkspaceHome } from '@/pages/workspaces/WorkspaceHome';
 import { WorkspaceMembersPage } from '@/pages/workspaces/WorkspaceMembersPage';
 import { WorkspaceSettingsPage } from '@/pages/workspaces/WorkspaceSettingsPage';
+import { MyTasksPage } from '@/pages/workspaces/MyTasksPage';
 import { WorkspaceActivityPage } from '@/pages/workspaces/WorkspaceActivityPage';
 
 import { ProjectListPage } from '@/pages/projects/ProjectListPage';
@@ -81,6 +82,7 @@ export default function App() {
 
           <Route path="/w/:slug" element={<WorkspaceLayout />}>
             <Route index element={<WorkspaceHome />} />
+            <Route path="my-tasks" element={<MyTasksPage />} />
             <Route path="members" element={<WorkspaceMembersPage />} />
             <Route path="settings" element={<WorkspaceSettingsPage />} />
             <Route path="activity" element={<WorkspaceActivityPage />} />

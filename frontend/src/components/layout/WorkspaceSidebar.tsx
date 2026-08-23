@@ -4,6 +4,7 @@ import {
   HashIcon,
   HistoryIcon,
   HomeIcon,
+  ListTodoIcon,
   MoreHorizontalIcon,
   PlusIcon,
   SettingsIcon,
@@ -71,6 +72,7 @@ export function WorkspaceSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <NavItem to={`/w/${slug}`} end icon={<HomeIcon />} label="Home" />
+              <NavItem to={`/w/${slug}/my-tasks`} icon={<ListTodoIcon />} label="My Tasks" />
               <NavItem to={`/w/${slug}/projects`} icon={<FolderKanbanIcon />} label="Projects" />
               <NavItem to={`/w/${slug}/members`} icon={<UsersIcon />} label="Members" />
               {/* The audit endpoint refuses anyone below admin, so linking it

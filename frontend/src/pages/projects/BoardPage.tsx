@@ -32,15 +32,13 @@ import { useTaskStore, byRank } from '@/store/taskStore';
 import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
 import { PRIORITY_META, PRIORITY_ORDER, STATUS_ORDER } from '@/lib/taskMeta';
 import type { TaskStatus, TaskSummary } from '@/types/api';
-import { socketClient } from '@/lib/socket';
 
 const ANY = '__any__';
 
 export function BoardPage() {
   const { slug = '', key = '' } = useParams();
   const navigate = useNavigate();
-  const { tasks, isLoading, error, fetchTasks, moveTask, applyTaskUpdate, reset } = useTaskStore();
-  const project = useProjectStore((s) => s.project);
+  const { tasks, isLoading, error, fetchTasks, moveTask, reset } = useTaskStore();
   const members = useProjectStore((s) => s.members);
   const myRole = useMyProjectRole();
   const canEdit = myRole === 'project_admin' || myRole === 'developer';
@@ -54,27 +52,6 @@ export function BoardPage() {
     if (slug && key) void fetchTasks(slug, key);
     return () => reset();
   }, [slug, key, fetchTasks, reset]);
-
-  useEffect(() => {
-    if (!project?.projectId) return;
-
-    const socket = socketClient.getSocket();
-    if (!socket) return;
-
-    const room = `project:${project.projectId}`;
-    socket.emit('join_room', room);
-
-    const onTaskUpdated = (task: Partial<TaskSummary> & { taskId: string }) => {
-      applyTaskUpdate(task);
-    };
-
-    socket.on('task_updated', onTaskUpdated);
-
-    return () => {
-      socket.off('task_updated', onTaskUpdated);
-      socket.emit('leave_room', room);
-    };
-  }, [project?.projectId, applyTaskUpdate]);
 
   const sensors = useSensors(
     // A small distance threshold keeps a click-to-open from registering as a drag.
