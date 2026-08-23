@@ -23,6 +23,7 @@ const TABS = [
   { to: '', label: 'Board', end: true },
   { to: 'backlog', label: 'Backlog' },
   { to: 'sprints', label: 'Sprints' },
+  { to: 'analytics', label: 'Analytics' },
   { to: 'channels', label: 'Channels' },
   { to: 'labels', label: 'Labels' },
   { to: 'members', label: 'Members' },

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import { Loader2Icon, PlusIcon } from 'lucide-react';
+import { Loader2Icon, PlusIcon, SparklesIcon } from 'lucide-react';
 
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -202,6 +202,8 @@ export function SprintListPage() {
                               <Progress value={pct} />
                             </div>
                           ) : null}
+
+                          {sprint.aiSummary ? <SprintRetrospective sprint={sprint} /> : null}
 
                           {canManage ? (
                             <div className="flex flex-wrap gap-2 pt-1">
@@ -405,5 +407,75 @@ function CreateSprintDialog({
         </FieldGroup>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * The AI retrospective written on sprint close.
+ *
+ * The data has always been returned by `GET .../sprints` — `listSprints`
+ * selects every column — but nothing rendered it, so the report only ever
+ * reached people as a chat message in the project channel. Renders nothing
+ * when Gemini is unconfigured, since the columns stay null.
+ */
+function SprintRetrospective({ sprint }: { sprint: Sprint }) {
+  const [open, setOpen] = useState(false);
+  const report = sprint.aiSummary;
+  if (!report) return null;
+
+  const contributions = sprint.aiContributionReport ?? [];
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
+      <div className="flex items-start gap-2">
+        <SparklesIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-foreground">Retrospective</p>
+          <p className="mt-1 text-sm text-muted-foreground">{report.summary}</p>
+
+          {open ? (
+            <>
+              {report.highlights.length > 0 ? (
+                <ul className="mt-3 list-disc space-y-1 pl-4 text-sm text-muted-foreground">
+                  {report.highlights.map((h) => (
+                    <li key={h}>{h}</li>
+                  ))}
+                </ul>
+              ) : null}
+
+              {contributions.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                    Contributions
+                  </p>
+                  {contributions.map((c) => (
+                    <div key={`${c.userId ?? c.fullName}`} className="text-sm">
+                      <span className="text-foreground">{c.fullName}</span>
+                      <span className="text-muted-foreground">
+                        {' '}
+                        · {c.tasksCompleted} {c.tasksCompleted === 1 ? 'task' : 'tasks'}
+                      </span>
+                      <p className="text-muted-foreground">{c.summary}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : null}
+
+          {report.highlights.length > 0 || contributions.length > 0 ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2 h-7 px-2"
+              aria-expanded={open}
+              onClick={() => setOpen((v) => !v)}
+            >
+              {open ? 'Show less' : 'Show more'}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }

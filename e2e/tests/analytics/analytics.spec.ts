@@ -179,3 +179,68 @@ test.describe('Team & delivery analytics', () => {
     expect(status).toBe(401);
   });
 });
+
+test.describe('Analytics page (UI)', () => {
+  test('workspace analytics renders every chart section', async ({ ownerPage }) => {
+    await ownerPage.goto(`/w/${SLUG}/analytics`);
+    await ownerPage.waitForLoadState('networkidle');
+
+    await expect(ownerPage.getByRole('heading', { name: 'Analytics' })).toBeVisible({
+      timeout: 10_000,
+    });
+
+    for (const section of ['Cycle time', 'Throughput', 'Velocity', 'Contribution', 'CI health']) {
+      await expect(
+        ownerPage.getByText(section, { exact: true }).first(),
+        `${section} card should render`,
+      ).toBeVisible();
+    }
+  });
+
+  test('states plainly that these are not DORA metrics', async ({ ownerPage }) => {
+    await ownerPage.goto(`/w/${SLUG}/analytics`);
+    await ownerPage.waitForLoadState('networkidle');
+    // The distinction is the kind of thing a reviewer probes, so it is on the
+    // page rather than only in the code.
+    await expect(ownerPage.getByText(/not DORA metrics/i)).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('the range selector refetches without breaking the page', async ({ ownerPage }) => {
+    await ownerPage.goto(`/w/${SLUG}/analytics`);
+    await ownerPage.waitForLoadState('networkidle');
+
+    await ownerPage.getByRole('button', { name: '30d' }).click();
+    await ownerPage.waitForLoadState('networkidle');
+    await expect(ownerPage.getByRole('heading', { name: 'Analytics' })).toBeVisible();
+  });
+
+  test('project analytics is reachable from the project tab bar', async ({ ownerPage }) => {
+    await ownerPage.goto(`/w/${SLUG}/projects/${KEY}`);
+    await ownerPage.waitForLoadState('networkidle');
+
+    // The workspace sidebar also has an Analytics link, so scope to the tab bar.
+    await ownerPage
+      .getByLabel('Project sections')
+      .getByRole('link', { name: 'Analytics' })
+      .click();
+    await ownerPage.waitForLoadState('networkidle');
+
+    await expect(ownerPage).toHaveURL(new RegExp(`/projects/${KEY}/analytics$`));
+    await expect(ownerPage.getByText(`Delivery metrics for ${KEY}.`)).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+
+  test('a member with no project access sees empty states, not an error', async ({
+    memberNoProjectPage,
+  }) => {
+    await memberNoProjectPage.goto(`/w/${SLUG}/analytics`);
+    await memberNoProjectPage.waitForLoadState('networkidle');
+
+    await expect(memberNoProjectPage.getByRole('heading', { name: 'Analytics' })).toBeVisible({
+      timeout: 10_000,
+    });
+    // Scoped to nothing, so every chart is empty — but the page must not 403 or crash.
+    await expect(memberNoProjectPage.getByText(/No completed transitions/i)).toBeVisible();
+  });
+});

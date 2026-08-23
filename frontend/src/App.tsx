@@ -41,6 +41,7 @@ import { ChannelPage } from '@/pages/channels/ChannelPage';
 import { ChannelListPage } from '@/pages/channels/ChannelListPage';
 import { NotificationsInbox } from '@/pages/NotificationsInbox';
 import { GlobalSearchResults } from '@/pages/GlobalSearchResults';
+import { AnalyticsPage } from '@/pages/AnalyticsPage';
 
 /**
  * Route table.
@@ -88,6 +89,7 @@ export default function App() {
             <Route path="activity" element={<WorkspaceActivityPage />} />
             <Route path="notifications" element={<NotificationsInbox />} />
             <Route path="search" element={<GlobalSearchResults />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="channels" element={<ChannelListPage />} />
             <Route path="channels/:channelId" element={<ChannelPage />} />
 
@@ -106,6 +108,7 @@ export default function App() {
               <Route path="members" element={<ProjectMembersPage />} />
               <Route path="settings" element={<ProjectSettingsPage />} />
               <Route path="github" element={<GitHubIntegration />} />
+              <Route path="analytics" element={<AnalyticsPage />} />
             </Route>
           </Route>
         </Route>

@@ -1,5 +1,6 @@
 import { Link, NavLink, useParams } from 'react-router-dom';
 import {
+  ChartLineIcon,
   FolderKanbanIcon,
   HashIcon,
   HistoryIcon,
@@ -75,6 +76,9 @@ export function WorkspaceSidebar() {
               <NavItem to={`/w/${slug}/my-tasks`} icon={<ListTodoIcon />} label="My Tasks" />
               <NavItem to={`/w/${slug}/projects`} icon={<FolderKanbanIcon />} label="Projects" />
               <NavItem to={`/w/${slug}/members`} icon={<UsersIcon />} label="Members" />
+              {/* Open to every member — the endpoint scopes the rollup to the
+                  projects they actually belong to rather than refusing them. */}
+              <NavItem to={`/w/${slug}/analytics`} icon={<ChartLineIcon />} label="Analytics" />
               {/* The audit endpoint refuses anyone below admin, so linking it
                   for a plain member would only lead to a 403. */}
               {canManage ? (

@@ -245,6 +245,27 @@ export interface Sprint {
   endDate: string | null;
   sequenceNumber: number;
   capacityPoints: number | null;
+  closedAt: string | null;
+  velocityIssues: number | null;
+  /**
+   * Written by the Gemini retrospective on sprint close. `listSprints` selects
+   * every column, so these have always been on the wire — this interface just
+   * never declared them, which is why the report only ever reached people as a
+   * chat message.
+   */
+  aiSummary: {
+    summary: string;
+    highlights: string[];
+    generatedAt: string;
+  } | null;
+  aiContributionReport:
+    | {
+        userId: string | null;
+        fullName: string;
+        summary: string;
+        tasksCompleted: number;
+      }[]
+    | null;
   stats?: {
     taskCount: number;
     totalPoints: number;
