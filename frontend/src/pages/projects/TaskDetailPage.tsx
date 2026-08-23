@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { formatDistanceToNow } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import {
+  CalendarIcon,
+  CheckIcon,
   GitCommitHorizontalIcon,
   HistoryIcon,
   Loader2Icon,
   SendIcon,
   SparklesIcon,
+  TagIcon,
   XIcon,
 } from 'lucide-react';
 
@@ -19,6 +22,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import {
   Select,
   SelectContent,
@@ -43,6 +49,7 @@ import { useTaskDetailStore } from '@/store/taskDetailStore';
 import { TaskAttachments } from '@/pages/projects/task/TaskAttachments';
 import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
 import { useSprintStore } from '@/store/sprintStore';
+import { useLabelStore } from '@/store/labelStore';
 import { initialsOf } from '@/lib/initials';
 import {
   ISSUE_TYPE_META,
@@ -362,6 +369,15 @@ export function TaskDetailPage() {
             />
           </div>
 
+          <div>
+            <p className="mb-1.5 text-xs text-muted-foreground">Due date</p>
+            <DueDateField
+              value={task.dueDate}
+              disabled={!canEdit}
+              onChange={(next) => void save({ dueDate: next })}
+            />
+          </div>
+
           {task.aiDurationEstimate ? (
             <div className="rounded-lg bg-card p-3">
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -372,18 +388,16 @@ export function TaskDetailPage() {
             </div>
           ) : null}
 
-          {task.labels?.length ? (
-            <div>
-              <p className="mb-1.5 text-xs text-muted-foreground">Labels</p>
-              <div className="flex flex-wrap gap-1">
-                {task.labels.map((l) => (
-                  <Badge key={l} variant="secondary">
-                    {l}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          ) : null}
+          <div>
+            <p className="mb-1.5 text-xs text-muted-foreground">Labels</p>
+            <LabelPicker
+              slug={slug}
+              projectKey={key}
+              selected={task.labels ?? []}
+              disabled={!canEdit}
+              onChange={(next) => void save({ labels: next })}
+            />
+          </div>
 
           <Separator />
           <p className="text-xs text-muted-foreground">
@@ -459,6 +473,186 @@ function SidebarSelect({
           ))}
         </SelectContent>
       </Select>
+    </div>
+  );
+}
+
+/**
+ * Due-date control.
+ *
+ * `dueDate` has been fully plumbed for a long time — returned by listTasks and
+ * getTask, accepted by both the create and update schemas, and already rendered
+ * with overdue styling on My Tasks and the dashboard — but there was no way to
+ * *set* one anywhere in the app. `components/ui/calendar.tsx` and
+ * react-day-picker were installed and imported by nothing.
+ */
+function DueDateField({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: string | null;
+  disabled?: boolean;
+  onChange: (next: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = value ? new Date(value) : undefined;
+  const overdue = selected ? selected < new Date() : false;
+
+  return (
+    <div className="flex items-center gap-1">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            disabled={disabled}
+            className={cn(
+              'flex-1 justify-start font-normal',
+              !selected && 'text-muted-foreground',
+              overdue && 'text-destructive',
+            )}
+          >
+            <CalendarIcon className="size-4" aria-hidden="true" />
+            {selected ? format(selected, 'd MMM yyyy') : 'No due date'}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={selected}
+            defaultMonth={selected}
+            autoFocus
+            onSelect={(date) => {
+              setOpen(false);
+              // The API takes an ISO datetime; a bare date would be rejected by
+              // the zod `.datetime()` guard on updateTaskSchema.
+              onChange(date ? date.toISOString() : null);
+            }}
+          />
+        </PopoverContent>
+      </Popover>
+
+      {selected && !disabled ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Clear due date"
+          onClick={() => onChange(null)}
+        >
+          <XIcon className="size-4" aria-hidden="true" />
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Label picker.
+ *
+ * `ProjectLabelsPage` has been a full CRUD screen for a while and `TaskPatch`
+ * has always accepted `labels`, but the task detail rendered them as read-only
+ * badges — so a label could be created and never actually applied to anything.
+ *
+ * The data model matters here: `project_labels` is a catalogue of names while a
+ * task's `labels` column is a plain array of strings with no FK between them,
+ * so this sends names, and the server reconciles case.
+ */
+function LabelPicker({
+  slug,
+  projectKey,
+  selected,
+  disabled,
+  onChange,
+}: {
+  slug: string;
+  projectKey: string;
+  selected: string[];
+  disabled?: boolean;
+  onChange: (next: string[]) => void;
+}) {
+  const { labels, fetchLabels } = useLabelStore();
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (slug && projectKey) void fetchLabels(slug, projectKey);
+  }, [slug, projectKey, fetchLabels]);
+
+  const toggle = (name: string) => {
+    const has = selected.some((l) => l.toLowerCase() === name.toLowerCase());
+    onChange(
+      has ? selected.filter((l) => l.toLowerCase() !== name.toLowerCase()) : [...selected, name],
+    );
+  };
+
+  const colorOf = (name: string) =>
+    labels.find((l) => l.name.toLowerCase() === name.toLowerCase())?.color;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {selected.map((l) => (
+        <Badge
+          key={l}
+          variant="secondary"
+          style={colorOf(l) ? { borderColor: colorOf(l), color: colorOf(l) } : undefined}
+          className={colorOf(l) ? 'border bg-transparent' : undefined}
+        >
+          {l}
+          {!disabled ? (
+            <button
+              type="button"
+              aria-label={`Remove label ${l}`}
+              className="ml-1 opacity-60 hover:opacity-100"
+              onClick={() => toggle(l)}
+            >
+              <XIcon className="size-3" aria-hidden="true" />
+            </button>
+          ) : null}
+        </Badge>
+      ))}
+
+      {!disabled ? (
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground">
+              <TagIcon className="size-3.5" aria-hidden="true" />
+              {selected.length === 0 ? 'Add label' : 'Edit'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-56 p-1">
+            {labels.length === 0 ? (
+              <p className="px-2 py-3 text-center text-xs text-muted-foreground">
+                No labels in this project yet.
+              </p>
+            ) : (
+              <ul className="max-h-64 overflow-y-auto">
+                {labels.map((l) => {
+                  const checked = selected.some(
+                    (s) => s.toLowerCase() === l.name.toLowerCase(),
+                  );
+                  return (
+                    <li key={l.labelId}>
+                      <button
+                        type="button"
+                        onClick={() => toggle(l.name)}
+                        aria-pressed={checked}
+                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
+                      >
+                        <span
+                          className="size-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: l.color }}
+                          aria-hidden="true"
+                        />
+                        <span className="min-w-0 flex-1 truncate">{l.name}</span>
+                        {checked ? <CheckIcon className="size-3.5 shrink-0" aria-hidden="true" /> : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </PopoverContent>
+        </Popover>
+      ) : null}
     </div>
   );
 }

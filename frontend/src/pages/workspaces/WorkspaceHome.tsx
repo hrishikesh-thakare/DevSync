@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { MemberAvatar } from '@/components/MemberAvatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -98,7 +99,12 @@ interface Dashboard {
 
 export function WorkspaceHome() {
   const { slug = '' } = useParams();
-  const { name, description, memberCount, myRole } = useCurrentWorkspaceStore();
+  const { name, description, memberCount, myRole, members } = useCurrentWorkspaceStore();
+
+  // The dashboard payload carries no presence, but the workspace roster does —
+  // and it stays current because `user_presence_updated` merges into this store.
+  const presenceOf = (userId: string) =>
+    members.find((m) => m.userId === userId)?.presence ?? null;
 
   const [data, setData] = useState<Dashboard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -347,12 +353,9 @@ export function WorkspaceHome() {
                   <ul className="space-y-2">
                     {data.workload.map((member) => (
                       <li key={member.userId} className="flex items-center gap-3">
-                        <Avatar className="size-7">
-                          {member.avatarUrl ? <AvatarImage src={member.avatarUrl} alt="" /> : null}
-                          <AvatarFallback className="text-[10px]">
-                            {initialsOf(member.fullName)}
-                          </AvatarFallback>
-                        </Avatar>
+                        <MemberAvatar
+                          member={{ ...member, presence: presenceOf(member.userId) }}
+                        />
                         <span className="min-w-0 flex-1 truncate text-sm text-foreground">
                           {member.fullName}
                         </span>

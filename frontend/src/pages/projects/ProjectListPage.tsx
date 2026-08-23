@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 import { FolderKanbanIcon, PlusIcon } from 'lucide-react';
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { MemberAvatar } from '@/components/MemberAvatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,7 +15,6 @@ import {
 } from '@/components/ui/empty';
 import { PageHeader, PageShell } from '@/components/layout/PageHeader';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
-import { initialsOf } from '@/lib/initials';
 
 export function ProjectListPage() {
   const { slug = '' } = useParams();
@@ -75,12 +74,20 @@ export function ProjectListPage() {
                       {project.key}
                     </span>
                     {project.leadName ? (
-                      <Avatar className="ml-auto size-6" title={`Lead: ${project.leadName}`}>
-                        {project.leadAvatar ? <AvatarImage src={project.leadAvatar} alt="" /> : null}
-                        <AvatarFallback className="text-[10px]">
-                          {initialsOf(project.leadName)}
-                        </AvatarFallback>
-                      </Avatar>
+                      // The card is a link overlay, so the avatar sits above it
+                      // to keep its tooltip hoverable.
+                      <span className="relative z-10 ml-auto">
+                        {/* ProjectSummary carries no leadUserId, so presence
+                            cannot be resolved here — the dot is omitted rather
+                            than guessed. */}
+                        <MemberAvatar
+                          size="sm"
+                          member={{
+                            fullName: `${project.leadName} · Lead`,
+                            avatarUrl: project.leadAvatar,
+                          }}
+                        />
+                      </span>
                     ) : null}
                   </div>
 

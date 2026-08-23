@@ -1,5 +1,16 @@
 <!doctype html>
-<html lang="en">
+<!--
+  `class="dark"` is deliberate. index.css bakes the dark palette straight onto
+  :root with `color-scheme: dark` and defines no light block, so the app is
+  dark-only by design — but `@custom-variant dark (&:is(.dark *))` means every
+  `dark:` utility in the shadcn components only applies under a `.dark`
+  ancestor. Without this class those variants never matched, so components
+  silently rendered their *light* branch (avatar `mix-blend-darken`, lighter
+  ring opacities, destructive backgrounds) on top of dark variables. Adding the
+  class changes no custom property; it just selects the branch that was always
+  intended.
+-->
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />

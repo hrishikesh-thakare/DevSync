@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { MailPlusIcon } from 'lucide-react';
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { MemberAvatar } from '@/components/MemberAvatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -32,7 +32,6 @@ import { LeaveWorkspaceButton } from '@/pages/workspaces/LeaveWorkspaceButton';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
 import { useAuthStore } from '@/store/auth';
 import { apiFetch } from '@/lib/api';
-import { initialsOf } from '@/lib/initials';
 import type { WorkspaceRole } from '@/types/api';
 
 const ROLES: { value: WorkspaceRole; label: string }[] = [
@@ -219,10 +218,7 @@ export function WorkspaceMembersPage() {
                   <TableRow key={member.userId}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <Avatar className="size-8">
-                          {member.avatarUrl ? <AvatarImage src={member.avatarUrl} alt="" /> : null}
-                          <AvatarFallback className="text-xs">{initialsOf(name)}</AvatarFallback>
-                        </Avatar>
+                        <MemberAvatar member={member} />
                         <div className="min-w-0">
                           <p className="truncate text-foreground">
                             {name}
