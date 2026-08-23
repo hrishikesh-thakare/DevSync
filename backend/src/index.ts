@@ -50,9 +50,6 @@ app.param('taskKey', resolveTaskKey);
 import authRoutes from './modules/auth/auth.routes.js';
 app.use('/api/auth', authRoutes);
 
-import workspacesRoutes from './modules/workspaces/workspaces.routes.js';
-app.use('/api/workspaces', workspacesRoutes);
-
 import projectsRoutes from './modules/projects/projects.routes.js';
 app.use('/api/workspaces/:slug/projects', projectsRoutes);
 
@@ -70,6 +67,9 @@ app.use('/api/workspaces/:slug/channels', channelsRoutes);
 
 import filesRoutes from './modules/files/files.routes.js';
 app.use('/api/workspaces/:slug/files', filesRoutes);
+
+import workspacesRoutes from './modules/workspaces/workspaces.routes.js';
+app.use('/api/workspaces', workspacesRoutes);
 
 // Messages routes moved to channels.routes.ts
 
