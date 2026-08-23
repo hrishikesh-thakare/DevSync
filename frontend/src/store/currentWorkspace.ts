@@ -32,6 +32,11 @@ interface CurrentWorkspaceState {
   // Actions
   fetchWorkspaceData: (slug: string) => Promise<void>;
   createChannel: (slug: string, name: string, type?: ChannelType, projectId?: string | null) => Promise<Channel>;
+  updateChannel: (slug: string, channelId: string, patch: { name?: string; description?: string }) => Promise<void>;
+  archiveChannel: (slug: string, channelId: string) => Promise<void>;
+  deleteChannel: (slug: string, channelId: string) => Promise<void>;
+  joinChannel: (slug: string, channelId: string) => Promise<void>;
+  leaveChannel: (slug: string, channelId: string) => Promise<void>;
   createProject: (slug: string, name: string, key: string, description?: string) => Promise<void>;
   updateMemberPresence: (userId: string, data: { presence?: Presence; statusText?: string; statusEmoji?: string }) => void;
 }
@@ -108,6 +113,42 @@ export const useCurrentWorkspaceStore = create<CurrentWorkspaceState>((set, get)
       channels: [...state.channels, data.channel],
     }));
     return data.channel as Channel;
+  },
+
+  updateChannel: async (slug, channelId, patch) => {
+    // `updateChannelSchema` is .strict(): name and description only. Type,
+    // project scope and the announcement flag are fixed at creation.
+    const data = await apiFetch(`/workspaces/${slug}/channels/${channelId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+    set((state) => ({
+      channels: state.channels.map((c) => (c.channelId === channelId ? data.channel : c)),
+    }));
+  },
+
+  archiveChannel: async (slug, channelId) => {
+    await apiFetch(`/workspaces/${slug}/channels/${channelId}/archive`, { method: 'PATCH' });
+    // `listChannels` filters archived channels out entirely, so dropping the
+    // row here matches what a refetch would return.
+    set((state) => ({ channels: state.channels.filter((c) => c.channelId !== channelId) }));
+  },
+
+  deleteChannel: async (slug, channelId) => {
+    await apiFetch(`/workspaces/${slug}/channels/${channelId}`, { method: 'DELETE' });
+    set((state) => ({ channels: state.channels.filter((c) => c.channelId !== channelId) }));
+  },
+
+  joinChannel: async (slug, channelId) => {
+    await apiFetch(`/workspaces/${slug}/channels/${channelId}/join`, { method: 'POST' });
+  },
+
+  leaveChannel: async (slug, channelId) => {
+    await apiFetch(`/workspaces/${slug}/channels/${channelId}/leave`, { method: 'DELETE' });
+    // Leaving a *private* channel removes it from `listChannels` for this user;
+    // a public one stays visible. Refetching is the only way to know which,
+    // short of duplicating the server's visibility rules here.
+    await get().fetchWorkspaceData(slug);
   },
 
   createProject: async (slug, name, key, description) => {

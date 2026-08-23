@@ -457,3 +457,39 @@ export interface GithubRepoOption {
   url: string;
   defaultBranch: string;
 }
+
+// ─── Sessions ────────────────────────────────────────────────────────────────
+
+/**
+ * A row from `GET /auth/sessions` — one live refresh token.
+ *
+ * `deviceInfo` is a `jsonb` column written by `createRefreshToken`, which only
+ * ever stores these two fields, both defaulting to the string 'unknown'.
+ */
+export interface UserSession {
+  tokenId: string;
+  deviceInfo: { userAgent?: string; ip?: string } | null;
+  issuedAt: string;
+  expiresAt: string;
+  isCurrent: boolean;
+}
+
+// ─── Audit ───────────────────────────────────────────────────────────────────
+
+/**
+ * A row from `GET /audit/:entityType/:entityId`.
+ *
+ * `oldValues` / `newValues` are free-form `jsonb` written per call site, so
+ * they carry no fixed shape — they are rendered structurally, never keyed by
+ * an assumed field.
+ */
+export interface AuditLogEntry {
+  logId: string;
+  action: string;
+  oldValues: unknown;
+  newValues: unknown;
+  createdAt: string;
+  actorId: string | null;
+  actorName: string | null;
+  actorAvatar: string | null;
+}

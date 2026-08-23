@@ -30,6 +30,15 @@ export const env = {
   SMTP_SECURE: process.env.SMTP_SECURE || '',
   SMTP_FROM: process.env.SMTP_FROM || '',
 
+  // Real mail is only sent in production. Set this to 'true' to override that
+  // for a deliberate local test — never leave it on, because the e2e seed
+  // drives the live HTTP API and every seeded registration sends.
+  SMTP_ALLOW_DEV: process.env.SMTP_ALLOW_DEV === 'true',
+
+  // Hard ceiling on messages per calendar day. 0 uses the built-in default
+  // (500 in production, matching Gmail's own free-tier limit; 25 elsewhere).
+  SMTP_MAX_PER_DAY: parseInt(process.env.SMTP_MAX_PER_DAY || '0', 10) || 0,
+
   // Encryption (for GitHub tokens, secrets)
   ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || '',
 

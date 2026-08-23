@@ -21,6 +21,7 @@ const TABS = [
   { to: 'backlog', label: 'Backlog' },
   { to: 'sprints', label: 'Sprints' },
   { to: 'channels', label: 'Channels' },
+  { to: 'labels', label: 'Labels' },
   { to: 'members', label: 'Members' },
   { to: 'github', label: 'GitHub' },
   { to: 'settings', label: 'Settings' },

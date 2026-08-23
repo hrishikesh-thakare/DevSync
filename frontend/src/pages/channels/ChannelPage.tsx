@@ -17,10 +17,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { LinkPreview } from '@/components/LinkPreview';
+import { ChannelSettingsSheet } from '@/pages/channels/ChannelSettingsSheet';
 import { useChatStore } from '@/store/chatStore';
 import { useAuthStore } from '@/store/auth';
 import { socketClient } from '@/lib/socket';
 import { initialsOf } from '@/lib/initials';
+import { firstUrlIn } from '@/lib/messageLinks';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/types/api';
 import { Bubble, BubbleContent, BubbleReactions } from '@/components/ui/bubble';
@@ -158,10 +161,11 @@ export function ChannelPage() {
           <h1 className="font-medium text-foreground">{channel.name}</h1>
           {channel.isAnnouncementOnly ? <Badge variant="outline">announcements</Badge> : null}
           {channel.description ? (
-            <p className="ml-2 hidden truncate text-sm text-muted-foreground sm:block">
+            <p className="ml-2 hidden min-w-0 truncate text-sm text-muted-foreground sm:block">
               {channel.description}
             </p>
           ) : null}
+          <ChannelSettingsSheet slug={slug} channel={channel} />
         </header>
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -173,6 +177,7 @@ export function ChannelPage() {
             <ul className="space-y-1">
               {messages.map((message, i) => (
                 <MessageRow
+                  slug={slug}
                   key={message.messageId}
                   message={message}
                   previous={messages[i - 1]}
@@ -219,6 +224,7 @@ export function ChannelPage() {
 
             <div className="flex-1 overflow-y-auto px-4 py-3">
               <MessageRow
+                  slug={slug}
                 message={threadRoot}
                 currentUserId={me?.userId}
                 compact
@@ -234,6 +240,7 @@ export function ChannelPage() {
                 <ul className="space-y-1">
                   {threadReplies.map((reply) => (
                     <MessageRow
+                  slug={slug}
                       key={reply.messageId}
                       message={reply}
                       currentUserId={me?.userId}
@@ -410,6 +417,7 @@ function getBubbleVariant(isMine: boolean, authorId: string | null) {
 }
 
 function MessageRow({
+  slug,
   message,
   previous,
   currentUserId,
@@ -418,6 +426,7 @@ function MessageRow({
   onReact,
   onDelete,
 }: {
+  slug: string;
   message: ChatMessage;
   previous?: ChatMessage;
   currentUserId?: string;
@@ -438,6 +447,8 @@ function MessageRow({
   const showDate =
     !compact &&
     (!previous || !isSameDay(new Date(previous.createdAt), new Date(message.createdAt)));
+
+  const linkedUrl = useMemo(() => firstUrlIn(message.bodyText ?? ''), [message.bodyText]);
 
   // Collapse the flat reaction rows into counts per emoji.
   const reactions = useMemo(() => {
@@ -503,6 +514,11 @@ function MessageRow({
                 ) : null}
               </BubbleContent>
             )}
+
+            {/* Only the first link is unfurled: the endpoint fetches the target
+                page server-side with a 5s timeout, so one request per message
+                is the sensible ceiling. */}
+            {linkedUrl ? <LinkPreview slug={slug} url={linkedUrl} /> : null}
 
             {Array.isArray(message.bodyBlocks) && message.bodyBlocks.length > 0 && (
               <div className="mt-2 px-1">

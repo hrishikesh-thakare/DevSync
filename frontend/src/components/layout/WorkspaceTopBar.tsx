@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LogOutIcon, SearchIcon, SettingsIcon, LayersIcon } from 'lucide-react';
+import { LogOutIcon, SearchIcon, SettingsIcon, LayersIcon, UserCogIcon } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -82,6 +82,12 @@ export function WorkspaceTopBar({ slug }: { slug: string }) {
               <span className="truncate text-xs font-normal text-muted-foreground">{user?.email}</span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link to="/account">
+                <UserCogIcon className="size-4" aria-hidden="true" />
+                Account settings
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link to="/workspaces">
                 <LayersIcon className="size-4" aria-hidden="true" />

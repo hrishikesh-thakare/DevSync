@@ -2,6 +2,7 @@ import { Link, NavLink, useParams } from 'react-router-dom';
 import {
   FolderKanbanIcon,
   HashIcon,
+  HistoryIcon,
   HomeIcon,
   MoreHorizontalIcon,
   PlusIcon,
@@ -72,6 +73,11 @@ export function WorkspaceSidebar() {
               <NavItem to={`/w/${slug}`} end icon={<HomeIcon />} label="Home" />
               <NavItem to={`/w/${slug}/projects`} icon={<FolderKanbanIcon />} label="Projects" />
               <NavItem to={`/w/${slug}/members`} icon={<UsersIcon />} label="Members" />
+              {/* The audit endpoint refuses anyone below admin, so linking it
+                  for a plain member would only lead to a 403. */}
+              {canManage ? (
+                <NavItem to={`/w/${slug}/activity`} icon={<HistoryIcon />} label="Activity" />
+              ) : null}
               {isOwner() ? (
                 <NavItem to={`/w/${slug}/settings`} icon={<SettingsIcon />} label="Settings" />
               ) : null}

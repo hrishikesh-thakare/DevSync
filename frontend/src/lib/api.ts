@@ -25,6 +25,44 @@ export class ApiError extends Error {
 }
 
 /**
+ * The single in-flight refresh, shared by every caller that hits a 401 at once.
+ *
+ * `POST /auth/refresh` *rotates*: it revokes the presented token and issues a
+ * new one. So two parallel refreshes with the same cookie are not idempotent —
+ * the first wins and the second is answered "Invalid or revoked refresh token",
+ * which used to dispatch `auth:unauthorized` and sign the user out.
+ *
+ * That was reachable on any ordinary page load. WorkspaceLayout, NotificationBell,
+ * ProjectLayout and the routed page all fetch on mount, so once the 15-minute
+ * access token expired, four requests 401'd in the same tick and raced. Sharing
+ * one promise means exactly one rotation happens and the others await its result.
+ */
+let refreshInFlight: Promise<string | null> | null = null;
+
+function refreshAccessToken(): Promise<string | null> {
+  refreshInFlight ??= (async () => {
+    try {
+      const res = await fetch(`${API_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      localStorage.setItem('accessToken', data.accessToken);
+      return data.accessToken as string;
+    } catch {
+      return null;
+    } finally {
+      // Cleared only once settled, so a later 401 can start a fresh rotation.
+      refreshInFlight = null;
+    }
+  })();
+
+  return refreshInFlight;
+}
+
+/**
  * Custom fetch wrapper that automatically includes credentials (cookies)
  * and intercepts 401 Unauthorized errors to attempt a token refresh.
  *
@@ -69,38 +107,21 @@ export async function apiFetch<T = any>(endpoint: string, options: RequestInit =
   const PUBLIC_AUTH = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/oauth/callback'];
 
   if (response.status === 401 && !PUBLIC_AUTH.includes(endpoint)) {
-    try {
-      const refreshRes = await fetch(`${API_URL}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      });
+    const accessToken = await refreshAccessToken();
 
-      if (refreshRes.ok) {
-        // Token refreshed successfully, save it and retry original request
-        const refreshData = await refreshRes.json();
-        localStorage.setItem('accessToken', refreshData.accessToken);
-        
-        config.headers = {
-          ...config.headers,
-          Authorization: `Bearer ${refreshData.accessToken}`
-        };
-        
-        response = await fetch(url, config);
-
-        // A fresh token that still gets rejected means the session is truly gone
-        // (user deactivated, deleted, or role revoked) — stop pretending otherwise.
-        if (response.status === 401) {
-          window.dispatchEvent(new Event('auth:unauthorized'));
-        }
-      } else {
-        // Refresh failed, force logout via Zustand store
-        window.dispatchEvent(new Event('auth:unauthorized'));
-        throw new ApiError('Session expired. Please log in again.', 401);
-      }
-    } catch (refreshErr) {
+    if (!accessToken) {
+      // The refresh cookie itself is gone, expired or already revoked.
       window.dispatchEvent(new Event('auth:unauthorized'));
-      throw refreshErr;
+      throw new ApiError('Session expired. Please log in again.', 401);
+    }
+
+    config.headers = { ...config.headers, Authorization: `Bearer ${accessToken}` };
+    response = await fetch(url, config);
+
+    // A fresh token that still gets rejected means the session is truly gone
+    // (user deactivated, deleted, or role revoked) — stop pretending otherwise.
+    if (response.status === 401) {
+      window.dispatchEvent(new Event('auth:unauthorized'));
     }
   }
 

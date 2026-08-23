@@ -4,8 +4,8 @@ import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import {
   GitCommitHorizontalIcon,
+  HistoryIcon,
   Loader2Icon,
-  PaperclipIcon,
   SendIcon,
   SparklesIcon,
   XIcon,
@@ -37,7 +37,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { ActivityLog } from '@/components/ActivityLog';
+import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
 import { useTaskDetailStore } from '@/store/taskDetailStore';
+import { TaskAttachments } from '@/pages/projects/task/TaskAttachments';
 import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
 import { useSprintStore } from '@/store/sprintStore';
 import { initialsOf } from '@/lib/initials';
@@ -62,6 +65,8 @@ export function TaskDetailPage() {
   const sprints = useSprintStore((s) => s.sprints);
   const fetchSprints = useSprintStore((s) => s.fetchSprints);
   const myRole = useMyProjectRole();
+  const workspaceRole = useCurrentWorkspaceStore((s) => s.myRole);
+  const isWorkspaceAdmin = workspaceRole === 'owner' || workspaceRole === 'admin';
   const canEdit = myRole === 'project_admin' || myRole === 'developer';
   const canDelete = myRole === 'project_admin';
 
@@ -201,20 +206,28 @@ export function TaskDetailPage() {
             </section>
           ) : null}
 
-          {attachments.length > 0 ? (
+          <TaskAttachments
+            slug={slug}
+            projectKey={key}
+            taskKey={taskKey}
+            attachments={attachments}
+            canEdit={canEdit}
+          />
+
+          {/* The audit endpoint is owner/admin only, so the section is offered
+              to nobody else rather than rendering a permission notice. */}
+          {isWorkspaceAdmin ? (
             <section>
               <h2 className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
-                <PaperclipIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-                Attachments ({attachments.length})
+                <HistoryIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+                History
               </h2>
-              <ul className="space-y-1">
-                {attachments.map((a) => (
-                  <li key={a.fileId} className="flex items-center gap-2 rounded-lg bg-card px-3 py-2 text-sm">
-                    <span className="min-w-0 flex-1 truncate">{a.filename}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">{a.uploaderName}</span>
-                  </li>
-                ))}
-              </ul>
+              <ActivityLog
+                entityType="task"
+                entityId={task.taskId}
+                limit={25}
+                emptyHint="Edits to this task will show up here."
+              />
             </section>
           ) : null}
 

@@ -127,6 +127,25 @@ export const initSocket = (server: HttpServer) => {
     // Join personal user room (for direct notifications)
     socket.join(`user:${userId}`);
 
+    // Join a room per active workspace membership. These are joined server-side
+    // from the database, never on client request, so a socket can only ever be
+    // in rooms its user actually belongs to. Presence updates are addressed to
+    // these rooms instead of being broadcast to every connected socket.
+    void (async () => {
+      try {
+        const memberships = await db
+          .select({ workspaceId: workspaceMembers.workspaceId })
+          .from(workspaceMembers)
+          .where(and(eq(workspaceMembers.userId, userId), eq(workspaceMembers.state, 'active')));
+
+        for (const m of memberships) {
+          if (m.workspaceId) socket.join(`workspace:${m.workspaceId}`);
+        }
+      } catch (err) {
+        console.error('Failed to join workspace rooms:', err);
+      }
+    })();
+
     // Join workspace/project/channel rooms
     socket.on('join_room', async (roomId: string) => {
       // Only channel rooms can be subscribed to from the client;
@@ -160,6 +179,36 @@ export const initSocket = (server: HttpServer) => {
   });
 
   return io;
+};
+
+/**
+ * Announces a presence/status change to the people who can actually see it.
+ *
+ * This used to be a bare `io.emit`, which reached every connected socket on the
+ * server — so a status message like "at the doctor" was delivered to users who
+ * shared no workspace with its author. Addressing the author's workspace rooms
+ * keeps the update inside the tenancy boundary the rest of the API enforces.
+ */
+export const broadcastPresence = async (
+  userId: string,
+  presence: string,
+  statusText: string,
+): Promise<void> => {
+  try {
+    const memberships = await db
+      .select({ workspaceId: workspaceMembers.workspaceId })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.userId, userId), eq(workspaceMembers.state, 'active')));
+
+    const payload = { userId, presence, statusText };
+    const server = getIO();
+
+    for (const m of memberships) {
+      if (m.workspaceId) server.to(`workspace:${m.workspaceId}`).emit('user_presence_updated', payload);
+    }
+  } catch (err) {
+    console.error('broadcastPresence error:', err);
+  }
 };
 
 // Helper function to get the io instance from anywhere in the backend

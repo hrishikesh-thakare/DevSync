@@ -28,6 +28,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { PageHeader, PageShell } from '@/components/layout/PageHeader';
+import { LeaveWorkspaceButton } from '@/pages/workspaces/LeaveWorkspaceButton';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
 import { useAuthStore } from '@/store/auth';
 import { apiFetch } from '@/lib/api';
@@ -129,6 +130,7 @@ export function WorkspaceMembersPage() {
               ? 'You can invite people and remove members. Only the owner can change roles.'
               : `${members.length} people have access to this workspace.`
         }
+        actions={<LeaveWorkspaceButton slug={slug} canLeave={myRole !== 'owner'} />}
       />
 
       {canInvite ? (

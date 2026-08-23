@@ -26,8 +26,12 @@ app.use(globalLimiter);
 import { githubWebhookRouter } from './modules/github/github.routes.js';
 app.use('/api/webhooks/github', githubWebhookRouter);
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true }));
+// 1mb everywhere by default. The 50mb ceiling exists only for the two endpoints
+// that carry a base64-encoded file in the JSON body; applying it globally meant
+// every route on the API would buffer a 50mb payload before rejecting it.
+app.use(/^\/api\/workspaces\/[^/]+\/(files\/upload|projects\/[^/]+\/tasks\/[^/]+\/attachments)$/, express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
 
 // ─── Health Check ────────────────────────────────────────────────────────────
@@ -83,6 +87,34 @@ app.use('/api/notifications', notificationsRoutes);
 import auditRoutes from './modules/audit/audit.routes.js';
 app.use('/api/audit', auditRoutes);
 
+// ─── 404 + Error handling (must be registered after every route) ─────────────
+//
+// Without these, Express's built-in handlers answer with an HTML page. In
+// development that page embeds the stack trace *and absolute filesystem paths*
+// (`D:\Final-Yr-Project\DevSync\backend\node_modules\...`), and in every
+// environment it breaks clients that expect JSON.
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Not found.' });
+});
+
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  // A malformed JSON body surfaces here as a SyntaxError from body-parser.
+  const status = typeof err?.status === 'number' ? err.status : 500;
+
+  if (status >= 500) {
+    console.error('Unhandled error:', err);
+  }
+
+  res.status(status).json({
+    error:
+      status === 400 && err instanceof SyntaxError
+        ? 'Malformed JSON body.'
+        : status < 500
+          ? err?.message || 'Request could not be processed.'
+          : 'Internal server error.',
+  });
+});
+
 import { createServer } from 'http';
 import { initSocket, getIO } from './sockets/index.js';
 import { registerWorkers, shutdownQueue } from './workers/index.js';
@@ -137,6 +169,21 @@ const shutdown = async (signal: string) => {
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
+
+// A rejected promise with no catch would otherwise terminate the process in
+// modern Node — one failing background job taking the whole API down. Route
+// errors never reach here; the Express error handler above catches those.
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled promise rejection:', reason);
+});
+
+// An uncaught exception leaves application state unknowable, so the only safe
+// response is to drain and exit — a process manager (or `npm run dev`) restarts
+// from a clean slate. Logging and carrying on would risk serving corrupt data.
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception — shutting down:', err);
+  void shutdown('uncaughtException').finally(() => process.exit(1));
+});
 
 // ─── Start Server ────────────────────────────────────────────────────────────
 const httpServer = createServer(app);

@@ -253,6 +253,17 @@ export const listTasks = async (req: Request, res: Response): Promise<void> => {
     const projectId = req.params.projectId || res.locals.projectId;
     const { status, assigneeId, sprintId, issueType, search } = req.query;
 
+    // Opt-in paging. The default is deliberately "everything" so the board and
+    // backlog, which need the full ordered set to render columns, keep working;
+    // the hard ceiling only stops a caller asking for an absurd page size.
+    const MAX_LIMIT = 2000;
+    const requestedLimit = parseInt(String(req.query.limit ?? ''), 10);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, MAX_LIMIT)
+      : MAX_LIMIT;
+    const requestedOffset = parseInt(String(req.query.offset ?? ''), 10);
+    const offset = Number.isFinite(requestedOffset) && requestedOffset > 0 ? requestedOffset : 0;
+
     let conditions = [eq(tasks.projectId, projectId), isNull(tasks.deletedAt)];
 
     if (status && typeof status === 'string') {
@@ -303,9 +314,20 @@ export const listTasks = async (req: Request, res: Response): Promise<void> => {
       .from(tasks)
       .leftJoin(users, eq(tasks.assigneeId, users.userId))
       .where(whereClause)
-      .orderBy(asc(tasks.rank));
+      .orderBy(asc(tasks.rank))
+      .limit(limit)
+      .offset(offset);
 
-    res.json({ tasks: results });
+    // `totalCount` is always reported so a caller can tell a full page from a
+    // truncated one. Omitting `limit` still returns everything, which keeps the
+    // existing board and backlog working unchanged — the parameter is there so
+    // they can adopt paging without a breaking contract change.
+    const [{ count: totalCount }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tasks)
+      .where(whereClause);
+
+    res.json({ tasks: results, totalCount, limit, offset });
   } catch (err) {
     console.error('List tasks error:', err);
     res.status(500).json({ error: 'Server error listing tasks.' });

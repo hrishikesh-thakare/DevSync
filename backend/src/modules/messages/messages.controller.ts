@@ -11,6 +11,29 @@ import { createNotification } from '../notifications/notifications.controller.js
 import { workspaceMembers } from '../../db/schema/workspaces.js';
 import { logAuditAction } from '../audit/audit.controller.js';
 
+/**
+ * Confirms a message actually belongs to the channel in the URL.
+ *
+ * `requireChannelAccess` runs one router up and authorises the **channel**, not
+ * the message. Every handler below then looked the message up by `messageId`
+ * alone, so any `:messageId` in the system could be paired with a `:channelId`
+ * the caller happened to have access to — enough to read a private thread, pin
+ * or unpin someone else's message, react to it, or (as a workspace admin of any
+ * workspace at all) delete it. Scoping the lookup here closes all five paths.
+ *
+ * Returns null when the message does not exist *or* is not in this channel;
+ * callers answer 404 either way, so the endpoint never confirms that an id
+ * exists somewhere else.
+ */
+const findMessageInChannel = async (messageId: string, channelId: string) => {
+  const [row] = await db
+    .select()
+    .from(messages)
+    .where(and(eq(messages.messageId, messageId), eq(messages.channelId, channelId)))
+    .limit(1);
+  return row ?? null;
+};
+
 // ─── SEND MESSAGE ────────────────────────────────────────────────────────────
 // POST /api/channels/:channelId/messages
 export const sendMessage = async (req: Request, res: Response): Promise<void> => {
@@ -310,7 +333,15 @@ export const listMessages = async (req: Request, res: Response): Promise<void> =
 // GET /api/channels/:channelId/messages/:messageId/thread
 export const getThreadReplies = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { messageId } = req.params as Record<string, string>;
+    const { channelId, messageId } = req.params as Record<string, string>;
+
+    // The thread root has to live in this channel, or any message id in the
+    // system could be read through a channel the caller happens to be in.
+    const root = await findMessageInChannel(messageId, channelId);
+    if (!root) {
+      res.status(404).json({ error: 'Message not found.' });
+      return;
+    }
 
     const results = await db
       .select({
@@ -373,12 +404,8 @@ export const editMessage = async (req: Request, res: Response): Promise<void> =>
     const userId = req.user!.userId;
     const { bodyText, bodyBlocks, isPinned } = req.body;
 
-    // Verify ownership before editing text
-    const [msg] = await db
-      .select({ authorId: messages.authorId, isDeleted: messages.isDeleted, isPinned: messages.isPinned })
-      .from(messages)
-      .where(eq(messages.messageId, messageId))
-      .limit(1);
+    // Verify the message is in this channel, then ownership.
+    const msg = await findMessageInChannel(messageId, channelId);
 
     if (!msg) {
       res.status(404).json({ error: 'Message not found.' });
@@ -457,12 +484,8 @@ export const deleteMessage = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    // Verify ownership & fetch replyCount
-    const [msg] = await db
-      .select({ authorId: messages.authorId, threadId: messages.threadId, replyCount: messages.replyCount, bodyText: messages.bodyText })
-      .from(messages)
-      .where(eq(messages.messageId, messageId))
-      .limit(1);
+    // Verify the message is in this channel, then ownership & fetch replyCount.
+    const msg = await findMessageInChannel(messageId, channelId);
 
     if (!msg) {
       res.status(404).json({ error: 'Message not found.' });
@@ -590,6 +613,14 @@ export const addReaction = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
+    // Without this, a reaction could be written onto any message in any
+    // workspace — the insert only ever referenced the message id.
+    const target = await findMessageInChannel(messageId, channelId);
+    if (!target) {
+      res.status(404).json({ error: 'Message not found.' });
+      return;
+    }
+
     const { messageReactions } = await import('../../db/schema/channels.js');
 
     await db
@@ -615,6 +646,12 @@ export const removeReaction = async (req: Request, res: Response): Promise<void>
   try {
     const { channelId, messageId, emoji } = req.params as Record<string, string>;
     const userId = req.user!.userId;
+
+    const target = await findMessageInChannel(messageId, channelId);
+    if (!target) {
+      res.status(404).json({ error: 'Message not found.' });
+      return;
+    }
 
     const { messageReactions } = await import('../../db/schema/channels.js');
 

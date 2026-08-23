@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { db } from '../../config/db.js';
 import { workspaceFiles } from '../../db/schema/channels.js';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { supabase } from '../../config/supabase.js';
 import { env } from '../../config/env.js';
 import fs from 'fs';
@@ -159,11 +159,17 @@ export const getUploadUrl = async (req: Request, res: Response): Promise<void> =
 export const getDownloadUrl = async (req: Request, res: Response): Promise<void> => {
   try {
     const { fileId } = req.params as Record<string, string>;
+    const workspaceId = (req.params.workspaceId || res.locals.workspaceId) as string;
 
+    // Scope the lookup to the workspace in the URL. `requireWorkspaceRole` only
+    // proves the caller belongs to *that* workspace — it says nothing about
+    // where the file lives. Looking up by fileId alone let any authenticated
+    // user read any file in the system by passing someone else's fileId
+    // through a workspace of their own.
     const [fileRecord] = await db
       .select()
       .from(workspaceFiles)
-      .where(eq(workspaceFiles.fileId, fileId))
+      .where(and(eq(workspaceFiles.fileId, fileId), eq(workspaceFiles.workspaceId, workspaceId)))
       .limit(1);
 
     if (!fileRecord) {

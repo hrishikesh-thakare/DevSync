@@ -9,7 +9,7 @@ import { env } from '../../config/env.js';
 import { eq, and, isNull, gt, ne } from 'drizzle-orm';
 import { supabase } from '../../config/supabase.js';
 import { logAuditAction } from '../audit/audit.controller.js';
-import { getIO } from '../../sockets/index.js';
+import { broadcastPresence } from '../../sockets/index.js';
 import { enqueueJob } from '../../workers/queue.js';
 
 // ─── Token Helpers ───────────────────────────────────────────────────────────
@@ -615,12 +615,11 @@ export const updateStatus = async (req: Request, res: Response): Promise<void> =
       statusText: users.statusText
     }).from(users).where(eq(users.userId, userId)).limit(1);
 
-    const io = getIO();
-    io.emit('user_presence_updated', { 
-      userId, 
-      presence: updatedUser?.presence || 'online', 
-      statusText: updatedUser?.statusText || '' 
-    });
+    await broadcastPresence(
+      userId,
+      updatedUser?.presence || 'online',
+      updatedUser?.statusText || '',
+    );
     
     res.json({ message: 'Status updated successfully', user: updatedUser });
   } catch (err) {
@@ -643,12 +642,11 @@ export const updatePresence = async (req: Request, res: Response): Promise<void>
       statusText: users.statusText
     }).from(users).where(eq(users.userId, userId)).limit(1);
       
-    const io = getIO();
-    io.emit('user_presence_updated', { 
-      userId, 
-      presence: updatedUser?.presence || 'online', 
-      statusText: updatedUser?.statusText || '' 
-    });
+    await broadcastPresence(
+      userId,
+      updatedUser?.presence || 'online',
+      updatedUser?.statusText || '',
+    );
     
     res.json({ message: 'Presence updated successfully', user: updatedUser });
   } catch (err) {

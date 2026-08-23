@@ -23,6 +23,13 @@ export interface RegisterCredentials {
   email: string;
   password?: string;
   fullName?: string;
+  /**
+   * Present only when arriving from an invite email, which links to
+   * `/register?inviteToken=…`. The server redeems it inside the same
+   * transaction that creates the user, and rejects it unless `email` matches
+   * the invited address.
+   */
+  inviteToken?: string;
 }
 
 export interface AuthState {
