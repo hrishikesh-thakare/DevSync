@@ -46,7 +46,7 @@ test.describe('Workspace RBAC — Settings Access @rbac', () => {
 
     // Member should be blocked from settings
     const url = viewerPage.url();
-    const forbiddenText = await viewerPage.locator('text=/forbidden|not authorized|access denied/i').count();
+    const forbiddenText = await viewerPage.locator('text=/forbidden|not authorized|access denied|do not have access/i').count();
     const isBlocked = !url.includes('/settings') || forbiddenText > 0;
     expect(isBlocked).toBe(true);
 

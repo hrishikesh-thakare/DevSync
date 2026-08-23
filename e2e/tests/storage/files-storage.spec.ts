@@ -36,7 +36,10 @@ test.describe('Files & Storage', () => {
   test('raw endpoint serves the file content', async () => {
     expect(rawUrl).toBeTruthy();
     const res = await fetch(rawUrl);
-    expect(res.status).toBe(200);
+    if (res.status !== 200) {
+      const body = await res.text();
+      throw new Error(`Expected 200 but got ${res.status}: ${body}\nrawUrl: ${rawUrl}`);
+    }
     expect(await res.text()).toBe(CONTENT);
   });
 

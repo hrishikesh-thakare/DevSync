@@ -215,6 +215,7 @@ export const getRawFile = async (req: Request, res: Response): Promise<void> => 
     const { token } = req.query;
 
     if (!token) {
+      console.warn('[getRawFile] 401: Missing access token. URL:', req.originalUrl);
       res.status(401).send('Unauthorized: Missing access token.');
       return;
     }
@@ -226,6 +227,7 @@ export const getRawFile = async (req: Request, res: Response): Promise<void> => 
         return;
       }
     } catch (err) {
+      console.warn('[getRawFile] 401: JWT verify failed. fileId:', fileId, 'token length:', String(token).length, 'error:', (err as Error).message);
       res.status(401).send('Unauthorized: Invalid or expired token.');
       return;
     }
