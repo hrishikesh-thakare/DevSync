@@ -71,6 +71,13 @@
       "when": 1787125288423,
       "tag": "0009_missing_user_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787125288424,
+      "tag": "0010_custom_pg_features",
+      "breakpoints": true
     }
   ]
 }
