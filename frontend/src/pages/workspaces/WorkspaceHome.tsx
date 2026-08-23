@@ -12,6 +12,7 @@ import {
   UsersIcon,
 } from 'lucide-react';
 
+import { EmptyState } from '@/components/layout/PageState';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MemberAvatar } from '@/components/MemberAvatar';
 import { Badge } from '@/components/ui/badge';
@@ -539,12 +540,12 @@ function RiskGroup({
                 <TaskRow task={task} slug={slug} />
               </div>
               {task.assigneeName ? (
-                <Avatar className="mr-3 size-6 shrink-0" title={task.assigneeName}>
-                  {task.assigneeAvatar ? <AvatarImage src={task.assigneeAvatar} alt="" /> : null}
-                  <AvatarFallback className="text-[9px]">
-                    {initialsOf(task.assigneeName)}
-                  </AvatarFallback>
-                </Avatar>
+                <span className="mr-3 shrink-0">
+                  <MemberAvatar
+                    size="sm"
+                    member={{ fullName: task.assigneeName, avatarUrl: task.assigneeAvatar }}
+                  />
+                </span>
               ) : null}
             </li>
           ))}
@@ -554,6 +555,13 @@ function RiskGroup({
   );
 }
 
-function EmptyRow({ children }: { children: React.ReactNode }) {
-  return <p className="px-2 py-6 text-center text-sm text-muted-foreground">{children}</p>;
+/**
+ * Compact empty state for the dashboard's card panels.
+ *
+ * Delegates to the shared component so the typography matches the rest of the
+ * app, but stays borderless and iconless — a full bordered Empty block inside
+ * a small card reads as a nested box.
+ */
+function EmptyRow({ children }: { children: string }) {
+  return <EmptyState compact title={children} className="py-6" />;
 }

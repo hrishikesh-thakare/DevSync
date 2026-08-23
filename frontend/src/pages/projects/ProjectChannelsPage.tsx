@@ -1,8 +1,8 @@
 import { Link, useParams } from 'react-router-dom';
 import { HashIcon, LockIcon } from 'lucide-react';
 
+import { EmptyState } from '@/components/layout/PageState';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
 import { PageHeader, PageShell } from '@/components/layout/PageHeader';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
 import { useProjectStore } from '@/store/projectStore';
@@ -23,14 +23,11 @@ export function ProjectChannelsPage() {
       />
 
       {scoped.length === 0 ? (
-        <Card>
-          <CardContent>
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No channels are scoped to this project yet. Workspace admins can create one and attach
-              it to the project.
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={<HashIcon aria-hidden="true" />}
+          title="No project channels"
+          description="Workspace admins can create a channel and attach it to this project."
+        />
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
           {scoped.map((channel) => (

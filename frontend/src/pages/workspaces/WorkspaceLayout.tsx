@@ -73,10 +73,15 @@ export function WorkspaceLayout() {
 
   return (
     <SidebarProvider>
+      {/* First focusable element on the page, so the sidebar's ~25 nav items
+          are skippable. Visually hidden until it takes focus. */}
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
       <WorkspaceSidebar />
       <SidebarInset>
         <WorkspaceTopBar slug={slug} />
-        <main className="flex-1 overflow-y-auto">
+        <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto">
           <Outlet />
         </main>
       </SidebarInset>

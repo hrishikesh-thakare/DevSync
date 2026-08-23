@@ -24,6 +24,7 @@ import { useAuthStore } from '@/store/auth';
 import { socketClient } from '@/lib/socket';
 import { initialsOf } from '@/lib/initials';
 import { firstUrlIn } from '@/lib/messageLinks';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/types/api';
 import { Bubble, BubbleContent, BubbleReactions } from '@/components/ui/bubble';
@@ -554,11 +555,11 @@ function MessageRow({
             {reactions.length > 0 ? (
               <BubbleReactions align="start" side="bottom" className={cn("gap-0 p-0.5 bg-background border shadow-sm ring-background")}>
                 {reactions.map(([emoji, info]) => (
+                  <Tooltip key={emoji}>
+                  <TooltipTrigger asChild>
                   <button
-                    key={emoji}
                     type="button"
                     onClick={() => onReact(emoji)}
-                    title={info.who.join(', ')}
                     className={cn(
                       'rounded-full px-2 py-0.5 text-xs transition-colors hover:bg-muted',
                       info.mine
@@ -568,6 +569,9 @@ function MessageRow({
                   >
                     {emoji} {info.count}
                   </button>
+                  </TooltipTrigger>
+                  <TooltipContent>{info.who.join(', ')}</TooltipContent>
+                  </Tooltip>
                 ))}
               </BubbleReactions>
             ) : null}

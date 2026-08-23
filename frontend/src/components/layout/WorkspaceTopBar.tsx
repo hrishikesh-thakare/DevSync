@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { WorkspaceBreadcrumbs } from '@/components/layout/WorkspaceBreadcrumbs';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +20,14 @@ import { useAuthStore } from '@/store/auth';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
 import { NotificationBell } from '@/components/layout/NotificationBell';
 import { initialsOf } from '@/lib/initials';
+
+/**
+ * Which modifier the palette hint should show. Read once at module load —
+ * `navigator` is stable, and `userAgentData` is not available in every browser
+ * so `platform` remains the reliable check despite being deprecated.
+ */
+const isMac =
+  typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? '');
 
 export function WorkspaceTopBar({ slug }: { slug: string }) {
   const [query, setQuery] = useState('');
@@ -49,7 +58,9 @@ export function WorkspaceTopBar({ slug }: { slug: string }) {
       <SidebarTrigger />
       <Separator orientation="vertical" className="mr-1 h-4" />
 
-      <form onSubmit={onSearch} className="relative max-w-md flex-1" role="search">
+      <WorkspaceBreadcrumbs />
+
+      <form onSubmit={onSearch} className="relative ml-auto max-w-md flex-1" role="search">
         <SearchIcon
           className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
           aria-hidden="true"
@@ -60,11 +71,19 @@ export function WorkspaceTopBar({ slug }: { slug: string }) {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search tasks and messages…"
           aria-label="Search this workspace"
-          className="pl-8"
+          className="pl-8 pr-14"
         />
+        {/* The command palette was keyboard-only discovery — nothing in the UI
+            hinted it existed. */}
+        <kbd
+          className="pointer-events-none absolute top-1/2 right-2 hidden -translate-y-1/2 items-center gap-0.5 rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline-flex"
+          aria-hidden="true"
+        >
+          {isMac ? '⌘' : 'Ctrl'} K
+        </kbd>
       </form>
 
-      <div className="ml-auto flex items-center gap-1">
+      <div className="flex items-center gap-1">
         <NotificationBell slug={slug} />
 
         <DropdownMenu>

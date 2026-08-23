@@ -25,6 +25,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { PageHeader, PageShell } from '@/components/layout/PageHeader';
 import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
+import { ErrorState } from '@/components/layout/PageState';
+import { Skeleton } from '@/components/ui/skeleton';
 
 /** Mirrors the editable half of `updateProjectSchema`. */
 const schema = z.object({
@@ -37,7 +39,7 @@ type Values = z.infer<typeof schema>;
 export function ProjectSettingsPage() {
   const { slug = '', key = '' } = useParams();
   const navigate = useNavigate();
-  const { project, updateProject, archiveProject } = useProjectStore();
+  const { project, updateProject, archiveProject, error: projectError } = useProjectStore();
   const myRole = useMyProjectRole();
   const canEdit = myRole === 'project_admin' || myRole === 'developer';
   const canArchive = myRole === 'project_admin';
@@ -79,7 +81,24 @@ export function ProjectSettingsPage() {
     }
   };
 
-  if (!project) return null;
+  // Previously `return null`, which rendered a blank page while the project
+  // loaded and again if the fetch failed — indistinguishable from a broken route.
+  if (!project) {
+    return (
+      <PageShell narrow>
+        <PageHeader title="Project settings" />
+        {projectError ? (
+          <ErrorState message={projectError} />
+        ) : (
+          <div className="space-y-4">
+            <Skeleton className="h-9 w-64 rounded-lg" />
+            <Skeleton className="h-64 w-full rounded-2xl" />
+            <Skeleton className="h-40 w-full rounded-2xl" />
+          </div>
+        )}
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell narrow>

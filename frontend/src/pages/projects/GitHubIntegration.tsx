@@ -15,6 +15,7 @@ import {
   XCircleIcon,
 } from 'lucide-react';
 
+import { EmptyState } from '@/components/layout/PageState';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -493,8 +494,9 @@ function RowList({
   );
 }
 
-function EmptyRow({ children }: { children: React.ReactNode }) {
-  return <p className="px-4 py-10 text-center text-sm text-muted-foreground">{children}</p>;
+/** Compact empty state shared by all five GitHub tabs. */
+function EmptyRow({ children }: { children: string }) {
+  return <EmptyState compact title={children} className="py-10" />;
 }
 
 function ExternalLink({ href }: { href: string }) {

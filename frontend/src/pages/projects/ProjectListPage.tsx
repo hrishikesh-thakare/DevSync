@@ -2,6 +2,7 @@ import { Link, useParams } from 'react-router-dom';
 import { FolderKanbanIcon, PlusIcon } from 'lucide-react';
 
 import { MemberAvatar } from '@/components/MemberAvatar';
+import { ErrorState } from '@/components/layout/PageState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,7 +19,7 @@ import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
 
 export function ProjectListPage() {
   const { slug = '' } = useParams();
-  const { projects, isLoading, isAdmin } = useCurrentWorkspaceStore();
+  const { projects, isLoading, isAdmin, error } = useCurrentWorkspaceStore();
   const canCreate = isAdmin();
 
   const newProjectButton = canCreate ? (
@@ -41,6 +42,8 @@ export function ProjectListPage() {
         }
         actions={newProjectButton}
       />
+
+      {error ? <ErrorState message={error} className="mb-4" /> : null}
 
       {isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

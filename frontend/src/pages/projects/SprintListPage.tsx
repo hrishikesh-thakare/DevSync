@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import { Loader2Icon, PlusIcon, SparklesIcon } from 'lucide-react';
+import { CalendarClockIcon, Loader2Icon, PlusIcon, SparklesIcon } from 'lucide-react';
 
+import { EmptyState } from '@/components/layout/PageState';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -141,13 +142,23 @@ export function SprintListPage() {
       ) : null}
 
       {sprints.length === 0 ? (
-        <Card>
-          <CardContent>
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No sprints yet.{canManage ? ' Create one to start planning.' : ''}
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={<CalendarClockIcon aria-hidden="true" />}
+          title="No sprints yet"
+          description={
+            canManage
+              ? 'Create a sprint to start planning time-boxed work.'
+              : 'A project admin can create the first sprint.'
+          }
+          action={
+            canManage ? (
+              <Button onClick={() => setCreateOpen(true)}>
+                <PlusIcon className="size-4" aria-hidden="true" />
+                New sprint
+              </Button>
+            ) : null
+          }
+        />
       ) : (
         <div className="space-y-8">
           {groups.map((group) =>

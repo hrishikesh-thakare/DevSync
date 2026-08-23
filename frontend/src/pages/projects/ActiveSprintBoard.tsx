@@ -20,8 +20,7 @@ import { useSprintStore } from '@/store/sprintStore';
 import { useTaskStore, byRank } from '@/store/taskStore';
 import { STATUS_META, STATUS_ORDER } from '@/lib/taskMeta';
 import { PRIORITY_META } from '@/lib/taskMeta';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { initialsOf } from '@/lib/initials';
+import { MemberAvatar } from '@/components/MemberAvatar';
 import { cn } from '@/lib/utils';
 
 /**
@@ -185,12 +184,16 @@ export function ActiveSprintBoard() {
                           </span>
                         ) : null}
                         {task.assigneeId ? (
-                          <Avatar className="ml-auto size-5" title={task.assigneeName ?? undefined}>
-                            {task.assigneeAvatar ? <AvatarImage src={task.assigneeAvatar} alt="" /> : null}
-                            <AvatarFallback className="text-[9px]">
-                              {initialsOf(task.assigneeName ?? '?')}
-                            </AvatarFallback>
-                          </Avatar>
+                          <span className="ml-auto">
+                            <MemberAvatar
+                              size="sm"
+                              member={{
+                                userId: task.assigneeId,
+                                fullName: task.assigneeName,
+                                avatarUrl: task.assigneeAvatar,
+                              }}
+                            />
+                          </span>
                         ) : null}
                       </div>
                     </Link>

@@ -17,10 +17,12 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { toast } from 'sonner';
-import { GripVerticalIcon, PlusIcon } from 'lucide-react';
+import { GripVerticalIcon, ListTodoIcon, PlusIcon } from 'lucide-react';
 
+import { EmptyState } from '@/components/layout/PageState';
 import { Alert, AlertTitle } from '@/components/ui/alert';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { MemberAvatar } from '@/components/MemberAvatar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -38,7 +40,6 @@ import { useTaskStore, byRank } from '@/store/taskStore';
 import { useSprintStore } from '@/store/sprintStore';
 import { useMyProjectRole } from '@/store/projectStore';
 import { ISSUE_TYPE_META, PRIORITY_META, STATUS_META } from '@/lib/taskMeta';
-import { initialsOf } from '@/lib/initials';
 import { cn } from '@/lib/utils';
 import type { TaskSummary } from '@/types/api';
 
@@ -195,13 +196,19 @@ export function BacklogPage() {
       ) : null}
 
       {backlog.length === 0 ? (
-        <Card>
-          <CardContent>
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              Nothing in the backlog. Tasks appear here until they are added to a sprint.
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={<ListTodoIcon aria-hidden="true" />}
+          title="Backlog is empty"
+          description="Tasks land here until they are added to a sprint."
+          action={
+            canEdit ? (
+              <Button onClick={() => setCreateOpen(true)}>
+                <PlusIcon className="size-4" aria-hidden="true" />
+                Create task
+              </Button>
+            ) : null
+          }
+        />
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={backlog.map((t) => t.taskId)} strategy={verticalListSortingStrategy}>
@@ -289,9 +296,15 @@ function BacklogRow({
       ) : null}
 
       <span className="shrink-0 font-mono text-xs text-muted-foreground">{task.taskKey}</span>
-      <span className="shrink-0 text-xs text-muted-foreground" title={type?.label}>
-        {type?.glyph}
-      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            <span aria-hidden="true">{type?.glyph}</span>
+            <span className="sr-only">{type?.label}</span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{type?.label}</TooltipContent>
+      </Tooltip>
 
       <button
         type="button"
@@ -314,10 +327,15 @@ function BacklogRow({
       ) : null}
 
       {task.assigneeId ? (
-        <Avatar className="size-6 shrink-0" title={task.assigneeName ?? undefined}>
-          {task.assigneeAvatar ? <AvatarImage src={task.assigneeAvatar} alt="" /> : null}
-          <AvatarFallback className="text-[9px]">{initialsOf(task.assigneeName ?? '?')}</AvatarFallback>
-        </Avatar>
+        <MemberAvatar
+          size="sm"
+          className="shrink-0"
+          member={{
+            userId: task.assigneeId,
+            fullName: task.assigneeName,
+            avatarUrl: task.assigneeAvatar,
+          }}
+        />
       ) : null}
     </li>
   );

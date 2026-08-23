@@ -136,8 +136,26 @@ export const getProject = async (req: Request, res: Response): Promise<void> => 
   try {
     const { projectId } = req.params as Record<string, string>;
 
+    // Explicitly projected, never `select()`. An unprojected select here shipped
+    // `github_webhook_secret` — the encrypted HMAC secret used to verify inbound
+    // GitHub webhooks — to every project member on the wire. Nothing rendered
+    // it, so it was invisible, but it had no business leaving the server.
     const [project] = await db
-      .select()
+      .select({
+        projectId: projects.projectId,
+        workspaceId: projects.workspaceId,
+        name: projects.name,
+        key: projects.key,
+        description: projects.description,
+        iconUrl: projects.iconUrl,
+        leadUserId: projects.leadUserId,
+        githubRepoOwner: projects.githubRepoOwner,
+        githubRepoName: projects.githubRepoName,
+        issueCounter: projects.issueCounter,
+        status: projects.status,
+        createdAt: projects.createdAt,
+        updatedAt: projects.updatedAt,
+      })
       .from(projects)
       .where(eq(projects.projectId, projectId))
       .limit(1);

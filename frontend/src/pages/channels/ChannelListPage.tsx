@@ -3,9 +3,9 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { HashIcon, LockIcon, PlusIcon } from 'lucide-react';
 
+import { EmptyState } from '@/components/layout/PageState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
   Dialog,
@@ -76,11 +76,11 @@ export function ChannelListPage() {
       />
 
       {channels.length === 0 ? (
-        <Card>
-          <CardContent>
-            <p className="py-8 text-center text-sm text-muted-foreground">No channels yet.</p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={<HashIcon aria-hidden="true" />}
+          title="No channels yet"
+          description="Channels are where discussion happens, workspace-wide or scoped to a project."
+        />
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
           {channels.map((channel) => (

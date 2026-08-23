@@ -124,3 +124,42 @@
     --color-priority-medium: var(--priority-medium);
     --color-priority-low: var(--priority-low);
 }
+
+/* ─── Reduced motion ──────────────────────────────────────────────────────────
+   The app ships ~34 animate-spin, ~13 animate-in and ~11 animate-out utilities
+   plus dnd-kit transforms, and had no escape hatch at all. Honour the OS
+   setting rather than forcing vestibular-sensitive users through it.
+
+   Motion is reduced to a near-instant tick rather than 0s: some libraries
+   (Radix included) wait on transitionend/animationend to unmount, and a true
+   zero duration can mean that event never fires. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ─── Skip link ───────────────────────────────────────────────────────────────
+   The workspace sidebar can carry ~25 nav items, every one of which a keyboard
+   user previously had to tab through before reaching page content. */
+.skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+}
+
+.skip-link:focus {
+    left: 0.5rem;
+    top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius);
+    background: var(--popover);
+    color: var(--popover-foreground);
+    outline: 2px solid var(--ring);
+}

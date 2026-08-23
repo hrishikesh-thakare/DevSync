@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { MailPlusIcon } from 'lucide-react';
 
 import { MemberAvatar } from '@/components/MemberAvatar';
+import { ErrorState, TableSkeleton } from '@/components/layout/PageState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -48,7 +49,15 @@ const STATE_VARIANT = {
 
 export function WorkspaceMembersPage() {
   const { slug = '' } = useParams();
-  const { members, myRole, isAdmin, isOwner, fetchWorkspaceData } = useCurrentWorkspaceStore();
+  const {
+    members,
+    myRole,
+    isAdmin,
+    isOwner,
+    fetchWorkspaceData,
+    isLoading,
+    error,
+  } = useCurrentWorkspaceStore();
   const myUserId = useAuthStore((s) => s.user?.userId);
 
   const [email, setEmail] = useState('');
@@ -188,9 +197,14 @@ export function WorkspaceMembersPage() {
         </p>
       </div>
 
+      {error ? <ErrorState message={error} className="mb-4" /> : null}
+
       <Card>
         <CardContent className="px-0">
-          <Table>
+          {/* The roster comes from the shared workspace fetch, so a cold load
+              previously rendered an empty table that looked like "no members". */}
+          {isLoading && members.length === 0 ? <TableSkeleton /> : null}
+          <Table hidden={isLoading && members.length === 0}>
             <TableHeader>
               <TableRow>
                 <TableHead>Member</TableHead>

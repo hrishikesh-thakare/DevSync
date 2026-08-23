@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { BellIcon, CheckCheckIcon } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ErrorState } from '@/components/layout/PageState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -24,7 +25,7 @@ import { cn } from '@/lib/utils';
 export function NotificationsInbox() {
   const { slug = '' } = useParams();
   const navigate = useNavigate();
-  const { notifications, unreadCount, isLoading, fetchNotifications, markAsRead, markAllAsRead, resolveUrl } =
+  const { notifications, unreadCount, isLoading, error, fetchNotifications, markAsRead, markAllAsRead, resolveUrl } =
     useNotificationStore();
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
 
@@ -65,6 +66,8 @@ export function NotificationsInbox() {
           </>
         }
       />
+
+      {error ? <ErrorState message={error} className="mb-4" /> : null}
 
       {isLoading ? (
         <div className="space-y-2">

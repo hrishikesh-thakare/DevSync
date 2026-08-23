@@ -1,9 +1,10 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GitCommitHorizontalIcon } from 'lucide-react';
+import { format, formatDistanceToNow, isPast } from 'date-fns';
+import { CalendarIcon, GitCommitHorizontalIcon } from 'lucide-react';
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { initialsOf } from '@/lib/initials';
+import { MemberAvatar } from '@/components/MemberAvatar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ISSUE_TYPE_META, PRIORITY_META } from '@/lib/taskMeta';
 import { cn } from '@/lib/utils';
 import type { TaskSummary } from '@/types/api';
@@ -25,10 +26,15 @@ export function TaskCardBody({ task, dragging }: { task: TaskSummary; dragging?:
       <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <span className="font-mono text-xs text-muted-foreground">{task.taskKey}</span>
 
-        <span className="flex items-center gap-1 text-xs text-muted-foreground" title={type?.label}>
-          <span aria-hidden="true">{type?.glyph}</span>
-          <span className="sr-only">{type?.label}</span>
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <span aria-hidden="true">{type?.glyph}</span>
+              <span className="sr-only">{type?.label}</span>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{type?.label}</TooltipContent>
+        </Tooltip>
 
         {priority ? (
           <span className={cn('flex items-center gap-1 text-xs', priority.text)}>
@@ -44,22 +50,33 @@ export function TaskCardBody({ task, dragging }: { task: TaskSummary; dragging?:
         ) : null}
 
         {task.linkedCommitsCount > 0 ? (
-          <span
-            className="flex items-center gap-0.5 text-xs text-muted-foreground"
-            title={`${task.linkedCommitsCount} linked commit(s)`}
-          >
-            <GitCommitHorizontalIcon className="size-3.5" aria-hidden="true" />
-            {task.linkedCommitsCount}
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+                <GitCommitHorizontalIcon className="size-3.5" aria-hidden="true" />
+                {task.linkedCommitsCount}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {task.linkedCommitsCount} linked{' '}
+              {task.linkedCommitsCount === 1 ? 'commit' : 'commits'}
+            </TooltipContent>
+          </Tooltip>
         ) : null}
 
+        {task.dueDate ? <DueChip dueDate={task.dueDate} done={task.status === 'done'} /> : null}
+
         {task.assigneeId ? (
-          <Avatar className="ml-auto size-5" title={task.assigneeName ?? undefined}>
-            {task.assigneeAvatar ? <AvatarImage src={task.assigneeAvatar} alt="" /> : null}
-            <AvatarFallback className="text-[9px]">
-              {initialsOf(task.assigneeName ?? '?')}
-            </AvatarFallback>
-          </Avatar>
+          <span className="ml-auto">
+            <MemberAvatar
+              size="sm"
+              member={{
+                userId: task.assigneeId,
+                fullName: task.assigneeName,
+                avatarUrl: task.assigneeAvatar,
+              }}
+            />
+          </span>
         ) : null}
       </div>
     </div>
@@ -104,5 +121,37 @@ export function SortableTaskCard({
         <TaskCardBody task={task} />
       </div>
     </li>
+  );
+}
+
+/**
+ * Due date on the card.
+ *
+ * Due dates were stored, returned and editable everywhere except the one place
+ * you actually look at work — the board. An overdue item now reads as overdue
+ * without opening it.
+ */
+function DueChip({ dueDate, done }: { dueDate: string; done: boolean }) {
+  const due = new Date(dueDate);
+  const overdue = !done && isPast(due);
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn(
+            'flex items-center gap-0.5 text-xs',
+            overdue ? 'font-medium text-destructive' : 'text-muted-foreground',
+          )}
+        >
+          <CalendarIcon className="size-3.5" aria-hidden="true" />
+          {format(due, 'd MMM')}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        {overdue ? 'Overdue — due ' : 'Due '}
+        {formatDistanceToNow(due, { addSuffix: true })}
+      </TooltipContent>
+    </Tooltip>
   );
 }

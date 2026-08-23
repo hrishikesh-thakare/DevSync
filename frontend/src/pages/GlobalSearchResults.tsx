@@ -57,6 +57,10 @@ export function GlobalSearchResults() {
   const [input, setInput] = useState(query);
   const [tasks, setTasks] = useState<TaskHit[]>([]);
   const [messages, setMessages] = useState<MessageHit[]>([]);
+  // The API caps each type at 25 rows per page but also returns the true totals.
+  // Counting the returned arrays instead silently under-reports any result set
+  // larger than one page.
+  const [counts, setCounts] = useState({ tasks: 0, messages: 0 });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,10 +74,15 @@ export function GlobalSearchResults() {
         );
         setTasks(data.tasks ?? []);
         setMessages(data.messages ?? []);
+        setCounts({
+          tasks: data.taskCount ?? (data.tasks ?? []).length,
+          messages: data.messageCount ?? (data.messages ?? []).length,
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Search failed.');
         setTasks([]);
         setMessages([]);
+        setCounts({ tasks: 0, messages: 0 });
       } finally {
         setIsLoading(false);
       }
@@ -97,7 +106,7 @@ export function GlobalSearchResults() {
     setParams({ q: input, type });
   };
 
-  const total = tasks.length + messages.length;
+  const total = counts.tasks + counts.messages;
 
   return (
     <PageShell>
@@ -165,7 +174,7 @@ export function GlobalSearchResults() {
           {tasks.length > 0 ? (
             <section>
               <h2 className="mb-2 text-sm font-medium text-muted-foreground">
-                Tasks ({tasks.length})
+                Tasks ({counts.tasks})
               </h2>
               <Card>
                 <CardContent className="px-0">
@@ -205,7 +214,7 @@ export function GlobalSearchResults() {
           {messages.length > 0 ? (
             <section>
               <h2 className="mb-2 text-sm font-medium text-muted-foreground">
-                Messages ({messages.length})
+                Messages ({counts.messages})
               </h2>
               <Card>
                 <CardContent className="px-0">

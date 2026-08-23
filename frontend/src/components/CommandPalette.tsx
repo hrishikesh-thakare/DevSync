@@ -11,6 +11,13 @@ import {
   UsersIcon,
 } from 'lucide-react';
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useAuthStore } from '@/store/auth';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
 import { apiFetch } from '@/lib/api';
@@ -93,10 +100,8 @@ export function CommandPalette() {
         else setOpen(true);
         return;
       }
-      if (e.key === 'Escape' && open) {
-        e.preventDefault();
-        closePalette();
-      }
+      // Escape is Radix Dialog's job now — handling it here as well would
+      // close the palette twice over.
     };
     document.addEventListener('keydown', down);
     return () => document.removeEventListener('keydown', down);
@@ -138,7 +143,6 @@ export function CommandPalette() {
     };
   }, [projects, channels, trimmed]);
 
-  if (!open) return null;
 
   const run = (action: () => void) => {
     closePalette();
@@ -152,14 +156,23 @@ export function CommandPalette() {
     matches.channels.length > 0;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-background/80 pt-[15vh] backdrop-blur-sm"
-      onClick={closePalette}
-    >
-      <div
-        className="relative w-full max-w-lg overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-2xl animate-in fade-in zoom-in-95"
-        onClick={(e) => e.stopPropagation()}
+    // Radix Dialog rather than a bare overlay div: this was previously a plain
+    // <div> with a click handler, so it had no role="dialog", no aria-modal, no
+    // focus trap (Tab escaped to the page behind it) and no focus restore on
+    // close. Radix provides all four, plus Escape handling.
+    <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : closePalette())}>
+      <DialogContent
+        showCloseButton={false}
+        aria-label="Command menu"
+        className="top-[15vh] max-w-lg translate-y-0 gap-0 overflow-hidden p-0"
       >
+        <DialogHeader className="sr-only">
+          <DialogTitle>Command menu</DialogTitle>
+          <DialogDescription>
+            Search tasks, messages, projects and channels, or jump to a page.
+          </DialogDescription>
+        </DialogHeader>
+
         <Command label="Global Command Menu" shouldFilter={false} loop>
           <div className="flex items-center gap-2 border-b px-4">
             <SearchIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -350,7 +363,7 @@ export function CommandPalette() {
             ) : null}
           </Command.List>
         </Command>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
