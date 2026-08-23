@@ -3,11 +3,8 @@ import { apiRequest } from '../../helpers/api-helpers.js';
 import { API_URL, TEST_PASSWORD } from '../../helpers/constants.js';
 
 test.describe('Self-Service Account Deletion @account', () => {
-  let token: string;
-  const email = `delete_me_${Date.now()}@demo.com`;
-
-  test.beforeAll(async () => {
-    // Register a new throwaway user
+  const registerAndVerify = async (email: string) => {
+    // Register
     const regRes = await fetch(`${API_URL}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -15,7 +12,7 @@ test.describe('Self-Service Account Deletion @account', () => {
     });
     expect(regRes.ok).toBe(true);
     
-    // Verify email (since REQUIRE_EMAIL_VERIFICATION is active in CI)
+    // Verify email
     const regBody = await regRes.json();
     const verificationUrl = new URL(regBody.verificationUrl);
     const verifyToken = verificationUrl.searchParams.get('token');
@@ -24,24 +21,63 @@ test.describe('Self-Service Account Deletion @account', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: verifyToken }),
     });
+  };
 
-    // Login
+  test('can delete own account via API and gets logged out', async () => {
+    const email = `api_delete_${Date.now()}@demo.com`;
+    await registerAndVerify(email);
+
+    // Login via API
     const loginRes = await fetch(`${API_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password: TEST_PASSWORD }),
     });
-    const loginBody = await loginRes.json();
-    token = loginBody.accessToken;
-  });
+    const { accessToken } = await loginRes.json();
 
-  test('can delete own account and gets logged out', async () => {
     // Delete account
-    const { status } = await apiRequest('/auth/me', token, { method: 'DELETE' });
+    const { status } = await apiRequest('/auth/me', accessToken, { method: 'DELETE' });
     expect(status).toBe(200);
 
     // Verify token is no longer valid
-    const { status: meStatus } = await apiRequest('/auth/me', token);
+    const { status: meStatus } = await apiRequest('/auth/me', accessToken);
     expect(meStatus).toBe(401);
+  });
+
+  test('can delete own account via UI (Account Settings)', async ({ page }) => {
+    const email = `ui_delete_${Date.now()}@demo.com`;
+    await registerAndVerify(email);
+
+    // Navigate and login
+    await page.goto('/login');
+    await page.fill('input[type="email"]', email);
+    await page.fill('input[type="password"]', TEST_PASSWORD);
+    await page.click('button[type="submit"]');
+    await page.waitForURL('/workspaces');
+
+    // Go to Account Settings
+    await page.goto('/account');
+    await page.waitForLoadState('networkidle');
+
+    // Click "Delete account" trigger
+    await page.click('button:has-text("Delete account")');
+
+    // Modal is open, type email to confirm
+    const confirmDialog = page.locator('[role="alertdialog"]');
+    await expect(confirmDialog).toBeVisible();
+    await confirmDialog.locator('input').fill(email);
+
+    // Click Delete permanently
+    await confirmDialog.locator('button:has-text("Delete permanently")').click();
+
+    // Should redirect to login and show success toast
+    await page.waitForURL('/login');
+    await expect(page.locator('text=Account deleted successfully')).toBeVisible();
+
+    // Trying to log in again should fail
+    await page.fill('input[type="email"]', email);
+    await page.fill('input[type="password"]', TEST_PASSWORD);
+    await page.click('button[type="submit"]');
+    await expect(page.locator('text=Invalid email or password.')).toBeVisible();
   });
 });
