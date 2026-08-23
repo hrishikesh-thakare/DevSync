@@ -882,3 +882,30 @@ export const verifyEmail = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
+// DELETE /api/auth/me — soft delete the user's account
+export const deleteAccount = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+
+    await db.transaction(async (tx) => {
+      // Soft delete the user
+      await tx
+        .update(users)
+        .set({ deletedAt: new Date() })
+        .where(eq(users.userId, userId));
+
+      // Revoke all active sessions
+      await tx
+        .update(refreshTokens)
+        .set({ revokedAt: new Date() })
+        .where(and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt)));
+
+      await logAuditAction({ actorId: userId, action: 'user.deleted', entityType: 'user', entityId: userId, tx });
+    });
+
+    res.json({ message: 'Account deleted successfully.' });
+  } catch (err) {
+    console.error('Delete account error:', err);
+    res.status(500).json({ error: 'Server error deleting account.' });
+  }
+};

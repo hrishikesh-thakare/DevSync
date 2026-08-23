@@ -11,6 +11,7 @@ import { StatusCard } from '@/pages/account/StatusCard';
 import { PreferencesCard } from '@/pages/account/PreferencesCard';
 import { ChangePasswordCard } from '@/pages/account/ChangePasswordCard';
 import { SessionsCard } from '@/pages/account/SessionsCard';
+import { DeleteAccountCard } from '@/pages/account/DeleteAccountCard';
 
 /**
  * Account settings, deliberately outside the workspace shell — nothing here is
@@ -59,6 +60,7 @@ export function AccountSettingsPage() {
           <PreferencesCard />
           <ChangePasswordCard />
           <SessionsCard />
+          <DeleteAccountCard />
         </div>
       </div>
     </div>

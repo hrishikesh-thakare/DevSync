@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, refresh, logout, oauthCallback, updateStatus, updatePresence, updatePreferences, listSessions, revokeSession, revokeOtherSessions, changePassword, forgotPassword, resetPassword, verifyEmail } from './auth.controller.js';
+import { register, login, refresh, logout, oauthCallback, updateStatus, updatePresence, updatePreferences, listSessions, revokeSession, revokeOtherSessions, changePassword, forgotPassword, resetPassword, verifyEmail, deleteAccount } from './auth.controller.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { authLimiter } from '../../middleware/rateLimit.js';
 import { validate } from '../../middleware/validate.js';
@@ -25,6 +25,7 @@ router.post('/oauth/callback', oauthCallback);
 router.get('/me', requireAuth, (req, res) => {
   res.json({ user: req.user });
 });
+router.delete('/me', requireAuth, deleteAccount);
 
 // Protected routes for presence, status and preferences
 router.post('/status', requireAuth, validate(updateStatusSchema), updateStatus);
