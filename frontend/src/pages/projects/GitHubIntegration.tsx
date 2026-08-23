@@ -12,6 +12,8 @@ import {
   GitPullRequestIcon,
   Loader2Icon,
   RefreshCwIcon,
+  Rows2Icon,
+  Rows3Icon,
   XCircleIcon,
 } from 'lucide-react';
 
@@ -23,6 +25,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
   Select,
   SelectContent,
@@ -86,6 +90,7 @@ export function GitHubIntegration() {
   const tab = (params.get('tab') ?? 'commits') as GithubTab;
   const [branch, setBranch] = useState('all');
   const [state, setState] = useState('all');
+  const [dense, setDense] = useState(false);
 
   useEffect(() => {
     if (slug && key) void fetchConnection(slug, key);
@@ -226,6 +231,23 @@ export function GitHubIntegration() {
             </SelectContent>
           </Select>
         ) : null}
+
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          value={dense ? 'dense' : 'comfortable'}
+          onValueChange={(v) => v && setDense(v === 'dense')}
+          className="ml-auto"
+          aria-label="Row density"
+        >
+          <ToggleGroupItem value="comfortable" aria-label="Comfortable density">
+            <Rows3Icon className="size-4" aria-hidden="true" />
+          </ToggleGroupItem>
+          <ToggleGroupItem value="dense" aria-label="Compact density">
+            <Rows2Icon className="size-4" aria-hidden="true" />
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
       {tabError ? (
@@ -256,55 +278,47 @@ export function GitHubIntegration() {
                   href: c.url,
                   taskKey: c.taskKey,
                 }))}
+                dense={dense}
                 slug={slug}
                 projectKey={key}
               />
             ) : null}
 
             {tab === 'ci' ? (
-              <ul className="divide-y">
-                {ciRuns.items.length === 0 ? (
-                  <EmptyRow>No workflow runs recorded yet.</EmptyRow>
-                ) : (
-                  ciRuns.items.map((run) => (
-                    <li key={run.id} className="flex items-center gap-3 px-4 py-3">
-                      <CiIcon conclusion={run.conclusion} status={run.status} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm text-foreground">
-                          {run.workflowName ?? 'Workflow'}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {[run.headBranch, run.headSha?.slice(0, 7), run.conclusion ?? run.status]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </p>
-                      </div>
-                      {run.triggeredAt ? (
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {formatDistanceToNow(new Date(run.triggeredAt), { addSuffix: true })}
-                        </span>
-                      ) : null}
-                      {canRerun ? (
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Re-run ${run.workflowName ?? 'workflow'}`}
-                          onClick={() => {
-                            void rerun(slug, key, run.runId)
-                              .then(() => toast.success('Re-run triggered on GitHub'))
-                              .catch((err: unknown) =>
-                                toast.error(err instanceof Error ? err.message : 'Could not re-run.'),
-                              );
-                          }}
-                        >
-                          <RefreshCwIcon className="size-4" aria-hidden="true" />
-                        </Button>
-                      ) : null}
-                      {run.htmlUrl ? <ExternalLink href={run.htmlUrl} /> : null}
-                    </li>
-                  ))
-                )}
-              </ul>
+              <RowList
+                empty="No workflow runs recorded yet."
+                dense={dense}
+                rows={ciRuns.items.map((run) => ({
+                  id: run.id,
+                  icon: <CiIcon conclusion={run.conclusion} status={run.status} />,
+                  title: run.workflowName ?? 'Workflow',
+                  mono: '',
+                  meta: [run.headBranch, run.headSha?.slice(0, 7), run.conclusion ?? run.status]
+                    .filter(Boolean)
+                    .join(' · '),
+                  when: run.triggeredAt,
+                  href: run.htmlUrl,
+                  taskKey: null,
+                  action: canRerun ? (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Re-run ${run.workflowName ?? 'workflow'}`}
+                      onClick={() => {
+                        void rerun(slug, key, run.runId)
+                          .then(() => toast.success('Re-run triggered on GitHub'))
+                          .catch((err: unknown) =>
+                            toast.error(err instanceof Error ? err.message : 'Could not re-run.'),
+                          );
+                      }}
+                    >
+                      <RefreshCwIcon className="size-4" aria-hidden="true" />
+                    </Button>
+                  ) : null,
+                }))}
+                slug={slug}
+                projectKey={key}
+              />
             ) : null}
 
             {tab === 'prs' ? (
@@ -323,6 +337,7 @@ export function GitHubIntegration() {
                   taskKey: pr.taskKey,
                   badge: pr.state,
                 }))}
+                dense={dense}
                 slug={slug}
                 projectKey={key}
               />
@@ -342,6 +357,7 @@ export function GitHubIntegration() {
                   taskKey: issue.taskKey,
                   badge: issue.state,
                 }))}
+                dense={dense}
                 slug={slug}
                 projectKey={key}
               />
@@ -360,6 +376,7 @@ export function GitHubIntegration() {
                   href: b.htmlUrl,
                   taskKey: b.taskKey,
                 }))}
+                dense={dense}
                 slug={slug}
                 projectKey={key}
               />
@@ -440,57 +457,98 @@ interface Row {
   href: string | null;
   taskKey: string | null;
   badge?: string;
+  /** Per-row action, e.g. the CI tab's re-run button. */
+  action?: React.ReactNode;
 }
 
+/**
+ * Shared table for all five GitHub tabs.
+ *
+ * Previously a `<ul>` of flex rows — real tabular data (icon, key, title,
+ * status, task link, timestamp) with no `<table>` semantics, so a screen
+ * reader had no column meaning to announce. None of these rows are
+ * drag-reorderable, unlike the backlog, so a literal `<table>` is safe here.
+ */
 function RowList({
   rows,
   empty,
   slug,
   projectKey,
+  dense,
 }: {
   rows: Row[];
   empty: string;
   slug: string;
   projectKey: string;
+  dense: boolean;
 }) {
   if (rows.length === 0) return <EmptyRow>{empty}</EmptyRow>;
 
+  const cellPad = dense ? 'py-1.5' : 'py-3';
+
   return (
-    <ul className="divide-y">
-      {rows.map((row) => (
-        <li key={row.id} className="flex items-center gap-3 px-4 py-3">
-          {row.icon}
-          {row.mono ? (
-            <code className="shrink-0 font-mono text-xs text-muted-foreground">{row.mono}</code>
-          ) : null}
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-8" />
+          <TableHead>Title</TableHead>
+          <TableHead className="w-24">Task</TableHead>
+          <TableHead className="hidden w-32 sm:table-cell">When</TableHead>
+          <TableHead className="w-10" />
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((row) => (
+          <TableRow key={row.id}>
+            <TableCell className={cellPad}>{row.icon}</TableCell>
 
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm text-foreground">{row.title}</p>
-            {row.meta ? <p className="truncate text-xs text-muted-foreground">{row.meta}</p> : null}
-          </div>
+            <TableCell className={cn(cellPad, 'max-w-0 whitespace-normal')}>
+              <div className="flex items-center gap-2">
+                {row.mono ? (
+                  <code className="shrink-0 font-mono text-xs text-muted-foreground">
+                    {row.mono}
+                  </code>
+                ) : null}
+                <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                  {row.title}
+                </span>
+                {row.badge ? (
+                  <Badge variant="outline" className="shrink-0">
+                    {row.badge}
+                  </Badge>
+                ) : null}
+              </div>
+              {row.meta ? (
+                <p className="truncate text-xs text-muted-foreground">{row.meta}</p>
+              ) : null}
+            </TableCell>
 
-          {row.badge ? <Badge variant="outline">{row.badge}</Badge> : null}
+            <TableCell className={cellPad}>
+              {/* Smart-commit linking is done server-side; surface the result. */}
+              {row.taskKey ? (
+                <Link
+                  to={`/w/${slug}/projects/${projectKey}/tasks/${row.taskKey}`}
+                  className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground hover:text-foreground"
+                >
+                  {row.taskKey}
+                </Link>
+              ) : null}
+            </TableCell>
 
-          {/* Smart-commit linking is done server-side; surface the result. */}
-          {row.taskKey ? (
-            <Link
-              to={`/w/${slug}/projects/${projectKey}/tasks/${row.taskKey}`}
-              className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground hover:text-foreground"
-            >
-              {row.taskKey}
-            </Link>
-          ) : null}
+            <TableCell className={cn(cellPad, 'hidden text-xs text-muted-foreground sm:table-cell')}>
+              {row.when ? formatDistanceToNow(new Date(row.when), { addSuffix: true }) : null}
+            </TableCell>
 
-          {row.when ? (
-            <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-              {formatDistanceToNow(new Date(row.when), { addSuffix: true })}
-            </span>
-          ) : null}
-
-          {row.href ? <ExternalLink href={row.href} /> : null}
-        </li>
-      ))}
-    </ul>
+            <TableCell className={cellPad}>
+              <div className="flex items-center gap-1">
+                {row.action}
+                {row.href ? <ExternalLink href={row.href} /> : null}
+              </div>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }
 
