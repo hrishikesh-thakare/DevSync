@@ -566,6 +566,11 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
         }
       }
 
+      const io = getIO();
+      if (io && updated.projectId) {
+        io.to(`project:${updated.projectId}`).emit('task_updated', updated);
+      }
+
       return updated;
     });
 
@@ -720,6 +725,11 @@ export const reorderTask = async (req: Request, res: Response): Promise<void> =>
           oldValues: { status: oldTask.status },
           tx
         });
+      }
+
+      const io = getIO();
+      if (io && updated.projectId) {
+        io.to(`project:${updated.projectId}`).emit('task_updated', updated);
       }
 
       return {

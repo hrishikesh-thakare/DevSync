@@ -25,7 +25,7 @@ DevSync is an enterprise-grade project management and real-time collaboration pl
 - **Real-Time Communication**:
   - WebSockets-powered (`Socket.io`) instant messaging.
   - **Project-Scoped Channels** and Workspace-wide discussion rooms.
-  - Threaded replies, direct messaging, and rich-text formatting (`Lexical`, sanitized with DOMPurify).
+  - Threaded replies, direct messaging, and rich-text formatting.
 - **Deep GitHub Integration**:
   - Connect repositories directly to projects.
   - Auto-link commits to tasks via smart commit messages.
@@ -44,11 +44,11 @@ DevSync is built on a modern, type-safe, monolithic architecture.
 
 ### Frontend
 - **Framework**: React 19 + TypeScript + Vite 8 + React Router 7
-- **Styling**: Tailwind CSS v4 + Framer Motion (Micro-animations)
-- **State Management**: Zustand
-- **Editor & UI**: Lexical (Rich Text), `@dnd-kit` (Drag & Drop), Recharts, Lucide Icons
+- **Styling**: Tailwind CSS v4 + shadcn/ui
+- **State Management**: Zustand 5
+- **Forms & Validation**: React Hook Form + Zod
+- **Editor & UI**: `@dnd-kit` (Drag & Drop), Lucide Icons, Sonner (Toasts)
 - **Real-time**: `socket.io-client`
-- **Security**: DOMPurify (XSS sanitization)
 
 ### Backend
 - **Runtime**: Node.js (ESM) + Express 5 + TypeScript
@@ -166,7 +166,7 @@ npm install
 npm run test
 ```
 
-See [**`docs/e2e_tests_summary.md`**](./docs/e2e_tests_summary.md) for a complete breakdown of every test module.
+See [**`docs/e2e-test-suite.md`**](./docs/e2e-test-suite.md) for a complete breakdown of every test module.
 
 ---
 
@@ -180,7 +180,7 @@ For deep dives into the system architecture, schema, and API contracts, please r
 | [**Database Schema**](./docs/schema.md) | Drizzle table definitions, relations, constraints, and ERD diagram. |
 | [**Tech Stack**](./docs/tech-stack.md) | Detailed breakdown of technical choices and future architectural plans. |
 | [**Navigation Flow**](./docs/navigation-flow.md) | Frontend routing topology and screen-by-screen feature inventory. |
-| [**E2E Test Suite**](./docs/e2e_tests_summary.md) | Complete inventory of the Playwright end-to-end tests and what they verify. |
+| [**E2E Test Suite**](./docs/e2e-test-suite.md) | Complete inventory of the Playwright end-to-end tests and what they verify. |
 
 ---
 

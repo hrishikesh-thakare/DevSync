@@ -1,75 +1,37 @@
-# React + TypeScript + Vite
+# DevSync Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The frontend for DevSync is built with React 19, Vite 8, and TypeScript. It provides a highly responsive, real-time SPA for workspace and project management.
 
-Currently, two official plugins are available:
+## 🛠 Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Framework**: React 19 + TypeScript + Vite 8
+- **Routing**: React Router 7
+- **Styling**: Tailwind CSS v4
+- **Components**: shadcn/ui
+- **State Management**: Zustand 5
+- **Forms & Validation**: React Hook Form + Zod
+- **Drag & Drop**: `@dnd-kit`
+- **Icons**: Lucide React
+- **Real-time**: `socket.io-client`
 
-## React Compiler
+## 🚀 Development Setup
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. Ensure you have the backend running first (see `../README.md`).
+2. Install dependencies:
+   ```bash
+   npm install --legacy-peer-deps
+   ```
+3. Create a `.env` file in this directory based on the `.env.example` or with the following variables:
+   ```env
+   VITE_API_URL=http://localhost:3001/api
+   VITE_SUPABASE_URL=https://your-project-id.supabase.co
+   VITE_SUPABASE_ANON_KEY=your_anon_key
+   ```
+4. Start the development server:
+   ```bash
+   npm run dev
+   ```
 
-## Expanding the ESLint configuration
+## 🏗️ Architecture Overview
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
-```
+For details about the frontend routing structure, screen inventory, and RBAC rules, please refer to the `docs/navigation-flow.md` document in the root directory.

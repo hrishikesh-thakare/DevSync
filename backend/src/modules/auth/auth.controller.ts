@@ -172,7 +172,10 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
     console.error('Registration error:', err);
-    res.status(500).json({ error: 'Server error during registration.' });
+    res.status(500).json({ 
+      error: 'Server error during registration.',
+      details: env.NODE_ENV !== 'production' ? (err instanceof Error ? err.message : String(err)) : undefined
+    });
   }
 };
 

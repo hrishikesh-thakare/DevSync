@@ -20,6 +20,7 @@ interface TaskState {
     afterTaskId: string | null,
     beforeTaskId: string | null,
   ) => Promise<void>;
+  applyTaskUpdate: (update: Partial<TaskSummary> & { taskId: string }) => void;
   reset: () => void;
 }
 
@@ -88,6 +89,18 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       set({ tasks: previous });
       throw err;
     }
+  },
+
+  applyTaskUpdate: (update) => {
+    set((state) => {
+      const exists = state.tasks.some(t => t.taskId === update.taskId);
+      if (!exists) return state; // Only update if we already have it in the board
+      return {
+        tasks: state.tasks.map((t) =>
+          t.taskId === update.taskId ? { ...t, ...update } : t,
+        ),
+      };
+    });
   },
 
   reset: () => set({ tasks: [], isLoading: true, error: null }),

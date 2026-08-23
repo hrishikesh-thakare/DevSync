@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import { db } from '../config/db.js';
 import { users } from '../db/schema/auth.js';
 import { channels, channelMembers } from '../db/schema/channels.js';
-import { projectMembers } from '../db/schema/projects.js';
+import { projects, projectMembers } from '../db/schema/projects.js';
 import { workspaceMembers } from '../db/schema/workspaces.js';
 import { and, eq } from 'drizzle-orm';
 
@@ -148,19 +148,39 @@ export const initSocket = (server: HttpServer) => {
 
     // Join workspace/project/channel rooms
     socket.on('join_room', async (roomId: string) => {
-      // Only channel rooms can be subscribed to from the client;
-      // user rooms are joined server-side.
-      if (typeof roomId !== 'string' || !roomId.startsWith('channel:')) {
+      if (typeof roomId !== 'string') return;
+
+      if (roomId.startsWith('channel:')) {
+        const channelId = roomId.slice('channel:'.length);
+        const allowed = await canAccessChannel(userId, channelId);
+
+        if (!allowed) {
+          console.log(`Socket ${socket.id} denied join of channel room ${roomId}`);
+          socket.emit('room_join_denied', { roomId });
+          return;
+        }
+      } else if (roomId.startsWith('project:')) {
+        const projectId = roomId.slice('project:'.length);
+        
+        // Simple access check for projects: user must have a role in the project
+        // or be a workspace admin/owner.
+        const [project] = await db.select({ workspaceId: projects.workspaceId }).from(projects).where(eq(projects.projectId, projectId)).limit(1);
+        if (!project) return;
+        
+        const [membership] = await db.select({ role: workspaceMembers.role }).from(workspaceMembers).where(and(eq(workspaceMembers.workspaceId, project.workspaceId!), eq(workspaceMembers.userId, userId), eq(workspaceMembers.state, 'active'))).limit(1);
+        
+        if (!membership) return;
+        
+        if (membership.role !== 'owner' && membership.role !== 'admin') {
+           const [pMember] = await db.select().from(projectMembers).where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId))).limit(1);
+           if (!pMember) {
+              console.log(`Socket ${socket.id} denied join of project room ${roomId}`);
+              socket.emit('room_join_denied', { roomId });
+              return;
+           }
+        }
+      } else {
         console.log(`Socket ${socket.id} denied join of invalid room ${roomId}`);
-        return;
-      }
-
-      const channelId = roomId.slice('channel:'.length);
-      const allowed = await canAccessChannel(userId, channelId);
-
-      if (!allowed) {
-        console.log(`Socket ${socket.id} denied join of channel room ${roomId}`);
-        socket.emit('room_join_denied', { roomId });
         return;
       }
 

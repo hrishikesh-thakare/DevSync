@@ -198,7 +198,7 @@ The suite runs automatically in CI on every push to `main`/`develop` and on ever
 | edit: author-only for text, pin by any member | Owner can't edit viewer's text (403); any member can pin |
 | delete: author-only unless workspace admin | Viewer deletes own ✓; owner deletes developer's ✓; viewer can't delete owner's |
 | message endpoints require authentication (401) | List + post without token → 401 |
-| malicious HTML in a message renders inert in the browser | `<img onerror>`/`<script>`/`<svg onload>`/`javascript:` hrefs stored verbatim via API render with no executable element or handler, no dialog, no window flag; plain text still visible (DOMPurify regression test) |
+| malicious HTML in a message renders inert in the browser | `<img onerror>`/`<script>`/`<svg onload>`/`javascript:` hrefs stored verbatim via API render with no executable element or handler, no dialog, no window flag; plain text still visible (XSS regression test) |
 
 ## 🎯 Tasks (`tests/tasks/`)
 

@@ -18,13 +18,13 @@ DevSync uses a **monolithic backend** (Node.js/Express) communicating with a **S
 | **Vite 8** | Build Tool & Bundler | Extremely fast HMR (Hot Module Replacement) and optimized production builds. |
 | **TypeScript 5** | Language | Type safety across the stack, reducing runtime errors. |
 | **TailwindCSS v4** | Styling | Utility-first CSS for rapid UI development without writing custom CSS classes. |
+| **shadcn/ui** | Component Library | Beautifully designed components that you can copy and paste into your apps, highly customizable. |
 | **Zustand 5** | State Management | Lightweight, fast, and boiler-plate free alternative to Redux. |
 | **React Router 7** | Routing | Standard client-side routing for SPAs. |
-| **Tiptap 3** | Rich Text Editor | Headless, highly customizable rich text editor used for the task description and chat inputs. |
+| **React Hook Form + Zod** | Forms & Validation | Performant, flexible, and extensible forms with easy-to-use validation. |
 | **dnd-kit 6** | Drag and Drop | Accessible, flexible drag-and-drop toolkit used for the Kanban board columns and cards. |
-| **Recharts 3** | Data Visualization | Used for the sprint burndown charts and analytics. |
-| **Framer Motion 12** | Animations | Smooth, physics-based micro-animations for UI elements. |
 | **Socket.io-client 4** | Real-time Client | Receives WebSocket events for instant chat messages and live task updates. |
+| **Sonner** | Toasts | Opinionated toast component for React for success and error notifications. |
 | **Lucide React** | Icons | Clean, consistent SVG icon set. |
 
 ---

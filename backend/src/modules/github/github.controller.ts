@@ -11,6 +11,7 @@ import { logAuditAction } from '../audit/audit.controller.js';
 import { createNotification } from '../notifications/notifications.controller.js';
 import { encrypt, decrypt } from '../../lib/encryption.js';
 import { enqueueJob } from '../../workers/queue.js';
+import { getIO } from '../../sockets/index.js';
 
 // ─── HELPER: Verify GitHub Webhook Signature ─────────────────────────────────
 function verifyGitHubSignature(rawBody: Buffer, signatureHeader: string | undefined, webhookSecret: string): boolean {
@@ -540,6 +541,9 @@ const handlePushEvent = async (projectId: string, payload: any) => {
             .update(tasks)
             .set({ status: 'done', updatedAt: new Date() })
             .where(eq(tasks.taskId, task.taskId));
+            
+          const io = getIO();
+          if (io) io.to(`project:${projectId}`).emit('task_updated', { taskId: task.taskId, status: 'done' });
 
           await logAuditAction({
             actorId: authorUserId,
@@ -554,6 +558,9 @@ const handlePushEvent = async (projectId: string, payload: any) => {
             .update(tasks)
             .set({ status: 'in_progress', updatedAt: new Date() })
             .where(eq(tasks.taskId, task.taskId));
+            
+          const io = getIO();
+          if (io) io.to(`project:${projectId}`).emit('task_updated', { taskId: task.taskId, status: 'in_progress' });
 
           await logAuditAction({
             actorId: authorUserId,
@@ -975,6 +982,10 @@ const handlePullRequestEvent = async (projectId: string, payload: any, defaultBr
 
   if (state === 'merged' && taskId && isDefaultBranch) {
     await db.update(tasks).set({ status: 'done', updatedAt: new Date() }).where(eq(tasks.taskId, taskId));
+    
+    const io = getIO();
+    if (io) io.to(`project:${projectId}`).emit('task_updated', { taskId, status: 'done' });
+    
     await logAuditAction({
       actorId: authorUserId,
       action: 'task.auto_closed_by_pr_merge',
@@ -987,6 +998,10 @@ const handlePullRequestEvent = async (projectId: string, payload: any, defaultBr
     const linkedTask = await findTaskByKey(projectId, taskKey!);
     if (linkedTask && (linkedTask.status === 'todo' || linkedTask.status === 'in_progress')) {
       await db.update(tasks).set({ status: 'in_review', updatedAt: new Date() }).where(eq(tasks.taskId, taskId));
+      
+      const io = getIO();
+      if (io) io.to(`project:${projectId}`).emit('task_updated', { taskId, status: 'in_review' });
+
       await logAuditAction({
         actorId: authorUserId,
         action: 'task.auto_review_by_pr_open',
@@ -1145,6 +1160,9 @@ const handleBranchEvent = async (projectId: string, payload: any, event: string)
       const linkedTask = await findTaskByKey(projectId, taskKey!);
       if (linkedTask && linkedTask.status === 'todo') {
         await db.update(tasks).set({ status: 'in_progress', updatedAt: new Date() }).where(eq(tasks.taskId, taskId));
+        
+        const io = getIO();
+        if (io) io.to(`project:${projectId}`).emit('task_updated', { taskId, status: 'in_progress' });
       }
     }
   } else if (event === 'delete') {

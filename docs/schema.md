@@ -286,7 +286,7 @@ erDiagram
 | `author_id` | `uuid` | FK → `users` ON DELETE SET NULL | Message author |
 | `is_system` | `boolean` | default `false` | System-generated message |
 | `system_type` | `varchar(30)` | nullable | e.g., `member_joined`, `sprint_started` |
-| `body_text` | `text` | NOT NULL, default `''` | Message content (HTML from Tiptap editor) |
+| `body_text` | `text` | NOT NULL, default `''` | Message content (HTML from Rich Text Editor) |
 | `body_blocks` | `jsonb` | nullable | Structured block content |
 | `thread_id` | `uuid` | self-referencing FK | Parent message (for threaded replies) |
 | `reply_count` | `integer` | default `0` | Number of thread replies |
