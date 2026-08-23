@@ -434,6 +434,18 @@ export const oauthCallback = async (req: Request, res: Response): Promise<void> 
       .where(eq(users.email, email))
       .limit(1);
 
+    // Supabase carries the GitHub handle as user_metadata.user_name. It was
+    // available here all along and simply never read, which left users.github_login
+    // NULL for everyone â€” and since matchAuthorUserId() looks a webhook author up
+    // by that column, every PR, issue and branch ingested from GitHub was
+    // attributed to nobody. Capturing it is what makes per-person GitHub
+    // analytics resolve to real accounts.
+    const provider = sbUser.app_metadata?.provider;
+    const githubLogin =
+      provider === 'github'
+        ? sbUser.user_metadata?.user_name || sbUser.user_metadata?.preferred_username || null
+        : null;
+
     if (!user) {
       // Auto-register the user if they don't exist
       isNewUser = true;
@@ -443,9 +455,9 @@ export const oauthCallback = async (req: Request, res: Response): Promise<void> 
       await db.transaction(async (tx) => {
         const [newUser] = await tx
           .insert(users)
-          .values({ email, fullName, avatarUrl, emailVerifiedAt: new Date() })
+          .values({ email, fullName, avatarUrl, githubLogin, emailVerifiedAt: new Date() })
           .returning();
-        
+
         user = newUser;
 
         await logAuditAction({
@@ -453,6 +465,14 @@ export const oauthCallback = async (req: Request, res: Response): Promise<void> 
           newValues: { email: user.email, full_name: user.fullName, auth_method: 'github' }, tx
         });
       });
+    }
+
+    // Backfill for accounts created before the handle was captured, so existing
+    // users start resolving on their next GitHub sign-in rather than needing a
+    // migration to guess at them.
+    if (!isNewUser && githubLogin && user && !user.githubLogin) {
+      await db.update(users).set({ githubLogin }).where(eq(users.userId, user.userId));
+      user.githubLogin = githubLogin;
     }
 
     if (user.deletedAt) {
@@ -882,7 +902,7 @@ export const verifyEmail = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// DELETE /api/auth/me — soft delete the user's account
+// DELETE /api/auth/me ï¿½ soft delete the user's account
 export const deleteAccount = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user!.userId;

@@ -7,6 +7,7 @@ import { users } from '../../db/schema/auth.js';
 import { messages, channels, workspaceFiles } from '../../db/schema/channels.js';
 import { eq, and, isNull, asc, desc, sql, or, ilike } from 'drizzle-orm';
 import { logAuditAction } from '../audit/audit.controller.js';
+import { recordStatusTransition, completedAtFor, DONE_STATUS } from './task-transitions.js';
 import { createNotification } from '../notifications/notifications.controller.js';
 import { getIO } from '../../sockets/index.js';
 import { createFileRecord } from '../files/files.controller.js';
@@ -178,6 +179,9 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
           sprintId: sprintId || null,
           storyPoints: storyPoints ?? null,
           discussionThreadId: rootMessage.messageId,
+          // A task can be filed already finished (an imported or retroactive
+          // item); it should count toward throughput from the moment it exists.
+          completedAt: targetStatus === DONE_STATUS ? new Date() : null,
         })
         .returning();
 
@@ -190,6 +194,17 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
         workspaceId: project.workspaceId ?? undefined,
         newValues: { task_key: task.taskKey, title: task.title, type: task.issueType, status: task.status, priority: task.priority, reporter_id: task.reporterId, project_id: task.projectId },
         tx
+      });
+
+      // Opening row, so a task's history starts at the status it was created
+      // in rather than at whatever its first later move happened to be.
+      await recordStatusTransition(tx, {
+        taskId: task.taskId,
+        projectId: task.projectId,
+        fromStatus: null,
+        toStatus: task.status ?? 'todo',
+        actorId: userId,
+        changedAt: task.createdAt ?? undefined,
       });
 
       // 7. Broadcast to project channels
@@ -390,6 +405,13 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
     if (sprintId !== undefined) updateData.sprintId = sprintId || null;
     if (storyPoints !== undefined) updateData.storyPoints = storyPoints ?? null;
 
+    // Crossing the done boundary stamps or clears the completion date. Left
+    // alone otherwise — `updatedAt` moves on every edit and cannot stand in.
+    if (status !== undefined && oldTask && status !== oldTask.status) {
+      const completedAt = completedAtFor(oldTask.status, status, updateData.updatedAt);
+      if (completedAt !== undefined) updateData.completedAt = completedAt;
+    }
+
     const result = await db.transaction(async (tx) => {
       await validateTaskRelations(tx, oldTask.projectId as string, { assigneeId, parentTaskId, epicId, sprintId });
 
@@ -430,6 +452,14 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
           await logAuditAction({
             actorId, action: 'task.status_changed', entityType: eType, entityId: eId, workspaceId,
             newValues: { status: updated.status }, oldValues: { status: oldTask.status }, tx
+          });
+          await recordStatusTransition(tx, {
+            taskId: eId,
+            projectId: updated.projectId,
+            fromStatus: oldTask.status,
+            toStatus: updated.status!,
+            actorId,
+            changedAt: updated.updatedAt ?? undefined,
           });
         }
         if (oldTask.priority !== updated.priority) {
@@ -694,6 +724,13 @@ export const reorderTask = async (req: Request, res: Response): Promise<void> =>
     const result = await db.transaction(async (tx) => {
       const [oldTask] = await tx.select().from(tasks).where(eq(tasks.taskId, taskId)).limit(1);
 
+      // Dragging a card into or out of the Done column is a completion event
+      // just as much as editing the field is.
+      if (oldTask && status && status !== oldTask.status) {
+        const completedAt = completedAtFor(oldTask.status, status, updateData.updatedAt);
+        if (completedAt !== undefined) updateData.completedAt = completedAt;
+      }
+
       const [updated] = await tx
         .update(tasks)
         .set(updateData)
@@ -727,6 +764,14 @@ export const reorderTask = async (req: Request, res: Response): Promise<void> =>
           newValues: { status: updated.status },
           oldValues: { status: oldTask.status },
           tx
+        });
+        await recordStatusTransition(tx, {
+          taskId: updated.taskId,
+          projectId: updated.projectId,
+          fromStatus: oldTask.status,
+          toStatus: updated.status!,
+          actorId: req.user!.userId,
+          changedAt: updateData.updatedAt,
         });
       }
 

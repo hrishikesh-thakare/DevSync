@@ -84,6 +84,9 @@ app.use('/api/workspaces/:slug/search', searchRoutes);
 import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
 app.use('/api/workspaces/:slug/dashboard', dashboardRoutes);
 
+import analyticsRoutes from './modules/analytics/analytics.routes.js';
+app.use('/api/workspaces/:slug/analytics', analyticsRoutes);
+
 import notificationsRoutes from './modules/notifications/notifications.routes.js';
 app.use('/api/notifications', notificationsRoutes);
 
