@@ -34,7 +34,7 @@ test.describe('Password Recovery — UI', () => {
     await page.goto(`${BASE}/forgot-password`);
     await page.getByPlaceholder('you@company.com').fill(`nobody-${Date.now()}@demo.com`);
     await page.getByRole('button', { name: 'Send reset link' }).click();
-    await expect(page.getByText('password reset link has been sent')).toBeVisible();
+    await expect(page.getByText('Reset link sent to')).toBeVisible();
   });
 
   test('full reset flow: request → reset page → sign in with new password', async ({ page }) => {
@@ -47,23 +47,23 @@ test.describe('Password Recovery — UI', () => {
     await page.goto(resetUrl);
     await expect(page.getByText('Choose a new password')).toBeVisible();
 
-    await page.getByPlaceholder('At least 8 characters').fill(newPassword);
-    await page.getByPlaceholder('Re-enter new password').fill(newPassword);
+    await page.getByLabel('New password', { exact: true }).fill(newPassword);
+    await page.getByLabel('Confirm new password').fill(newPassword);
     await page.getByRole('button', { name: 'Reset password' }).click();
 
-    await expect(page.getByText('Your password has been reset')).toBeVisible();
-    await page.getByRole('link', { name: 'Go to sign in' }).click();
+    await expect(page.getByText('Password reset successfully')).toBeVisible();
+    await page.getByRole('button', { name: 'Go to sign in' }).click();
     await expect(page).toHaveURL(`${BASE}/login`);
 
     // Old password is dead
     await page.getByPlaceholder('you@company.com').fill(email);
-    await page.getByPlaceholder('••••••••').fill(TEST_PASSWORD);
+    await page.getByLabel('Password').fill(TEST_PASSWORD);
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page.getByText('Invalid email or password')).toBeVisible();
 
     // New password works
     await page.getByPlaceholder('you@company.com').fill(email);
-    await page.getByPlaceholder('••••••••').fill(newPassword);
+    await page.getByLabel('Password').fill(newPassword);
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page).toHaveURL(`${BASE}/workspaces`);
   });
@@ -75,7 +75,7 @@ test.describe('Password Recovery — UI', () => {
     // Sign in
     await page.goto(`${BASE}/login`);
     await page.getByPlaceholder('you@company.com').fill(email);
-    await page.getByPlaceholder('••••••••').fill(TEST_PASSWORD);
+    await page.getByLabel('Password').fill(TEST_PASSWORD);
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page).toHaveURL(`${BASE}/workspaces`);
 
@@ -83,11 +83,11 @@ test.describe('Password Recovery — UI', () => {
     await page.goto(`${BASE}/account`);
     await expect(page.getByText('Change Password')).toBeVisible();
 
-    await page.getByPlaceholder('Enter your current password').fill(TEST_PASSWORD);
-    await page.getByPlaceholder('At least 8 characters').fill(newPassword);
-    await page.getByPlaceholder('Re-enter new password').fill(newPassword);
-    await page.getByRole('button', { name: 'Update Password' }).click();
-    await expect(page.getByText('Password changed. Other sessions were signed out.')).toBeVisible();
+    await page.getByLabel('Current password').fill(TEST_PASSWORD);
+    await page.getByLabel('New password', { exact: true }).fill(newPassword);
+    await page.getByLabel('Confirm new password').fill(newPassword);
+    await page.getByRole('button', { name: 'Change password' }).click();
+    await expect(page.getByText('Password changed. Other devices have been signed out.')).toBeVisible();
 
     // Sign out (revokes the refresh cookie) and back in with the new password
     await page.evaluate(async (apiBase) => {
@@ -96,7 +96,7 @@ test.describe('Password Recovery — UI', () => {
     }, API_URL);
     await page.goto(`${BASE}/login`);
     await page.getByPlaceholder('you@company.com').fill(email);
-    await page.getByPlaceholder('••••••••').fill(newPassword);
+    await page.getByLabel('Password').fill(newPassword);
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page).toHaveURL(`${BASE}/workspaces`);
   });

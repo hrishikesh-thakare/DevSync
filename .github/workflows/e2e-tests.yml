@@ -97,6 +97,11 @@ jobs:
         run: nohup npm run dev > backend.log 2>&1 &
         env:
           PORT: 3001
+          REQUIRE_EMAIL_VERIFICATION: 'true'
+          GEMINI_API_KEY: ''
+          SMTP_HOST: ''
+          SMTP_USER: ''
+          SMTP_PASS: ''
 
       - name: Start frontend server
         working-directory: frontend

@@ -477,7 +477,7 @@ function MessageRow({
         </li>
       ) : null}
 
-      <li className={cn('group flex gap-3 rounded-lg px-2 py-1 hover:bg-accent/40', grouped && '-mt-1')}>
+      <li id={message.messageId} className={cn('group flex gap-3 rounded-lg px-2 py-1 hover:bg-accent/40', grouped && '-mt-1')}>
         <div className="w-7 shrink-0">
           {!grouped ? (
             <Avatar className="size-7">
