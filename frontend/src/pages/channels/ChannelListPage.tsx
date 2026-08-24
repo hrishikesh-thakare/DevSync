@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { HashIcon, LockIcon, PlusIcon } from 'lucide-react';
@@ -27,6 +27,8 @@ import { PageHeader, PageShell } from '@/components/layout/PageHeader';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
 import type { ChannelType } from '@/types/api';
 
+const ANY = '__any__';
+
 export function ChannelListPage() {
   const { slug = '' } = useParams();
   const navigate = useNavigate();
@@ -38,6 +40,23 @@ export function ChannelListPage() {
   const [type, setType] = useState<ChannelType>('public');
   const [projectId, setProjectId] = useState('__none__');
   const [saving, setSaving] = useState(false);
+
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState(ANY);
+  const [projectFilter, setProjectFilter] = useState(ANY);
+
+  const hasFilters = search.trim() !== '' || typeFilter !== ANY || projectFilter !== ANY;
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return channels.filter(
+      (c) =>
+        (!q || c.name.toLowerCase().includes(q)) &&
+        (typeFilter === ANY || c.type === typeFilter) &&
+        (projectFilter === ANY ||
+          (projectFilter === '__workspace__' ? !c.projectId : c.projectId === projectFilter)),
+    );
+  }, [channels, search, typeFilter, projectFilter]);
 
   const create = async () => {
     if (!name.trim()) return;
@@ -82,8 +101,73 @@ export function ChannelListPage() {
           description="Channels are where discussion happens, workspace-wide or scoped to a project."
         />
       ) : (
+        <>
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <Input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Filter by name"
+              aria-label="Filter channels"
+              className="max-w-xs"
+            />
+
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-36" aria-label="Filter by visibility">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ANY}>All types</SelectItem>
+                <SelectItem value="public">Public</SelectItem>
+                <SelectItem value="private">Private</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={projectFilter} onValueChange={setProjectFilter}>
+              <SelectTrigger className="w-48" aria-label="Filter by project">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ANY}>All channels</SelectItem>
+                <SelectItem value="__workspace__">Workspace-wide</SelectItem>
+                {projects.map((p) => (
+                  <SelectItem key={p.projectId} value={p.projectId}>
+                    {p.key} — {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {hasFilters ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearch('');
+                  setTypeFilter(ANY);
+                  setProjectFilter(ANY);
+                }}
+              >
+                Clear filters
+              </Button>
+            ) : null}
+
+            <p className="ml-auto text-xs text-muted-foreground">
+              {visible.length === channels.length
+                ? `${channels.length} channels`
+                : `${visible.length} of ${channels.length} channels`}
+            </p>
+          </div>
+
+          {visible.length === 0 ? (
+            <EmptyState
+              icon={<HashIcon aria-hidden="true" />}
+              title="No channels match these filters"
+              description="Try clearing a filter or searching for something else."
+            />
+          ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
-          {channels.map((channel) => (
+          {visible.map((channel) => (
             <li key={channel.channelId}>
               <Link
                 to={`/w/${slug}/channels/${channel.channelId}`}
@@ -101,6 +185,8 @@ export function ChannelListPage() {
             </li>
           ))}
         </ul>
+          )}
+        </>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>

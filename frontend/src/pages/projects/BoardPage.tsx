@@ -1,17 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import {
-  DndContext,
-  DragOverlay,
-  KeyboardSensor,
-  PointerSensor,
-  closestCorners,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
-} from '@dnd-kit/core';
-import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { toast } from 'sonner';
 import { PlusIcon } from 'lucide-react';
 
@@ -25,8 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Kanban, KanbanBoard, KanbanOverlay, type KanbanCommitMeta } from '@/components/reui/kanban';
 import { BoardColumn } from '@/pages/projects/board/BoardColumn';
-import { TaskCardBody } from '@/pages/projects/board/TaskCard';
+import { KanbanTaskCard } from '@/pages/projects/board/KanbanTaskCard';
 import { CreateTaskDialog } from '@/pages/projects/board/CreateTaskDialog';
 import { useTaskStore, byRank } from '@/store/taskStore';
 import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
@@ -34,6 +23,13 @@ import { PRIORITY_META, PRIORITY_ORDER, STATUS_ORDER } from '@/lib/taskMeta';
 import type { TaskStatus, TaskSummary } from '@/types/api';
 
 const ANY = '__any__';
+
+const EMPTY_COLUMNS: Record<TaskStatus, TaskSummary[]> = {
+  todo: [],
+  in_progress: [],
+  in_review: [],
+  done: [],
+};
 
 export function BoardPage() {
   const { slug = '', key = '' } = useParams();
@@ -45,19 +41,12 @@ export function BoardPage() {
 
   const [assignee, setAssignee] = useState(ANY);
   const [priority, setPriority] = useState(ANY);
-  const [dragging, setDragging] = useState<TaskSummary | null>(null);
   const [createIn, setCreateIn] = useState<TaskStatus | null>(null);
 
   useEffect(() => {
     if (slug && key) void fetchTasks(slug, key);
     return () => reset();
   }, [slug, key, fetchTasks, reset]);
-
-  const sensors = useSensors(
-    // A small distance threshold keeps a click-to-open from registering as a drag.
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
 
   const filtered = useMemo(
     () =>
@@ -70,72 +59,54 @@ export function BoardPage() {
     [tasks, assignee, priority],
   );
 
-  const columns = useMemo(() => {
-    const map: Record<TaskStatus, TaskSummary[]> = {
-      todo: [],
-      in_progress: [],
-      in_review: [],
-      done: [],
-    };
+  // `Kanban`'s `value` is genuinely owned by it during a drag gesture — this
+  // is the live, per-drag-reorderable copy, re-derived whenever the filtered
+  // task list changes. `moveTask` reverts `tasks` itself on a failed request
+  // (see `taskStore.ts`), which flows back through `filtered` and resyncs
+  // this without any extra revert logic here.
+  const [columns, setColumns] = useState<Record<TaskStatus, TaskSummary[]>>(EMPTY_COLUMNS);
+
+  useEffect(() => {
+    const map: Record<TaskStatus, TaskSummary[]> = { todo: [], in_progress: [], in_review: [], done: [] };
     for (const task of filtered) map[task.status]?.push(task);
     for (const status of STATUS_ORDER) map[status].sort(byRank);
-    return map;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing to the filtered `tasks` fetch, not derivable from it during render (Kanban owns `columns` mid-drag)
+    setColumns(map);
   }, [filtered]);
 
-  const onDragStart = (e: DragStartEvent) => {
-    setDragging((e.active.data.current as { task?: TaskSummary } | undefined)?.task ?? null);
-  };
+  const onBoardCommit = (value: Record<TaskStatus, TaskSummary[]>, meta: KanbanCommitMeta<TaskSummary>) => {
+    if (meta.kind !== 'item') return;
 
-  const onDragEnd = async (e: DragEndEvent) => {
-    setDragging(null);
-    const { active, over } = e;
-    if (!over) return;
-
-    const task = (active.data.current as { task?: TaskSummary } | undefined)?.task;
+    // `Kanban` only ever calls `onValueCommit` once a card genuinely landed
+    // somewhere new (it checks that itself before firing), and it already
+    // hands back exactly where: `overContainer`/`overIndex` in `value`, the
+    // array it just finished reordering. Nothing here re-derives either.
+    const targetStatus = meta.overContainer as TaskStatus;
+    const destination = value[targetStatus] ?? [];
+    const task = destination[meta.overIndex];
     if (!task) return;
 
-    // The drop target is either a column (empty space) or another card.
-    const overData = over.data.current as
-      | { type?: string; status?: TaskStatus; task?: TaskSummary }
-      | undefined;
-
-    const targetStatus: TaskStatus | undefined =
-      overData?.type === 'column' ? overData.status : overData?.task?.status;
-    if (!targetStatus) return;
-
-    // Recompute the destination column without the dragged card, so the
-    // neighbours sent to the server describe where it is landing.
-    const destination = columns[targetStatus].filter((t) => t.taskId !== task.taskId);
-
-    let index = destination.length;
-    if (overData?.type === 'task' && overData.task) {
-      const overIndex = destination.findIndex((t) => t.taskId === overData.task!.taskId);
-      if (overIndex !== -1) index = overIndex;
-    }
-
-    const after = index > 0 ? destination[index - 1] : null;
-    const before = index < destination.length ? destination[index] : null;
+    const after = meta.overIndex > 0 ? destination[meta.overIndex - 1] : null;
+    const before = meta.overIndex < destination.length - 1 ? destination[meta.overIndex + 1] : null;
 
     const afterTaskId = after?.taskId ?? null;
     let beforeTaskId = before?.taskId ?? null;
 
-    // The server derives the new rank with `generateKeyBetween(afterRank,
-    // beforeRank)`, which throws unless afterRank is strictly less than
-    // beforeRank — and that 500s the request. Tasks created but never reordered
-    // all share the same default rank, so equal neighbours are common. Drop one
-    // side in that case: the card still lands in the right column, just at the
-    // end of the tied run instead of between two identical keys.
+    // The one piece that has to be figured out here regardless of which drag
+    // library is driving the board: the server derives the new rank with
+    // `generateKeyBetween(afterRank, beforeRank)`, which throws unless
+    // afterRank is strictly less than beforeRank — and that 500s the request.
+    // Tasks created but never reordered all share the same default rank, so
+    // equal neighbours are common. Drop one side in that case: the card still
+    // lands in the right column, just at the end of the tied run instead of
+    // between two identical keys.
     if (after && before && (after.rank ?? '') >= (before.rank ?? '')) {
       beforeTaskId = null;
     }
 
-    if (task.status === targetStatus && afterTaskId === null && beforeTaskId === null) return;
-
-    try {
-      await moveTask(slug, key, task.taskId, targetStatus, afterTaskId, beforeTaskId);
-    } catch (err) {
+    void moveTask(slug, key, task.taskId, targetStatus, afterTaskId, beforeTaskId).catch((err) => {
       toast.error(err instanceof Error ? err.message : 'Could not move the task.');
-    }
+    });
   };
 
   if (isLoading) {
@@ -221,14 +192,8 @@ export function BoardPage() {
         ) : null}
       </div>
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCorners}
-        onDragStart={onDragStart}
-        onDragEnd={onDragEnd}
-        onDragCancel={() => setDragging(null)}
-      >
-        <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <Kanban value={columns} onValueChange={setColumns} onValueCommit={onBoardCommit} getItemValue={(t) => t.taskId}>
+        <KanbanBoard className="flex-1 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
           {STATUS_ORDER.map((status) => (
             <BoardColumn
               key={status}
@@ -239,10 +204,15 @@ export function BoardPage() {
               onOpen={(task) => navigate(`/w/${slug}/projects/${key}/tasks/${task.taskKey}`)}
             />
           ))}
-        </div>
+        </KanbanBoard>
 
-        <DragOverlay>{dragging ? <TaskCardBody task={dragging} dragging /> : null}</DragOverlay>
-      </DndContext>
+        <KanbanOverlay>
+          {({ value }) => {
+            const task = tasks.find((t) => t.taskId === value);
+            return task ? <KanbanTaskCard task={task} dragging /> : null;
+          }}
+        </KanbanOverlay>
+      </Kanban>
 
       {/* Mounted only while open so each run starts from fresh defaults,
           rather than resetting state from an effect. */}

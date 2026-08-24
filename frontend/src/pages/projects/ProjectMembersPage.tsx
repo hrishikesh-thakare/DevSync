@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { UserPlusIcon } from 'lucide-react';
+import { MoreHorizontalIcon, Trash2Icon, UserPlusIcon } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -25,19 +25,54 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { PageHeader, PageShell } from '@/components/layout/PageHeader';
 import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
 import { initialsOf } from '@/lib/initials';
-import type { ProjectRole } from '@/types/api';
+import type { ProjectMember, ProjectRole } from '@/types/api';
 
 const ROLES: { value: ProjectRole; label: string; hint: string }[] = [
   { value: 'project_admin', label: 'Project admin', hint: 'Manage settings, sprints and members' },
   { value: 'developer', label: 'Developer', hint: 'Create and edit tasks' },
   { value: 'viewer', label: 'Viewer', hint: 'Read-only access' },
 ];
+
+const ANY = '__any__';
+
+function ProjectRoleBadge({ role }: { role: ProjectRole }) {
+  switch (role) {
+    case 'project_admin':
+      return (
+        <Badge className="bg-blue-600 text-white hover:bg-blue-600/90 dark:bg-blue-500 dark:text-white font-semibold shadow-xs">
+          Project admin
+        </Badge>
+      );
+    case 'developer':
+      return (
+        <Badge className="bg-purple-600 text-white hover:bg-purple-600/90 dark:bg-purple-500 dark:text-white font-medium shadow-xs">
+          Developer
+        </Badge>
+      );
+    case 'viewer':
+    default:
+      return (
+        <Badge className="bg-cyan-600 text-white hover:bg-cyan-600/90 dark:bg-cyan-500 dark:text-white font-medium shadow-xs">
+          Viewer
+        </Badge>
+      );
+  }
+}
 
 export function ProjectMembersPage() {
   const { slug = '', key = '' } = useParams();
@@ -50,6 +85,8 @@ export function ProjectMembersPage() {
   const [addRole, setAddRole] = useState<ProjectRole>('developer');
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
+  const [roleFilter, setRoleFilter] = useState(ANY);
+  const [memberToRemove, setMemberToRemove] = useState<ProjectMember | null>(null);
 
   // Only workspace members can be added to a project — the server rejects
   // anyone else with a 400, so they never appear in the picker.
@@ -60,13 +97,16 @@ export function ProjectMembersPage() {
 
   const adminCount = members.filter((m) => m.role === 'project_admin').length;
 
+  const hasFilters = filter.trim() !== '' || roleFilter !== ANY;
+
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return members;
-    return members.filter((m) =>
-      [m.fullName, m.displayName, m.email].some((v) => v?.toLowerCase().includes(q)),
+    return members.filter(
+      (m) =>
+        (!q || [m.fullName, m.displayName, m.email].some((v) => v?.toLowerCase().includes(q))) &&
+        (roleFilter === ANY || m.role === roleFilter),
     );
-  }, [members, filter]);
+  }, [members, filter, roleFilter]);
 
   const onAdd = async () => {
     if (!addUserId) return;
@@ -88,7 +128,6 @@ export function ProjectMembersPage() {
       await updateMemberRole(slug, key, userId, role);
       toast.success('Role updated');
     } catch (err) {
-      // The server refuses to demote the last project admin.
       toast.error(err instanceof Error ? err.message : 'Could not change the role.');
     } finally {
       setBusy(null);
@@ -165,7 +204,7 @@ export function ProjectMembersPage() {
         </Card>
       ) : null}
 
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <Input
           type="search"
           value={filter}
@@ -174,27 +213,55 @@ export function ProjectMembersPage() {
           aria-label="Filter project members"
           className="max-w-xs"
         />
-        <p className="text-xs text-muted-foreground">
+
+        <Select value={roleFilter} onValueChange={setRoleFilter}>
+          <SelectTrigger className="w-44" aria-label="Filter by role">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ANY}>All roles</SelectItem>
+            {ROLES.map((r) => (
+              <SelectItem key={r.value} value={r.value}>
+                {r.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {hasFilters ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setFilter('');
+              setRoleFilter(ANY);
+            }}
+          >
+            Clear filters
+          </Button>
+        ) : null}
+
+        <p className="ml-auto text-xs text-muted-foreground">
           {visible.length === members.length
             ? `${members.length} members`
             : `${visible.length} of ${members.length} members`}
         </p>
       </div>
 
-      <Card>
-        <CardContent className="px-0">
+      <Card className="overflow-hidden py-0">
+        <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Member</TableHead>
-                <TableHead>Role</TableHead>
-                {canManage ? <TableHead className="w-24" /> : null}
+                <TableHead className="w-44">Role</TableHead>
+                {canManage ? <TableHead className="w-16 text-right"><span className="sr-only">Actions</span></TableHead> : null}
               </TableRow>
             </TableHeader>
             <TableBody>
               {visible.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 3 : 2} className="text-center text-muted-foreground">
+                  <TableCell colSpan={canManage ? 3 : 2} className="h-24 text-center text-muted-foreground">
                     {members.length === 0
                       ? 'No one has been added to this project yet.'
                       : 'No member matches that search.'}
@@ -207,74 +274,73 @@ export function ProjectMembersPage() {
                   return (
                     <TableRow key={member.userId}>
                       <TableCell>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3.5">
                           <Avatar className="size-8">
                             {member.avatarUrl ? <AvatarImage src={member.avatarUrl} alt="" /> : null}
                             <AvatarFallback className="text-xs">{initialsOf(name)}</AvatarFallback>
                           </Avatar>
                           <div className="min-w-0">
-                            <p className="truncate text-foreground">{name}</p>
+                            <p className="truncate font-medium text-foreground">{name}</p>
                             <p className="truncate text-xs text-muted-foreground">{member.email}</p>
                           </div>
                         </div>
                       </TableCell>
 
                       <TableCell>
-                        {canManage ? (
-                          <Select
-                            value={member.role}
-                            onValueChange={(v) => void onRoleChange(member.userId, v as ProjectRole)}
-                            disabled={busy === member.userId || isLastAdmin}
-                          >
-                            <SelectTrigger className="w-44">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {ROLES.map((r) => (
-                                <SelectItem key={r.value} value={r.value}>
-                                  {r.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <Badge variant="outline">{member.role.replace('_', ' ')}</Badge>
-                        )}
+                        <ProjectRoleBadge role={member.role} />
                         {isLastAdmin ? (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            The last project admin cannot be demoted.
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            Sole admin
                           </p>
                         ) : null}
                       </TableCell>
 
                       {canManage ? (
                         <TableCell className="text-right">
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
-                                size="sm"
-                                disabled={busy === member.userId || isLastAdmin}
+                                size="icon"
+                                className="size-8 text-muted-foreground hover:text-foreground"
+                                disabled={busy === member.userId}
                               >
-                                Remove
+                                <MoreHorizontalIcon className="size-4" />
+                                <span className="sr-only">Actions for {name}</span>
                               </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Remove {name} from this project?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  They keep their workspace membership and can be added back later.
-                                  Tasks assigned to them stay assigned.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => void onRemove(member.userId, name)}>
-                                  Remove
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuLabel>Role</DropdownMenuLabel>
+                              <DropdownMenuRadioGroup
+                                value={member.role}
+                                onValueChange={(val) => void onRoleChange(member.userId, val as ProjectRole)}
+                              >
+                                {ROLES.map((r) => (
+                                  <DropdownMenuRadioItem
+                                    key={r.value}
+                                    value={r.value}
+                                    disabled={isLastAdmin && r.value !== 'project_admin'}
+                                    className="cursor-pointer"
+                                  >
+                                    {r.label}
+                                  </DropdownMenuRadioItem>
+                                ))}
+                              </DropdownMenuRadioGroup>
+
+                              {!isLastAdmin ? (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive dark:focus:bg-destructive/20"
+                                    onClick={() => setMemberToRemove(member)}
+                                  >
+                                    <Trash2Icon className="mr-2 size-4 text-destructive" />
+                                    Remove member
+                                  </DropdownMenuItem>
+                                </>
+                              ) : null}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       ) : null}
                     </TableRow>
@@ -285,6 +351,36 @@ export function ProjectMembersPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Confirmation dialog for member removal */}
+      <AlertDialog open={!!memberToRemove} onOpenChange={(open) => !open && setMemberToRemove(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Remove {memberToRemove?.displayName || memberToRemove?.fullName} from this project?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              They keep their workspace membership and can be added back later.
+              Tasks assigned to them stay assigned.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-xs"
+              onClick={() => {
+                if (memberToRemove) {
+                  const name = memberToRemove.displayName || memberToRemove.fullName || 'Member';
+                  void onRemove(memberToRemove.userId, name);
+                  setMemberToRemove(null);
+                }
+              }}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageShell>
   );
 }

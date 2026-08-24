@@ -328,6 +328,8 @@ export const listTasks = async (req: Request, res: Response): Promise<void> => {
         reporterId: tasks.reporterId,
         linkedCommitsCount: tasks.linkedCommitsCount,
         createdAt: tasks.createdAt,
+        parentTaskId: tasks.parentTaskId,
+        epicId: tasks.epicId,
       })
       .from(tasks)
       .leftJoin(users, eq(tasks.assigneeId, users.userId))

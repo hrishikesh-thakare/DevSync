@@ -27,6 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
@@ -38,10 +39,12 @@ import {
 import { CreateTaskDialog } from '@/pages/projects/board/CreateTaskDialog';
 import { useTaskStore, byRank } from '@/store/taskStore';
 import { useSprintStore } from '@/store/sprintStore';
-import { useMyProjectRole } from '@/store/projectStore';
-import { ISSUE_TYPE_META, PRIORITY_META, STATUS_META } from '@/lib/taskMeta';
+import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
+import { ISSUE_TYPE_META, ISSUE_TYPE_ORDER, PRIORITY_META, PRIORITY_ORDER, STATUS_META } from '@/lib/taskMeta';
 import { cn } from '@/lib/utils';
 import type { TaskSummary } from '@/types/api';
+
+const ANY = '__any__';
 
 /**
  * The backlog is every task not attached to a sprint, ordered by rank.
@@ -53,12 +56,17 @@ export function BacklogPage() {
   const navigate = useNavigate();
   const { tasks, isLoading, error, fetchTasks, moveTask, reset } = useTaskStore();
   const { sprints, fetchSprints, addTask } = useSprintStore();
+  const members = useProjectStore((s) => s.members);
   const myRole = useMyProjectRole();
   const canEdit = myRole === 'project_admin' || myRole === 'developer';
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [assigning, setAssigning] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [assignee, setAssignee] = useState(ANY);
+  const [priority, setPriority] = useState(ANY);
+  const [issueType, setIssueType] = useState(ANY);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     if (slug && key) {
@@ -70,6 +78,19 @@ export function BacklogPage() {
 
   const backlog = useMemo(() => tasks.filter((t) => !t.sprintId).sort(byRank), [tasks]);
 
+  const hasFilters = assignee !== ANY || priority !== ANY || issueType !== ANY || search.trim() !== '';
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return backlog.filter(
+      (t) =>
+        (assignee === ANY || (assignee === 'unassigned' ? !t.assigneeId : t.assigneeId === assignee)) &&
+        (priority === ANY || t.priority === priority) &&
+        (issueType === ANY || t.issueType === issueType) &&
+        (!q || t.title.toLowerCase().includes(q) || t.taskKey.toLowerCase().includes(q)),
+    );
+  }, [backlog, assignee, priority, issueType, search]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -79,10 +100,12 @@ export function BacklogPage() {
     const { active, over } = e;
     if (!over || active.id === over.id) return;
 
-    const moving = backlog.find((t) => t.taskId === active.id);
+    const moving = visible.find((t) => t.taskId === active.id);
     if (!moving) return;
 
-    const without = backlog.filter((t) => t.taskId !== active.id);
+    // Neighbours come from the currently visible (filtered) list, not the
+    // full backlog — the drop target the user actually saw and dropped onto.
+    const without = visible.filter((t) => t.taskId !== active.id);
     const overIndex = without.findIndex((t) => t.taskId === over.id);
     if (overIndex === -1) return;
 
@@ -154,16 +177,87 @@ export function BacklogPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl p-6">
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <h1 className="text-lg font-medium text-foreground">Backlog</h1>
         <span className="text-xs text-muted-foreground">
-          {backlog.length} task{backlog.length === 1 ? '' : 's'} without a sprint
+          {visible.length === backlog.length
+            ? `${backlog.length} task${backlog.length === 1 ? '' : 's'} without a sprint`
+            : `${visible.length} of ${backlog.length} tasks`}
         </span>
 
         {canEdit ? (
           <Button className="ml-auto" onClick={() => setCreateOpen(true)}>
             <PlusIcon className="size-4" aria-hidden="true" />
             Create task
+          </Button>
+        ) : null}
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search title or key"
+          aria-label="Search backlog"
+          className="w-52"
+        />
+
+        <Select value={assignee} onValueChange={setAssignee}>
+          <SelectTrigger className="w-48" aria-label="Filter by assignee">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ANY}>All assignees</SelectItem>
+            <SelectItem value="unassigned">Unassigned</SelectItem>
+            {members.map((m) => (
+              <SelectItem key={m.userId} value={m.userId}>
+                {m.displayName || m.fullName}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={priority} onValueChange={setPriority}>
+          <SelectTrigger className="w-40" aria-label="Filter by priority">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ANY}>All priorities</SelectItem>
+            {PRIORITY_ORDER.map((p) => (
+              <SelectItem key={p} value={p}>
+                {PRIORITY_META[p].label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={issueType} onValueChange={setIssueType}>
+          <SelectTrigger className="w-40" aria-label="Filter by type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ANY}>All types</SelectItem>
+            {ISSUE_TYPE_ORDER.map((t) => (
+              <SelectItem key={t} value={t}>
+                {ISSUE_TYPE_META[t].label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {hasFilters ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setAssignee(ANY);
+              setPriority(ANY);
+              setIssueType(ANY);
+              setSearch('');
+            }}
+          >
+            Clear filters
           </Button>
         ) : null}
       </div>
@@ -209,11 +303,17 @@ export function BacklogPage() {
             ) : null
           }
         />
+      ) : visible.length === 0 ? (
+        <EmptyState
+          icon={<ListTodoIcon aria-hidden="true" />}
+          title="No tasks match these filters"
+          description="Try clearing a filter or searching for something else."
+        />
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={backlog.map((t) => t.taskId)} strategy={verticalListSortingStrategy}>
+          <SortableContext items={visible.map((t) => t.taskId)} strategy={verticalListSortingStrategy}>
             <ul className="space-y-1">
-              {backlog.slice(0, 200).map((task) => (
+              {visible.slice(0, 200).map((task) => (
                 <BacklogRow
                   key={task.taskId}
                   task={task}
@@ -225,9 +325,9 @@ export function BacklogPage() {
               ))}
             </ul>
           </SortableContext>
-          {backlog.length > 200 ? (
+          {visible.length > 200 ? (
             <p className="mt-3 text-center text-xs text-muted-foreground">
-              {backlog.length - 200} more not shown
+              {visible.length - 200} more not shown
             </p>
           ) : null}
         </DndContext>

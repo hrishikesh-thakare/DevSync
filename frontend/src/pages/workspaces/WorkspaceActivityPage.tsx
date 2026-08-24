@@ -33,6 +33,7 @@ export function WorkspaceActivityPage() {
           entityType="workspace"
           entityId={workspaceId}
           limit={100}
+          filterable
           emptyHint="Actions are recorded as people create projects, move tasks and manage members."
         />
       )}

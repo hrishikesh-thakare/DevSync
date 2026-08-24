@@ -1,5 +1,3 @@
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
 import { CalendarIcon, GitCommitHorizontalIcon } from 'lucide-react';
 
@@ -80,47 +78,6 @@ export function TaskCardBody({ task, dragging }: { task: TaskSummary; dragging?:
         ) : null}
       </div>
     </div>
-  );
-}
-
-export function SortableTaskCard({
-  task,
-  disabled,
-  onOpen,
-}: {
-  task: TaskSummary;
-  disabled?: boolean;
-  onOpen: (task: TaskSummary) => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: task.taskId,
-    data: { type: 'task', task },
-    disabled,
-  });
-
-  return (
-    <li
-      ref={setNodeRef}
-      style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={cn('list-none', isDragging && 'opacity-40')}
-    >
-      <div
-        onClick={() => onOpen(task)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onOpen(task);
-          }
-        }}
-        // `attributes` supplies role="button", tabIndex and the drag
-        // aria-roledescription; spread it first so nothing here is clobbered.
-        {...attributes}
-        {...listeners}
-        className="cursor-grab rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
-      >
-        <TaskCardBody task={task} />
-      </div>
-    </li>
   );
 }
 

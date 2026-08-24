@@ -42,6 +42,7 @@ export interface AuthState {
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
   updatePreferences: (prefs: Record<string, unknown>) => Promise<void>;
+  updateAvatar: (avatarUrl: string | null) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => {
@@ -129,6 +130,17 @@ export const useAuthStore = create<AuthState>((set) => {
         console.error('Update preferences error:', err);
         throw err;
       }
+    },
+
+    // The image itself is already uploaded to Supabase storage by the caller
+    // (same bucket the message composer's attachments use) by the time this
+    // runs — this just hands the server the resulting public URL to persist.
+    updateAvatar: async (avatarUrl: string | null) => {
+      const data = await apiFetch('/auth/profile', {
+        method: 'PATCH',
+        body: JSON.stringify({ avatarUrl }),
+      });
+      set((state) => (state.user ? { user: { ...state.user, avatarUrl: data.avatarUrl } } : {}));
     },
   };
 });

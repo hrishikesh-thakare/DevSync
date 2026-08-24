@@ -1,9 +1,8 @@
-import { useDroppable } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { PlusIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { SortableTaskCard } from '@/pages/projects/board/TaskCard';
+import { KanbanColumn, KanbanColumnContent, KanbanItem, KanbanItemHandle } from '@/components/reui/kanban';
+import { KanbanTaskCard } from '@/pages/projects/board/KanbanTaskCard';
 import { STATUS_META } from '@/lib/taskMeta';
 import { cn } from '@/lib/utils';
 import type { TaskStatus, TaskSummary } from '@/types/api';
@@ -32,12 +31,12 @@ export function BoardColumn({
   const visible = tasks.slice(0, COLUMN_RENDER_CAP);
   const hidden = tasks.length - visible.length;
 
-  // The column itself is a drop target so an empty column can still receive a
-  // card — SortableContext alone only registers the cards inside it.
-  const { setNodeRef, isOver } = useDroppable({ id: `column:${status}`, data: { type: 'column', status } });
-
+  // `KanbanColumn` is itself sortable (columns can be dragged past each other)
+  // unless something inside it wires up a `KanbanColumnHandle` — nothing here
+  // does, on purpose, since a fixed Todo → In Progress → In Review → Done
+  // order is part of what a status column means.
   return (
-    <section className="flex min-w-0 flex-col" aria-label={meta.label}>
+    <KanbanColumn value={status} aria-label={meta.label} className="min-w-0">
       <header className="mb-2 flex items-center gap-2 px-1">
         <span className={cn('size-2 rounded-full', meta.dot)} aria-hidden="true" />
         <h2 className="text-sm font-medium text-foreground">{meta.label}</h2>
@@ -55,20 +54,23 @@ export function BoardColumn({
         ) : null}
       </header>
 
-      <div
-        ref={setNodeRef}
-        className={cn(
-          'flex-1 rounded-xl p-2 transition-colors',
-          isOver ? 'bg-accent/60 ring-1 ring-ring/40' : 'bg-muted/30',
-        )}
-      >
-        <SortableContext items={visible.map((t) => t.taskId)} strategy={verticalListSortingStrategy}>
-          <ul className="flex min-h-24 flex-col gap-2">
-            {visible.map((task) => (
-              <SortableTaskCard key={task.taskId} task={task} disabled={!canEdit} onOpen={onOpen} />
-            ))}
-          </ul>
-        </SortableContext>
+      <div className="flex-1 rounded-xl bg-muted/30 p-2">
+        <KanbanColumnContent value={status} className="min-h-24">
+          {visible.map((task) => (
+            <KanbanItem key={task.taskId} value={task.taskId} disabled={!canEdit}>
+              {/* The whole card is its own drag handle — dnd-kit's distance-
+                  based activation (configured on the Kanban root's sensors)
+                  is what lets a stationary click still open the task instead
+                  of starting a drag. */}
+              <KanbanItemHandle
+                onClick={() => onOpen(task)}
+                className="block rounded-[min(var(--radius-4xl),24px)] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <KanbanTaskCard task={task} />
+              </KanbanItemHandle>
+            </KanbanItem>
+          ))}
+        </KanbanColumnContent>
 
         {tasks.length === 0 ? (
           <p className="px-1 py-6 text-center text-xs text-muted-foreground">
@@ -82,6 +84,6 @@ export function BoardColumn({
           </p>
         ) : null}
       </div>
-    </section>
+    </KanbanColumn>
   );
 }

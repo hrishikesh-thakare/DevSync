@@ -678,6 +678,26 @@ export const updatePresence = async (req: Request, res: Response): Promise<void>
   }
 };
 
+// PATCH /auth/profile — currently just `avatarUrl`. The frontend uploads the
+// image to Supabase storage itself (same bucket the message composer's
+// attachments use) and hands this endpoint the resulting public URL; there is
+// no image processing or storage concern on this side.
+export const updateProfile = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+    const { avatarUrl } = req.body;
+
+    await db.update(users)
+      .set({ avatarUrl })
+      .where(eq(users.userId, userId));
+
+    res.json({ message: 'Profile updated successfully', avatarUrl });
+  } catch (err) {
+    console.error('Update profile error:', err);
+    res.status(500).json({ error: 'Server error updating profile.' });
+  }
+};
+
 export const updatePreferences = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user!.userId;

@@ -98,15 +98,21 @@ export function ListSkeleton({
 /** Skeleton shaped like a table body, matching the two members screens. */
 export function TableSkeleton({ rows = 6 }: { rows?: number }) {
   return (
-    <div className="space-y-3 p-4" aria-hidden="true">
+    <div className="divide-y" aria-hidden="true">
       {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="flex items-center gap-3">
-          <Skeleton className="size-8 shrink-0 rounded-full" />
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <Skeleton className="h-3.5 w-40 rounded" />
-            <Skeleton className="h-3 w-56 rounded" />
+        <div key={i} className="flex items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-3.5">
+            <Skeleton className="size-8 shrink-0 rounded-full" />
+            <div className="min-w-0 space-y-1.5">
+              <Skeleton className="h-3.5 w-36 rounded" />
+              <Skeleton className="h-3 w-48 rounded" />
+            </div>
           </div>
-          <Skeleton className="h-6 w-20 shrink-0 rounded-full" />
+          <div className="flex items-center gap-6">
+            <Skeleton className="h-9 w-36 rounded-md" />
+            <Skeleton className="h-5 w-16 rounded-full" />
+            <Skeleton className="h-8 w-16 rounded-md" />
+          </div>
         </div>
       ))}
     </div>

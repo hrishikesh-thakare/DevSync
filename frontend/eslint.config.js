@@ -31,4 +31,38 @@ export default defineConfig([
       'react-hooks/set-state-in-effect': 'off',
     },
   },
+  {
+    // Same deal, for the larger blocks pulled from the reui registry (filters,
+    // cascader, event calendar, gantt, kanban, file upload): also regenerated
+    // wholesale by `npx shadcn add`, so a local fix does not survive the next
+    // update. The React Compiler–oriented hook rules (refs/purity/
+    // immutability/preserve-manual-memoization/exhaustive-deps) fire on ref-
+    // during-render and dependency patterns that are idiomatic in this
+    // (pre-Compiler) codebase but that the rule set assumes are gone.
+    files: [
+      'src/components/reui/**/*.tsx',
+      'src/components/examples/**/*.tsx',
+      'src/hooks/use-file-upload.ts',
+    ],
+    // The vendor's own inline `eslint-disable exhaustive-deps` comments are
+    // now redundant since the rule is off here project-wide — that would
+    // otherwise warn as an unused directive.
+    linterOptions: {
+      reportUnusedDisableDirectives: 'off',
+    },
+    rules: {
+      'react-refresh/only-export-components': 'off',
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/refs': 'off',
+      'react-hooks/purity': 'off',
+      'react-hooks/immutability': 'off',
+      'react-hooks/preserve-manual-memoization': 'off',
+      'react-hooks/exhaustive-deps': 'off',
+      // `_e`/`_de`/etc: deliberately unused destructured params naming a
+      // shape the callback signature must match, plus one stray `any` and
+      // an unused prop kept for a symmetric call signature across variants.
+      '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
 ])

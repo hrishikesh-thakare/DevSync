@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Toggle } from '@/components/ui/toggle';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -235,50 +236,53 @@ export function MessageComposer({
       )}
 
       <div className="rounded-lg border focus-within:ring-2 focus-within:ring-ring/40">
-        {/* Toolbar — each button inserts markdown syntax around the current
-            selection; there is no live "is the cursor inside bold text"
-            state to track, so these are action buttons, not stateful
-            toggles. What you get is what you can already see: the literal
-            **markers** land in the text the moment you click. */}
+        {/* Toolbar — each control inserts markdown syntax around the current
+            selection. There is no live "is the cursor inside bold text"
+            state to track, so every `Toggle` here is pinned `pressed={false}`
+            and never latches down: it is the shadcn Toggle look (an outlined
+            pill that lights up on hover/focus, matching the reference
+            composer) wired to a one-shot action, not a real persistent
+            toggle — a stuck-down Bold button would claim the selection is
+            bold when it just isn't tracked. */}
         <div className="flex items-center gap-0.5 border-b px-1.5 py-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
+          <Toggle
+            variant="outline"
+            size="sm"
+            pressed={false}
             aria-label="Bold"
             disabled={disabled}
-            onClick={() => withSelection((v, s, e) => wrapSelection(v, s, e, '**'))}
+            onPressedChange={() => withSelection((v, s, e) => wrapSelection(v, s, e, '**'))}
           >
             <BoldIcon className={iconBtn} aria-hidden="true" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
+          </Toggle>
+          <Toggle
+            variant="outline"
+            size="sm"
+            pressed={false}
             aria-label="Italic"
             disabled={disabled}
-            onClick={() => withSelection((v, s, e) => wrapSelection(v, s, e, '_'))}
+            onPressedChange={() => withSelection((v, s, e) => wrapSelection(v, s, e, '_'))}
           >
             <ItalicIcon className={iconBtn} aria-hidden="true" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
+          </Toggle>
+          <Toggle
+            variant="outline"
+            size="sm"
+            pressed={false}
             aria-label="Strikethrough"
             disabled={disabled}
-            onClick={() => withSelection((v, s, e) => wrapSelection(v, s, e, '~~'))}
+            onPressedChange={() => withSelection((v, s, e) => wrapSelection(v, s, e, '~~'))}
           >
             <StrikethroughIcon className={iconBtn} aria-hidden="true" />
-          </Button>
+          </Toggle>
 
           <Separator orientation="vertical" className="mx-1 h-5" />
 
           <Popover open={linkOpen} onOpenChange={setLinkOpen}>
             <PopoverTrigger asChild>
-              <Button type="button" variant="ghost" size="icon-sm" aria-label="Link" disabled={disabled}>
+              <Toggle variant="outline" size="sm" pressed={linkOpen} aria-label="Link" disabled={disabled}>
                 <Link2Icon className={iconBtn} aria-hidden="true" />
-              </Button>
+              </Toggle>
             </PopoverTrigger>
             <PopoverContent className="w-64" align="start">
               <form
@@ -304,59 +308,59 @@ export function MessageComposer({
 
           <Separator orientation="vertical" className="mx-1 h-5" />
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
+          <Toggle
+            variant="outline"
+            size="sm"
+            pressed={false}
             aria-label="Numbered list"
             disabled={disabled}
-            onClick={() => withSelection(prefixOrderedList)}
+            onPressedChange={() => withSelection(prefixOrderedList)}
           >
             <ListOrderedIcon className={iconBtn} aria-hidden="true" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
+          </Toggle>
+          <Toggle
+            variant="outline"
+            size="sm"
+            pressed={false}
             aria-label="Bulleted list"
             disabled={disabled}
-            onClick={() => withSelection(prefixBulletList)}
+            onPressedChange={() => withSelection(prefixBulletList)}
           >
             <ListIcon className={iconBtn} aria-hidden="true" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
+          </Toggle>
+          <Toggle
+            variant="outline"
+            size="sm"
+            pressed={false}
             aria-label="Quote"
             disabled={disabled}
-            onClick={() => withSelection(prefixBlockquote)}
+            onPressedChange={() => withSelection(prefixBlockquote)}
           >
             <TextQuoteIcon className={iconBtn} aria-hidden="true" />
-          </Button>
+          </Toggle>
 
           <Separator orientation="vertical" className="mx-1 h-5" />
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
+          <Toggle
+            variant="outline"
+            size="sm"
+            pressed={false}
             aria-label="Inline code"
             disabled={disabled}
-            onClick={() => withSelection((v, s, e) => wrapSelection(v, s, e, '`'))}
+            onPressedChange={() => withSelection((v, s, e) => wrapSelection(v, s, e, '`'))}
           >
             <CodeIcon className={iconBtn} aria-hidden="true" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
+          </Toggle>
+          <Toggle
+            variant="outline"
+            size="sm"
+            pressed={false}
             aria-label="Code block"
             disabled={disabled}
-            onClick={() => withSelection(wrapCodeBlock)}
+            onPressedChange={() => withSelection(wrapCodeBlock)}
           >
             <Code2Icon className={iconBtn} aria-hidden="true" />
-          </Button>
+          </Toggle>
         </div>
 
         <div className="flex items-end gap-1 px-1 py-1">

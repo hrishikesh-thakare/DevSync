@@ -1,11 +1,13 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
-import { DownloadIcon, Loader2Icon, PaperclipIcon, Trash2Icon, UploadIcon } from 'lucide-react';
+import { DownloadIcon, Loader2Icon, PaperclipIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { apiFetch } from '@/lib/api';
 import { formatBytes, MAX_UPLOAD_BYTES } from '@/lib/files';
+import { useFileUpload } from '@/hooks/use-file-upload';
 import { useTaskDetailStore } from '@/store/taskDetailStore';
+import { cn } from '@/lib/utils';
 import type { TaskAttachment } from '@/types/api';
 
 export function TaskAttachments({
@@ -24,12 +26,10 @@ export function TaskAttachments({
   const addAttachment = useTaskDetailStore((s) => s.addAttachment);
   const removeAttachment = useTaskDetailStore((s) => s.removeAttachment);
 
-  const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState<string[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const onFiles = async (fileList: FileList | null) => {
-    const files = Array.from(fileList ?? []);
+  const onFiles = async (files: File[]) => {
     if (files.length === 0) return;
 
     // Uploads run one at a time: each request carries the whole file base64-encoded
@@ -44,10 +44,20 @@ export function TaskAttachments({
         setUploading((prev) => prev.filter((n) => n !== file.name));
       }
     }
-
-    // Reset the input so re-picking the same file still fires a change event.
-    if (inputRef.current) inputRef.current.value = '';
   };
+
+  // `useFileUpload` (reui registry) only owns the drag/drop and file-dialog
+  // mechanics here — its own `files` list is unused, since the real upload
+  // state (`uploading`/`attachments`) already lives in `taskDetailStore`, and
+  // showing both would mean two lists disagreeing while a file is in flight.
+  const [{ isDragging }, { openFileDialog, getInputProps, handleDragEnter, handleDragLeave, handleDragOver, handleDrop }] =
+    useFileUpload({
+      multiple: true,
+      onFilesAdded: (added) => {
+        const files = added.map((a) => a.file).filter((f): f is File => f instanceof File);
+        void onFiles(files);
+      },
+    });
 
   const download = async (attachment: TaskAttachment) => {
     setBusyId(attachment.fileId);
@@ -78,49 +88,48 @@ export function TaskAttachments({
 
   return (
     <section>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <PaperclipIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-          Attachments ({attachments.length})
-        </h2>
-        {canEdit ? (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => inputRef.current?.click()}
-              disabled={uploading.length > 0}
-            >
-              {uploading.length > 0 ? (
-                <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <UploadIcon className="size-4" aria-hidden="true" />
-              )}
-              Attach file
-            </Button>
-            {/* The visible button is the accessible control; this input is only
-                ever opened programmatically, so it stays out of the tab order
-                and out of the accessibility tree rather than being announced as
-                a second, duplicate "attach" control. */}
-            <input
-              ref={inputRef}
-              type="file"
-              multiple
-              className="sr-only"
-              tabIndex={-1}
-              aria-hidden="true"
-              onChange={(e) => void onFiles(e.target.files)}
-            />
-          </>
-        ) : null}
-      </div>
+      <h2 className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
+        <PaperclipIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+        Attachments ({attachments.length})
+      </h2>
+
+      {canEdit ? (
+        <div
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          className={cn(
+            'mb-2 flex items-center gap-3 rounded-lg border border-dashed p-3 transition-colors',
+            isDragging ? 'border-primary bg-primary/5' : 'border-muted-foreground/25',
+          )}
+        >
+          {/* The visible button is the accessible control; this input is only
+              ever opened programmatically, so it stays out of the tab order
+              and out of the accessibility tree rather than being announced as
+              a second, duplicate "attach" control. */}
+          <input {...getInputProps()} className="sr-only" tabIndex={-1} aria-hidden="true" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openFileDialog}
+            disabled={uploading.length > 0}
+          >
+            {uploading.length > 0 ? (
+              <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <PlusIcon className="size-4" aria-hidden="true" />
+            )}
+            Attach file
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Drop files here, or click to browse. Up to {formatBytes(MAX_UPLOAD_BYTES)} each.
+          </p>
+        </div>
+      ) : null}
 
       {attachments.length === 0 && uploading.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {canEdit
-            ? `No attachments yet. Files up to ${formatBytes(MAX_UPLOAD_BYTES)} each.`
-            : 'No attachments yet.'}
-        </p>
+        <p className="text-sm text-muted-foreground">No attachments yet.</p>
       ) : (
         <ul className="space-y-1">
           {uploading.map((name) => (

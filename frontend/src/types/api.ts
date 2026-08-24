@@ -219,6 +219,8 @@ export interface TaskSummary {
   reporterId: string | null;
   linkedCommitsCount: number;
   createdAt: string;
+  parentTaskId: string | null;
+  epicId: string | null;
 }
 
 /** Body accepted by `POST .../tasks` — mirrors the `.strict()` createTaskSchema. */

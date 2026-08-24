@@ -50,3 +50,10 @@ export const updateStatusSchema = z.object({
   statusText: z.string().max(100, 'Status text must be 100 characters or fewer').optional(),
   presence: z.enum(presenceValues).optional(),
 }).strict();
+
+// `avatarUrl` only, deliberately — name and email have no update path (see
+// AccountSettingsPage's own comment on why), so this schema stays narrow
+// rather than growing into a general profile-patch endpoint.
+export const updateProfileSchema = z.object({
+  avatarUrl: z.string().url('Must be a valid URL').max(2048).nullable(),
+}).strict();

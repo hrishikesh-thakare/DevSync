@@ -36,6 +36,9 @@ import { BacklogPage } from '@/pages/projects/BacklogPage';
 import { TaskDetailPage } from '@/pages/projects/TaskDetailPage';
 import { SprintListPage } from '@/pages/projects/SprintListPage';
 import { ActiveSprintBoard } from '@/pages/projects/ActiveSprintBoard';
+import { ProjectCalendarPage } from '@/pages/projects/ProjectCalendarPage';
+import { ProjectRoadmapPage } from '@/pages/projects/ProjectRoadmapPage';
+import { ProjectEpicsPage } from '@/pages/projects/ProjectEpicsPage';
 
 import { ChannelPage } from '@/pages/channels/ChannelPage';
 import { ChannelListPage } from '@/pages/channels/ChannelListPage';
@@ -103,6 +106,9 @@ export default function App() {
               <Route path="sprints" element={<SprintListPage />} />
               <Route path="sprints/active" element={<ActiveSprintBoard />} />
               <Route path="sprints/:sprintId" element={<ActiveSprintBoard />} />
+              <Route path="epics" element={<ProjectEpicsPage />} />
+              <Route path="calendar" element={<ProjectCalendarPage />} />
+              <Route path="roadmap" element={<ProjectRoadmapPage />} />
               <Route path="channels" element={<ProjectChannelsPage />} />
               <Route path="labels" element={<ProjectLabelsPage />} />
               <Route path="members" element={<ProjectMembersPage />} />
