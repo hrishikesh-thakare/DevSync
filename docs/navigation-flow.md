@@ -88,14 +88,15 @@ The app shell wraps everything under `/w/:slug` and consists of three permanent 
 ### 5. Core Project Views (Under `/projects/:key`)
 These screens are wrapped in the `ProjectLayout` which provides the top navigation tabs (Board, Backlog, Sprints, etc.).
 
-14. **Kanban Board (`/projects/:key`)**: 4-column drag-and-drop board (Todo, In Progress, In Review, Done). Filterable by Assignee, Priority, Sprint.
+14. **Kanban Board (`/projects/:key`)**: 4-column drag-and-drop board (Todo, In Progress, In Review, Done), built on the `@reui/c-kanban-1` primitives over dnd-kit. Filterable by Assignee and Priority. See `docs/kanban.md`.
     *   *RBAC:* `viewer` role cannot drag cards or see the "+ Create Task" button.
 15. **Backlog (`/projects/:key/backlog`)**: Flat list of tasks without an active sprint. Supports drag-and-drop LexoRank reordering. Bulk actions to assign to sprint.
 16. **Task Detail (`/projects/:key/tasks/:taskKey`)**: Deep-linkable overlay containing title, rich-text description, subtasks, linked GitHub commits, and a threaded discussion panel.
     *   *RBAC:* `developer`+ can edit fields inline. `viewer` sees a read-only state.
 17. **Sprint List (`/projects/:key/sprints`)**: Cards for Future, Active, and Closed sprints.
     *   *RBAC:* "Start Sprint" and "Close Sprint" buttons restricted to `project_admin`.
-18. **Active Sprint Board (`/projects/:key/sprints/active`)**: Similar to Kanban Board but filtered to the currently active sprint. Displays a progress bar and remaining days.
+18. **Active Sprint Board (`/projects/:key/sprints/active`)**: Status-grouped view of the currently active sprint (read-only, no drag). Displays a progress bar and remaining days.
+
 
 ### 6. Project Management
 19. **Project Channels (`/projects/:key/channels`)**: Lists channels strictly scoped to this project.

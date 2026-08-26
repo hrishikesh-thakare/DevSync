@@ -20,12 +20,14 @@ export function BoardColumn({
   canEdit,
   onCreate,
   onOpen,
+  hrefFor,
 }: {
   status: TaskStatus;
   tasks: TaskSummary[];
   canEdit: boolean;
   onCreate: (status: TaskStatus) => void;
   onOpen: (task: TaskSummary) => void;
+  hrefFor: (task: TaskSummary) => string;
 }) {
   const meta = STATUS_META[status];
   const visible = tasks.slice(0, COLUMN_RENDER_CAP);
@@ -61,12 +63,14 @@ export function BoardColumn({
               {/* The whole card is its own drag handle — dnd-kit's distance-
                   based activation (configured on the Kanban root's sensors)
                   is what lets a stationary click still open the task instead
-                  of starting a drag. */}
+                  of starting a drag. Keyboard users open a task through the
+                  title link inside the card, since the handle owns
+                  `onKeyDown` for dnd-kit's keyboard sensor. */}
               <KanbanItemHandle
                 onClick={() => onOpen(task)}
                 className="block rounded-[min(var(--radius-4xl),24px)] outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <KanbanTaskCard task={task} />
+                <KanbanTaskCard task={task} href={hrefFor(task)} />
               </KanbanItemHandle>
             </KanbanItem>
           ))}

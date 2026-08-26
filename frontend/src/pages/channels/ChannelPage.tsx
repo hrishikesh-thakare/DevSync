@@ -32,12 +32,11 @@ import type { ChatMessage } from '@/types/api';
 import { Bubble, BubbleContent } from '@/components/ui/bubble';
 import {
   Attachment,
-  AttachmentAction,
-  AttachmentActions,
   AttachmentContent,
   AttachmentDescription,
   AttachmentMedia,
   AttachmentTitle,
+  AttachmentTrigger,
   AttachmentGroup
 } from '@/components/ui/attachment';
 import { FileTextIcon } from 'lucide-react';
@@ -105,11 +104,12 @@ export function ChannelPage() {
     bottomRef.current?.scrollIntoView({ block: 'end' });
   }, [messages.length]);
 
-  // `bodyText` is now HTML from the rich composer, so an "empty" check can't
-  // be a bare `.trim()` — the composer itself already gates on Tiptap's own
-  // `editor.isEmpty` before ever calling this, so a call reaching here with
-  // no attachments always has real content. Returns whether it succeeded —
-  // MessageComposer only clears the draft it just sent on `true`.
+  // `bodyText` is markdown from the composer (`RichTextEditor`'s wire format
+  // — see that component's doc comment), trimmed there before this is ever
+  // called; the composer itself already gates on the editor's own `isEmpty`
+  // before calling `onSend`, so a call reaching here with no attachments
+  // always has real content. Returns whether it succeeded — MessageComposer
+  // only clears the draft it just sent on `true`.
   const submit = async (
     body: string,
     attachments: AttachmentPayload[],
@@ -162,7 +162,7 @@ export function ChannelPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0">
+    <div className="flex h-full min-h-0 bg-background">
       {/* Main conversation.
           `min-h-0` is what actually makes the message list scroll internally
           instead of the whole column growing past the viewport — a flex
@@ -189,7 +189,7 @@ export function ChannelPage() {
               normal flow now (see MessageRow below), but the last message's
               content can still sit close to this edge — kept for breathing
               room. */}
-          <div className="px-6 pt-4 pb-8">
+          <div className="flex flex-col justify-end min-h-full px-6 pt-4 pb-8">
             {messages.length === 0 ? (
               <p className="py-12 text-center text-sm text-muted-foreground">
                 No messages yet. Say something.
@@ -225,6 +225,7 @@ export function ChannelPage() {
             scrolling here. */}
         <div className="sticky bottom-0 z-10 bg-background">
           <MessageComposer
+            slug={slug}
             disabled={sending}
             placeholder={`Message #${channel.name}`}
             onSend={(bodyText, attachments) => submit(bodyText, attachments, null)}
@@ -250,7 +251,7 @@ export function ChannelPage() {
           </header>
 
           <ScrollArea className="flex-1">
-            <div className="px-4 pt-3 pb-8">
+            <div className="flex flex-col justify-end min-h-full px-4 pt-3 pb-8">
               <MessageRow
                 slug={slug}
                 message={threadRoot}
@@ -288,6 +289,7 @@ export function ChannelPage() {
 
           <div className="sticky bottom-0 z-10 bg-background">
             <MessageComposer
+              slug={slug}
               disabled={sending}
               placeholder="Reply in thread"
               onSend={(bodyText, attachments) => submit(bodyText, attachments, threadRoot.messageId)}
@@ -352,8 +354,9 @@ function MessageRow({
     (!previous || !isSameDay(new Date(previous.createdAt), new Date(message.createdAt)));
 
   const linkedUrl = useMemo(() => firstUrlIn(message.bodyText ?? ''), [message.bodyText]);
-  // `bodyText` is markdown from the composer (plain `**bold**` syntax typed
-  // into a textarea, not a rich-text editor's HTML) — converted to HTML and
+  // `bodyText` is markdown (`**bold**` syntax) — the composer is a rich-text
+  // editor (`RichTextEditor`, Tiptap), but its wire format is still markdown,
+  // not HTML, so this render path is unchanged: converted to HTML and
   // sanitized in one step; see `e2e/tests/channels/messages.spec.ts`'s "XSS
   // sanitization" suite for exactly what has to survive that inert.
   const safeBodyHtml = useMemo(() => renderMarkdownMessage(message.bodyText ?? ''), [message.bodyText]);
@@ -385,7 +388,7 @@ function MessageRow({
         </li>
       ) : null}
 
-      <li id={message.messageId} className={cn('group flex gap-3 rounded-lg px-2 py-1 hover:bg-accent/40', grouped && '-mt-1')}>
+      <li id={message.messageId} className={cn('group flex gap-3 rounded-lg px-2 py-1 hover:bg-accent/40', grouped && '-mt-1', isMine && 'flex-row-reverse')}>
         <div className="w-7 shrink-0">
           {!grouped ? (
             <Avatar className="size-7">
@@ -397,9 +400,9 @@ function MessageRow({
           ) : null}
         </div>
 
-        <div className="min-w-0 flex-1">
+        <div className={cn("min-w-0 flex-1 flex flex-col", isMine ? "items-end" : "items-start")}>
           {!grouped ? (
-            <p className="flex items-baseline gap-2">
+            <p className={cn("flex items-baseline gap-2", isMine && "flex-row-reverse")}>
               <span className="text-sm font-medium text-foreground">
                 {message.authorName ?? 'System'}
               </span>
@@ -410,19 +413,26 @@ function MessageRow({
             </p>
           ) : null}
 
-          <Bubble variant={getBubbleVariant(isMine, message.authorId)} className="mt-1">
+          <Bubble variant={getBubbleVariant(isMine, message.authorId)} align={isMine ? 'end' : 'start'} className="mt-1">
             {message.bodyText && (
-              <BubbleContent className="whitespace-pre-wrap">
+              <BubbleContent>
                 {/* A separate inner element, not dangerouslySetInnerHTML on
                     BubbleContent itself — React forbids mixing that prop with
                     ordinary children, and the "(edited)" marker needs to stay
-                    a normal sibling node. whitespace-pre-wrap stays on the
-                    outer element for legacy plain-text messages sent before
-                    this feature existed: their literal '\n' characters still
-                    need it, while Tiptap's own <p> tags create their visual
-                    breaks regardless. */}
+                    a normal sibling node. We previously used whitespace-pre-wrap
+                    here, but marked's output already contains <p> and <br> tags
+                    for line breaks, and preserving raw \n caused huge gaps. */}
                 <div
-                  className="rich-message-content"
+                  className={cn(
+                    "rich-message-content min-w-0",
+                    '[&_p]:m-0 [&_p+p]:mt-2',
+                    '[&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5',
+                    '[&_blockquote]:my-1 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/50 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground',
+                    '[&_code]:rounded [&_code]:bg-black/10 dark:[&_code]:bg-white/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[0.85em]',
+                    '[&_pre]:my-1 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-black/10 dark:[&_pre]:bg-white/10 [&_pre]:p-2',
+                    '[&_pre_code]:bg-transparent [&_pre_code]:p-0',
+                    '[&_a]:underline [&_a]:underline-offset-2'
+                  )}
                   dangerouslySetInnerHTML={{ __html: safeBodyHtml }}
                 />
                 {message.isEdited ? (
@@ -438,27 +448,46 @@ function MessageRow({
 
             {Array.isArray(message.bodyBlocks) && message.bodyBlocks.length > 0 && (
               <div className="mt-2 px-1">
-                <AttachmentGroup>
+                {/* `items-start`: the group's own default is `stretch`,
+                    which pads a small horizontal file card up to match a
+                    tall image card in the same row (empty space around a
+                    centered icon) — only images are meant to be big. */}
+                <AttachmentGroup className="items-start">
                   {message.bodyBlocks.map((b: unknown, idx) => {
                     const block = b as AttachmentPayload & { type: string };
                     if (block.type !== 'attachment') return null;
+                    const isImage = block.mimetype?.startsWith('image/');
                     return (
-                      <Attachment key={idx}>
-                        <AttachmentMedia variant={block.mimetype?.startsWith('image/') ? 'image' : 'icon'}>
-                          {block.mimetype?.startsWith('image/') ? <img src={block.url} alt="" /> : <FileTextIcon />}
+                      <Attachment
+                        key={idx}
+                        orientation={isImage ? 'vertical' : 'horizontal'}
+                        // `!` (important) is load-bearing on the image case:
+                        // the component's own vertical-orientation styling
+                        // already sets `has-data-[slot=attachment-content]:w-30`
+                        // on the root, and a plain `w-72` here loses to it —
+                        // same specificity, and Tailwind's generated order
+                        // puts the `has-*` variant later. Verified directly
+                        // (measured the rendered box) rather than assumed.
+                        // Files/PDFs stay at the component's own default
+                        // horizontal size — only images are meant to be big.
+                        className={isImage ? 'w-72!' : undefined}
+                      >
+                        <AttachmentMedia variant={isImage ? 'image' : 'icon'}>
+                          {isImage ? <img src={block.url} alt="" /> : <FileTextIcon />}
                         </AttachmentMedia>
                         <AttachmentContent>
                           <AttachmentTitle>{block.name}</AttachmentTitle>
                           <AttachmentDescription>{Math.round(block.sizeBytes / 1024)} KB</AttachmentDescription>
                         </AttachmentContent>
+                        {/* The whole card opens the file — not just a small
+                            icon button — for every attachment type alike
+                            (image, PDF, anything else). No separate download
+                            action: it would just be the same href a second
+                            time, competing for the same click. */}
                         {block.url && (
-                          <AttachmentActions>
-                            <AttachmentAction asChild aria-label={`Download ${block.name}`}>
-                              <a href={block.url} target="_blank" rel="noopener noreferrer">
-                                <FileTextIcon />
-                              </a>
-                            </AttachmentAction>
-                          </AttachmentActions>
+                          <AttachmentTrigger asChild aria-label={`Open ${block.name}`}>
+                            <a href={block.url} target="_blank" rel="noopener noreferrer" />
+                          </AttachmentTrigger>
                         )}
                       </Attachment>
                     );
@@ -477,7 +506,7 @@ function MessageRow({
               // any bubble, which is what got reported. Normal flow can't
               // do that: it renders exactly where it sits in the DOM,
               // directly under the message it belongs to.
-              <div className="mt-1.5 flex flex-wrap items-center gap-1">
+              <div className={cn("mt-1.5 flex flex-wrap items-center gap-1", isMine && "justify-end")}>
                 {reactions.map(([emoji, info]) => (
                   <Tooltip key={emoji}>
                     <TooltipTrigger asChild>
@@ -504,7 +533,7 @@ function MessageRow({
             <button
               type="button"
               onClick={onReply}
-              className="mt-1 text-xs text-primary hover:underline"
+              className={cn("mt-1 text-xs text-primary hover:underline", isMine && "self-end")}
             >
               {message.replyCount} {message.replyCount === 1 ? 'reply' : 'replies'}
             </button>
@@ -512,7 +541,7 @@ function MessageRow({
         </div>
 
         {/* Row actions, revealed on hover/focus */}
-        <div className="flex shrink-0 items-start gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+        <div className={cn("flex shrink-0 items-start gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100", isMine && "flex-row-reverse")}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon-xs" aria-label="Add reaction">

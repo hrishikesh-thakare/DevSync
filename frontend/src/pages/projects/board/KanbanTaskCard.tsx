@@ -1,81 +1,107 @@
+import { Link } from 'react-router-dom';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
-import { CalendarIcon, GitCommitHorizontalIcon } from 'lucide-react';
+import { CalendarIcon } from 'lucide-react';
 
 import { MemberAvatar } from '@/components/MemberAvatar';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ISSUE_TYPE_META, PRIORITY_META } from '@/lib/taskMeta';
+import { PRIORITY_META } from '@/lib/taskMeta';
 import { cn } from '@/lib/utils';
-import type { TaskSummary } from '@/types/api';
+import type { TaskPriority, TaskSummary } from '@/types/api';
+
+/**
+ * Priority chip colour, one per level, using DevSync's own frozen
+ * `--priority-*` tokens (`index.css`) rather than reui's semantic
+ * destructive/warning/primary palette — that keeps every priority visually
+ * distinct instead of collapsing onto a generic red/amber/blue. Solid
+ * background + white text, the same "bright chip" pattern reui's own solid
+ * badge variants use (`bg-destructive text-white`, etc — `--priority-critical`
+ * is in fact nearly identical to `--destructive`) rather than a tinted
+ * background with coloured text, which reads as dull on a dark card. `Badge`'s
+ * base class already sets `border-transparent`, so no explicit border is
+ * needed to get a borderless look.
+ */
+const PRIORITY_CHIP: Record<TaskPriority, string> = {
+  critical: 'bg-priority-critical text-white',
+  high: 'bg-priority-high text-white',
+  medium: 'bg-priority-medium text-white',
+  low: 'bg-priority-low text-white',
+};
 
 /**
  * The card every Kanban board in the app renders — `BoardPage`'s project
  * board and `MyTasksPage`'s board view alike — built on the `Card`/`Badge`
  * shell `@reui/c-kanban-1` actually ships, not `TaskCardBody`'s plain-div
- * one. The priority pill is `Badge`'s own `secondary` variant rather than
- * reui's bordered, saturated `-light` variants — flat, no border, matching
- * every other badge in DevSync (see the `c-kanban-1` example file's own
- * `Badge` swap for the same reasoning).
+ * one.
+ *
+ * Deliberately minimal: title, priority, assignee, due date. Everything else
+ * about a task (key, type, story points, linked commits, description,
+ * comments…) lives on the task detail page — a board is for scanning status
+ * at a glance, not for reading a task, and every extra chip is something a
+ * reader has to visually filter out to find the four things that matter here.
  *
  * `TaskCardBody` stays as it is for the list-shaped surfaces (My Tasks' list
  * view) that were never a kanban card to begin with.
+ *
+ * `href` turns the title into a real link. The card as a whole is a drag
+ * handle, and `KanbanItemHandle` owns `onKeyDown` for dnd-kit's keyboard
+ * sensor, so there is no Enter-to-open on the card itself — this link is how
+ * a keyboard user opens a task, and it makes middle-click and open-in-new-tab
+ * work for everyone else.
  */
-export function KanbanTaskCard({ task, dragging }: { task: TaskSummary; dragging?: boolean }) {
-  const type = ISSUE_TYPE_META[task.issueType];
+export function KanbanTaskCard({
+  task,
+  dragging,
+  href,
+}: {
+  task: TaskSummary;
+  dragging?: boolean;
+  href?: string;
+}) {
   const priority = PRIORITY_META[task.priority];
 
   return (
     <Card className={cn('gap-0 py-0 text-left transition-shadow', dragging ? 'shadow-lg' : 'hover:shadow-md')}>
-      <CardContent className="space-y-2.5 p-3">
+      <CardContent className="space-y-2 p-3">
         <div className="flex items-start justify-between gap-2">
-          <span className="line-clamp-2 min-w-0 text-sm font-medium text-foreground">{task.title}</span>
+          {href ? (
+            <Link
+              to={href}
+              onClick={(e) => e.stopPropagation()}
+              className="line-clamp-2 min-w-0 rounded-sm text-sm font-medium text-foreground outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {task.title}
+            </Link>
+          ) : (
+            <span className="line-clamp-2 min-w-0 text-sm font-medium text-foreground">{task.title}</span>
+          )}
           {priority ? (
-            <Badge variant="secondary" className="h-5 shrink-0 rounded-sm px-1.5 text-xs capitalize">
+            <Badge
+              variant="secondary"
+              className={cn('h-5 shrink-0 rounded-sm px-1.5 text-xs capitalize', PRIORITY_CHIP[task.priority])}
+            >
               {priority.label}
             </Badge>
           ) : null}
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs text-muted-foreground">
-          <span className="font-mono">{task.taskKey}</span>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="flex items-center" aria-hidden="true">
-                {type?.glyph}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>{type?.label}</TooltipContent>
-          </Tooltip>
-
-          {task.storyPoints != null ? (
-            <span className="rounded bg-muted px-1.5">{task.storyPoints}</span>
-          ) : null}
-
-          {task.linkedCommitsCount > 0 ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="flex items-center gap-0.5">
-                  <GitCommitHorizontalIcon className="size-3.5" aria-hidden="true" />
-                  {task.linkedCommitsCount}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                {task.linkedCommitsCount} linked {task.linkedCommitsCount === 1 ? 'commit' : 'commits'}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-
-          {task.dueDate ? <DueChip dueDate={task.dueDate} done={task.status === 'done'} /> : null}
-
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {task.assigneeId ? (
-            <span className="ml-auto shrink-0">
+            <span className="flex min-w-0 items-center gap-1.5">
               <MemberAvatar
                 size="sm"
+                className="shrink-0"
                 member={{ userId: task.assigneeId, fullName: task.assigneeName, avatarUrl: task.assigneeAvatar }}
                 showPresence={false}
               />
+              <span className="truncate">{task.assigneeName}</span>
+            </span>
+          ) : null}
+
+          {task.dueDate ? (
+            <span className="ml-auto shrink-0">
+              <DueChip dueDate={task.dueDate} done={task.status === 'done'} />
             </span>
           ) : null}
         </div>

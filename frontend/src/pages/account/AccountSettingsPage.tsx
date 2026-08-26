@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuthStore } from '@/store/auth';
 import { initialsOf } from '@/lib/initials';
-import { supabase } from '@/lib/supabase';
+import { apiFetch } from '@/lib/api';
+import { fileToBase64, formatBytes, MAX_UPLOAD_BYTES } from '@/lib/files';
 import { useFileUpload } from '@/hooks/use-file-upload';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { StatusCard } from '@/pages/account/StatusCard';
@@ -77,8 +78,13 @@ export function AccountSettingsPage() {
 /**
  * `useFileUpload` (installed from the reui registry) only manages local
  * selection/preview state — it does no uploading itself. The actual upload
- * reuses the same Supabase bucket and pattern `MessageComposer` already uses
- * for attachments; only the storage path prefix differs.
+ * goes through `POST /auth/avatar`, not straight to Supabase from the
+ * browser: `workspace-files` is a private bucket, so only the backend's
+ * service-role key can write to it or mint a URL for what it stores (same
+ * reasoning as `MessageComposer`'s attachments, which hit the equivalent
+ * workspace-scoped endpoint — an avatar has no workspace, hence its own
+ * dedicated route). The returned URL is then handed to `PATCH /auth/profile`
+ * via `onChange`, unchanged from before.
  */
 function AvatarUpload({
   avatarUrl,
@@ -99,11 +105,19 @@ function AvatarUpload({
       void (async () => {
         setUploading(true);
         try {
-          const filePath = `avatars/${Date.now()}_${picked.name}`;
-          const { error } = await supabase.storage.from('workspaces').upload(filePath, picked);
-          if (error) throw error;
-          const { data: urlData } = supabase.storage.from('workspaces').getPublicUrl(filePath);
-          await onChange(urlData.publicUrl);
+          if (picked.size > MAX_UPLOAD_BYTES) {
+            throw new Error(`Image is larger than the ${formatBytes(MAX_UPLOAD_BYTES)} limit.`);
+          }
+          const { avatarUrl: uploadedUrl } = await apiFetch('/auth/avatar', {
+            method: 'POST',
+            body: JSON.stringify({
+              filename: picked.name,
+              mimetype: picked.type || 'application/octet-stream',
+              sizeBytes: picked.size,
+              fileBase64: await fileToBase64(picked),
+            }),
+          });
+          await onChange(uploadedUrl);
           toast.success('Avatar updated');
         } catch (err) {
           toast.error(err instanceof Error ? err.message : 'Could not update your avatar.');

@@ -147,6 +147,27 @@ test.describe('Task CRUD', () => {
     );
     expect(status).toBe(200);
   });
+
+  // Tied ranks are the common case in a fresh project (every task created but
+  // never reordered shares a default rank), and generateKeyBetween throws on
+  // a non-increasing pair — so the endpoint has to resolve that itself rather
+  // than 500. This drops a card between two neighbours that may well be tied.
+  test('reordering between two tied-rank neighbours does not error', async () => {
+    const accessToken = getAuthToken('owner');
+    const { data: tasksData } = await apiRequest(`/workspaces/${SLUG}/projects/${KEY}/tasks`, accessToken);
+    const tasks = tasksData?.tasks || tasksData || [];
+    if (tasks.length < 3) { test.skip(); return; }
+
+    const { status } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}/tasks/${tasks[0].taskKey}/reorder`,
+      accessToken,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ afterTaskId: tasks[1].taskId, beforeTaskId: tasks[2].taskId }),
+      }
+    );
+    expect(status).toBe(200);
+  });
 });
 
 test.describe('Task Comments', () => {

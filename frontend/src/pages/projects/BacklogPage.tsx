@@ -49,7 +49,9 @@ const ANY = '__any__';
 /**
  * The backlog is every task not attached to a sprint, ordered by rank.
  * Reordering uses the same `/reorder` endpoint the board does, keeping status
- * unchanged and only moving the fractional index.
+ * unchanged and only moving the fractional index. It drives dnd-kit directly
+ * rather than through the reui Kanban — this is a single sortable list, not a
+ * board, and `verticalListSortingStrategy` is the right primitive for it.
  */
 export function BacklogPage() {
   const { slug = '', key = '' } = useParams();
@@ -112,8 +114,9 @@ export function BacklogPage() {
     const after = overIndex > 0 ? without[overIndex - 1] : null;
     const before = without[overIndex];
 
-    // Same tied-rank guard as the board: the server's generateKeyBetween throws
-    // unless the two neighbouring ranks are strictly increasing.
+    // Same tied-rank guard as the board: tasks that were never reordered share
+    // a default rank, and the server needs a strictly increasing pair. Passing
+    // `null` asks it to append after the tied run instead.
     const beforeId = after && before && (after.rank ?? '') >= (before.rank ?? '') ? null : (before?.taskId ?? null);
 
     try {

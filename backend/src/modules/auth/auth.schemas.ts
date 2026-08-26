@@ -57,3 +57,13 @@ export const updateStatusSchema = z.object({
 export const updateProfileSchema = z.object({
   avatarUrl: z.string().url('Must be a valid URL').max(2048).nullable(),
 }).strict();
+
+// Mirrors `addTaskAttachmentSchema` (tasks.schemas.ts) — same base64-in-JSON
+// upload shape, just without `filetype` (an avatar is always an image, set
+// server-side, not client-asserted).
+export const uploadAvatarSchema = z.object({
+  filename: z.string().min(1).max(255),
+  mimetype: z.string().max(100).optional(),
+  sizeBytes: z.number().int().nonnegative().optional(),
+  fileBase64: z.string().min(1, 'fileBase64 is required'),
+}).strict();

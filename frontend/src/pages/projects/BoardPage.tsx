@@ -92,14 +92,12 @@ export function BoardPage() {
     const afterTaskId = after?.taskId ?? null;
     let beforeTaskId = before?.taskId ?? null;
 
-    // The one piece that has to be figured out here regardless of which drag
-    // library is driving the board: the server derives the new rank with
-    // `generateKeyBetween(afterRank, beforeRank)`, which throws unless
-    // afterRank is strictly less than beforeRank — and that 500s the request.
-    // Tasks created but never reordered all share the same default rank, so
-    // equal neighbours are common. Drop one side in that case: the card still
-    // lands in the right column, just at the end of the tied run instead of
-    // between two identical keys.
+    // The server derives the new rank with `generateKeyBetween(afterRank,
+    // beforeRank)`, which needs afterRank strictly less than beforeRank. Tasks
+    // created but never reordered all share the same default rank, so equal
+    // neighbours are common. Dropping one side asks for "append after the tied
+    // run", which is the same thing the server falls back to — sending it
+    // explicitly keeps the optimistic rank and the persisted one identical.
     if (after && before && (after.rank ?? '') >= (before.rank ?? '')) {
       beforeTaskId = null;
     }
@@ -202,6 +200,7 @@ export function BoardPage() {
               canEdit={canEdit}
               onCreate={setCreateIn}
               onOpen={(task) => navigate(`/w/${slug}/projects/${key}/tasks/${task.taskKey}`)}
+              hrefFor={(task) => `/w/${slug}/projects/${key}/tasks/${task.taskKey}`}
             />
           ))}
         </KanbanBoard>

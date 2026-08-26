@@ -716,9 +716,21 @@ export const reorderTask = async (req: Request, res: Response): Promise<void> =>
       if (before?.rank) beforeRank = before.rank;
     }
 
-    // Generate new rank using fractional-indexing (true LexoRank)
-    // afterRank is the task above it, beforeRank is the task below it
-    const newRank = generateKeyBetween(afterRank || null, beforeRank || null);
+    // Generate new rank using fractional-indexing (true LexoRank).
+    // `afterRank` is the task above, `beforeRank` the task below.
+    //
+    // generateKeyBetween throws unless afterRank < beforeRank, and tasks that
+    // were created but never reordered all share the same default rank — so
+    // tied neighbours are the common case, not an edge case. Clients guard for
+    // this too, but the server refuses to 500 on a drag it can resolve itself:
+    // a tie means "append after the tied run", which is what dropping onto a
+    // block of identical ranks visually means anyway.
+    let newRank: string;
+    try {
+      newRank = generateKeyBetween(afterRank || null, beforeRank || null);
+    } catch {
+      newRank = generateKeyBetween(afterRank || null, null);
+    }
 
     const updateData: Record<string, any> = { rank: newRank, updatedAt: new Date() };
     if (status) updateData.status = status;
@@ -767,6 +779,9 @@ export const reorderTask = async (req: Request, res: Response): Promise<void> =>
           oldValues: { status: oldTask.status },
           tx
         });
+        // Feeds the cycle-time and throughput figures on AnalyticsPage — a
+        // drag is a status change like any other and has to be recorded here,
+        // not just audited.
         await recordStatusTransition(tx, {
           taskId: updated.taskId,
           projectId: updated.projectId,
@@ -802,7 +817,7 @@ export const reorderTask = async (req: Request, res: Response): Promise<void> =>
     if (result.oldStatus !== result.updated.status) {
       const [actor] = await db.select({ name: users.fullName }).from(users).where(eq(users.userId, actorId));
       const formatStatus = (s: string) => s.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
-      
+
       const notifyStatus = async (recipient: string | null) => {
         if (recipient && recipient !== actorId) {
           await createNotification({

@@ -67,19 +67,16 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   moveTask: async (slug, key, taskId, status, afterTaskId, beforeTaskId) => {
     const previous = get().tasks;
 
-    // Move optimistically so the card lands where it was dropped. Previously
-    // this patched `status` only, leaving `rank` untouched — the card kept its
-    // old rank, got sorted to wherever that stale value fell among its new
-    // column's siblings (visibly the wrong slot), then jumped again once the
-    // PATCH round-trip returned the real rank. Two snaps per drag, which reads
-    // as lag even when the request itself is fast.
+    // Move optimistically so the card lands where it was dropped. Patching
+    // `status` alone is not enough: the card would keep its old rank, sort to
+    // wherever that stale value falls among its new column's siblings (visibly
+    // the wrong slot), then jump again once the PATCH returns the real rank.
+    // Two snaps per drag, which reads as lag even when the request is fast.
     //
-    // The fix: compute the same rank the server will, from the same neighbours
-    // the caller already resolved, using the identical library the backend
-    // uses (`tasks.controller.ts`'s reorder handler). This can only diverge
-    // from the server's actual value if another client's move races it between
-    // this computation and the request landing — rare, and `onSuccess` below
-    // still adopts the server's authoritative rank when the response returns.
+    // So compute the same rank the server will, from the same neighbours the
+    // caller already resolved, with the same library the backend uses. This
+    // can only diverge if another client's move races it, and the success path
+    // below adopts the server's authoritative rank regardless.
     let optimisticRank: string | undefined;
     if (afterTaskId || beforeTaskId) {
       const byId = new Map(previous.map((t) => [t.taskId, t]));
@@ -88,10 +85,13 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       try {
         optimisticRank = generateKeyBetween(afterRank, beforeRank);
       } catch {
-        // Equal or malformed neighbour ranks — generateKeyBetween throws
-        // rather than guess. Falling through leaves the old rank in place;
-        // the card still moves columns, just re-settles on the server's
-        // response instead of immediately, exactly like before this fix.
+        // Tied neighbours. The server resolves this by appending after the
+        // tied run rather than erroring, so mirror that here.
+        try {
+          optimisticRank = generateKeyBetween(afterRank, null);
+        } catch {
+          // Nothing sensible to guess — let the response settle it.
+        }
       }
     } else {
       // Dropped with no neighbours at all, i.e. the only card in an empty
@@ -112,13 +112,16 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       });
 
       // Adopt the server's fractional index, otherwise the next drag computes
-      // neighbours from a stale rank and positions drift.
+      // neighbours from a stale rank and positions drift over a session.
       set((state) => ({
         tasks: state.tasks.map((t) =>
           t.taskId === taskId ? { ...t, rank: data.task.rank, status: data.task.status } : t,
         ),
       }));
     } catch (err) {
+      // Self-healing revert: restoring `tasks` here is what lets BoardPage skip
+      // any revert logic of its own — its `filtered` memo and columns-sync
+      // effect pick this up automatically.
       set({ tasks: previous });
       throw err;
     }

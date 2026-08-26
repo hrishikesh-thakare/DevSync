@@ -212,6 +212,7 @@ The suite runs automatically in CI on every push to `main`/`develop` and on ever
 | can delete task via API (project admin) | DELETE → 200/204 |
 | board page renders tasks (UI) | Kanban columns render |
 | can reorder a task via API | PATCH reorder → 200 |
+| reordering between two tied-rank neighbours does not error | PATCH reorder with tied neighbours → 200, not 500 |
 | can post comment on task via API | POST comment → 200/201 |
 | can list comments on task via API | GET comments → 200 |
 

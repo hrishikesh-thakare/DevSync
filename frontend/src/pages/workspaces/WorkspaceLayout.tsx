@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { TriangleAlertIcon } from 'lucide-react';
 
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { WorkspaceSidebar } from '@/components/layout/WorkspaceSidebar';
@@ -85,10 +85,8 @@ export function WorkspaceLayout() {
         {/* `<main>` stays the semantic element and the skip-link target —
             `ScrollArea`'s Root renders a plain div, so it goes inside rather
             than replacing `<main>`, and does the actual scrolling. */}
-        <main id="main-content" tabIndex={-1} className="flex min-h-0 flex-1 flex-col">
-          <ScrollArea className="flex-1">
-            <Outlet />
-          </ScrollArea>
+        <main id="main-content" tabIndex={-1} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <Outlet />
         </main>
       </SidebarInset>
     </SidebarProvider>

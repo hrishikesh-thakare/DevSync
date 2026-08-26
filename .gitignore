@@ -52,3 +52,8 @@ e2e/.auth/
 e2e/test-results/
 e2e/playwright-report/
 e2e/blob-report/
+
+# Local disk fallback for file uploads (Supabase Storage is the real target;
+# this only fills up when Supabase isn't configured in dev, or a request
+# falls back after a Supabase error)
+backend/uploads/

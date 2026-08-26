@@ -20,6 +20,7 @@ DevSync is an enterprise-grade project management and real-time collaboration pl
 - **Hierarchical Organization**: Structure your company with **Workspaces** and silo work into distinct **Projects**.
 - **Agile Project Management**:
   - Interactive **Kanban Boards** with fluid drag-and-drop mechanics (`@dnd-kit`).
+  - **Backlog, Roadmap, Calendar and Epic views** over a single ranked task list.
   - Native support for Epics, Stories, Tasks, Bugs, and Subtasks.
   - **Sprint Planning**: Time-boxed iterations with velocity tracking and backlog prioritization powered by LexoRank ordering.
 - **Real-Time Communication**:

@@ -1,7 +1,7 @@
 import { useState, type ComponentProps } from "react"
-// The app's own badge, not reui's: flat and borderless (`secondary` is
-// `bg-secondary`/`border-transparent`), matching every other badge in
-// DevSync rather than reui's bordered, saturated `-light` variants.
+// DevSync: reui's own Badge ships bordered, saturated `-light` variants. This
+// app's badges are flat and borderless, so both badges below use the shadcn
+// Badge instead. `KanbanTaskCard` (the real board card) does the same.
 import { Badge } from "@/components/ui/badge"
 import {
   Kanban,
@@ -110,7 +110,7 @@ function TaskColumn({ value, tasks, isOverlay, ...props }: TaskColumnProps) {
             <span className="text-sm font-semibold">
               {COLUMN_TITLES[value]}
             </span>
-            <Badge variant="secondary">{tasks.length}</Badge>
+            <Badge variant="outline">{tasks.length}</Badge>
           </div>
           <KanbanColumnHandle asChild>
             <Button size="icon-xs" variant="ghost">

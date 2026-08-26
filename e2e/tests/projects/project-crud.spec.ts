@@ -101,8 +101,6 @@ test.describe('Project CRUD', () => {
     await ownerPage.waitForLoadState('networkidle');
 
     // Board should display Kanban columns
-    const columns = ownerPage.locator('[data-testid*="column"], [class*="column"], [class*="kanban"]');
-    // Or look for status text
     const statusText = ownerPage.locator('text=/Todo|In Progress|In Review|Done/i');
     await expect(statusText.first()).toBeVisible({ timeout: 10_000 });
   });

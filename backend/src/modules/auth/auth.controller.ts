@@ -11,6 +11,7 @@ import { supabase } from '../../config/supabase.js';
 import { logAuditAction } from '../audit/audit.controller.js';
 import { broadcastPresence } from '../../sockets/index.js';
 import { enqueueJob } from '../../workers/queue.js';
+import { createFileRecord, resolveDownloadUrl } from '../files/files.controller.js';
 
 // ─── Token Helpers ───────────────────────────────────────────────────────────
 
@@ -678,10 +679,10 @@ export const updatePresence = async (req: Request, res: Response): Promise<void>
   }
 };
 
-// PATCH /auth/profile — currently just `avatarUrl`. The frontend uploads the
-// image to Supabase storage itself (same bucket the message composer's
-// attachments use) and hands this endpoint the resulting public URL; there is
-// no image processing or storage concern on this side.
+// PATCH /auth/profile — currently just `avatarUrl`. `POST /auth/avatar`
+// (below) is what actually uploads the image and returns the URL this
+// expects; this endpoint only ever writes whatever URL it's handed, with no
+// image processing or storage concern of its own.
 export const updateProfile = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user!.userId;
@@ -695,6 +696,43 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
   } catch (err) {
     console.error('Update profile error:', err);
     res.status(500).json({ error: 'Server error updating profile.' });
+  }
+};
+
+// POST /auth/avatar — uploads the image and returns a durable URL, but does
+// NOT write `users.avatarUrl` itself; `AccountSettingsPage` still calls
+// `PATCH /auth/profile` with the URL this returns, same as when it uploaded
+// straight to Supabase from the browser. Kept separate rather than folded
+// into one endpoint that both stores the file and updates the row, so the
+// one existing, already-tested profile-write path doesn't need to change.
+//
+// A dedicated endpoint, not `POST /workspaces/:slug/files/upload`, because
+// an avatar has no workspace to be scoped under — that route sits behind
+// `requireWorkspaceRole`, and `/account` is reachable with no workspace ever
+// having been loaded. `createFileRecord` already supports `workspaceId: null`
+// for exactly this (see its own doc comment); `resolveDownloadUrl(..., true)`
+// generates the same ten-year signed URL chat attachments get, since an
+// avatar is displayed indefinitely from a stored `<img src>`, never re-fetched.
+export const uploadAvatar = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+    const { filename, mimetype, sizeBytes, fileBase64 } = req.body;
+
+    const fileRecord = await createFileRecord({
+      workspaceId: null,
+      userId,
+      filename,
+      mimetype,
+      sizeBytes,
+      filetype: 'image',
+      fileBase64,
+    });
+
+    const avatarUrl = await resolveDownloadUrl(fileRecord, true);
+    res.status(200).json({ avatarUrl });
+  } catch (err) {
+    console.error('Upload avatar error:', err);
+    res.status(500).json({ error: 'Server error uploading avatar.' });
   }
 };
 

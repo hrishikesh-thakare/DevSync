@@ -26,10 +26,10 @@ app.use(globalLimiter);
 import { githubWebhookRouter } from './modules/github/github.routes.js';
 app.use('/api/webhooks/github', githubWebhookRouter);
 
-// 1mb everywhere by default. The 50mb ceiling exists only for the two endpoints
+// 1mb everywhere by default. The 50mb ceiling exists only for the endpoints
 // that carry a base64-encoded file in the JSON body; applying it globally meant
 // every route on the API would buffer a 50mb payload before rejecting it.
-app.use(/^\/api\/workspaces\/[^/]+\/(files\/upload|projects\/[^/]+\/tasks\/[^/]+\/attachments)$/, express.json({ limit: '50mb' }));
+app.use(/^\/api\/(workspaces\/[^/]+\/(files\/upload|projects\/[^/]+\/tasks\/[^/]+\/attachments)|auth\/avatar)$/, express.json({ limit: '50mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());

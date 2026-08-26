@@ -22,7 +22,7 @@ DevSync uses a **monolithic backend** (Node.js/Express) communicating with a **S
 | **Zustand 5** | State Management | Lightweight, fast, and boiler-plate free alternative to Redux. |
 | **React Router 7** | Routing | Standard client-side routing for SPAs. |
 | **React Hook Form + Zod** | Forms & Validation | Performant, flexible, and extensible forms with easy-to-use validation. |
-| **dnd-kit 6** | Drag and Drop | Accessible, flexible drag-and-drop toolkit used for the Kanban board columns and cards. |
+| **dnd-kit 6** | Drag and Drop | Accessible, flexible drag-and-drop toolkit. Drives the Kanban board (via the `@reui/c-kanban-1` primitives), the Backlog's sortable list, and the reui gantt, event-calendar and filter blocks. |
 | **Socket.io-client 4** | Real-time Client | Receives WebSocket events for instant chat messages and live task updates. |
 | **Sonner** | Toasts | Opinionated toast component for React for success and error notifications. |
 | **Lucide React** | Icons | Clean, consistent SVG icon set. |

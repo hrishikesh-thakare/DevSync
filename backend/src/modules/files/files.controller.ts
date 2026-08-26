@@ -15,11 +15,13 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 
 /**
  * Stores a file (Supabase Storage with local disk fallback) and creates its
- * workspace_files record. Used by the generic file upload and by task
- * attachment uploads.
+ * workspace_files record. Used by the generic file upload, by task
+ * attachment uploads, and by avatar uploads (`workspaceId: null` — the
+ * column is nullable for exactly this: a personal file with no workspace
+ * home, stored under `users/<userId>/` instead of `workspaces/<id>/`).
  */
 export const createFileRecord = async (params: {
-  workspaceId: string;
+  workspaceId: string | null;
   userId: string;
   filename: string;
   mimetype?: string;
@@ -32,7 +34,7 @@ export const createFileRecord = async (params: {
 
   const safeName = filename.replace(/[^a-zA-Z0-9-_\.]/g, '');
   const uniqueName = `${Date.now()}_${safeName}`;
-  const storagePath = `workspaces/${workspaceId}/${uniqueName}`;
+  const storagePath = workspaceId ? `workspaces/${workspaceId}/${uniqueName}` : `users/${userId}/${uniqueName}`;
   const fileBuffer = Buffer.from(fileBase64, 'base64');
 
   let isSupabaseUploaded = false;
@@ -154,12 +156,61 @@ export const getUploadUrl = async (req: Request, res: Response): Promise<void> =
   }
 };
 
+/**
+ * A signed URL/JWT good for ten years — effectively permanent for a link that
+ * gets stored once and displayed forever (a chat attachment in `bodyBlocks`,
+ * an avatar), as opposed to the default one-hour link `TaskAttachments.tsx`
+ * fetches fresh on every click. `workspace-files` is a private bucket
+ * (confirmed against the actual Supabase project, not assumed), so
+ * `getPublicUrl()` never works there — a long-lived signed URL, generated
+ * once at upload time and stored, is the same shape of URL either way, it
+ * just doesn't expire out from under content nothing ever re-signs.
+ */
+const PERSISTENT_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 365 * 10;
+const PERSISTENT_JWT_EXPIRES_IN = '3650d';
+
+/**
+ * The actual URL-resolution logic behind `getDownloadUrl`, pulled out so a
+ * non-HTTP caller (the avatar upload handler, which wants a URL back in the
+ * same request that created the file, not a second round trip through a
+ * workspace-scoped route an avatar has no workspace to satisfy) can reuse it
+ * directly instead of duplicating the local/Supabase/fallback branching.
+ */
+export async function resolveDownloadUrl(
+  fileRecord: typeof workspaceFiles.$inferSelect,
+  persistent: boolean,
+): Promise<string> {
+  const expiresInSeconds = persistent ? PERSISTENT_EXPIRES_IN_SECONDS : 3600;
+  const jwtExpiresIn = persistent ? PERSISTENT_JWT_EXPIRES_IN : '1h';
+  // Not every file has a workspace (an avatar doesn't) — `/raw` doesn't
+  // actually check this path segment (see the route comment below), so a
+  // placeholder is fine where a real id isn't available.
+  const workspaceSegment = fileRecord.workspaceId || '_';
+
+  if (fileRecord.storagePath.startsWith('local:')) {
+    const token = jwt.sign({ fileId: fileRecord.fileId }, env.JWT_SECRET, { expiresIn: jwtExpiresIn });
+    return `${env.BACKEND_URL || 'http://localhost:3001'}/api/workspaces/${workspaceSegment}/files/${fileRecord.fileId}/raw?token=${token}`;
+  }
+
+  if (env.SUPABASE_URL && !env.SUPABASE_URL.includes('placeholder')) {
+    const { data, error } = await supabase.storage
+      .from('workspace-files')
+      .createSignedUrl(fileRecord.storagePath, expiresInSeconds);
+
+    if (!error && data?.signedUrl) return data.signedUrl;
+  }
+
+  const token = jwt.sign({ fileId: fileRecord.fileId }, env.JWT_SECRET, { expiresIn: jwtExpiresIn });
+  return `${env.BACKEND_URL || 'http://localhost:3001'}/api/workspaces/${workspaceSegment}/files/${fileRecord.fileId}/raw?token=${token}`;
+}
+
 // ─── GET DOWNLOAD URL ────────────────────────────────────────────────────────
-// GET /api/workspaces/:workspaceId/files/:fileId/download
+// GET /api/workspaces/:workspaceId/files/:fileId/download?persistent=true
 export const getDownloadUrl = async (req: Request, res: Response): Promise<void> => {
   try {
     const { fileId } = req.params as Record<string, string>;
     const workspaceId = (req.params.workspaceId || res.locals.workspaceId) as string;
+    const persistent = req.query.persistent === 'true';
 
     // Scope the lookup to the workspace in the URL. `requireWorkspaceRole` only
     // proves the caller belongs to *that* workspace — it says nothing about
@@ -177,30 +228,8 @@ export const getDownloadUrl = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    // If local file, return raw endpoint URL
-    if (fileRecord.storagePath.startsWith('local:')) {
-      const token = jwt.sign({ fileId: fileRecord.fileId }, env.JWT_SECRET, { expiresIn: '1h' });
-      const rawUrl = `${env.BACKEND_URL || 'http://localhost:3001'}/api/workspaces/${fileRecord.workspaceId}/files/${fileRecord.fileId}/raw?token=${token}`;
-      res.json({ downloadUrl: rawUrl, fileRecord });
-      return;
-    }
-
-    // Try Supabase signed URL
-    if (env.SUPABASE_URL && !env.SUPABASE_URL.includes('placeholder')) {
-      const { data, error } = await supabase.storage
-        .from('workspace-files')
-        .createSignedUrl(fileRecord.storagePath, 3600);
-
-      if (!error && data?.signedUrl) {
-        res.json({ downloadUrl: data.signedUrl, fileRecord });
-        return;
-      }
-    }
-
-    // Fallback: raw endpoint
-    const token = jwt.sign({ fileId: fileRecord.fileId }, env.JWT_SECRET, { expiresIn: '1h' });
-    const rawUrl = `${env.BACKEND_URL || 'http://localhost:3001'}/api/workspaces/${fileRecord.workspaceId}/files/${fileRecord.fileId}/raw?token=${token}`;
-    res.json({ downloadUrl: rawUrl, fileRecord });
+    const downloadUrl = await resolveDownloadUrl(fileRecord, persistent);
+    res.json({ downloadUrl, fileRecord });
   } catch (err) {
     console.error('Get download URL error:', err);
     res.status(500).json({ error: 'Server error generating download URL.' });

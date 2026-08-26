@@ -132,9 +132,10 @@ export const useAuthStore = create<AuthState>((set) => {
       }
     },
 
-    // The image itself is already uploaded to Supabase storage by the caller
-    // (same bucket the message composer's attachments use) by the time this
-    // runs — this just hands the server the resulting public URL to persist.
+    // The image itself is already uploaded by the caller (`POST /auth/avatar`,
+    // which signs a long-lived URL server-side — `workspace-files` is a
+    // private bucket) by the time this runs — this just hands the server the
+    // resulting URL to persist.
     updateAvatar: async (avatarUrl: string | null) => {
       const data = await apiFetch('/auth/profile', {
         method: 'PATCH',

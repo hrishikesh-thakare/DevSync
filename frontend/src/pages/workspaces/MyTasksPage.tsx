@@ -128,7 +128,9 @@ export function MyTasksPage() {
       } catch (err) {
         toast.error(err instanceof Error ? err.message : `Could not move ${task.taskKey}.`);
         // The write failed, so `tasks` never changed and the effect above
-        // never reruns — undo the drag's own optimistic move by hand.
+        // never reruns — undo the drag's own optimistic move by hand. (The
+        // project board gets this for free from `taskStore.moveTask`, which
+        // owns its list; this page owns `tasks` locally, so it does not.)
         setColumns((prev) => {
           const reverted: Record<TaskStatus, MyTask[]> = { todo: [], in_progress: [], in_review: [], done: [] };
           for (const status of STATUS_ORDER) {
@@ -339,11 +341,12 @@ function MyTaskCard({ task, workspaceSlug }: { task: MyTask; workspaceSlug: stri
  */
 function MyTaskKanbanCard({ task, workspaceSlug }: { task: MyTask; workspaceSlug: string }) {
   const navigate = useNavigate();
+  const href = `/w/${workspaceSlug}/projects/${task.projectKey}/tasks/${task.taskKey}`;
 
   return (
     <KanbanItem value={task.taskId}>
       <KanbanItemHandle
-        onClick={() => navigate(`/w/${workspaceSlug}/projects/${task.projectKey}/tasks/${task.taskKey}`)}
+        onClick={() => navigate(href)}
         className="block space-y-1.5 rounded-[min(var(--radius-4xl),24px)] outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Link
@@ -353,7 +356,7 @@ function MyTaskKanbanCard({ task, workspaceSlug }: { task: MyTask; workspaceSlug
         >
           {task.projectName} ({task.projectKey})
         </Link>
-        <KanbanTaskCard task={task} />
+        <KanbanTaskCard task={task} href={href} />
       </KanbanItemHandle>
     </KanbanItem>
   );

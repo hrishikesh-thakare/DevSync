@@ -1,9 +1,9 @@
 import { Router } from 'express';
-import { register, login, refresh, logout, oauthCallback, updateStatus, updatePresence, updatePreferences, updateProfile, listSessions, revokeSession, revokeOtherSessions, changePassword, forgotPassword, resetPassword, verifyEmail, deleteAccount } from './auth.controller.js';
+import { register, login, refresh, logout, oauthCallback, updateStatus, updatePresence, updatePreferences, updateProfile, uploadAvatar, listSessions, revokeSession, revokeOtherSessions, changePassword, forgotPassword, resetPassword, verifyEmail, deleteAccount } from './auth.controller.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { authLimiter } from '../../middleware/rateLimit.js';
 import { validate } from '../../middleware/validate.js';
-import { registerSchema, loginSchema, changePasswordSchema, forgotPasswordSchema, resetPasswordSchema, verifyEmailSchema, updateStatusSchema, updatePresenceSchema, updateProfileSchema } from './auth.schemas.js';
+import { registerSchema, loginSchema, changePasswordSchema, forgotPasswordSchema, resetPasswordSchema, verifyEmailSchema, updateStatusSchema, updatePresenceSchema, updateProfileSchema, uploadAvatarSchema } from './auth.schemas.js';
 
 const router = Router();
 
@@ -32,6 +32,7 @@ router.post('/status', requireAuth, validate(updateStatusSchema), updateStatus);
 router.post('/presence', requireAuth, validate(updatePresenceSchema), updatePresence);
 router.patch('/preferences', requireAuth, updatePreferences);
 router.patch('/profile', requireAuth, validate(updateProfileSchema), updateProfile);
+router.post('/avatar', requireAuth, validate(uploadAvatarSchema), uploadAvatar);
 router.post('/change-password', requireAuth, validate(changePasswordSchema), changePassword);
 
 // Session / device management
