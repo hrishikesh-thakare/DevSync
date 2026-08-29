@@ -2,13 +2,23 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { format, isSameDay } from 'date-fns';
 import { toast } from 'sonner';
-import { HashIcon, MessageSquareIcon, SmilePlusIcon, XIcon } from 'lucide-react';
+import {
+  ChevronDownIcon,
+  HashIcon,
+  Loader2Icon,
+  MessageSquareIcon,
+  PhoneIcon,
+  PhoneOffIcon,
+  SmilePlusIcon,
+  XIcon,
+} from 'lucide-react';
 
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -23,6 +33,7 @@ import { ChannelSettingsSheet } from '@/pages/channels/ChannelSettingsSheet';
 import { useChatStore } from '@/store/chatStore';
 import { useAuthStore } from '@/store/auth';
 import { socketClient } from '@/lib/socket';
+import { apiFetch } from '@/lib/api';
 import { initialsOf } from '@/lib/initials';
 import { firstUrlIn } from '@/lib/messageLinks';
 import { renderMarkdownMessage } from '@/lib/renderMarkdownMessage';
@@ -39,7 +50,7 @@ import {
   AttachmentTrigger,
   AttachmentGroup
 } from '@/components/ui/attachment';
-import { FileTextIcon } from 'lucide-react';
+import { attachmentIcon } from '@/lib/files';
 
 const QUICK_REACTIONS = ['👍', '🎉', '👀', '✅', '❤️', '🚀'];
 
@@ -69,6 +80,12 @@ export function ChannelPage() {
 
   const me = useAuthStore((s) => s.user);
   const [sending, setSending] = useState(false);
+  // The Zoom join link for this channel's live call, if any — `null` means
+  // no call is running, so the header button reads "Start call". There is
+  // no embed and no participant count: once someone clicks through, they've
+  // left this page for Zoom's, which the backend has no visibility into.
+  const [callUrl, setCallUrl] = useState<string | null>(null);
+  const [startingCall, setStartingCall] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -83,12 +100,22 @@ export function ChannelPage() {
     const socket = socketClient.getSocket();
     const room = `channel:${channelId}`;
 
+    // The server replies to `join_room` with the call's current state (if
+    // any) addressed only to this socket, and to a fresh `POST .../call`
+    // from anyone with a room-wide broadcast — same event name either way,
+    // so one listener covers both. `channelRoomId` is checked because this
+    // socket may be joined to other channel rooms too (a background DM tab).
+    const onCallStarted = (payload: { channelRoomId: string; joinUrl: string | null }) => {
+      if (payload.channelRoomId === room) setCallUrl(payload.joinUrl);
+    };
+
     socket.emit('join_room', room);
     socket.on('new_message', onNewMessage);
     socket.on('message_updated', onMessageUpdated);
     socket.on('message_deleted', onMessageDeleted);
     socket.on('message_reaction_added', onReactionAdded);
     socket.on('message_reaction_removed', onReactionRemoved);
+    socket.on('call_started', onCallStarted);
 
     return () => {
       socket.emit('leave_room', room);
@@ -97,8 +124,45 @@ export function ChannelPage() {
       socket.off('message_deleted', onMessageDeleted);
       socket.off('message_reaction_added', onReactionAdded);
       socket.off('message_reaction_removed', onReactionRemoved);
+      socket.off('call_started', onCallStarted);
+      setCallUrl(null);
     };
   }, [channelId, onNewMessage, onMessageUpdated, onMessageDeleted, onReactionAdded, onReactionRemoved]);
+
+  // Opens the shared Zoom link in a new tab — minting one first via the
+  // backend if this is the first person in the channel to click it this
+  // "session" (the backend reuses the existing meeting for everyone after).
+  const handleCall = async () => {
+    if (callUrl) {
+      window.open(callUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    setStartingCall(true);
+    try {
+      const { joinUrl } = await apiFetch(`/workspaces/${slug}/channels/${channelId}/call`, { method: 'POST' });
+      setCallUrl(joinUrl);
+      window.open(joinUrl, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not start the call.');
+    } finally {
+      setStartingCall(false);
+    }
+  };
+
+  // Force-ends the Zoom meeting for everyone, not just this tab — there's no
+  // "leave" concept here (closing the Zoom tab already does that); this is
+  // specifically for closing out a call nobody's using any more so the next
+  // click starts a fresh one instead of rejoining a stale meeting.
+  const handleEndCall = async () => {
+    const previousUrl = callUrl;
+    setCallUrl(null); // optimistic — the DELETE below can't really fail in a way worth reverting for
+    try {
+      await apiFetch(`/workspaces/${slug}/channels/${channelId}/call`, { method: 'DELETE' });
+    } catch (err) {
+      setCallUrl(previousUrl);
+      toast.error(err instanceof Error ? err.message : 'Could not end the call.');
+    }
+  };
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' });
@@ -181,10 +245,57 @@ export function ChannelPage() {
               {channel.description}
             </p>
           ) : null}
+          {callUrl ? (
+            // Split button: the main half still does the obvious thing on a
+            // plain click (join); ending the call for everyone is one level
+            // deeper, in the chevron's menu, since it's the more disruptive
+            // of the two actions and shouldn't share a hit target with it.
+            <ButtonGroup className="ml-auto">
+              <Button variant="secondary" size="sm" className="gap-1.5" onClick={() => void handleCall()}>
+                <PhoneIcon className="size-3.5" aria-hidden="true" />
+                Join call
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="secondary" size="sm" aria-label="Call options">
+                    <ChevronDownIcon className="size-3.5" aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem variant="destructive" onSelect={() => void handleEndCall()}>
+                    <PhoneOffIcon className="size-3.5" aria-hidden="true" />
+                    End call for everyone
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </ButtonGroup>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-auto gap-1.5"
+              disabled={startingCall}
+              onClick={() => void handleCall()}
+            >
+              {startingCall ? (
+                <Loader2Icon className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <PhoneIcon className="size-3.5" aria-hidden="true" />
+              )}
+              Start call
+            </Button>
+          )}
           <ChannelSettingsSheet slug={slug} channel={channel} />
         </header>
 
-        <ScrollArea className="flex-1">
+        {/* `min-h-0` on the ScrollArea itself, not just its ancestors: a flex
+            item's default min-height is `auto` ("never shrink below content
+            size"), and Radix's ScrollAreaPrimitive.Root doesn't override it —
+            without this, `flex-1` alone still lets it grow to fit every
+            message rather than clamp to the available space, so `<main>`'s
+            own overflow-y-auto ends up scrolling everything (header
+            included) instead of this list scrolling internally. */}
+        <ScrollArea className="min-h-0 flex-1">
           {/* `pb-8` rather than `py-4` symmetrically: reactions render in
               normal flow now (see MessageRow below), but the last message's
               content can still sit close to this edge — kept for breathing
@@ -250,7 +361,14 @@ export function ChannelPage() {
             </Button>
           </header>
 
-          <ScrollArea className="flex-1">
+          {/* `min-h-0` on the ScrollArea itself, not just its ancestors: a flex
+            item's default min-height is `auto` ("never shrink below content
+            size"), and Radix's ScrollAreaPrimitive.Root doesn't override it —
+            without this, `flex-1` alone still lets it grow to fit every
+            message rather than clamp to the available space, so `<main>`'s
+            own overflow-y-auto ends up scrolling everything (header
+            included) instead of this list scrolling internally. */}
+        <ScrollArea className="min-h-0 flex-1">
             <div className="flex flex-col justify-end min-h-full px-4 pt-3 pb-8">
               <MessageRow
                 slug={slug}
@@ -457,6 +575,7 @@ function MessageRow({
                     const block = b as AttachmentPayload & { type: string };
                     if (block.type !== 'attachment') return null;
                     const isImage = block.mimetype?.startsWith('image/');
+                    const Icon = attachmentIcon(block.mimetype);
                     return (
                       <Attachment
                         key={idx}
@@ -473,7 +592,7 @@ function MessageRow({
                         className={isImage ? 'w-72!' : undefined}
                       >
                         <AttachmentMedia variant={isImage ? 'image' : 'icon'}>
-                          {isImage ? <img src={block.url} alt="" /> : <FileTextIcon />}
+                          {isImage ? <img src={block.url} alt="" /> : <Icon />}
                         </AttachmentMedia>
                         <AttachmentContent>
                           <AttachmentTitle>{block.name}</AttachmentTitle>

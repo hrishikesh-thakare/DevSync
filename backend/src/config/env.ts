@@ -22,6 +22,14 @@ export const env = {
 
   GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
 
+  // Zoom (Server-to-Server OAuth app) — used only to mint meetings for the
+  // channel "Start call" button. Not a per-user/per-workspace OAuth flow:
+  // one Zoom account (whoever owns these credentials) hosts every meeting;
+  // anyone can still join the resulting link without their own Zoom account.
+  ZOOM_ACCOUNT_ID: process.env.ZOOM_ACCOUNT_ID || '',
+  ZOOM_CLIENT_ID: process.env.ZOOM_CLIENT_ID || '',
+  ZOOM_CLIENT_SECRET: process.env.ZOOM_CLIENT_SECRET || '',
+
   // SMTP Email
   SMTP_HOST: process.env.SMTP_HOST || '',
   SMTP_PORT: process.env.SMTP_PORT || '',

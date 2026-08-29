@@ -6,6 +6,9 @@ import { projectMembers } from '../../db/schema/projects.js';
 import { users } from '../../db/schema/auth.js';
 import { eq, and } from 'drizzle-orm';
 import { logAuditAction } from '../audit/audit.controller.js';
+import { getIO } from '../../sockets/index.js';
+import { createZoomMeeting, endZoomMeeting } from '../../lib/zoom.js';
+import { getActiveCall, setActiveCall, clearActiveCall } from './activeCalls.js';
 
 // ─── Helper: generate slug from channel name ────────────────────────────────
 const channelSlug = (name: string): string =>
@@ -377,4 +380,80 @@ export const updateChannel = async (req: Request, res: Response): Promise<void> 
     console.error('Update channel error:', err);
     res.status(500).json({ error: 'Server error updating channel.' });
   }
+};
+
+// ─── CALLS (Zoom link-out) ───────────────────────────────────────────────────
+// A "Start call" mints a Zoom meeting the first time; everyone after reuses
+// the same link (`getActiveCall`) until it ages out — see activeCalls.ts.
+// There's no embed and no live participant count: once someone clicks
+// through, they've left DevSync's page for Zoom's, which this backend has
+// no visibility into.
+
+// GET /api/workspaces/:workspaceId/channels/:channelId/call
+export const getCall = async (req: Request, res: Response): Promise<void> => {
+  const { channelId } = req.params as Record<string, string>;
+  const call = getActiveCall(channelId);
+  res.json({ joinUrl: call?.joinUrl ?? null });
+};
+
+// POST /api/workspaces/:workspaceId/channels/:channelId/call
+export const startCall = async (req: Request, res: Response): Promise<void> => {
+  const { channelId } = req.params as Record<string, string>;
+
+  const existing = getActiveCall(channelId);
+  if (existing) {
+    res.status(200).json({ joinUrl: existing.joinUrl });
+    return;
+  }
+
+  try {
+    const [channel] = await db
+      .select({ name: channels.name })
+      .from(channels)
+      .where(eq(channels.channelId, channelId))
+      .limit(1);
+
+    const { joinUrl, meetingId } = await createZoomMeeting(`DevSync — #${channel?.name ?? 'channel'}`);
+    setActiveCall(channelId, { joinUrl, meetingId, createdAt: Date.now() });
+
+    // Any tab already open on this channel updates its "Start call" button
+    // to "Join call" immediately, without polling.
+    getIO().to(`channel:${channelId}`).emit('call_started', {
+      channelRoomId: `channel:${channelId}`,
+      joinUrl,
+    });
+
+    res.status(201).json({ joinUrl });
+  } catch (err) {
+    console.error('Start call error:', err);
+    res.status(502).json({ error: 'Could not start the call. Check the Zoom integration is configured.' });
+  }
+};
+
+// DELETE /api/workspaces/:workspaceId/channels/:channelId/call
+export const endCall = async (req: Request, res: Response): Promise<void> => {
+  const { channelId } = req.params as Record<string, string>;
+
+  const call = getActiveCall(channelId);
+  // Cleared and broadcast first, regardless of whether the Zoom API call
+  // below succeeds: DevSync's own "is a call live" state shouldn't stay
+  // stuck just because Zoom's side had a transient error, and every open
+  // tab reverting to "Start call" is the visible part of this action.
+  clearActiveCall(channelId);
+  getIO().to(`channel:${channelId}`).emit('call_started', {
+    channelRoomId: `channel:${channelId}`,
+    joinUrl: null,
+  });
+
+  if (call) {
+    try {
+      await endZoomMeeting(call.meetingId);
+    } catch (err) {
+      // Non-fatal: most commonly the meeting already ended itself because
+      // everyone had already left. DevSync's own state is already cleared.
+      console.error('End Zoom meeting error (non-fatal):', err);
+    }
+  }
+
+  res.status(200).json({ ended: true });
 };

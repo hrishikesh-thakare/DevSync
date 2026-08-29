@@ -10,6 +10,9 @@ import {
   archiveChannel,
   deleteChannel,
   updateChannel,
+  getCall,
+  startCall,
+  endCall,
 } from './channels.controller.js';
 
 import messagesRoutes from '../messages/messages.routes.js';
@@ -34,6 +37,11 @@ router.delete('/:channelId/leave', requireChannelAccess, leaveChannel);
 router.patch('/:channelId/archive', requireWorkspaceRole(['owner', 'admin']), requireChannelAccess, archiveChannel);
 router.patch('/:channelId', requireWorkspaceRole(['owner', 'admin']), requireChannelAccess, validate(updateChannelSchema), updateChannel);
 router.delete('/:channelId', requireWorkspaceRole(['owner', 'admin']), requireChannelAccess, deleteChannel);
+
+// ─── Calls (Zoom link-out) ───────────────────────────────────────────────────
+router.get('/:channelId/call', requireChannelAccess, getCall);
+router.post('/:channelId/call', requireChannelAccess, startCall);
+router.delete('/:channelId/call', requireChannelAccess, endCall);
 
 // ─── Messages (Nested) ───────────────────────────────────────────────────────
 router.use('/:channelId/messages', requireChannelAccess, messagesRoutes);

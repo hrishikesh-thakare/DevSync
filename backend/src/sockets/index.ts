@@ -8,6 +8,7 @@ import { channels, channelMembers } from '../db/schema/channels.js';
 import { projects, projectMembers } from '../db/schema/projects.js';
 import { workspaceMembers } from '../db/schema/workspaces.js';
 import { and, eq } from 'drizzle-orm';
+import { getActiveCall } from '../modules/channels/activeCalls.js';
 
 /**
  * Mirrors requireChannelAccess for socket room subscriptions.
@@ -186,6 +187,15 @@ export const initSocket = (server: HttpServer) => {
 
       socket.join(roomId);
       console.log(`Socket ${socket.id} joined room ${roomId}`);
+
+      // A channel may already have a live Zoom call when this socket joins
+      // its room — reply with the join link so a page opened mid-call shows
+      // "Join call" immediately rather than a stale "Start call".
+      if (roomId.startsWith('channel:')) {
+        const channelId = roomId.slice('channel:'.length);
+        const call = getActiveCall(channelId);
+        socket.emit('call_started', { channelRoomId: roomId, joinUrl: call?.joinUrl ?? null });
+      }
     });
 
     socket.on('leave_room', (roomId: string) => {

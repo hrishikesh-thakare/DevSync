@@ -132,7 +132,12 @@ export function ChannelSettingsSheet({ slug, channel }: { slug: string; channel:
       </SheetTrigger>
 
       <SheetContent className="w-full gap-0 p-0 sm:max-w-md">
-        <ScrollArea className="flex-1">
+        {/* `min-h-0`: a flex item's default min-height is `auto` (never
+            shrink below content size), and Radix's ScrollAreaPrimitive.Root
+            doesn't override it — without this, a long member list just grows
+            past SheetContent's fixed viewport-height box with no scrollbar
+            at all, rather than clamping and scrolling internally. */}
+        <ScrollArea className="min-h-0 flex-1">
         <SheetHeader className="p-6 pb-4">
           <SheetTitle>#{channel.name}</SheetTitle>
           <SheetDescription>

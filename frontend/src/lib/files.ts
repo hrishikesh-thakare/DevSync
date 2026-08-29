@@ -7,6 +7,8 @@
  * about a third, which is where MAX_UPLOAD_BYTES comes from.
  */
 
+import { FileTextIcon, MicIcon, VideoIcon, type LucideIcon } from 'lucide-react';
+
 /** 30 MiB of file ≈ 40 MB of base64, comfortably inside the server's 50mb cap. */
 export const MAX_UPLOAD_BYTES = 30 * 1024 * 1024;
 
@@ -49,6 +51,20 @@ export function fileToBase64(file: File): Promise<string> {
     };
     reader.readAsDataURL(file);
   });
+}
+
+/**
+ * The generic (non-image) icon for an attachment card — images render an
+ * actual thumbnail instead, so this is only ever consulted for the
+ * `variant="icon"` case. Recordings made through the composer's own
+ * record-video/record-voice buttons are plain video/webm and audio/webm
+ * files by the time they reach here, indistinguishable from an uploaded
+ * clip — same icon either way.
+ */
+export function attachmentIcon(mimetype: string | undefined): LucideIcon {
+  if (mimetype?.startsWith('video/')) return VideoIcon;
+  if (mimetype?.startsWith('audio/')) return MicIcon;
+  return FileTextIcon;
 }
 
 export function formatBytes(bytes: number | null | undefined): string {
