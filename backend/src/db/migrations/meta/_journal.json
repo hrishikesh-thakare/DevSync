@@ -92,6 +92,13 @@
       "when": 1787125288426,
       "tag": "0012_analytics_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788272747942,
+      "tag": "0013_resync_snapshot",
+      "breakpoints": true
     }
   ]
 }

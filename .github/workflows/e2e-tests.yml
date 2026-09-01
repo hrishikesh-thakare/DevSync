@@ -82,14 +82,15 @@ jobs:
         run: |
           cat > .env << EOF
           VITE_API_URL=http://localhost:3001/api
-          VITE_SOCKET_URL=http://localhost:3001
           VITE_SUPABASE_URL=https://placeholder.supabase.co
           VITE_SUPABASE_ANON_KEY=placeholder
           EOF
 
       - name: Run database migrations
         working-directory: backend
-        run: npx drizzle-kit migrate
+        # The same runner the deployed app uses (drizzle-orm's migrator), not
+        # drizzle-kit — which is a devDependency and absent in production.
+        run: npx tsx src/db/migrate.ts
 
       # ─── Start Services ─────────────────────────────────────────────────
       - name: Start backend server

@@ -3,7 +3,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { Loader2Icon, MonitorIcon } from 'lucide-react';
 
-import { Alert, AlertTitle } from '@/components/ui/alert';
+import { ErrorState } from '@/components/layout/PageState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -98,9 +98,7 @@ export function SessionsCard() {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {error ? (
-          <Alert variant="destructive">
-            <AlertTitle>{error}</AlertTitle>
-          </Alert>
+          <ErrorState message={error} />
         ) : null}
 
         {isLoading ? (

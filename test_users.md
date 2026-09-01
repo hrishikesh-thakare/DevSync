@@ -2,7 +2,7 @@
 
 These users have been automatically seeded into the database for manual integration testing. All users have been randomly assigned an avatar using Faker.
 
-**Global Password for all users:** `password123`
+**Global Password for all users:** `Password123!`
 
 | Name | Email | Role / Notes |
 | :--- | :--- | :--- |

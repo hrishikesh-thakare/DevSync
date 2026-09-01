@@ -1,18 +1,18 @@
 # DevSync E2E Test Suite — Complete Test Reference
 
-The DevSync Playwright end-to-end suite contains **260 tests across 31 spec files**. It verifies the full product surface: authentication & sessions (including password recovery, email verification, enforcement of verified emails on sign-in, and rate limiting behind a trusted proxy), workspace/project/channel/task/sprint/label CRUD (including soft-delete isolation of deleted workspaces), messaging (including threads and reactions), XSS sanitization of message HTML, RBAC at workspace and project level, GitHub integration, search, notifications, file storage, WebSocket realtime events, and audit logging.
+The DevSync Playwright end-to-end suite contains **297 tests across 33 spec files**. It verifies the full product surface: authentication & sessions (including password recovery, email verification, enforcement of verified emails on sign-in, and rate limiting behind a trusted proxy), workspace/project/channel/task/sprint/label CRUD (including soft-delete isolation of deleted workspaces), messaging (including threads and reactions), XSS sanitization of message HTML, RBAC at workspace and project level, GitHub integration, search, notifications, file storage, WebSocket realtime events, and audit logging.
 
 ## Running the Suite
 
 | Command | Purpose |
 | :--- | :--- |
-| `npx playwright test` | Run the full suite (260 tests, 8 workers) |
+| `npx playwright test` | Run the full suite (297 tests) |
 | `npx playwright test tests/<dir>` | Run one module (e.g. `tests/rbac`) |
 | `npx playwright test tests/<dir>/<file>.spec.ts --workers 1` | Run one spec file serially |
 | `npm run test:rbac` / `test:auth` | Run tests tagged `@rbac` / `@auth` |
 | `npx playwright test --headed` / `--ui` | Interactive debugging |
 
-The suite runs automatically in CI on every push to `main`/`develop` and on every PR targeting them (`.github/workflows/e2e-tests.yml`): fresh Postgres 16, `drizzle-kit migrate` (all 9 versioned migrations, 0000→0008), seed, then the full run.
+The suite runs automatically in CI on every push to `main`/`develop` and on every PR targeting them (`.github/workflows/e2e-tests.yml`): fresh Postgres 16, migrations (all 13 versioned migrations, 0000→0012, applied with the same drizzle-orm migrator the deployed app uses), seed, then the full run.
 
 ## Test Infrastructure
 

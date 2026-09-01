@@ -3,10 +3,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2Icon } from 'lucide-react';
+import { Loader2Icon, LockIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { EmptyState, ErrorState } from '@/components/layout/PageState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -99,12 +99,13 @@ export function CreateProjectPage() {
   if (!canCreate) {
     return (
       <PageShell narrow>
-        <Alert variant="destructive">
-          <AlertTitle>You do not have permission to create projects</AlertTitle>
-          <AlertDescription>
-            Only workspace owners and admins can create projects. Ask an admin to create one for you.
-          </AlertDescription>
-        </Alert>
+        {/* A permission boundary, not a failure — same treatment as the
+            workspace settings page. */}
+        <EmptyState
+          icon={<LockIcon />}
+          title="You do not have permission to create projects"
+          description="Only workspace owners and admins can create projects. Ask an admin to create one for you."
+        />
       </PageShell>
     );
   }
@@ -117,9 +118,7 @@ export function CreateProjectPage() {
       />
 
       {submitError ? (
-        <Alert variant="destructive" className="mb-6">
-          <AlertTitle>{submitError}</AlertTitle>
-        </Alert>
+        <ErrorState message={submitError} className="mb-6" />
       ) : null}
 
       <Card>

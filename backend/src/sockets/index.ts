@@ -1,6 +1,7 @@
 import { Server as HttpServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { env } from '../config/env.js';
+import { corsOrigin } from '../config/cors.js';
 import jwt from 'jsonwebtoken';
 import { db } from '../config/db.js';
 import { users } from '../db/schema/auth.js';
@@ -87,7 +88,7 @@ let io: Server;
 export const initSocket = (server: HttpServer) => {
   io = new Server(server, {
     cors: {
-      origin: env.FRONTEND_URL,
+      origin: corsOrigin,
       credentials: true,
       methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     },

@@ -62,12 +62,40 @@ export const getWorkspaceDashboard = async (req: Request, res: Response): Promis
     if (projectIds.length === 0) {
       res.json({
         role,
+        persona: isAdmin ? 'admin' : 'contributor',
         myWork: { counts: { todo: 0, in_progress: 0, in_review: 0 }, overdue: 0, dueSoon: 0, tasks: [] },
         sprints: [],
         ...(isAdmin ? { projects: [], atRisk: { overdue: [], stalled: [] }, workload: [], pendingInvites: [], activity: [] } : {}),
       });
       return;
     }
+
+    /**
+     * Which dashboard this person actually needs.
+     *
+     * The workspace role alone cannot tell a contributor from a read-only
+     * observer: both are `member`. Someone who is a `viewer` in every project
+     * they belong to can act on nothing — no task will ever be assigned to
+     * them, so a "My work" panel is permanently empty and a "needs your
+     * attention" count is permanently zero. Leading their dashboard with either
+     * is worse than useless; it teaches them the page has nothing to say.
+     *
+     * Three personas, which is the range role-based design is worth doing for:
+     * admin (is the team on track, what needs me), contributor (what do I do
+     * next), viewer (how is it going).
+     */
+    const myProjectRoles = await db
+      .select({ role: projectMembers.role })
+      .from(projectMembers)
+      .where(
+        and(inArray(projectMembers.projectId, projectIds), eq(projectMembers.userId, userId)),
+      );
+
+    const persona: 'admin' | 'contributor' | 'viewer' = isAdmin
+      ? 'admin'
+      : myProjectRoles.length > 0 && myProjectRoles.every((r) => r.role === 'viewer')
+        ? 'viewer'
+        : 'contributor';
 
     const now = new Date();
     const projectById = new Map(projectRows.map((p) => [p.projectId, p]));
@@ -194,7 +222,7 @@ export const getWorkspaceDashboard = async (req: Request, res: Response): Promis
     });
 
     if (!isAdmin) {
-      res.json({ role, myWork, sprints: sprintSummaries });
+      res.json({ role, persona, myWork, sprints: sprintSummaries });
       return;
     }
 
@@ -344,6 +372,7 @@ export const getWorkspaceDashboard = async (req: Request, res: Response): Promis
 
     res.json({
       role,
+      persona,
       myWork,
       sprints: sprintSummaries,
       projects: projectRows.map((p) => {

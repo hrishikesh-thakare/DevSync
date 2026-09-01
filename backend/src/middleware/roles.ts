@@ -22,8 +22,16 @@ export const requireWorkspaceRole = (allowedRoles: ('owner' | 'admin' | 'member'
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = req.user?.userId;
-      let workspaceId = req.params?.workspaceId || req.body?.workspaceId || req.query?.workspaceId;
-      const slug = req.params?.slug || req.body?.slug || req.query?.slug;
+      // Route params only. This used to fall back to `req.body.workspaceId` and
+      // `req.query.workspaceId`, which let the caller name the workspace whose
+      // membership gets checked — a different one from the `:slug` in the path
+      // the controller then acts on. Nothing reaches that today because every
+      // nested router sets `mergeParams: true`, so `req.params` is always
+      // populated; it was a cross-workspace privilege escalation waiting for a
+      // route refactor to expose it. The scope of an authorization check must
+      // come from the path being authorized, never from the request body.
+      let workspaceId = req.params?.workspaceId;
+      const slug = req.params?.slug;
 
       if (!userId) {
         res.status(401).json({ error: 'Unauthorized. Auth context missing.' });
@@ -92,9 +100,12 @@ export const requireProjectRole = (allowedRoles: ('project_admin' | 'developer' 
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = req.user?.userId;
-      let projectId = req.params?.projectId || req.body?.projectId || req.query?.projectId;
-      const key = req.params?.key || req.body?.key || req.query?.key;
-      const slug = req.params?.slug || req.body?.slug || req.query?.slug;
+      // Route params only — see the note in requireWorkspaceRole. A caller who
+      // can supply `projectId` in the body picks which project's membership is
+      // checked, while the controller still resolves the project from `:key`.
+      let projectId = req.params?.projectId;
+      const key = req.params?.key;
+      const slug = req.params?.slug;
 
       if (!userId) {
         res.status(401).json({ error: 'Unauthorized. Auth context missing.' });

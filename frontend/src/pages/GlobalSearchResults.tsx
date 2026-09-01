@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { HashIcon, SearchIcon } from 'lucide-react';
 
-import { Alert, AlertTitle } from '@/components/ui/alert';
+import { ErrorState } from '@/components/layout/PageState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -138,9 +138,7 @@ export function GlobalSearchResults() {
       </Tabs>
 
       {error ? (
-        <Alert variant="destructive" className="mb-4">
-          <AlertTitle>{error}</AlertTitle>
-        </Alert>
+        <ErrorState message={error} className="mb-4" />
       ) : null}
 
       {isLoading ? (

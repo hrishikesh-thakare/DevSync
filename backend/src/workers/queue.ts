@@ -40,6 +40,14 @@ export const enqueueJob = (
   payload: any,
   opts: { maxAttempts?: number; backoffMs?: number; delayMs?: number } = {}
 ): void => {
+  // After shutdown the drain loop is closed, so a pushed job would sit in the
+  // array forever and keep the shutdown snapshot looking non-empty. Refuse it
+  // at the door instead.
+  if (drained) {
+    console.warn(`[queue] shutting down — dropping job '${name}'`);
+    return;
+  }
+
   const handler = handlers.get(name);
   if (!handler) {
     console.warn(`[queue] no worker registered for job '${name}' — dropping job`);

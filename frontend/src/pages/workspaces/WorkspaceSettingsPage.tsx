@@ -4,9 +4,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Loader2Icon } from 'lucide-react';
+import { LockIcon, Loader2Icon } from 'lucide-react';
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { EmptyState } from '@/components/layout/PageState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -105,10 +105,18 @@ export function WorkspaceSettingsPage() {
     return (
       <PageShell narrow>
         <PageHeader title="Workspace settings" />
-        <Alert variant="destructive">
-          <AlertTitle>You do not have access to these settings</AlertTitle>
-          <AlertDescription>Only workspace owners and admins can change them.</AlertDescription>
-        </Alert>
+        {/* Not a load failure — the request never went wrong, this person just
+            cannot be here. An empty state says that; a destructive alert
+            implies something broke. */}
+        {/* Wording is load-bearing: tests/rbac/workspace-rbac.spec.ts asserts a
+            match for /forbidden|not authorized|access denied|do not have
+            access/i on this screen. Keep the un-contracted "do not have
+            access". */}
+        <EmptyState
+          icon={<LockIcon />}
+          title="You do not have access to these settings"
+          description="Only workspace owners and admins can change them."
+        />
       </PageShell>
     );
   }

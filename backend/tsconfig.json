@@ -18,5 +18,7 @@
     }
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist"]
+  // Tests are run by vitest straight from source; compiling them into dist/
+  // would ship vitest imports into the production build.
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
 }

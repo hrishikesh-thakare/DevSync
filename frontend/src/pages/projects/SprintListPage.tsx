@@ -4,8 +4,7 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { CalendarClockIcon, Loader2Icon, PlusIcon, SparklesIcon } from 'lucide-react';
 
-import { EmptyState } from '@/components/layout/PageState';
-import { Alert, AlertTitle } from '@/components/ui/alert';
+import { EmptyState, ErrorState } from '@/components/layout/PageState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -136,9 +135,7 @@ export function SprintListPage() {
       />
 
       {error ? (
-        <Alert variant="destructive" className="mb-6">
-          <AlertTitle>{error}</AlertTitle>
-        </Alert>
+        <ErrorState message={error} className="mb-6" />
       ) : null}
 
       {sprints.length === 0 ? (
@@ -356,9 +353,7 @@ function CreateSprintDialog({
         </DialogHeader>
 
         {error ? (
-          <Alert variant="destructive">
-            <AlertTitle>{error}</AlertTitle>
-          </Alert>
+          <ErrorState message={error} />
         ) : null}
 
         <FieldGroup>

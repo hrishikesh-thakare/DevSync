@@ -26,8 +26,16 @@ const SECTION_LABELS: Record<string, string> = {
   sprints: 'Sprints',
   labels: 'Labels',
   github: 'GitHub',
+  epics: 'Epics',
+  calendar: 'Calendar',
+  roadmap: 'Roadmap',
   new: 'New',
 };
+
+// Every project/workspace route segment must have an entry above, or the
+// lookup falls through to `?? tail` and renders the raw lowercase slug —
+// which is how `epics`, `calendar` and `roadmap` shipped reading as "epics",
+// "calendar", "roadmap" after they were added to the route table.
 
 interface Crumb {
   label: string;

@@ -13,13 +13,13 @@ import {
   XIcon,
 } from 'lucide-react';
 
-import { Alert, AlertTitle } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState, ErrorState, MessageSkeleton } from '@/components/layout/PageState';
 import { Separator } from '@/components/ui/separator';
 import {
   DropdownMenu,
@@ -205,12 +205,7 @@ export function ChannelPage() {
   if (isLoading) {
     return (
       <div className="p-6">
-        <Skeleton className="mb-4 h-8 w-64 rounded-lg" />
-        <div className="space-y-3">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-14 w-full rounded-lg" />
-          ))}
-        </div>
+        <MessageSkeleton />
       </div>
     );
   }
@@ -218,9 +213,7 @@ export function ChannelPage() {
   if (error || !channel) {
     return (
       <div className="p-6">
-        <Alert variant="destructive">
-          <AlertTitle>{error ?? 'Channel not found.'}</AlertTitle>
-        </Alert>
+        <ErrorState message={error ?? 'Channel not found.'} />
       </div>
     );
   }
@@ -302,9 +295,12 @@ export function ChannelPage() {
               room. */}
           <div className="flex flex-col justify-end min-h-full px-6 pt-4 pb-8">
             {messages.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted-foreground">
-                No messages yet. Say something.
-              </p>
+              <EmptyState
+                compact
+                icon={<MessageSquareIcon />}
+                title="No messages yet"
+                description="Start the conversation — everyone in this channel will see it."
+              />
             ) : (
               <ul className="space-y-1">
                 {messages.map((message, i) => (
@@ -382,7 +378,7 @@ export function ChannelPage() {
               {isThreadLoading ? (
                 <Skeleton className="h-16 w-full rounded-lg" />
               ) : threadReplies.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">No replies yet.</p>
+                <EmptyState compact title="No replies yet" description="Reply to start the thread." />
               ) : (
                 <ul className="space-y-1">
                   {threadReplies.map((reply) => (

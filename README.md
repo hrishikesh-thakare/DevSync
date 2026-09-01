@@ -54,7 +54,7 @@ DevSync is built on a modern, type-safe, monolithic architecture.
 ### Backend
 - **Runtime**: Node.js (ESM) + Express 5 + TypeScript
 - **Database**: PostgreSQL (Managed by Supabase)
-- **ORM**: Drizzle ORM v0.44
+- **ORM**: Drizzle ORM v0.45
 - **Real-time**: Socket.io v4
 - **Auth**: JSON Web Tokens (JWT) + refresh tokens, bcrypt, Supabase OAuth
 - **Security & Validation**: Zod, Helmet, express-rate-limit, AES-256-GCM encryption
@@ -82,49 +82,15 @@ cd devsync
 cd backend
 npm install
 ```
-Create a `.env` file in the `backend/` directory based on the required environment variables:
-```env
-# Database (Supabase PostgreSQL)
-DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres
-
-# Auth
-JWT_SECRET=your-jwt-secret-min-32-chars
-JWT_EXPIRES_IN=15m
-REFRESH_TOKEN_EXPIRES_IN=7d
-
-# GitHub OAuth
-GITHUB_CLIENT_ID=
-GITHUB_CLIENT_SECRET=
-
-# Google OAuth
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-
-# Supabase (Storage & Auth Integrations)
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
-
-# GitHub token encryption (AES-256-GCM, at least 32 chars)
-ENCRYPTION_KEY=32_byte_hex_string_for_aes_256_gcm
-
-# SMTP Email (invitations, notifications)
-SMTP_HOST=
-SMTP_PORT=
-SMTP_USER=
-SMTP_PASS=
-SMTP_FROM=
-
-# Optional: Gemini AI
-GEMINI_API_KEY=
-
-# Server
-PORT=3001
-NODE_ENV=development
-FRONTEND_URL=http://localhost:5173
-```
-Run database migrations and start the server:
+Copy the example environment file and fill it in — every variable is documented inline, including which are required in production:
 ```bash
-npm run db:push
+cp .env.example .env
+```
+The three you cannot skip locally are `DATABASE_URL`, `JWT_SECRET`, and `ENCRYPTION_KEY` (`openssl rand -hex 32`).
+
+Apply migrations and start the server:
+```bash
+npm run db:migrate    # drizzle-kit, for local development
 npm run dev
 ```
 
@@ -158,13 +124,17 @@ To receive external GitHub webhooks (such as commit triggers or PR auto-linking)
 
 ## 🧪 Testing
 
-DevSync ships with an extensive **Playwright E2E suite** (103 tests) covering authentication & sessions, workspace/project/channel CRUD, sprint lifecycles, task management, and a rigorous RBAC matrix including cross-project isolation.
+DevSync ships with an extensive **Playwright E2E suite** (297 tests across 33 spec files) covering authentication & sessions, workspace/project/channel CRUD, sprint lifecycles, task management, and a rigorous RBAC matrix including cross-project isolation.
 
-Run the suite from the project root:
 ```bash
-cd e2e
-npm install
-npm run test
+cd e2e && npm install && npm run test
+```
+
+Backend unit tests cover the logic underneath that suite — encryption, cookie
+attribute derivation, CORS matching, the retry queue, status transitions — and
+need no database or running server:
+```bash
+cd backend && npm test
 ```
 
 See [**`docs/e2e-test-suite.md`**](./docs/e2e-test-suite.md) for a complete breakdown of every test module.
@@ -182,6 +152,8 @@ For deep dives into the system architecture, schema, and API contracts, please r
 | [**Tech Stack**](./docs/tech-stack.md) | Detailed breakdown of technical choices and future architectural plans. |
 | [**Navigation Flow**](./docs/navigation-flow.md) | Frontend routing topology and screen-by-screen feature inventory. |
 | [**E2E Test Suite**](./docs/e2e-test-suite.md) | Complete inventory of the Playwright end-to-end tests and what they verify. |
+| [**Migrations**](./docs/migrations.md) | Authoring migrations, the snapshot contract, and what Drizzle cannot describe. |
+| [**Deployment**](./docs/deployment.md) | Supabase + API + static frontend, required environment, and the cross-site cookie trap. |
 
 ---
 
@@ -191,7 +163,7 @@ The database comes pre-seeded with 20 distinct users designed to test every face
 
 Please see [**`test_users.md`**](./test_users.md) for the complete roster of testing accounts and recommended workflows.
 
-*(Global Test Password: `password123`)*
+*(Global Test Password: `Password123!`)*
 
 ---
 

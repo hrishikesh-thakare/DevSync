@@ -3,11 +3,11 @@ import { Link } from 'react-router-dom';
 import { ChevronRightIcon, LayersIcon, LogOutIcon, UserCogIcon } from 'lucide-react';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { ErrorState } from '@/components/layout/PageState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useAuthStore } from '@/store/auth';
@@ -62,9 +62,7 @@ export function WorkspacePickerPage() {
         </header>
 
         {error ? (
-          <Alert variant="destructive" className="mb-6">
-            <AlertTitle>{error}</AlertTitle>
-          </Alert>
+          <ErrorState message={error} className="mb-6" />
         ) : null}
 
         {isLoading ? (

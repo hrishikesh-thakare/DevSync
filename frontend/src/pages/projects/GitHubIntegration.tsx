@@ -17,7 +17,7 @@ import {
   XCircleIcon,
 } from 'lucide-react';
 
-import { EmptyState } from '@/components/layout/PageState';
+import { EmptyState, ErrorState } from '@/components/layout/PageState';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -115,9 +115,7 @@ export function GitHubIntegration() {
       <PageShell narrow>
         <PageHeader title="GitHub" description="Link a repository to see commits, CI and pull requests here." />
         {connectionError ? (
-          <Alert variant="destructive" className="mb-4">
-            <AlertTitle>{connectionError}</AlertTitle>
-          </Alert>
+          <ErrorState message={connectionError} className="mb-4" />
         ) : null}
         <ConnectCard slug={slug} projectKey={key} canConnect={canConnect} onConnect={connect} />
       </PageShell>
@@ -251,9 +249,7 @@ export function GitHubIntegration() {
       </div>
 
       {tabError ? (
-        <Alert variant="destructive" className="mb-4">
-          <AlertTitle>{tabError}</AlertTitle>
-        </Alert>
+        <ErrorState message={tabError} className="mb-4" />
       ) : null}
 
       {isLoadingTab ? (
@@ -644,12 +640,10 @@ function ConnectCard({
       </CardHeader>
       <CardContent className="space-y-3">
         {error ? (
-          <Alert variant="destructive">
-            <AlertTitle>{error}</AlertTitle>
-            <AlertDescription>
-              Connecting requires your GitHub account to be linked to DevSync first.
-            </AlertDescription>
-          </Alert>
+          <ErrorState
+            message={error}
+            description="Connecting requires your GitHub account to be linked to DevSync first."
+          />
         ) : null}
 
         <div className="flex flex-wrap items-end gap-2">

@@ -3,28 +3,25 @@ import { Link, useParams } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import {
   ArrowRightIcon,
+  BarChart3Icon,
+  CheckCircle2Icon,
   ClockIcon,
   FolderKanbanIcon,
   HistoryIcon,
-  MailIcon,
   ShieldIcon,
   TriangleAlertIcon,
   UsersIcon,
 } from 'lucide-react';
 
-import { EmptyState } from '@/components/layout/PageState';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { EmptyState, ErrorState } from '@/components/layout/PageState';
 import { MemberAvatar } from '@/components/MemberAvatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertTitle } from '@/components/ui/alert';
 import { apiFetch } from '@/lib/api';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
-import { initialsOf } from '@/lib/initials';
-import { describeAuditAction } from '@/lib/auditActions';
 import { STATUS_META } from '@/lib/taskMeta';
 import { cn } from '@/lib/utils';
 import type { TaskStatus } from '@/types/api';
@@ -71,6 +68,8 @@ interface ProjectRollup {
 
 interface Dashboard {
   role: 'owner' | 'admin' | 'member';
+  /** Which layout to render — see the endpoint's note on why role alone is not enough. */
+  persona: 'admin' | 'contributor' | 'viewer';
   myWork: {
     counts: Record<string, number>;
     overdue: number;
@@ -98,14 +97,34 @@ interface Dashboard {
   }[];
 }
 
+/**
+ * The signed-in landing screen.
+ *
+ * Built to answer one question in about five seconds — *is anything waiting on
+ * me?* — and to answer it differently depending on who is asking. It used to
+ * render the same seven stacked panels to everyone (my work, sprints, at risk,
+ * every project's progress bar, the full workload table, pending invites and an
+ * activity feed), which is roughly twenty numbers competing for first place. An
+ * admin had to read the whole page to find the two overdue tasks that actually
+ * needed them, and a read-only viewer got a "My work" panel that is empty by
+ * definition.
+ *
+ * So each persona gets a genuinely different default view rather than a shared
+ * screen with sections switched off:
+ *
+ *   admin       Attention → At risk → My work → Sprints → a link strip
+ *   contributor Attention → My work → Sprints
+ *   viewer      Progress  → Sprints
+ *
+ * What was removed is not gone, only demoted: the projects grid, the workload
+ * table and the activity feed each have a real page of their own, and the strip
+ * at the bottom carries the one number that says whether visiting is worth it.
+ * That is the progressive-disclosure trade — the dashboard answers "is
+ * everything okay", the pages answer "why".
+ */
 export function WorkspaceHome() {
   const { slug = '' } = useParams();
-  const { name, description, memberCount, myRole, members } = useCurrentWorkspaceStore();
-
-  // The dashboard payload carries no presence, but the workspace roster does —
-  // and it stays current because `user_presence_updated` merges into this store.
-  const presenceOf = (userId: string) =>
-    members.find((m) => m.userId === userId)?.presence ?? null;
+  const { name, description, memberCount, myRole } = useCurrentWorkspaceStore();
 
   const [data, setData] = useState<Dashboard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -132,23 +151,144 @@ export function WorkspaceHome() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto w-full max-w-6xl space-y-6 p-6">
-        <Skeleton className="h-28 w-full rounded-2xl" />
-        <Skeleton className="h-40 w-full rounded-2xl" />
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Skeleton className="h-64 w-full rounded-2xl" />
-          <Skeleton className="h-64 w-full rounded-2xl" />
-        </div>
+      <div className="mx-auto w-full max-w-5xl space-y-6 p-6">
+        <Skeleton className="h-24 w-full rounded-2xl" />
+        <Skeleton className="h-20 w-full rounded-2xl" />
+        <Skeleton className="h-64 w-full rounded-2xl" />
       </div>
     );
   }
 
-  const isAdmin = myRole === 'owner' || myRole === 'admin';
-  const open = data?.myWork.counts ?? {};
-  const openTotal = Object.values(open).reduce((sum, n) => sum + n, 0);
+  // Fall back to the workspace role when the payload is missing (an error
+  // state), so the page still renders something coherent.
+  const persona =
+    data?.persona ?? (myRole === 'owner' || myRole === 'admin' ? 'admin' : 'contributor');
+  const isAdmin = persona === 'admin';
+  const isViewer = persona === 'viewer';
+
+  const myWork = data?.myWork;
+  const openTotal = Object.values(myWork?.counts ?? {}).reduce((sum, n) => sum + n, 0);
+  const atRisk = data?.atRisk;
+  const inviteCount = data?.pendingInvites?.length ?? 0;
+
+  // The single number the hero reports: what is actually waiting on *this*
+  // person. An admin owns the workspace-wide risks; everyone else owns their
+  // own dates. A viewer owns nothing, which is why they get progress instead.
+  const attention = isAdmin
+    ? (atRisk?.overdue.length ?? 0) + (atRisk?.stalled.length ?? 0) + inviteCount
+    : (myWork?.overdue ?? 0) + (myWork?.dueSoon ?? 0);
+
+  const hasSprints = (data?.sprints.length ?? 0) > 0;
+  const hasRisk = (atRisk?.overdue.length ?? 0) + (atRisk?.stalled.length ?? 0) > 0;
+
+  // A viewer's headline is delivery progress across the sprints they can see.
+  const sprintTotals = (data?.sprints ?? []).reduce(
+    (acc, s) => ({ done: acc.done + s.doneTasks, total: acc.total + s.totalTasks }),
+    { done: 0, total: 0 },
+  );
+  const sprintPct =
+    sprintTotals.total > 0 ? Math.round((sprintTotals.done / sprintTotals.total) * 100) : 0;
+
+  const myWorkCard = myWork ? (
+    <Card>
+      <CardHeader>
+        <CardTitle>My work</CardTitle>
+        <CardAction>
+          <Button asChild variant="ghost" size="sm">
+            <Link to={`/w/${slug}/my-tasks`}>
+              View all
+              <ArrowRightIcon className="size-3.5" aria-hidden="true" />
+            </Link>
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Three numbers, not six. The per-status split (to do / in progress /
+            in review) moved to My Tasks, where it is a filter you can act on
+            rather than a number you read past. */}
+        <div className="flex flex-wrap gap-2">
+          <Stat label="Open" value={openTotal} />
+          <Stat label="Overdue" value={myWork.overdue} tone="danger" />
+          <Stat label="Due soon" value={myWork.dueSoon} tone="warn" />
+        </div>
+
+        {myWork.tasks.length > 0 ? (
+          <ul className="divide-y rounded-lg border">
+            {myWork.tasks.map((task) => (
+              <li key={task.taskId}>
+                <TaskRow task={task} slug={slug} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EmptyState
+            compact
+            icon={<CheckCircle2Icon />}
+            title="Nothing assigned to you"
+            description="Tasks assigned to you across this workspace show up here."
+          />
+        )}
+      </CardContent>
+    </Card>
+  ) : null;
+
+  const sprintsCard =
+    data && data.sprints.length > 0 ? (
+      <Card>
+        <CardHeader>
+          <CardTitle>Active sprints</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {data.sprints.map((sprint) => {
+            const pct =
+              sprint.totalPoints > 0
+                ? Math.round((sprint.donePoints / sprint.totalPoints) * 100)
+                : sprint.totalTasks > 0
+                  ? Math.round((sprint.doneTasks / sprint.totalTasks) * 100)
+                  : 0;
+            const late = sprint.daysRemaining != null && sprint.daysRemaining < 0;
+
+            return (
+              <div key={sprint.sprintId}>
+                <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2">
+                  <Link
+                    to={`/w/${slug}/projects/${sprint.projectKey}/sprints`}
+                    className="text-sm font-medium text-foreground hover:underline"
+                  >
+                    {sprint.name}
+                  </Link>
+                  <span className="text-xs text-muted-foreground">{sprint.projectName}</span>
+                  <span
+                    className={cn(
+                      'ml-auto text-xs',
+                      late ? 'font-medium text-destructive' : 'text-muted-foreground',
+                    )}
+                  >
+                    {sprint.daysRemaining == null
+                      ? 'No end date'
+                      : late
+                        ? `${Math.abs(sprint.daysRemaining)}d overdue`
+                        : `${sprint.daysRemaining}d left`}
+                  </span>
+                </div>
+                <Progress value={pct} />
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  {sprint.doneTasks}/{sprint.totalTasks} tasks
+                  {sprint.totalPoints > 0
+                    ? ` · ${sprint.donePoints}/${sprint.totalPoints} points`
+                    : ' · unestimated'}
+                  {' · '}
+                  {pct}% complete
+                </p>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+    ) : null;
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 p-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6 p-6">
       <section>
         <h1 className="text-2xl font-medium text-foreground">{name}</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
@@ -164,304 +304,235 @@ export function WorkspaceHome() {
             <UsersIcon className="size-4" aria-hidden="true" />
             {memberCount} {memberCount === 1 ? 'member' : 'members'}
           </span>
-          <span className="flex items-center gap-1.5">
-            <FolderKanbanIcon className="size-4" aria-hidden="true" />
-            {data?.projects?.length ?? '—'} active projects
-          </span>
         </div>
       </section>
 
-      {error ? (
-        <Alert variant="destructive">
-          <AlertTitle>{error}</AlertTitle>
-        </Alert>
-      ) : null}
+      {error ? <ErrorState message={error} /> : null}
 
-      {/* ── My work: the one section every persona sees first ─────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle>My work</CardTitle>
-          <CardAction>
-            <Button asChild variant="ghost" size="sm">
-              <Link to={`/w/${slug}/my-tasks`}>
-                View all
-                <ArrowRightIcon className="size-3.5" aria-hidden="true" />
-              </Link>
-            </Button>
-          </CardAction>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <Stat label="Open" value={openTotal} />
-            {(['todo', 'in_progress', 'in_review'] as TaskStatus[]).map((status) => (
-              <Stat
-                key={status}
-                label={STATUS_META[status]?.label ?? status}
-                value={open[status] ?? 0}
-                dot={STATUS_META[status]?.dot}
-              />
-            ))}
-            <Stat label="Overdue" value={data?.myWork.overdue ?? 0} tone="danger" />
-            <Stat label="Due soon" value={data?.myWork.dueSoon ?? 0} tone="warn" />
-          </div>
+      {/* The five-second answer, top-left where it is read first.
 
-          {data && data.myWork.tasks.length > 0 ? (
-            <ul className="divide-y rounded-lg border">
-              {data.myWork.tasks.map((task) => (
-                <li key={task.taskId}>
-                  <TaskRow task={task} slug={slug} />
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              Nothing assigned to you right now.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+          Suppressed for a viewer with nothing to look at: the empty state below
+          carries the same sentence *and* a way out of it, and stacking two
+          blocks that say "there is nothing here" is the bloat this page is
+          meant to be rid of. */}
+      {isViewer && !hasSprints ? null : (
+        <Headline
+          isViewer={isViewer}
+          attention={attention}
+          isAdmin={isAdmin}
+          sprintPct={sprintPct}
+          sprintCount={data?.sprints.length ?? 0}
+        />
+      )}
 
-      {/* ── Sprint progress. Current ratio only — see the endpoint's note on
-             why there is no burndown line here. ───────────────────────────── */}
-      {data && data.sprints.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Active sprints</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {data.sprints.map((sprint) => {
-              const pct =
-                sprint.totalPoints > 0
-                  ? Math.round((sprint.donePoints / sprint.totalPoints) * 100)
-                  : sprint.totalTasks > 0
-                    ? Math.round((sprint.doneTasks / sprint.totalTasks) * 100)
-                    : 0;
-              const late = sprint.daysRemaining != null && sprint.daysRemaining < 0;
+      {/* An admin's own tasks matter, but the things only they can unblock come
+          first — nobody else is going to clear a stalled review.
 
-              return (
-                <div key={sprint.sprintId}>
-                  <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2">
-                    <Link
-                      to={`/w/${slug}/projects/${sprint.projectKey}/sprints`}
-                      className="text-sm font-medium text-foreground hover:underline"
-                    >
-                      {sprint.name}
-                    </Link>
-                    <span className="text-xs text-muted-foreground">{sprint.projectName}</span>
-                    <span
-                      className={cn(
-                        'ml-auto text-xs',
-                        late ? 'font-medium text-destructive' : 'text-muted-foreground',
-                      )}
-                    >
-                      {sprint.daysRemaining == null
-                        ? 'No end date'
-                        : late
-                          ? `${Math.abs(sprint.daysRemaining)}d overdue`
-                          : `${sprint.daysRemaining}d left`}
-                    </span>
-                  </div>
-                  <Progress value={pct} />
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    {sprint.doneTasks}/{sprint.totalTasks} tasks
-                    {sprint.totalPoints > 0
-                      ? ` · ${sprint.donePoints}/${sprint.totalPoints} points`
-                      : ' · unestimated'}
-                    {' · '}
-                    {pct}% complete
-                  </p>
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {/* ── Lead and owner sections ──────────────────────────────────────── */}
-      {isAdmin && data?.atRisk ? (
+          Rendered only when there is something in it. The card used to appear
+          unconditionally, so the common healthy case spent half a screen on two
+          empty states announcing that nothing was wrong — directly under a
+          headline that had already said so. An empty section is worth rendering
+          when its absence would be ambiguous; here the hero removes the
+          ambiguity, so the section is pure cost. */}
+      {isAdmin && hasRisk ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TriangleAlertIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-              At risk
+              Needs attention
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <RiskGroup
-              title={`Overdue (${data.atRisk.overdue.length})`}
-              tasks={data.atRisk.overdue}
-              slug={slug}
-              emptyText="Nothing is past its due date."
-            />
-            <RiskGroup
-              title={`Stalled in review (${data.atRisk.stalled.length})`}
-              tasks={data.atRisk.stalled}
-              slug={slug}
-              emptyText="Nothing has been sitting in review."
-            />
+            {atRisk!.overdue.length > 0 ? (
+              <RiskGroup
+                title={`Overdue (${atRisk!.overdue.length})`}
+                tasks={atRisk!.overdue}
+                slug={slug}
+              />
+            ) : null}
+            {atRisk!.stalled.length > 0 ? (
+              <RiskGroup
+                title={`Stalled in review (${atRisk!.stalled.length})`}
+                tasks={atRisk!.stalled}
+                slug={slug}
+              />
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
 
+      {/* A viewer is never an assignee, so their landing screen leads with the
+          work itself. My work still renders if they somehow hold tasks — from
+          before their role changed, say — rather than hiding them. */}
+      {isViewer ? (
+        <>
+          {sprintsCard}
+          {myWork && myWork.tasks.length > 0 ? myWorkCard : null}
+          {!hasSprints && (!myWork || myWork.tasks.length === 0) ? (
+            <EmptyState
+              icon={<FolderKanbanIcon />}
+              title="No active sprints"
+              description="When a project starts a sprint, its progress appears here."
+              action={
+                <Button asChild variant="outline">
+                  <Link to={`/w/${slug}/projects`}>Browse projects</Link>
+                </Button>
+              }
+            />
+          ) : null}
+        </>
+      ) : (
+        <>
+          {myWorkCard}
+          {sprintsCard}
+        </>
+      )}
+
+      {/* Progressive disclosure: the count says whether it is worth a click,
+          the page behind it does the explaining. This replaces the projects
+          grid, the workload table and the activity feed that used to be
+          rendered in full on this screen. */}
       {isAdmin ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          {data?.projects ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Projects at a glance</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {data.projects.length === 0 ? (
-                  <EmptyRow>No active projects.</EmptyRow>
-                ) : (
-                  <ul className="space-y-3">
-                    {data.projects.map((project) => (
-                      <li key={project.projectId}>
-                        <div className="mb-1 flex items-center gap-2">
-                          <Link
-                            to={`/w/${slug}/projects/${project.key}`}
-                            className="truncate text-sm text-foreground hover:underline"
-                          >
-                            {project.name}
-                          </Link>
-                          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                            {project.percentComplete}%
-                          </span>
-                        </div>
-                        <Progress value={project.percentComplete} />
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {project.doneTasks}/{project.totalTasks} done · {project.memberCount}{' '}
-                          {project.memberCount === 1 ? 'member' : 'members'}
-                          {project.activeSprintName ? ` · ${project.activeSprintName}` : ''}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
-          ) : null}
-
-          {data?.workload ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Workload</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {data.workload.length === 0 ? (
-                  <EmptyRow>Nothing is assigned yet.</EmptyRow>
-                ) : (
-                  <ul className="space-y-2">
-                    {data.workload.map((member) => (
-                      <li key={member.userId} className="flex items-center gap-3">
-                        <MemberAvatar
-                          member={{ ...member, presence: presenceOf(member.userId) }}
-                        />
-                        <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                          {member.fullName}
-                        </span>
-                        <Badge variant="outline">{member.openTasks} open</Badge>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
-          ) : null}
-
-          {data?.pendingInvites ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MailIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-                  Pending invites
-                </CardTitle>
-                <CardAction>
-                  <Button asChild variant="ghost" size="sm">
-                    <Link to={`/w/${slug}/members`}>
-                      Members
-                      <ArrowRightIcon className="size-3.5" aria-hidden="true" />
-                    </Link>
-                  </Button>
-                </CardAction>
-              </CardHeader>
-              <CardContent>
-                {data.pendingInvites.length === 0 ? (
-                  <EmptyRow>No invites are outstanding.</EmptyRow>
-                ) : (
-                  <ul className="space-y-2">
-                    {data.pendingInvites.map((invite) => (
-                      <li key={invite.inviteId} className="flex items-center gap-2 text-sm">
-                        <span className="min-w-0 flex-1 truncate text-foreground">
-                          {invite.email}
-                        </span>
-                        <Badge variant="outline">{invite.role}</Badge>
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          expires{' '}
-                          {formatDistanceToNow(new Date(invite.expiresAt), { addSuffix: true })}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
-          ) : null}
-
-          {data?.activity ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <HistoryIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-                  Recent activity
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {data.activity.length === 0 ? (
-                  <EmptyRow>No workspace activity recorded yet.</EmptyRow>
-                ) : (
-                  <ul className="space-y-2">
-                    {data.activity.map((entry) => (
-                      <li key={entry.logId} className="flex items-start gap-2 text-sm">
-                        <Avatar className="mt-0.5 size-6 shrink-0">
-                          {entry.actorAvatar ? <AvatarImage src={entry.actorAvatar} alt="" /> : null}
-                          <AvatarFallback className="text-[9px]">
-                            {initialsOf(entry.actorName ?? '?')}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="min-w-0 flex-1">
-                          <span className="text-foreground">
-                            {entry.actorName ?? 'Someone'}
-                          </span>{' '}
-                          <span className="text-muted-foreground">
-                            {describeAuditAction(entry.action)}
-                          </span>
-                          <span className="block text-xs text-muted-foreground">
-                            {formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true })}
-                          </span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
-          ) : null}
-        </div>
+        <nav aria-label="Workspace management" className="grid gap-3 sm:grid-cols-3">
+          <ManageLink
+            to={`/w/${slug}/members`}
+            icon={<UsersIcon className="size-4" aria-hidden="true" />}
+            label="Members"
+            detail={
+              inviteCount > 0
+                ? `${inviteCount} invite${inviteCount === 1 ? '' : 's'} pending`
+                : `${memberCount} active`
+            }
+            highlight={inviteCount > 0}
+          />
+          <ManageLink
+            to={`/w/${slug}/analytics`}
+            icon={<BarChart3Icon className="size-4" aria-hidden="true" />}
+            label="Analytics"
+            detail={`${data?.projects?.length ?? 0} active projects`}
+          />
+          <ManageLink
+            to={`/w/${slug}/activity`}
+            icon={<HistoryIcon className="size-4" aria-hidden="true" />}
+            label="Activity"
+            detail="Full audit trail"
+          />
+        </nav>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The one line the page exists to deliver.
+ *
+ * Deliberately a sentence rather than a number in a box: "2 things need you"
+ * is understood without a legend, where a bare `2` under the label "Attention"
+ * is not. Zero is a real answer here and gets its own affirmative phrasing —
+ * an all-clear state that reads as success is what makes the count worth
+ * checking on the days it is not zero.
+ */
+function Headline({
+  isViewer,
+  isAdmin,
+  attention,
+  sprintPct,
+  sprintCount,
+}: {
+  isViewer: boolean;
+  isAdmin: boolean;
+  attention: number;
+  sprintPct: number;
+  sprintCount: number;
+}) {
+  if (isViewer) {
+    return (
+      <div className="rounded-2xl border bg-card px-5 py-4">
+        <p className="text-lg font-medium text-foreground">
+          {sprintCount === 0
+            ? 'No sprints are running'
+            : `Sprint work is ${sprintPct}% complete`}
+        </p>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          {sprintCount === 0
+            ? 'Nothing is in flight in the projects you can see.'
+            : `Across ${sprintCount} active sprint${sprintCount === 1 ? '' : 's'}.`}
+        </p>
+      </div>
+    );
+  }
+
+  const clear = attention === 0;
+
+  return (
+    <div
+      className={cn(
+        'rounded-2xl border px-5 py-4',
+        clear ? 'bg-card' : 'border-destructive/40 bg-destructive/5',
+      )}
+    >
+      <p
+        className={cn(
+          'text-lg font-medium',
+          clear ? 'text-foreground' : 'text-destructive',
+        )}
+      >
+        {clear
+          ? "You're all clear"
+          : `${attention} thing${attention === 1 ? '' : 's'} need${attention === 1 ? 's' : ''} your attention`}
+      </p>
+      <p className="mt-0.5 text-sm text-muted-foreground">
+        {clear
+          ? isAdmin
+            ? 'Nothing is overdue, stalled in review, or waiting on an invite.'
+            : 'Nothing of yours is overdue or due in the next few days.'
+          : isAdmin
+            ? 'Overdue work, stalled reviews and outstanding invites are listed below.'
+            : 'Your overdue and soon-due tasks are listed below.'}
+      </p>
+    </div>
+  );
+}
+
+/** One tile in the admin link strip: a label, a live number, and a destination. */
+function ManageLink({
+  to,
+  icon,
+  label,
+  detail,
+  highlight,
+}: {
+  to: string;
+  icon: React.ReactNode;
+  label: string;
+  detail: string;
+  highlight?: boolean;
+}) {
+  return (
+    <Link
+      to={to}
+      className={cn(
+        'flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors hover:bg-accent/50',
+        highlight && 'border-amber-500/40 bg-amber-500/5',
+      )}
+    >
+      <span className="text-muted-foreground">{icon}</span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-foreground">{label}</span>
+        <span className="block truncate text-xs text-muted-foreground">{detail}</span>
+      </span>
+      <ArrowRightIcon className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+    </Link>
   );
 }
 
 function Stat({
   label,
   value,
-  dot,
   tone,
 }: {
   label: string;
   value: number;
-  dot?: string;
   tone?: 'danger' | 'warn';
 }) {
   const muted = value === 0;
@@ -473,7 +544,6 @@ function Stat({
         tone === 'warn' && !muted && 'border-amber-500/40 bg-amber-500/5',
       )}
     >
-      {dot ? <span className={cn('size-2 rounded-full', dot)} aria-hidden="true" /> : null}
       <span
         className={cn(
           'text-lg font-medium tabular-nums',
@@ -516,24 +586,20 @@ function TaskRow({ task, slug }: { task: DashboardTask; slug: string }) {
   );
 }
 
+/** Only rendered with tasks in it — the card above gates on that. */
 function RiskGroup({
   title,
   tasks,
   slug,
-  emptyText,
 }: {
   title: string;
   tasks: DashboardTask[];
   slug: string;
-  emptyText: string;
 }) {
   return (
     <div>
       <h3 className="mb-1.5 text-sm font-medium text-foreground">{title}</h3>
-      {tasks.length === 0 ? (
-        <p className="py-3 text-sm text-muted-foreground">{emptyText}</p>
-      ) : (
-        <ul className="divide-y rounded-lg border">
+      <ul className="divide-y rounded-lg border">
           {tasks.map((task) => (
             <li key={task.taskId} className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
@@ -549,19 +615,7 @@ function RiskGroup({
               ) : null}
             </li>
           ))}
-        </ul>
-      )}
+      </ul>
     </div>
   );
-}
-
-/**
- * Compact empty state for the dashboard's card panels.
- *
- * Delegates to the shared component so the typography matches the rest of the
- * app, but stays borderless and iconless — a full bordered Empty block inside
- * a small card reads as a nested box.
- */
-function EmptyRow({ children }: { children: string }) {
-  return <EmptyState compact title={children} className="py-6" />;
 }

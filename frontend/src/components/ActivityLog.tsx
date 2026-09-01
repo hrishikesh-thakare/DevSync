@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { HistoryIcon, UserIcon, ZapIcon } from 'lucide-react';
 
-import { Alert, AlertTitle } from '@/components/ui/alert';
+import { ErrorState } from '@/components/layout/PageState';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -142,9 +142,7 @@ export function ActivityLog({
 
   if (error) {
     return (
-      <Alert variant="destructive">
-        <AlertTitle>{error}</AlertTitle>
-      </Alert>
+      <ErrorState message={error} />
     );
   }
 

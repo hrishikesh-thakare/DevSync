@@ -6,6 +6,7 @@ import { db } from '../../config/db.js';
 import { users, refreshTokens, authTokens } from '../../db/schema/auth.js';
 import { workspaceInvites, workspaceMembers } from '../../db/schema/workspaces.js';
 import { env } from '../../config/env.js';
+import { refreshCookieOptions, clearRefreshCookieOptions } from '../../lib/cookies.js';
 import { eq, and, isNull, gt, ne } from 'drizzle-orm';
 import { supabase } from '../../config/supabase.js';
 import { logAuditAction } from '../audit/audit.controller.js';
@@ -151,12 +152,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     enqueueJob('email.send_verification', { toEmail: newUser.email, verificationToken });
 
     // Set refresh token in HTTP-only cookie
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    res.cookie('refreshToken', refreshToken, refreshCookieOptions());
 
     res.status(201).json({
       message: 'Registration successful',
@@ -254,12 +250,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const refreshToken = await createRefreshToken(user.userId, req);
 
     // Set refresh token in HTTP-only cookie
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie('refreshToken', refreshToken, refreshCookieOptions());
 
     // Update presence
     await db.transaction(async (tx) => {
@@ -340,12 +331,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
     const accessToken = generateAccessToken(tokenRecord.user);
     const newRefreshToken = await createRefreshToken(tokenRecord.user.userId, req);
 
-    res.cookie('refreshToken', newRefreshToken, {
-      httpOnly: true,
-      secure: env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie('refreshToken', newRefreshToken, refreshCookieOptions());
 
     res.json({
       accessToken,
@@ -390,11 +376,7 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
     }
 
     // Clear client-side cookie
-    res.clearCookie('refreshToken', {
-      httpOnly: true,
-      secure: env.NODE_ENV === 'production',
-      sameSite: 'lax',
-    });
+    res.clearCookie('refreshToken', clearRefreshCookieOptions());
 
     res.json({ message: 'Logout successful' });
   } catch (err) {
@@ -485,12 +467,7 @@ export const oauthCallback = async (req: Request, res: Response): Promise<void> 
     const accessToken = generateAccessToken(user);
     const refreshToken = await createRefreshToken(user.userId, req);
 
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie('refreshToken', refreshToken, refreshCookieOptions());
 
     // Update presence
     await db.transaction(async (tx) => {

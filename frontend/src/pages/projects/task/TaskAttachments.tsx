@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { DownloadIcon, Loader2Icon, PaperclipIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/layout/PageState';
 import { apiFetch } from '@/lib/api';
 import { formatBytes, MAX_UPLOAD_BYTES } from '@/lib/files';
 import { useFileUpload } from '@/hooks/use-file-upload';
@@ -129,7 +130,7 @@ export function TaskAttachments({
       ) : null}
 
       {attachments.length === 0 && uploading.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No attachments yet.</p>
+        <EmptyState compact title="No attachments" description="Drop a file here or use the button above." />
       ) : (
         <ul className="space-y-1">
           {uploading.map((name) => (

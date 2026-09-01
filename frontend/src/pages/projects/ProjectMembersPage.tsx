@@ -37,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PageHeader, PageShell } from '@/components/layout/PageHeader';
+import { EmptyState } from '@/components/layout/PageState';
 import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
 import { initialsOf } from '@/lib/initials';
@@ -260,11 +261,30 @@ export function ProjectMembersPage() {
             </TableHeader>
             <TableBody>
               {visible.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={canManage ? 3 : 2} className="h-24 text-center text-muted-foreground">
-                    {members.length === 0
-                      ? 'No one has been added to this project yet.'
-                      : 'No member matches that search.'}
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={canManage ? 3 : 2} className="p-0">
+                    {/* The two cases read very differently to a user: an
+                        untouched project needs a nudge to add someone, a
+                        filtered-to-nothing table needs to say the data is
+                        still there behind a filter. */}
+                    {members.length === 0 ? (
+                      <EmptyState
+                        compact
+                        icon={<UserPlusIcon />}
+                        title="No members yet"
+                        description={
+                          canManage
+                            ? 'Add someone to give them access to this project.'
+                            : 'Nobody has been added to this project yet.'
+                        }
+                      />
+                    ) : (
+                      <EmptyState
+                        compact
+                        title="No matching members"
+                        description="No one matches that search or role filter."
+                      />
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (

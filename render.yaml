@@ -1,0 +1,89 @@
+# Render blueprint for the DevSync API.
+#
+# The frontend is a static SPA and deploys separately (Vercel/Netlify/Cloudflare
+# Pages — see frontend/vercel.json and frontend/public/_redirects). The database
+# is Supabase, not a Render Postgres instance, so it is configured here only as
+# a connection string.
+#
+#   render blueprint launch     # or point Render at this file from the dashboard
+
+services:
+  - type: web
+    name: devsync-api
+    runtime: node
+    plan: starter
+    region: oregon
+    rootDir: backend
+    buildCommand: npm ci && npm run build
+    # Migrations run once per release rather than on every instance boot, so
+    # two instances can never race to apply the same migration.
+    preDeployCommand: npm run db:deploy
+    startCommand: npm start
+    healthCheckPath: /api/health
+
+    # ⚠️  Must stay at 1. Rate-limit counters, the background job queue, live
+    # call state and Socket.io room membership all live in process memory —
+    # see the note in backend/src/index.ts. Scaling past one instance silently
+    # breaks chat delivery and rate limiting.
+    numInstances: 1
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      # Render terminates TLS at a single proxy in front of the app.
+      - key: TRUST_PROXY_HOPS
+        value: 1
+
+      # ─── Secrets: set these in the Render dashboard, never in this file ────
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+      # ─── URLs ─────────────────────────────────────────────────────────────
+      # FRONTEND_URL and BACKEND_URL are compared to decide the refresh
+      # cookie's SameSite mode (backend/src/lib/cookies.ts), so both must be
+      # the real public origins — not localhost, and no trailing slash.
+      - key: FRONTEND_URL
+        sync: false
+      - key: BACKEND_URL
+        sync: false
+      # Comma-separated extra origins: apex vs www, preview deployments.
+      - key: CORS_ORIGINS
+        sync: false
+
+      # ─── Optional integrations ────────────────────────────────────────────
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ZOOM_ACCOUNT_ID
+        sync: false
+      - key: ZOOM_CLIENT_ID
+        sync: false
+      - key: ZOOM_CLIENT_SECRET
+        sync: false
+
+      # ─── SMTP ─────────────────────────────────────────────────────────────
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false

@@ -3,9 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PlusIcon } from 'lucide-react';
 
-import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { BoardSkeleton, ErrorState } from '@/components/layout/PageState';
 import {
   Select,
   SelectContent,
@@ -110,12 +109,7 @@ export function BoardPage() {
   if (isLoading) {
     return (
       <div className="mx-auto w-full max-w-5xl p-6">
-        <Skeleton className="mb-4 h-9 w-72 rounded-lg" />
-        <div className="grid grid-cols-4 gap-4">
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-72 rounded-xl" />
-          ))}
-        </div>
+        <BoardSkeleton />
       </div>
     );
   }
@@ -123,9 +117,7 @@ export function BoardPage() {
   if (error) {
     return (
       <div className="mx-auto w-full max-w-5xl p-6">
-        <Alert variant="destructive">
-          <AlertTitle>{error}</AlertTitle>
-        </Alert>
+        <ErrorState message={error} />
       </div>
     );
   }

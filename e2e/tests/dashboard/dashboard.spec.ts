@@ -89,6 +89,36 @@ test.describe('Workspace dashboard', () => {
     }
   });
 
+  /**
+   * `persona` drives which dashboard layout the SPA renders, and it is not
+   * derivable from `role`: a workspace `member` is a contributor or a read-only
+   * viewer depending on their *project* roles, and those two get meaningfully
+   * different screens. Guarding it here because the distinction is invisible in
+   * the workspace-role checks above.
+   */
+  test('persona distinguishes a contributor from a read-only viewer', async () => {
+    const cases = [
+      { user: TEST_USERS.owner, role: 'owner', persona: 'admin' },
+      { user: TEST_USERS.admin, role: 'admin', persona: 'admin' },
+      // developer in E2E → can be assigned work.
+      { user: TEST_USERS.developer, role: 'member', persona: 'contributor' },
+      // viewer in every project they belong to → can act on nothing.
+      { user: TEST_USERS.viewer, role: 'member', persona: 'viewer' },
+      // Workspace member with no project role at all is not a viewer: there is
+      // no read-only membership to infer it from.
+      { user: TEST_USERS.memberNoProject, role: 'member', persona: 'contributor' },
+    ];
+
+    for (const { user, role, persona } of cases) {
+      const { accessToken } = await apiLogin(user.email);
+      const { status, data } = await apiRequest(`/workspaces/${SLUG}/dashboard`, accessToken);
+
+      expect(status, `${user.email} should reach the dashboard`).toBe(200);
+      expect(data.role, `${user.email} role`).toBe(role);
+      expect(data.persona, `${user.email} persona`).toBe(persona);
+    }
+  });
+
   test('sprint progress never exceeds its totals', async () => {
     const { data } = await apiRequest(`/workspaces/${SLUG}/dashboard`, ownerToken);
     for (const sprint of data.sprints) {

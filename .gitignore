@@ -58,3 +58,6 @@ e2e/blob-report/
 # falls back after a Supabase error)
 backend/uploads/
 ss
+# Stray build output that was committed by accident
+frontend/out.css
+frontend/test.html

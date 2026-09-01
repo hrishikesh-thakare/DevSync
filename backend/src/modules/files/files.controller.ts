@@ -57,7 +57,19 @@ export const createFileRecord = async (params: {
 
   let finalStoragePath = storagePath;
   if (!isSupabaseUploaded) {
-    // Local disk fallback
+    // The local disk fallback is a development convenience, and on a managed
+    // host it is actively harmful: the container filesystem is ephemeral, so
+    // the bytes are gone at the next restart or redeploy while the
+    // workspace_files row survives, pointing at a file that no longer exists.
+    // The user is told the upload succeeded and finds it broken days later.
+    // Fail the request instead — a visible error is recoverable, silent data
+    // loss is not.
+    if (env.NODE_ENV === 'production') {
+      throw new Error(
+        'File storage is unavailable: the Supabase upload failed and the local disk ' +
+          'fallback is disabled in production because container storage is ephemeral.'
+      );
+    }
     const localFilePath = path.join(UPLOADS_DIR, uniqueName);
     fs.writeFileSync(localFilePath, fileBuffer);
     finalStoragePath = `local:${uniqueName}`;

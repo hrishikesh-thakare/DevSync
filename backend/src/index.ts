@@ -3,8 +3,13 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
-import { env } from './config/env.js';
+import { env, assertEnv } from './config/env.js';
+import { corsOrigin, allowedOrigins } from './config/cors.js';
 import { globalLimiter } from './middleware/rateLimit.js';
+
+// Refuse to boot on a configuration that cannot work, before anything opens a
+// port or a connection. See config/env.ts for the rules.
+assertEnv();
 
 const app = express();
 
@@ -17,10 +22,12 @@ app.set('trust proxy', env.TRUST_PROXY_HOPS);
 // ─── Global Middleware ───────────────────────────────────────────────────────
 app.use(helmet());
 app.use(cors({
-  origin: env.FRONTEND_URL,
+  origin: corsOrigin,
   credentials: true,
 }));
-app.use(morgan('dev'));
+// `dev` is colorized and unparseable; `combined` is the standard Apache format
+// every log aggregator already understands.
+app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(globalLimiter);
 // ─── Webhooks (Must be before express.json) ────────────────────────────────
 import { githubWebhookRouter } from './modules/github/github.routes.js';
@@ -35,8 +42,42 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
 
 // ─── Health Check ────────────────────────────────────────────────────────────
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+//
+// This is what a load balancer polls to decide whether to send traffic here, so
+// it has to answer the question that actually matters: can this instance serve
+// a request? A process that is up but cannot reach Postgres serves nothing but
+// 500s, and a health check that only proves Express is listening would keep it
+// in rotation indefinitely.
+import { sql } from 'drizzle-orm';
+import { db as healthDb } from './config/db.js';
+
+const pingDatabase = () => healthDb.execute(sql`select 1`);
+
+app.get('/api/health', async (_req, res) => {
+  const startedAt = Date.now();
+  try {
+    await pingDatabase();
+    res.json({
+      status: 'ok',
+      database: 'ok',
+      latencyMs: Date.now() - startedAt,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('Health check failed:', err);
+    res.status(503).json({
+      status: 'degraded',
+      database: 'unreachable',
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+// A liveness probe, for platforms that want one separate from readiness: it
+// answers whether the process should be restarted, not whether it should get
+// traffic, so it must not depend on the database.
+app.get('/api/health/live', (_req, res) => {
+  res.json({ status: 'ok', uptimeSeconds: Math.round(process.uptime()) });
 });
 
 import { resolveSlug, resolveProjectKey, resolveTaskKey } from './middleware/slugs.js';
@@ -123,7 +164,7 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 
 import { createServer } from 'http';
 import { initSocket, getIO } from './sockets/index.js';
-import { registerWorkers, shutdownQueue } from './workers/index.js';
+import { registerWorkers, shutdownQueue, stopWorkers } from './workers/index.js';
 import { queryClient } from './config/db.js';
 
 // ─── Graceful Shutdown ────────────────────────────────────────────────────────
@@ -149,8 +190,9 @@ const shutdown = async (signal: string) => {
     // Socket.io may not be initialized
   }
 
-  // Drain background job queue
+  // Drain background job queue and stop periodic sweeps
   shutdownQueue();
+  stopWorkers();
   console.log('✅ Job queue drained');
 
   // Close database connection
@@ -200,9 +242,51 @@ initSocket(httpServer);
 // Register background job workers (email delivery, GitHub webhook events)
 registerWorkers();
 
-httpServer.listen(env.PORT, () => {
-  console.log(`🚀 DevSync backend running on http://localhost:${env.PORT}`);
-  console.log(`   Environment: ${env.NODE_ENV}`);
+/**
+ * This process holds real state that no other instance can see: the rate-limit
+ * counters, the in-memory job queue, the live-call registry, and the Socket.io
+ * room membership that delivers every chat message. Run two of these behind one
+ * load balancer and each of those silently half-works — messages reach the half
+ * of your users who happen to share an instance with the sender, rate limits
+ * become N× the configured value, and queued invite emails vanish when the
+ * instance that holds them restarts.
+ *
+ * Making that safe means Redis: `@socket.io/redis-adapter`, `rate-limit-redis`,
+ * and BullMQ in place of `workers/queue.ts`. Until then the deployment must run
+ * exactly one instance, and that is a constraint worth stating out loud at boot
+ * rather than leaving in a document nobody reads during an incident.
+ */
+const warnIfHorizontallyScaled = () => {
+  const declared = parseInt(process.env.WEB_CONCURRENCY || process.env.INSTANCE_COUNT || '1', 10);
+  if (env.NODE_ENV === 'production' && declared > 1) {
+    console.warn(
+      `\n⚠️  ${declared} instances declared, but this build keeps rate limits, the job queue,\n` +
+        `   live calls and Socket.io rooms in process memory. Chat delivery and rate limiting\n` +
+        `   will be incorrect across instances. Run one instance, or move that state to Redis.\n`
+    );
+  }
+};
+
+const start = async () => {
+  // Opt-in, because a release that migrates from every booting instance races
+  // with itself the moment there is more than one. Prefer a release command.
+  if (process.env.RUN_MIGRATIONS_ON_BOOT === 'true') {
+    const { runMigrations } = await import('./db/migrate.js');
+    await runMigrations();
+  }
+
+  warnIfHorizontallyScaled();
+
+  httpServer.listen(env.PORT, () => {
+    console.log(`🚀 DevSync backend running on port ${env.PORT}`);
+    console.log(`   Environment:     ${env.NODE_ENV}`);
+    console.log(`   Allowed origins: ${allowedOrigins.join(', ')}`);
+  });
+};
+
+start().catch((err) => {
+  console.error('❌ Failed to start:', err);
+  process.exit(1);
 });
 
 export default app;

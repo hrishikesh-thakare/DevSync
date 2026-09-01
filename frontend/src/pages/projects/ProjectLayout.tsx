@@ -5,14 +5,7 @@ import { TriangleAlertIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty';
+import { EmptyState } from '@/components/layout/PageState';
 import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
 import { useTaskStore } from '@/store/taskStore';
 import { socketClient } from '@/lib/socket';
@@ -80,20 +73,13 @@ export function ProjectLayout() {
 
   if (error || !project) {
     return (
-      <Empty className="min-h-[60svh]">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <TriangleAlertIcon aria-hidden="true" />
-          </EmptyMedia>
-          <EmptyTitle>Couldn&apos;t open this project</EmptyTitle>
-          <EmptyDescription>
-            {error ?? 'It may have been archived, or you may not have access to it.'}
-          </EmptyDescription>
-        </EmptyHeader>
-        <EmptyContent>
-          <Button onClick={() => navigate(`/w/${slug}/projects`)}>Back to projects</Button>
-        </EmptyContent>
-      </Empty>
+      <EmptyState
+        className="min-h-[60svh]"
+        icon={<TriangleAlertIcon aria-hidden="true" />}
+        title="Couldn't open this project"
+        description={error ?? 'It may have been archived, or you may not have access to it.'}
+        action={<Button onClick={() => navigate(`/w/${slug}/projects`)}>Back to projects</Button>}
+      />
     );
   }
 

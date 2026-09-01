@@ -13,7 +13,7 @@ import {
   YAxis,
 } from 'recharts';
 
-import { Alert, AlertTitle } from '@/components/ui/alert';
+import { EmptyState, ErrorState } from '@/components/layout/PageState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -164,9 +164,7 @@ export function AnalyticsPage() {
       />
 
       {error ? (
-        <Alert variant="destructive" className="mb-6">
-          <AlertTitle>{error}</AlertTitle>
-        </Alert>
+        <ErrorState message={error} className="mb-6" />
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -214,9 +212,11 @@ function ChartCard({
       </CardHeader>
       <CardContent>
         {isEmpty ? (
-          <p className="flex h-56 items-center justify-center text-center text-sm text-muted-foreground">
-            {emptyText}
-          </p>
+          // Height-matched to the chart it stands in for, so a card that has
+          // no data yet does not collapse and shift the ones beside it.
+          <div className="flex h-56 items-center justify-center">
+            <EmptyState compact title="Nothing to chart yet" description={emptyText} />
+          </div>
         ) : (
           children
         )}

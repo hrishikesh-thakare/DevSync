@@ -60,5 +60,25 @@ DevSync uses a **monolithic backend** (Node.js/Express) communicating with a **S
 
 The following technologies are present in the `package.json` and directory structure but are reserved for future phases:
 
-*   **Background Jobs:** In-process queue in `workers/queue.ts` — SMTP invite emails and GitHub webhook event processing run off the request path with retry + exponential backoff. No external broker required.
+*   **Background Jobs:** In-process queue in `workers/queue.ts` — SMTP invite emails and GitHub webhook event processing run off the request path with retry + exponential backoff. No external broker required, at the cost of durability: queued jobs are held in memory and are lost on restart.
 *   **AI Integration:** Gemini-powered features live in `services/ai.service.ts` — sprint retrospective summaries + per-member contribution reports (posted to the project channel on sprint close) and task duration estimates. Disabled gracefully when `GEMINI_API_KEY` is unset.
+
+---
+
+## ⚠️ Scaling constraint
+
+The API is **single-instance by design**. Four pieces of state live in process
+memory rather than a shared store:
+
+| State | Where | Breaks at 2+ instances as |
+|---|---|---|
+| Rate-limit counters | `express-rate-limit` memory store | Effective limit becomes N× the configured value |
+| Background jobs | `workers/queue.ts` | Queued invite emails lost when their instance restarts |
+| Live call registry | `modules/channels/activeCalls.ts` | One channel mints a separate Zoom meeting per instance |
+| Socket.io rooms | Default in-memory adapter | Chat messages reach only viewers on the sender's instance |
+
+Removing the constraint means Redis in all four places:
+`@socket.io/redis-adapter`, `rate-limit-redis`, and BullMQ in place of the
+in-process queue. Until then the deployment must pin one instance — the app
+logs a warning at boot if it detects a higher instance count. See
+[deployment.md](./deployment.md).

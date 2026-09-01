@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Loader2Icon, PencilIcon, PlusIcon, TagIcon, Trash2Icon } from 'lucide-react';
 
-import { Alert, AlertTitle } from '@/components/ui/alert';
+import { ErrorState } from '@/components/layout/PageState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -131,9 +131,7 @@ export function ProjectLabelsPage() {
       />
 
       {error ? (
-        <Alert variant="destructive" className="mb-4">
-          <AlertTitle>{error}</AlertTitle>
-        </Alert>
+        <ErrorState message={error} className="mb-4" />
       ) : null}
 
       {canEdit ? (

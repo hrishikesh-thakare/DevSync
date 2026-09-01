@@ -8,13 +8,14 @@ import {
   GitCommitHorizontalIcon,
   HistoryIcon,
   Loader2Icon,
+  MessageSquareIcon,
   SendIcon,
   SparklesIcon,
   TagIcon,
   XIcon,
 } from 'lucide-react';
 
-import { Alert, AlertTitle } from '@/components/ui/alert';
+import { EmptyState, ErrorState } from '@/components/layout/PageState';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -128,12 +129,12 @@ export function TaskDetailPage() {
   if (error || !task) {
     return (
       <div className="mx-auto w-full max-w-5xl p-6">
-        <Alert variant="destructive">
-          <AlertTitle>{error ?? 'Task not found.'}</AlertTitle>
-        </Alert>
-        <Button className="mt-4" onClick={() => navigate(`/w/${slug}/projects/${key}`)}>
-          Back to board
-        </Button>
+        <ErrorState
+          message={error ?? 'Task not found.'}
+          action={
+            <Button onClick={() => navigate(`/w/${slug}/projects/${key}`)}>Back to board</Button>
+          }
+        />
       </div>
     );
   }
@@ -244,7 +245,13 @@ export function TaskDetailPage() {
             <h2 className="mb-3 text-sm font-medium text-foreground">Discussion</h2>
 
             {comments.length === 0 ? (
-              <p className="mb-4 text-sm text-muted-foreground">No comments yet.</p>
+              <EmptyState
+                compact
+                className="mb-4"
+                icon={<MessageSquareIcon />}
+                title="No comments yet"
+                description="Ask a question or leave context for whoever picks this up."
+              />
             ) : (
               <ul className="mb-4 space-y-3">
                 {comments.map((c) => (

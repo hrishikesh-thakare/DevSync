@@ -19,8 +19,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { toast } from 'sonner';
 import { GripVerticalIcon, ListTodoIcon, PlusIcon } from 'lucide-react';
 
-import { EmptyState } from '@/components/layout/PageState';
-import { Alert, AlertTitle } from '@/components/ui/alert';
+import { EmptyState, ErrorState } from '@/components/layout/PageState';
 import { MemberAvatar } from '@/components/MemberAvatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
@@ -171,9 +170,7 @@ export function BacklogPage() {
   if (error) {
     return (
       <div className="mx-auto w-full max-w-5xl p-6">
-        <Alert variant="destructive">
-          <AlertTitle>{error}</AlertTitle>
-        </Alert>
+        <ErrorState message={error} />
       </div>
     );
   }
