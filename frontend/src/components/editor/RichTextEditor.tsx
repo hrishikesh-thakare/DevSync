@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 
 import { Toggle } from '@/components/ui/toggle';
-import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -227,11 +226,6 @@ function EditorToolbar({ editor, disabled }: { editor: Editor; disabled?: boolea
       >
         <StrikethroughIcon className={TOOLBAR_ICON} aria-hidden="true" />
       </Toggle>
-
-      <div className="mx-1 h-5 w-px shrink-0 bg-border" aria-hidden="true" />
-      <MarkButton editor={editor} mark="code" label="Code">
-        <CodeIcon className="size-4" />
-      </MarkButton>
 
       <div className="mx-1 h-5 w-px shrink-0 bg-border" aria-hidden="true" />
 

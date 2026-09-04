@@ -5,7 +5,6 @@ import { LogOutIcon, SearchIcon, SettingsIcon, LayersIcon, UserCogIcon } from 'l
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { WorkspaceBreadcrumbs } from '@/components/layout/WorkspaceBreadcrumbs';
 import {
