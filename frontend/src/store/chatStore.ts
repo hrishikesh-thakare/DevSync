@@ -89,18 +89,20 @@ export const useChatStore = create<ChatState>((set) => ({
     const tempId = `optimistic-${Date.now()}`;
     const optimisticMsg: ChatMessage = {
       messageId: tempId,
-      channelId,
       threadId,
       authorId: me?.userId ?? null,
       authorName: me?.fullName ?? 'Me',
       authorAvatar: me?.avatarUrl ?? null,
       bodyText: bodyText || '',
       bodyBlocks: bodyBlocks || null,
+      isSystem: false,
+      systemType: null,
+      isEdited: false,
+      isDeleted: false,
+      isPinned: false,
+      replyCount: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      isSystem: false,
-      isEdited: false,
-      replyCount: 0,
       reactions: [],
       // We can use the 'optimistic-' prefix in the UI to style it as sending
     };

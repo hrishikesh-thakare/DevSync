@@ -287,8 +287,36 @@ export function WorkspaceHome() {
       </Card>
     ) : null;
 
+  const needsAttentionCard =
+    isAdmin && hasRisk ? (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TriangleAlertIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+            Needs attention
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {atRisk!.overdue.length > 0 ? (
+            <RiskGroup
+              title={`Overdue (${atRisk!.overdue.length})`}
+              tasks={atRisk!.overdue}
+              slug={slug}
+            />
+          ) : null}
+          {atRisk!.stalled.length > 0 ? (
+            <RiskGroup
+              title={`Stalled in review (${atRisk!.stalled.length})`}
+              tasks={atRisk!.stalled}
+              slug={slug}
+            />
+          ) : null}
+        </CardContent>
+      </Card>
+    ) : null;
+
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 p-6">
+    <div className="mx-auto w-full max-w-7xl space-y-6 p-6">
       <section>
         <h1 className="text-2xl font-medium text-foreground">{name}</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
@@ -309,12 +337,6 @@ export function WorkspaceHome() {
 
       {error ? <ErrorState message={error} /> : null}
 
-      {/* The five-second answer, top-left where it is read first.
-
-          Suppressed for a viewer with nothing to look at: the empty state below
-          carries the same sentence *and* a way out of it, and stacking two
-          blocks that say "there is nothing here" is the bloat this page is
-          meant to be rid of. */}
       {isViewer && !hasSprints ? null : (
         <Headline
           isViewer={isViewer}
@@ -325,67 +347,41 @@ export function WorkspaceHome() {
         />
       )}
 
-      {/* An admin's own tasks matter, but the things only they can unblock come
-          first — nobody else is going to clear a stalled review.
-
-          Rendered only when there is something in it. The card used to appear
-          unconditionally, so the common healthy case spent half a screen on two
-          empty states announcing that nothing was wrong — directly under a
-          headline that had already said so. An empty section is worth rendering
-          when its absence would be ambiguous; here the hero removes the
-          ambiguity, so the section is pure cost. */}
-      {isAdmin && hasRisk ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TriangleAlertIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-              Needs attention
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {atRisk!.overdue.length > 0 ? (
-              <RiskGroup
-                title={`Overdue (${atRisk!.overdue.length})`}
-                tasks={atRisk!.overdue}
-                slug={slug}
-              />
-            ) : null}
-            {atRisk!.stalled.length > 0 ? (
-              <RiskGroup
-                title={`Stalled in review (${atRisk!.stalled.length})`}
-                tasks={atRisk!.stalled}
-                slug={slug}
-              />
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {/* A viewer is never an assignee, so their landing screen leads with the
-          work itself. My work still renders if they somehow hold tasks — from
-          before their role changed, say — rather than hiding them. */}
       {isViewer ? (
-        <>
+        <div className="grid items-start gap-6 md:grid-cols-2">
           {sprintsCard}
           {myWork && myWork.tasks.length > 0 ? myWorkCard : null}
           {!hasSprints && (!myWork || myWork.tasks.length === 0) ? (
-            <EmptyState
-              icon={<FolderKanbanIcon />}
-              title="No active sprints"
-              description="When a project starts a sprint, its progress appears here."
-              action={
-                <Button asChild variant="outline">
-                  <Link to={`/w/${slug}/projects`}>Browse projects</Link>
-                </Button>
-              }
-            />
+            <div className="md:col-span-2">
+              <EmptyState
+                icon={<FolderKanbanIcon />}
+                title="No active sprints"
+                description="When a project starts a sprint, its progress appears here."
+                action={
+                  <Button asChild variant="outline">
+                    <Link to={`/w/${slug}/projects`}>Browse projects</Link>
+                  </Button>
+                }
+              />
+            </div>
           ) : null}
-        </>
+        </div>
+      ) : isAdmin ? (
+        <div
+          className={cn(
+            'grid items-start gap-6',
+            hasRisk ? 'lg:grid-cols-3 md:grid-cols-2' : 'md:grid-cols-2'
+          )}
+        >
+          {needsAttentionCard}
+          {sprintsCard}
+          {myWorkCard}
+        </div>
       ) : (
-        <>
+        <div className="grid items-start gap-6 md:grid-cols-2">
           {myWorkCard}
           {sprintsCard}
-        </>
+        </div>
       )}
 
       {/* Progressive disclosure: the count says whether it is worth a click,

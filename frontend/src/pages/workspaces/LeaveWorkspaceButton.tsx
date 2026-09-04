@@ -18,7 +18,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { apiFetch } from '@/lib/api';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
-import { useWorkspaceStore } from '@/store/workspaceStore';
 import { workspaceKeys } from '@/store/workspaceStore';
 
 /**

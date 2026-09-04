@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRightIcon, LayersIcon, LogOutIcon, UserCogIcon } from 'lucide-react';
 
