@@ -492,6 +492,7 @@ function MessageRow({
   }, [message.reactions, currentUserId]);
 
   const isMine = message.authorId === currentUserId;
+  const isOptimistic = message.messageId.startsWith('optimistic-');
 
   return (
     <>
@@ -505,10 +506,10 @@ function MessageRow({
         </li>
       ) : null}
 
-      <li id={message.messageId} className={cn('group flex gap-3 rounded-lg px-2 py-1 hover:bg-accent/40', grouped && '-mt-1', isMine && 'flex-row-reverse')}>
+      <li id={message.messageId} className={cn('group flex gap-3 rounded-lg px-2 py-1 hover:bg-accent/40', grouped && '-mt-1', isMine && 'flex-row-reverse', isOptimistic && 'opacity-60')}>
         <div className="w-7 shrink-0">
           {!grouped ? (
-            <Avatar className="size-7">
+             <Avatar className="size-7">
               {message.authorAvatar ? <AvatarImage src={message.authorAvatar} alt="" /> : null}
               <AvatarFallback className="text-[10px]">
                 {initialsOf(message.authorName ?? 'System')}
@@ -525,7 +526,7 @@ function MessageRow({
               </span>
               {message.isSystem ? <Badge variant="outline">system</Badge> : null}
               <span className="text-xs text-muted-foreground">
-                {format(new Date(message.createdAt), 'HH:mm')}
+                {isOptimistic ? 'Sending...' : format(new Date(message.createdAt), 'HH:mm')}
               </span>
             </p>
           ) : null}
@@ -659,47 +660,49 @@ function MessageRow({
         </div>
 
         {/* Row actions, revealed on hover/focus */}
-        <div className={cn("flex shrink-0 items-start gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100", isMine && "flex-row-reverse")}>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-xs" aria-label="Add reaction">
-                <SmilePlusIcon className="size-3.5" aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="flex min-w-0 gap-1 p-1">
-              {QUICK_REACTIONS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  className="rounded p-1 text-base hover:bg-accent"
-                  onClick={() => onReact(emoji)}
-                  aria-label={`React with ${emoji}`}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {onReply && !compact ? (
-            <Button variant="ghost" size="icon-xs" aria-label="Reply in thread" onClick={onReply}>
-              <MessageSquareIcon className="size-3.5" aria-hidden="true" />
-            </Button>
-          ) : null}
-
-          {isMine && onDelete ? (
+        {!isOptimistic && (
+          <div className={cn("flex shrink-0 items-start gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100", isMine && "flex-row-reverse")}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-xs" aria-label="Message actions">
-                  <span aria-hidden="true">⋯</span>
+                <Button variant="ghost" size="icon-xs" aria-label="Add reaction">
+                  <SmilePlusIcon className="size-3.5" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={onDelete}>Delete message</DropdownMenuItem>
+              <DropdownMenuContent align="end" className="flex min-w-0 gap-1 p-1">
+                {QUICK_REACTIONS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className="rounded p-1 text-base hover:bg-accent"
+                    onClick={() => onReact(emoji)}
+                    aria-label={`React with ${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
-          ) : null}
-        </div>
+
+            {onReply && !compact ? (
+              <Button variant="ghost" size="icon-xs" aria-label="Reply in thread" onClick={onReply}>
+                <MessageSquareIcon className="size-3.5" aria-hidden="true" />
+              </Button>
+            ) : null}
+
+            {isMine && onDelete ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-xs" aria-label="Message actions">
+                    <span aria-hidden="true">⋯</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={onDelete}>Delete message</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </div>
+        )}
       </li>
     </>
   );

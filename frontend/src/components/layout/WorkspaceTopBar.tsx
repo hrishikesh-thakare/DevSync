@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LogOutIcon, SearchIcon, SettingsIcon, LayersIcon, UserCogIcon } from 'lucide-react';
 
@@ -53,6 +53,25 @@ export function WorkspaceTopBar({ slug }: { slug: string }) {
     navigate('/login', { replace: true });
   };
 
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      // Don't trigger if the user is typing in an input, textarea, or contenteditable
+      if (
+        e.target instanceof HTMLElement &&
+        (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)
+      ) {
+        return;
+      }
+      
+      if (e.key === 'f' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        document.getElementById('global-search-input')?.focus();
+      }
+    };
+    document.addEventListener('keydown', down);
+    return () => document.removeEventListener('keydown', down);
+  }, []);
+
   return (
     <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4">
       <SidebarTrigger />
@@ -66,10 +85,11 @@ export function WorkspaceTopBar({ slug }: { slug: string }) {
           aria-hidden="true"
         />
         <Input
+          id="global-search-input"
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search tasks and messages…"
+          placeholder="Search tasks and messages… (Press f)"
           aria-label="Search this workspace"
           className="pl-8 pr-14"
         />

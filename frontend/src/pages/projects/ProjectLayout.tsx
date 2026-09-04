@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
 import { TriangleAlertIcon } from 'lucide-react';
 
@@ -11,6 +11,7 @@ import { useTaskStore } from '@/store/taskStore';
 import { socketClient } from '@/lib/socket';
 import { cn } from '@/lib/utils';
 import type { TaskSummary } from '@/types/api';
+import { CreateTaskDialog } from '@/pages/projects/board/CreateTaskDialog';
 
 const TABS = [
   { to: '', label: 'Board', end: true },
@@ -29,6 +30,28 @@ export function ProjectLayout() {
   const { project, isLoading, error, fetchProject, reset } = useProjectStore();
   const myRole = useMyProjectRole();
   const applyTaskUpdate = useTaskStore((s) => s.applyTaskUpdate);
+
+  const [createOpen, setCreateOpen] = useState(false);
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLElement &&
+        (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.key === 'c' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        // Only allow creating task if they have permission
+        if (myRole && myRole !== 'viewer') {
+          e.preventDefault();
+          setCreateOpen(true);
+        }
+      }
+    };
+    document.addEventListener('keydown', down);
+    return () => document.removeEventListener('keydown', down);
+  }, [myRole]);
 
   useEffect(() => {
     if (slug && key) void fetchProject(slug, key);
@@ -125,6 +148,16 @@ export function ProjectLayout() {
       <div className="flex-1">
         <Outlet />
       </div>
+
+      {createOpen && project ? (
+        <CreateTaskDialog
+          slug={slug}
+          projectKey={key}
+          open={createOpen}
+          status="todo"
+          onOpenChange={setCreateOpen}
+        />
+      ) : null}
     </div>
   );
 }

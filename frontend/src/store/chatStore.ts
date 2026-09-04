@@ -76,8 +76,6 @@ export const useChatStore = create<ChatState>((set) => ({
   },
 
   send: async (slug, channelId, bodyText, threadId = null, attachments = []) => {
-    // The server broadcasts `new_message` to the room, and this client is in it,
-    // so the socket handler appends it — no optimistic insert, or it double-posts.
     const bodyBlocks = attachments.length > 0 ? attachments.map(att => ({ type: 'attachment', ...att })) : undefined;
     
     const payload: Record<string, unknown> = {};
@@ -85,10 +83,77 @@ export const useChatStore = create<ChatState>((set) => ({
     if (bodyBlocks) payload.bodyBlocks = bodyBlocks;
     if (threadId) payload.threadId = threadId;
 
-    await apiFetch(`${base(slug, channelId)}/messages`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
+    // Optimistic insert
+    const { useAuthStore } = await import('@/store/auth');
+    const me = useAuthStore.getState().user;
+    const tempId = `optimistic-${Date.now()}`;
+    const optimisticMsg: ChatMessage = {
+      messageId: tempId,
+      channelId,
+      threadId,
+      authorId: me?.userId ?? null,
+      authorName: me?.fullName ?? 'Me',
+      authorAvatar: me?.avatarUrl ?? null,
+      bodyText: bodyText || null,
+      bodyBlocks: bodyBlocks || null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isSystem: false,
+      isEdited: false,
+      replyCount: 0,
+      reactions: [],
+      // We can use the 'optimistic-' prefix in the UI to style it as sending
+    };
+
+    set((state) => {
+      if (threadId) {
+        if (state.threadRoot?.messageId === threadId) {
+          return { threadReplies: [...state.threadReplies, optimisticMsg] };
+        }
+        return {
+          messages: state.messages.map((m) =>
+            m.messageId === threadId ? { ...m, replyCount: m.replyCount + 1 } : m,
+          ),
+        };
+      }
+      return { messages: [...state.messages, optimisticMsg] };
     });
+
+    try {
+      const response = await apiFetch(`${base(slug, channelId)}/messages`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      const realMsg = response.data as ChatMessage;
+
+      set((state) => {
+        // If the socket beat us, just clean up the optimistic duplicate
+        const socketBeatUs = 
+          state.messages.some((m) => m.messageId === realMsg.messageId) || 
+          state.threadReplies.some((m) => m.messageId === realMsg.messageId);
+
+        if (socketBeatUs) {
+          return {
+            messages: state.messages.filter((m) => m.messageId !== tempId),
+            threadReplies: state.threadReplies.filter((m) => m.messageId !== tempId),
+          };
+        } else {
+          // Otherwise, upgrade the optimistic message to the real one
+          return {
+            messages: state.messages.map((m) => (m.messageId === tempId ? realMsg : m)),
+            threadReplies: state.threadReplies.map((m) => (m.messageId === tempId ? realMsg : m)),
+          };
+        }
+      });
+    } catch (err) {
+      // Revert on failure
+      set((state) => ({
+        messages: state.messages.filter((m) => m.messageId !== tempId),
+        threadReplies: state.threadReplies.filter((m) => m.messageId !== tempId),
+      }));
+      throw err;
+    }
   },
 
   edit: async (slug, channelId, messageId, bodyText) => {
