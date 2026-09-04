@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2Icon, LogOutIcon } from 'lucide-react';
 
@@ -18,6 +19,7 @@ import {
 import { apiFetch } from '@/lib/api';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { workspaceKeys } from '@/store/workspaceStore';
 
 /**
  * Self-service `DELETE /workspaces/:slug/members/me`.
@@ -30,7 +32,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 export function LeaveWorkspaceButton({ slug, canLeave }: { slug: string; canLeave: boolean }) {
   const navigate = useNavigate();
   const name = useCurrentWorkspaceStore((s) => s.name);
-  const fetchWorkspaces = useWorkspaceStore((s) => s.fetchWorkspaces);
+  const queryClient = useQueryClient();
   const [leaving, setLeaving] = useState(false);
 
   if (!canLeave) return null;
@@ -43,7 +45,7 @@ export function LeaveWorkspaceButton({ slug, canLeave }: { slug: string; canLeav
       // Every route under /w/:slug now 403s, so leave the shell before the
       // picker's list is refreshed underneath it.
       navigate('/workspaces', { replace: true });
-      await fetchWorkspaces();
+      void queryClient.invalidateQueries({ queryKey: workspaceKeys.all });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not leave this workspace.');
       setLeaving(false);

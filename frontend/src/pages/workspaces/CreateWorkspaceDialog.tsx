@@ -18,7 +18,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Alert, AlertTitle } from '@/components/ui/alert';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { useCreateWorkspace } from '@/store/workspaceStore';
 
 /** Mirrors `createWorkspaceSchema` — name required, slug optional. */
 const schema = z.object({
@@ -45,7 +45,7 @@ function slugify(value: string) {
 export function CreateWorkspaceDialog() {
   const [open, setOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const createWorkspace = useWorkspaceStore((s) => s.createWorkspace);
+  const createWorkspace = useCreateWorkspace();
   const navigate = useNavigate();
 
   const form = useForm<Values>({
@@ -61,7 +61,7 @@ export function CreateWorkspaceDialog() {
   const onSubmit = async (values: Values) => {
     setSubmitError(null);
     try {
-      const created = await createWorkspace({
+      const created = await createWorkspace.mutateAsync({
         name: values.name,
         slug: values.slug || slugify(values.name),
         description: values.description,

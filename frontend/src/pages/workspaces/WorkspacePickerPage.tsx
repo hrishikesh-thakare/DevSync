@@ -9,20 +9,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { useWorkspaces } from '@/store/workspaceStore';
 import { useAuthStore } from '@/store/auth';
 import { CreateWorkspaceDialog } from '@/pages/workspaces/CreateWorkspaceDialog';
 import { PendingInvites } from '@/pages/workspaces/PendingInvites';
 import { initialsOf } from '@/lib/initials';
 
 export function WorkspacePickerPage() {
-  const { workspaces, isLoading, error, fetchWorkspaces } = useWorkspaceStore();
+  const { data: workspaces = [], isLoading, error } = useWorkspaces();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-
-  useEffect(() => {
-    void fetchWorkspaces();
-  }, [fetchWorkspaces]);
 
   // `GET /workspaces` returns every membership row, not just the joined ones.
   // Only `active` rows are actually reachable — the workspace guard 403s on any
@@ -62,7 +58,7 @@ export function WorkspacePickerPage() {
         </header>
 
         {error ? (
-          <ErrorState message={error} className="mb-6" />
+          <ErrorState message={error.message} className="mb-6" />
         ) : null}
 
         {isLoading ? (

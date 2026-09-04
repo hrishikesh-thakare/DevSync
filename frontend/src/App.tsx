@@ -1,5 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { AuthBootstrap } from '@/components/auth/AuthBootstrap';
 import { AuthGuard } from '@/components/auth/AuthGuard';
@@ -71,15 +72,25 @@ const AnalyticsPage = page(() => import('@/pages/AnalyticsPage'), 'AnalyticsPage
  * Neither are `/reset-password` and `/verify-email`, which the email service
  * hard-codes against `FRONTEND_URL`.
  */
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
 export default function App() {
   return (
-    <AuthBootstrap>
-      {/*
-        One boundary inside the router rather than around it, so the fallback
-        renders in place and the URL survives — the user can still navigate away
-        from a page that failed instead of being stranded on a blank document.
-      */}
-      <ErrorBoundary label="route">
+    <QueryClientProvider client={queryClient}>
+      <AuthBootstrap>
+        {/*
+          One boundary inside the router rather than around it, so the fallback
+          renders in place and the URL survives — the user can still navigate away
+          from a page that failed instead of being stranded on a blank document.
+        */}
+        <ErrorBoundary label="route">
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             {/* Guest-only */}
@@ -144,5 +155,6 @@ export default function App() {
         </Suspense>
       </ErrorBoundary>
     </AuthBootstrap>
+    </QueryClientProvider>
   );
 }

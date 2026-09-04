@@ -12,6 +12,7 @@ import { WorkspaceTopBar } from '@/components/layout/WorkspaceTopBar';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
 import { useNotificationStore } from '@/store/notificationStore';
 import { socketClient } from '@/lib/socket';
+import { KeyboardShortcutsModal } from '@/components/layout/KeyboardShortcutsModal';
 import type { AppNotification, Presence } from '@/types/api';
 
 export function WorkspaceLayout() {
@@ -89,6 +90,7 @@ export function WorkspaceLayout() {
           <Outlet />
         </main>
       </SidebarInset>
+      <KeyboardShortcutsModal />
     </SidebarProvider>
   );
 }

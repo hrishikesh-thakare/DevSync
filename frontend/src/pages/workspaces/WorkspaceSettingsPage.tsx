@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -25,7 +26,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { PageHeader, PageShell } from '@/components/layout/PageHeader';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { workspaceKeys } from '@/store/workspaceStore';
 import { apiFetch } from '@/lib/api';
 
 /** Mirrors `updateWorkspaceSchema`. */
@@ -45,7 +46,7 @@ export function WorkspaceSettingsPage() {
   const { slug = '' } = useParams();
   const navigate = useNavigate();
   const { name, description, isOwner, isAdmin, fetchWorkspaceData } = useCurrentWorkspaceStore();
-  const fetchWorkspaces = useWorkspaceStore((s) => s.fetchWorkspaces);
+  const queryClient = useQueryClient();
 
   const [confirmText, setConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -73,7 +74,7 @@ export function WorkspaceSettingsPage() {
       });
       const nextSlug = data.workspace.slug as string;
       toast.success('Workspace updated');
-      await fetchWorkspaces();
+      void queryClient.invalidateQueries({ queryKey: workspaceKeys.all });
 
       // Changing the slug changes every URL under /w/:slug, so move the router
       // before refetching against a slug that no longer resolves.
@@ -93,7 +94,7 @@ export function WorkspaceSettingsPage() {
     try {
       await apiFetch(`/workspaces/${slug}`, { method: 'DELETE' });
       toast.success(`${name} deleted`);
-      await fetchWorkspaces();
+      void queryClient.invalidateQueries({ queryKey: workspaceKeys.all });
       navigate('/workspaces', { replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not delete the workspace.');

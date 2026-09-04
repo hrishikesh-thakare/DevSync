@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { useAcceptInvite } from '@/store/workspaceStore';
 import { initialsOf } from '@/lib/initials';
 import type { WorkspaceSummary } from '@/types/api';
 
@@ -24,7 +24,7 @@ import type { WorkspaceSummary } from '@/types/api';
  * so offering "Decline" here would guarantee a 404.
  */
 export function PendingInvites({ invites }: { invites: WorkspaceSummary[] }) {
-  const acceptInvite = useWorkspaceStore((s) => s.acceptInvite);
+  const acceptInvite = useAcceptInvite();
   const [busySlug, setBusySlug] = useState<string | null>(null);
 
   if (invites.length === 0) return null;
@@ -32,7 +32,7 @@ export function PendingInvites({ invites }: { invites: WorkspaceSummary[] }) {
   const accept = async (ws: WorkspaceSummary) => {
     setBusySlug(ws.slug);
     try {
-      await acceptInvite(ws.slug);
+      await acceptInvite.mutateAsync(ws.slug);
       toast.success(`Joined ${ws.name}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not accept the invitation.');

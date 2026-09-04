@@ -94,7 +94,7 @@ export const useChatStore = create<ChatState>((set) => ({
       authorId: me?.userId ?? null,
       authorName: me?.fullName ?? 'Me',
       authorAvatar: me?.avatarUrl ?? null,
-      bodyText: bodyText || null,
+      bodyText: bodyText || '',
       bodyBlocks: bodyBlocks || null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
