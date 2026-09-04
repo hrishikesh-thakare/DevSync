@@ -39,7 +39,7 @@ import { cn } from '@/lib/utils';
 const COMPANIES = ['Northwind Labs', 'Meridian Systems', 'Kestrel Robotics', 'Halcyon Data', 'Arbor Health', 'Vantive'];
 
 const STATS = [
-  { value: '298', label: 'automated tests' },
+  { value: '360+', label: 'automated tests' },
   { value: '40%', label: 'less context switching' },
   { value: '<50ms', label: 'message delivery' },
   { value: '2 min', label: 'to first sprint' },

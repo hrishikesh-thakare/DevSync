@@ -9,34 +9,42 @@ This document maps out the frontend routing structure, screen-by-screen feature 
 The React app uses React Router with nested layouts.
 
 ```text
-/                                          → LandingPage (Public)
-/login                                     → LoginPage (Guest Only)
-/register                                  → RegisterPage (Guest Only)
-/auth/callback                             → OAuthCallbackPage (Public)
-/invite/:inviteToken                       → InviteAcceptancePage (Auth Required)
+/                                          ├─ LandingPage (Public)
+/login                                     ├─ LoginPage (Guest Only)
+/register                                  ├─ RegisterPage (Guest Only)
+/forgot-password                           ├─ ForgotPasswordPage (Guest Only)
+/reset-password                            ├─ ResetPasswordPage (Public)
+/verify-email                              ├─ VerifyEmailPage (Public)
+/auth/callback                             ├─ OAuthCallbackPage (Public)
+/invite/:inviteToken                       ├─ InviteLandingPage (Auth Required)
 
-/workspaces                                → WorkspacePickerPage (Auth Required)
+/workspaces                                ├─ WorkspacePickerPage (Auth Required)
+/account                                   ├─ AccountSettingsPage (Auth Required)
 
-/w/:slug                                   → WorkspaceLayout (App Shell Wrapper)
-  ├── /                                    → WorkspaceHome
-  ├── /members                             → WorkspaceMembersPage
-  ├── /settings                            → WorkspaceSettingsPage
-  ├── /notifications                       → NotificationsInbox
-  ├── /search                              → GlobalSearchResults
-  ├── /channels/:channelId                 → ChannelPage (Messaging)
-  ├── /projects                            → ProjectListPage
-  ├── /projects/new                        → CreateProjectPage
-  └── /projects/:key                       → ProjectLayout (Tabs Wrapper)
-      ├── /                                → BoardPage (Kanban)
-      ├── /backlog                         → BacklogPage
-      ├── /tasks/:taskKey                  → TaskDetailPage
-      ├── /sprints                         → SprintList
-      ├── /sprints/active                  → ActiveSprintBoard
-      ├── /sprints/:sprintId               → ActiveSprintBoard (Specific)
-      ├── /channels                        → ProjectChannels
-      ├── /members                         → ProjectMembers
-      ├── /settings                        → ProjectSettings
-      └── /github                          → GitHubIntegration
+/w/:slug                                   ├─ WorkspaceLayout (App Shell Wrapper)
+  ├── /                                    ├─ WorkspaceHome
+  ├── /my-tasks                            ├─ MyTasksPage
+  ├── /members                             ├─ WorkspaceMembersPage
+  ├── /settings                            ├─ WorkspaceSettingsPage
+  ├── /activity                            ├─ WorkspaceActivityPage
+  ├── /notifications                       ├─ NotificationsInbox
+  ├── /search                              ├─ GlobalSearchResults
+  ├── /analytics                           ├─ AnalyticsPage
+  ├── /channels                            ├─ ChannelListPage
+  ├── /channels/:channelId                 ├─ ChannelPage (Messaging)
+  ├── /projects                            ├─ ProjectListPage
+  ├── /projects/new                        ├─ CreateProjectPage
+  └── /projects/:key                       ├─ ProjectLayout (Tabs Wrapper)
+      ├── /                                ├─ BoardPage (Kanban)
+      ├── /backlog                         ├─ BacklogPage
+      ├── /tasks/:taskKey                  ├─ TaskDetailPage
+      ├── /sprints                         ├─ SprintList
+      ├── /sprints/:sprintId               ├─ ActiveSprintBoard (Specific)
+      ├── /labels                          ├─ ProjectLabelsPage
+      ├── /members                         ├─ ProjectMembersPage
+      ├── /settings                        ├─ ProjectSettingsPage
+      ├── /github                          ├─ GitHubIntegration
+      └── /analytics                       ├─ AnalyticsPage
 ```
 
 ---

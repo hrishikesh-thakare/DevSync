@@ -491,3 +491,83 @@ erDiagram
 | `old_values` | `jsonb` | nullable | Previous state (for updates) |
 | `new_values` | `jsonb` | nullable | New state (for creates/updates) |
 | `created_at` | `timestamptz` | default now | Timestamp of the action |
+---
+
+## Table: \uth_tokens\
+**File:** \schema/auth.ts\  
+**Purpose:** One-time use tokens for email verification and password resets.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| \	oken_id\ | \uuid\ | PK, default random | Unique identifier |
+| \user_id\ | \uuid\ | FK ? \users.user_id\ ON DELETE CASCADE | Token owner |
+| \	ype\ | \archar(30)\ | NOT NULL | \password_reset\ \| \email_verify\ |
+| \	oken_hash\ | \archar(64)\ | UNIQUE, NOT NULL | SHA-256 hash of the token |
+| \expires_at\ | \	imestamptz\ | NOT NULL | Expiration time |
+| \used_at\ | \	imestamptz\ | nullable | Set when token is consumed |
+| \created_at\ | \	imestamptz\ | default now | Token issue time |
+
+---
+
+## Table: \message_reactions\
+**File:** \schema/channels.ts\  
+**Purpose:** Emoji reactions to messages in channels.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| \eaction_id\ | \uuid\ | PK, default random | Unique identifier |
+| \message_id\ | \uuid\ | FK ? \messages.message_id\ ON DELETE CASCADE | Message being reacted to |
+| \user_id\ | \uuid\ | FK ? \users.user_id\ ON DELETE CASCADE | User who reacted |
+| \emoji\ | \archar(20)\ | NOT NULL | Emoji identifier (e.g. "??") |
+| \created_at\ | \	imestamptz\ | default now | When reaction was added |
+*(Unique constraint on message_id, user_id, emoji)*
+
+---
+
+## Table: \project_labels\
+**File:** \schema/labels.ts\  
+**Purpose:** Source of truth for label names and colors in a project.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| \label_id\ | \uuid\ | PK, default random | Unique identifier |
+| \project_id\ | \uuid\ | FK ? \projects.project_id\ ON DELETE CASCADE | Project the label belongs to |
+| \
+ame\ | \archar(50)\ | NOT NULL | Display name |
+| \color\ | \archar(7)\ | default '#64748b' | Hex color code |
+| \created_at\ | \	imestamptz\ | default now | Creation time |
+| \updated_at\ | \	imestamptz\ | default now | Last update |
+*(Unique index on project_id and lower(name))*
+
+---
+
+## Table: \	ask_status_transitions\
+**File:** \schema/tasks.ts\  
+**Purpose:** Immutable ledger of task status changes for workflow analytics (cumulative flow, cycle time).
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| \id\ | \uuid\ | PK, default random | Unique identifier |
+| \	ask_id\ | \uuid\ | FK ? \	asks.task_id\ ON DELETE CASCADE | Task that changed |
+| \project_id\ | \uuid\ | FK ? \projects.project_id\ ON DELETE CASCADE | Project context |
+| \rom_status\ | \archar(30)\ | nullable | Previous status (null on creation) |
+| \	o_status\ | \archar(30)\ | NOT NULL | New status |
+| \ctor_id\ | \uuid\ | FK ? \users.user_id\ ON DELETE SET NULL | User who made the change |
+| \changed_at\ | \	imestamptz\ | default now | When the transition happened |
+
+---
+
+## Table: \workspace_invites\
+**File:** \schema/workspaces.ts\  
+**Purpose:** Pending invitations to join a workspace via email link.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| \invite_id\ | \uuid\ | PK, default random | Unique identifier |
+| \workspace_id\ | \uuid\ | FK ? \workspaces.workspace_id\ ON DELETE CASCADE | Workspace being invited to |
+| \email\ | \archar(255)\ | NOT NULL | Invited user's email |
+| \ole\ | \archar(20)\ | NOT NULL | Role to grant on accept |
+| \	oken\ | \archar(100)\ | UNIQUE, NOT NULL | Secure join token |
+| \invited_by\ | \uuid\ | FK ? \users.user_id\ ON DELETE SET NULL | User who sent the invite |
+| \created_at\ | \	imestamptz\ | default now | When the invite was sent |
+| \expires_at\ | \	imestamptz\ | NOT NULL | When the invite expires |

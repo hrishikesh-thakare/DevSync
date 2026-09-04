@@ -26,20 +26,23 @@ backend/src/
 │   ├── roles.ts           # RBAC guards (requireWorkspaceRole, requireProjectRole)
 │   └── slugs.ts           # URL param resolvers (slug→workspaceId, key→projectId, taskKey→taskId)
 ├── modules/               # Feature modules (routes + controllers)
+│   ├── analytics/
+│   ├── audit/
 │   ├── auth/
-│   ├── workspaces/
-│   ├── projects/
-│   ├── tasks/
-│   ├── sprints/
 │   ├── channels/
-│   ├── messages/
+│   ├── dashboard/
 │   ├── files/
 │   ├── github/
+│   ├── labels/
+│   ├── messages/
 │   ├── notifications/
+│   ├── projects/
 │   ├── search/
-│   ├── audit/
-│   ├── services/           # ✅ ai.service.ts — Gemini client (sprint reports, duration estimates)
-│   └── storage/            # Supabase Storage helper routes
+│   ├── sprints/
+│   ├── tasks/
+│   └── workspaces/
+├── services/              # AI and third-party API clients
+│   └── ai.service.ts      # Gemini client (sprint reports, duration estimates)
 ├── sockets/
 │   └── index.ts           # Socket.io server init + JWT auth middleware
 ├── workers/
@@ -315,9 +318,18 @@ POST /api/workspaces/:slug/projects/:key/tasks
 ### Events
 | Event | Direction | Payload | Description |
 |---|---|---|---|
-| `join_room` | Client → Server | `roomId: string` | Join a channel room |
-| `leave_room` | Client → Server | `roomId: string` | Leave a channel room |
+| `join_room` | Client → Server | `roomId: string` | Join a channel or project room |
+| `leave_room` | Client → Server | `roomId: string` | Leave a room |
+| `room_join_denied` | Server → Client | `{ roomId: string }` | Sent when RBAC denies joining a room |
 | `new_message` | Server → Client | `Message` object | New message broadcast to channel members |
+| `message_updated` | Server → Client | `Message` object | Message was edited |
+| `message_deleted` | Server → Client | `{ messageId, threadId }` | Message was deleted |
+| `message_reaction_added` | Server → Client | `{ messageId, userId, emoji }` | Reaction added |
+| `message_reaction_removed` | Server → Client | `{ messageId, userId, emoji }` | Reaction removed |
+| `task_updated` | Server → Client | `Task` object | Task status, assignee, or field changed |
+| `new_notification` | Server → Client | `Notification` object | Pushed to personal `user:{id}` room |
+| `user_presence_updated` | Server → Client | `{ userId, presence, lastActiveAt }` | Workspace presence broadcast |
+| `call_started` | Server → Client | `{ channelRoomId, joinUrl }` | A video call started in a channel |
 
 ---
 
@@ -341,5 +353,3 @@ A lightweight in-process job queue (`workers/queue.ts`) processes slow work off 
 
 Failures are retried up to 3 times with backoff, then logged as permanently failed. Jobs are in-memory (lost on process exit) — swap `queue.ts` for BullMQ/ioredis if durable queues are needed. AI generation uses the same fire-and-forget pattern directly in the sprint/task controllers.
 
-### Storage Module (`modules/storage/`)
-Mounted at `/api/storage` but overlaps with the `files` module. May be consolidated in a future refactor.
