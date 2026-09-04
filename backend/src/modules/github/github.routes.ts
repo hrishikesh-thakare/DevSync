@@ -70,12 +70,11 @@ githubTaskRouter.get('/commits', requireProjectRole(['project_admin', 'developer
 githubTaskRouter.get('/github-activity', requireProjectRole(['project_admin', 'developer', 'viewer']), getTaskGithubActivity);
 
 // ─── User-level OAuth routes ────────────────────────────────────────────────
-import { exchangeGithubCode, getUserGithubRepos, getGithubOauthUrl, disconnectUserGithub } from './github.oauth.controller.js';
+import { exchangeGithubCode, getUserGithubRepos, getGithubOauthUrl } from './github.oauth.controller.js';
 import { exchangeGithubCodeSchema } from './github.schemas.js';
 export const githubUserRouter = Router();
 githubUserRouter.use(requireAuth);
 githubUserRouter.get('/oauth/url', getGithubOauthUrl);
 githubUserRouter.post('/oauth/exchange', validate(exchangeGithubCodeSchema), exchangeGithubCode);
 githubUserRouter.get('/user/repos', getUserGithubRepos);
-githubUserRouter.delete('/user/disconnect', disconnectUserGithub);
 

@@ -123,50 +123,6 @@ export const uploadFile = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
-// ─── LEGACY: GET PRESIGNED UPLOAD URL ────────────────────────────────────────
-export const getUploadUrl = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { workspaceId } = req.params as Record<string, string>;
-    const userId = req.user!.userId;
-    const { filename, mimetype, sizeBytes, filetype } = req.body;
-
-    if (!filename) {
-      res.status(400).json({ error: 'Filename is required.' });
-      return;
-    }
-
-    const safeName = filename.replace(/[^a-zA-Z0-9-_\.]/g, '');
-    const storagePath = `workspaces/${workspaceId}/${Date.now()}_${safeName}`;
-
-    const [fileRecord] = await db
-      .insert(workspaceFiles)
-      .values({
-        workspaceId,
-        uploaderId: userId,
-        filename,
-        storagePath,
-        mimetype: mimetype || null,
-        sizeBytes: sizeBytes || null,
-        filetype: filetype || 'other',
-      })
-      .returning();
-
-    const { data, error } = await supabase.storage
-      .from('workspace-files')
-      .createSignedUploadUrl(storagePath);
-
-    if (error) {
-      console.warn('Supabase presigned upload error:', error.message);
-      res.status(200).json({ uploadUrl: null, fileRecord });
-      return;
-    }
-
-    res.status(200).json({ uploadUrl: data.signedUrl, fileRecord });
-  } catch (err) {
-    console.error('Get upload URL error:', err);
-    res.status(500).json({ error: 'Server error generating upload URL.' });
-  }
-};
 
 /**
  * A signed URL/JWT good for ten years — effectively permanent for a link that

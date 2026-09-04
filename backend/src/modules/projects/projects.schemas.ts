@@ -15,8 +15,6 @@ export const updateProjectSchema = z.object({
   description: z.string().optional(),
   iconUrl: z.string().optional(),
   status: ProjectStatusEnum.optional(),
-  githubRepoOwner: z.string().optional().nullable(),
-  githubRepoName: z.string().optional().nullable(),
 }).strict();
 
 export const addProjectMemberSchema = z.object({

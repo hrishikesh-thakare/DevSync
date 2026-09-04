@@ -94,29 +94,4 @@ test.describe('Files & Storage', () => {
     expect(download.status).toBe(401);
   });
 
-  test('presigned upload URL endpoint returns a fileRecord (legacy flow)', async () => {
-    const { accessToken } = await apiLogin(TEST_USERS.owner.email);
-    const { status, data } = await apiRequest(`/workspaces/${SLUG}/files/upload-url`, accessToken, {
-      method: 'POST',
-      body: JSON.stringify({
-        filename: 'legacy-upload.txt',
-        mimetype: 'text/plain',
-        sizeBytes: 10,
-        filetype: 'other',
-      }),
-    });
-    expect(status).toBe(200);
-    expect(data.fileRecord?.fileId).toBeTruthy();
-    // Supabase gives a signed URL in real environments; local dev may return null
-    expect(data.uploadUrl === null || typeof data.uploadUrl === 'string').toBe(true);
-  });
-
-  test('presigned upload URL requires a filename (400)', async () => {
-    const { accessToken } = await apiLogin(TEST_USERS.owner.email);
-    const { status } = await apiRequest(`/workspaces/${SLUG}/files/upload-url`, accessToken, {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-    expect(status).toBe(400);
-  });
 });

@@ -9,7 +9,7 @@ import { encrypt, decrypt } from '../../lib/encryption.js';
 // GET /api/github/oauth/url
 export const getGithubOauthUrl = (req: Request, res: Response) => {
   const { returnTo } = req.query;
-  const clientId = process.env.GITHUB_CLIENT_ID;
+  const clientId = env.GITHUB_CLIENT_ID;
   if (!clientId) {
     return res.status(500).json({ error: 'GitHub OAuth is not configured.' });
   }
@@ -102,15 +102,3 @@ export const getUserGithubRepos = async (req: Request, res: Response): Promise<v
   }
 };
 
-// ─── DISCONNECT USER GITHUB ─────────────────────────────────────────────────
-// DELETE /api/github/user/disconnect
-export const disconnectUserGithub = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const userId = req.user!.userId;
-    await db.update(users).set({ githubAccessToken: null }).where(eq(users.userId, userId));
-    res.json({ message: 'GitHub account disconnected successfully.' });
-  } catch (error) {
-    console.error('Disconnect user GitHub error:', error);
-    res.status(500).json({ error: 'Server error disconnecting GitHub account.' });
-  }
-};

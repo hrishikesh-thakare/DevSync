@@ -27,7 +27,8 @@ import { cn } from '@/lib/utils';
  * the layout it stands in for, or it trades one kind of jank for another. So
  * when a screen has a shape the kit does not cover, the fix is to add the shape
  * here (see `BoardSkeleton`, `MessageSkeleton`, both lifted from the pages that
- * originally hand-rolled them), never to force that screen onto `ListSkeleton`.
+ * originally hand-rolled them), never to force that screen onto a shape that
+ * does not fit it.
  *
  * `EmptyState` and `ErrorState`, by contrast, do apply everywhere: a failed
  * load and an empty result look the same on every screen in the product.
@@ -104,25 +105,6 @@ export function ErrorState({
   );
 }
 
-/** Skeleton rows shaped like a list, rather than one undifferentiated block. */
-export function ListSkeleton({
-  rows = 5,
-  className,
-  rowClassName,
-}: {
-  rows?: number;
-  className?: string;
-  rowClassName?: string;
-}) {
-  return (
-    <div className={cn('space-y-2', className)} aria-hidden="true">
-      {Array.from({ length: rows }, (_, i) => (
-        <Skeleton key={i} className={cn('h-14 w-full rounded-xl', rowClassName)} />
-      ))}
-    </div>
-  );
-}
-
 /** Skeleton shaped like a table body, matching the two members screens. */
 export function TableSkeleton({ rows = 6 }: { rows?: number }) {
   return (
@@ -150,7 +132,7 @@ export function TableSkeleton({ rows = 6 }: { rows?: number }) {
 /**
  * Skeleton shaped like the Kanban board: a title, then status columns.
  *
- * Lifted out of BoardPage rather than replacing it with `ListSkeleton`. A
+ * Lifted out of BoardPage rather than replaced with a generic row stack. A
  * skeleton earns its keep by matching the layout it stands in for — that is
  * what suppresses the layout shift when real content arrives — so the fix for
  * the board was never to make it generic, it was to make its shape reusable.
@@ -178,20 +160,6 @@ export function MessageSkeleton({ messages = 5 }: { messages?: number }) {
           <Skeleton key={i} className="h-14 w-full rounded-lg" />
         ))}
       </div>
-    </div>
-  );
-}
-
-/** Card-grid skeleton, for the project and workspace pickers. */
-export function CardGridSkeleton({ cards = 6, className }: { cards?: number; className?: string }) {
-  return (
-    <div
-      className={cn('grid gap-4 sm:grid-cols-2 lg:grid-cols-3', className)}
-      aria-hidden="true"
-    >
-      {Array.from({ length: cards }, (_, i) => (
-        <Skeleton key={i} className="h-32 w-full rounded-2xl" />
-      ))}
     </div>
   );
 }
