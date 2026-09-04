@@ -25,3 +25,15 @@ export const authLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many authentication attempts from this IP, please try again after 15 minutes' },
 });
+
+// The unfurler makes the server fetch a URL the caller chose. `assertPublicHttpUrl`
+// stops it reaching anything private, but an unlimited outbound-fetch endpoint is
+// still an amplifier — worth capping even for authenticated members.
+export const unfurlLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  skip: shouldSkip,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many link previews requested, please slow down' },
+});

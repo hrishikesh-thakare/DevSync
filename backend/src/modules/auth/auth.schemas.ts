@@ -55,7 +55,19 @@ export const updateStatusSchema = z.object({
 // AccountSettingsPage's own comment on why), so this schema stays narrow
 // rather than growing into a general profile-patch endpoint.
 export const updateProfileSchema = z.object({
-  avatarUrl: z.string().url('Must be a valid URL').max(2048).nullable(),
+  // `.url()` alone is not a scheme check — Zod accepts anything the URL
+  // parser accepts, including `data:` and `javascript:`. This value is written
+  // straight to `users.avatar_url` and rendered as an `<img src>`, so the
+  // scheme has to be pinned or the field becomes a stored-payload sink.
+  avatarUrl: z
+    .string()
+    .url('Must be a valid URL')
+    .max(2048)
+    .refine(
+      (value) => /^https?:\/\//i.test(value),
+      'Avatar URL must be an http(s) URL',
+    )
+    .nullable(),
 }).strict();
 
 // Mirrors `addTaskAttachmentSchema` (tasks.schemas.ts) — same base64-in-JSON

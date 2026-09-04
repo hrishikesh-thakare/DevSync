@@ -7,10 +7,28 @@ import { env } from '../../config/env.js';
 import fs from 'fs';
 import path from 'path';
 import jwt from 'jsonwebtoken';
+import {
+  MAX_FILE_BYTES,
+  headerSafeFilename,
+  isAllowedUploadMime,
+  normalizeMime,
+  serveDisposition,
+} from '../../lib/fileTypes.js';
 
 const UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+/**
+ * Raised when an upload fails validation, so callers can answer 400 rather than
+ * the generic 500 an unexpected throw would produce.
+ */
+export class FileValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FileValidationError';
+  }
 }
 
 /**
@@ -30,12 +48,34 @@ export const createFileRecord = async (params: {
   fileBase64: string;
   taskId?: string;
 }): Promise<typeof workspaceFiles.$inferSelect> => {
-  const { workspaceId, userId, filename, mimetype, sizeBytes, filetype, fileBase64, taskId } = params;
+  const { workspaceId, userId, filename, mimetype, filetype, fileBase64, taskId } = params;
 
   const safeName = filename.replace(/[^a-zA-Z0-9-_\.]/g, '');
   const uniqueName = `${Date.now()}_${safeName}`;
   const storagePath = workspaceId ? `workspaces/${workspaceId}/${uniqueName}` : `users/${userId}/${uniqueName}`;
   const fileBuffer = Buffer.from(fileBase64, 'base64');
+
+  // Every upload path — generic files, task attachments, avatars — funnels
+  // through here, so this is the one place worth validating. `mimetype` and
+  // `sizeBytes` arrive as client assertions; neither was previously checked
+  // against the bytes actually sent.
+  if (fileBuffer.length === 0) {
+    throw new FileValidationError('File is empty or not valid base64.');
+  }
+
+  if (fileBuffer.length > MAX_FILE_BYTES) {
+    throw new FileValidationError(
+      `File exceeds the ${Math.floor(MAX_FILE_BYTES / (1024 * 1024))} MB limit.`,
+    );
+  }
+
+  if (!isAllowedUploadMime(mimetype)) {
+    throw new FileValidationError(`Files of type "${normalizeMime(mimetype) || 'unknown'}" are not allowed.`);
+  }
+
+  // The stored size is the measured one. A client-supplied `sizeBytes` that
+  // disagrees is not an error worth rejecting, it is just not authoritative.
+  const measuredBytes = fileBuffer.length;
 
   let isSupabaseUploaded = false;
 
@@ -85,12 +125,37 @@ export const createFileRecord = async (params: {
       filename,
       storagePath: finalStoragePath,
       mimetype: mimetype || null,
-      sizeBytes: sizeBytes || null,
+      sizeBytes: measuredBytes,
       filetype: filetype || 'other',
     })
     .returning();
 
   return fileRecord;
+};
+
+/**
+ * Response headers for a stored file.
+ *
+ * The uploader's declared mimetype is never echoed straight back. It used to
+ * be, alongside `Content-Disposition: inline`, which meant an uploaded
+ * `text/html` became a permanent script-hosting URL on the API's own origin —
+ * stored XSS against every session that opened it. `serveDisposition` maps the
+ * type through an allowlist instead: renderable types keep their type and go
+ * inline, everything else becomes an octet-stream download.
+ *
+ * `nosniff` and the sandbox CSP are the belt to that braces. Even if a type
+ * slips through, the browser will not re-sniff it into something executable,
+ * and the CSP denies scripts in the document regardless.
+ */
+const applyServingHeaders = (res: Response, mimetype: string | null, filename: string): void => {
+  const { contentType, disposition } = serveDisposition(mimetype);
+  res.setHeader('Content-Type', contentType);
+  res.setHeader(
+    'Content-Disposition',
+    `${disposition}; filename="${headerSafeFilename(filename)}"`,
+  );
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
 };
 
 // ─── DIRECT FILE UPLOAD (Server-side) ────────────────────────────────────────
@@ -118,6 +183,11 @@ export const uploadFile = async (req: Request, res: Response): Promise<void> => 
 
     res.status(200).json({ fileRecord });
   } catch (err) {
+    // A rejected upload is the caller's fault, not the server's.
+    if (err instanceof FileValidationError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     console.error('File upload error:', err);
     res.status(500).json({ error: 'Server error uploading file.' });
   }
@@ -245,8 +315,7 @@ export const getRawFile = async (req: Request, res: Response): Promise<void> => 
       const filePath = path.join(UPLOADS_DIR, fileNameOnDisk);
 
       if (fs.existsSync(filePath)) {
-        res.setHeader('Content-Type', fileRecord.mimetype || 'application/octet-stream');
-        res.setHeader('Content-Disposition', `inline; filename="${fileRecord.filename}"`);
+        applyServingHeaders(res, fileRecord.mimetype, fileRecord.filename);
         res.sendFile(filePath);
         return;
       }
@@ -265,8 +334,7 @@ export const getRawFile = async (req: Request, res: Response): Promise<void> => 
     const arrayBuffer = await data.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    res.setHeader('Content-Type', fileRecord.mimetype || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${fileRecord.filename}"`);
+    applyServingHeaders(res, fileRecord.mimetype, fileRecord.filename);
     res.send(buffer);
   } catch (err) {
     console.error('Get raw file error:', err);

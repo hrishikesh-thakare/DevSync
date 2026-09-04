@@ -15,12 +15,16 @@ const MessageBlocks = z
   .nullable()
   .optional();
 
+// `isSystem`/`systemType` are deliberately absent. They are server-authored:
+// the only writers are sprint and task automations, which insert directly. As
+// client input `isSystem` was an announcement-channel bypass — the posting
+// guard skipped the admin check whenever it was true, so any member could post
+// to an announcement-only channel by sending `{"isSystem": true}`, styled as a
+// system message. The schema is .strict(), so sending either is now a 400.
 export const sendMessageSchema = z.object({
   bodyText: MessageText.optional(),
   bodyBlocks: MessageBlocks,
   threadId: z.string().uuid('Invalid thread ID format').nullable().optional(),
-  isSystem: z.boolean().optional(),
-  systemType: z.string().max(50, 'System type must be 50 characters or less').nullable().optional(),
 }).strict()
   .refine((data) => data.bodyText !== undefined || data.bodyBlocks !== undefined, {
     message: 'Message content is required (bodyText or bodyBlocks)',

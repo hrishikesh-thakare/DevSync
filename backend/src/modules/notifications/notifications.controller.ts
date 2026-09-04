@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { db } from '../../config/db.js';
 import { notifications } from '../../db/schema/notifications.js';
 import { users } from '../../db/schema/auth.js';
-import { messages, channels } from '../../db/schema/channels.js';
+import { messages, channels, channelMembers } from '../../db/schema/channels.js';
 import { tasks } from '../../db/schema/tasks.js';
 import { sprints } from '../../db/schema/sprints.js';
 import { projects } from '../../db/schema/projects.js';
@@ -293,13 +293,34 @@ export const resolveNotification = async (req: Request, res: Response): Promise<
           .where(eq(tasks.taskId, notif.entityId));
 
         if (task && task.slug && task.projectKey && task.taskKey) {
-          // Check if there is a message in chat mentioning this taskKey (for backward compatibility with old notifications)
+          // Best-effort deep link for legacy notifications: find the chat
+          // message that mentioned this task key.
+          //
+          // The scope predicates are load-bearing. Without them this was an
+          // `ilike` across every message row in the database, and it handed the
+          // caller back the winning message's workspace slug, channel id and
+          // message id. Task keys are short and guessable (`PROJ-15`), so any
+          // user could enumerate other tenants' channels through their own
+          // notification list. The search now stays inside the task's own
+          // workspace, and inside channels the caller can actually read.
           const [msg] = await db
             .select({ channelId: messages.channelId, messageId: messages.messageId, slug: workspaces.slug })
             .from(messages)
             .leftJoin(channels, eq(messages.channelId, channels.channelId))
             .leftJoin(workspaces, eq(channels.workspaceId, workspaces.workspaceId))
-            .where(ilike(messages.bodyText, `%${task.taskKey}%`))
+            .innerJoin(
+              channelMembers,
+              and(
+                eq(channelMembers.channelId, messages.channelId),
+                eq(channelMembers.userId, userId),
+              ),
+            )
+            .where(
+              and(
+                ilike(messages.bodyText, `%${task.taskKey}%`),
+                eq(workspaces.slug, task.slug),
+              ),
+            )
             .orderBy(desc(messages.createdAt))
             .limit(1);
 

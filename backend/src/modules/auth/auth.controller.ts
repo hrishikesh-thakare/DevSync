@@ -12,7 +12,7 @@ import { supabase } from '../../config/supabase.js';
 import { logAuditAction } from '../audit/audit.controller.js';
 import { broadcastPresence } from '../../sockets/index.js';
 import { enqueueJob } from '../../workers/queue.js';
-import { createFileRecord, resolveDownloadUrl } from '../files/files.controller.js';
+import { createFileRecord, resolveDownloadUrl, FileValidationError } from '../files/files.controller.js';
 
 // ─── Token Helpers ───────────────────────────────────────────────────────────
 
@@ -708,6 +708,11 @@ export const uploadAvatar = async (req: Request, res: Response): Promise<void> =
     const avatarUrl = await resolveDownloadUrl(fileRecord, true);
     res.status(200).json({ avatarUrl });
   } catch (err) {
+    // A rejected upload is the caller's fault, not the server's.
+    if (err instanceof FileValidationError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     console.error('Upload avatar error:', err);
     res.status(500).json({ error: 'Server error uploading avatar.' });
   }

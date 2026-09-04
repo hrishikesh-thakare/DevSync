@@ -22,7 +22,7 @@ import {
   getWorkflowRunLogs,
 } from './github.controller.js';
 import express from 'express';
-import { validate } from '../../middleware/validate.js';
+import { validate, numericParam } from '../../middleware/validate.js';
 import {
   connectGithubSchema,
   addGithubCommentSchema,
@@ -36,6 +36,12 @@ export const githubConfigRouter = Router({ mergeParams: true });
 
 githubConfigRouter.use(requireAuth);
 githubConfigRouter.use(requireWorkspaceRole(['owner', 'admin', 'member']));
+
+// Every numeric GitHub id below is interpolated into an api.github.com URL —
+// see `numericParam` for why that has to be validated before it gets there.
+githubConfigRouter.param('runId', numericParam('runId'));
+githubConfigRouter.param('issueNumber', numericParam('issueNumber'));
+githubConfigRouter.param('prNumber', numericParam('prNumber'));
 githubConfigRouter.get('/connection', requireProjectRole(['project_admin', 'developer', 'viewer']), getGithubConnection);
 githubConfigRouter.post('/connect', requireProjectRole(['project_admin']), validate(connectGithubSchema), connectGithubRepo);
 githubConfigRouter.delete('/disconnect', requireProjectRole(['project_admin']), disconnectGithubRepo);

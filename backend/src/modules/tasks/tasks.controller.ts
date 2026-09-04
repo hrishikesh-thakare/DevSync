@@ -10,7 +10,7 @@ import { logAuditAction } from '../audit/audit.controller.js';
 import { recordStatusTransition, completedAtFor, DONE_STATUS } from './task-transitions.js';
 import { createNotification } from '../notifications/notifications.controller.js';
 import { getIO } from '../../sockets/index.js';
-import { createFileRecord } from '../files/files.controller.js';
+import { createFileRecord, FileValidationError } from '../files/files.controller.js';
 import { estimateTaskDuration } from '../../services/ai.service.js';
 import { ensureProjectLabels } from '../labels/labels.controller.js';
 import { supabase } from '../../config/supabase.js';
@@ -1003,9 +1003,16 @@ const notifyTaskMentions = async (text: string, actorId: string, taskId: string,
       mentionedIds.push(...(allProjectMembers.map(m => m.userId).filter(Boolean) as string[]));
       continue;
     }
+    // Only people on this project can be mentioned on its tasks. Unscoped,
+    // this resolved against every user in the product — a cross-tenant
+    // notification and a name-existence oracle in one query.
     const [mentionedUser] = await db
       .select({ id: users.userId })
       .from(users)
+      .innerJoin(
+        projectMembers,
+        and(eq(projectMembers.userId, users.userId), eq(projectMembers.projectId, projectId)),
+      )
       .where(or(ilike(users.displayName, username), ilike(users.fullName, username + '%')))
       .limit(1);
     if (mentionedUser) mentionedIds.push(mentionedUser.id);
@@ -1100,6 +1107,11 @@ export const addTaskAttachment = async (req: Request, res: Response): Promise<vo
 
     res.status(201).json({ attachment: fileRecord });
   } catch (err) {
+    // A rejected upload is the caller's fault, not the server's.
+    if (err instanceof FileValidationError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     console.error('Add task attachment error:', err);
     res.status(500).json({ error: 'Server error adding task attachment.' });
   }

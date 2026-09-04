@@ -45,15 +45,40 @@ export const getWorkspaceDashboard = async (req: Request, res: Response): Promis
     const role = req.workspaceRole ?? 'member';
     const isAdmin = role === 'owner' || role === 'admin';
 
-    const projectRows = await db
-      .select({
-        projectId: projects.projectId,
-        key: projects.key,
-        name: projects.name,
-        status: projects.status,
-      })
-      .from(projects)
-      .where(and(eq(projects.workspaceId, workspaceId), eq(projects.status, 'active')));
+    // Admins see every active project in the workspace; everyone else sees
+    // only the ones they belong to.
+    //
+    // This used to be workspace-wide for all roles, which contradicted
+    // `listProjects` — that endpoint deliberately hides non-member projects
+    // from a plain member, while this one handed the same person those
+    // projects' names, keys, sprint goals and dates through the dashboard.
+    // Two views of the same permission cannot disagree; the stricter one wins.
+    const projectRows = isAdmin
+      ? await db
+          .select({
+            projectId: projects.projectId,
+            key: projects.key,
+            name: projects.name,
+            status: projects.status,
+          })
+          .from(projects)
+          .where(and(eq(projects.workspaceId, workspaceId), eq(projects.status, 'active')))
+      : await db
+          .select({
+            projectId: projects.projectId,
+            key: projects.key,
+            name: projects.name,
+            status: projects.status,
+          })
+          .from(projects)
+          .innerJoin(
+            projectMembers,
+            and(
+              eq(projectMembers.projectId, projects.projectId),
+              eq(projectMembers.userId, userId),
+            ),
+          )
+          .where(and(eq(projects.workspaceId, workspaceId), eq(projects.status, 'active')));
 
     const projectIds = projectRows.map((p) => p.projectId).filter((id): id is string => id !== null);
 

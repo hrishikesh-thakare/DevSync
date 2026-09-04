@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { requireAuth } from '../../middleware/auth.js';
 import { requireWorkspaceRole } from '../../middleware/roles.js';
+import { validate } from '../../middleware/validate.js';
+import { uploadFileSchema } from './files.schemas.js';
 import { uploadFile, getDownloadUrl, getRawFile } from './files.controller.js';
 
 // Mounted at: /api/workspaces/:slug/files
@@ -13,7 +15,7 @@ router.use(requireAuth);
 router.use(requireWorkspaceRole(['owner', 'admin', 'member']));
 
 // New: direct server-side upload (base64 in JSON body)
-router.post('/upload', uploadFile);
+router.post('/upload', validate(uploadFileSchema), uploadFile);
 
 // Download
 router.get('/:fileId/download', getDownloadUrl);

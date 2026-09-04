@@ -19,3 +19,23 @@ export const validate = (schema: ZodSchema) => (req: Request, res: Response, nex
     res.status(500).json({ error: 'Internal server error during validation' });
   }
 };
+
+/**
+ * Rejects a path parameter that is not a plain positive integer.
+ *
+ * These params are interpolated into GitHub API URLs. `fetch` normalises `..`
+ * segments before sending, so an unvalidated `runId` of `../../../../user/repos`
+ * silently retargets the request at a different endpoint — executed with the
+ * *connecting user's* stored OAuth token (scopes `repo workflow admin:repo_hook`),
+ * not the caller's. Validating the shape at the router boundary is what keeps
+ * the URL template a template.
+ */
+export const numericParam =
+  (name: string) =>
+  (_req: Request, res: Response, next: NextFunction, value: string): void => {
+    if (typeof value !== 'string' || !/^[0-9]{1,19}$/.test(value)) {
+      res.status(400).json({ error: `Invalid ${name}.` });
+      return;
+    }
+    next();
+  };

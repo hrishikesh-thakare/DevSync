@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { assertPublicHttpUrl, BlockedUrlError } from '../../lib/ssrf.js';
 
 export const unfurlUrl = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -8,36 +9,51 @@ export const unfurlUrl = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Basic validation
+    // This is the one place the server fetches a URL chosen by a user, so the
+    // host has to be proven publicly routable before we connect to it.
     let targetUrl: URL;
     try {
-      targetUrl = new URL(url);
-    } catch {
-      res.status(400).json({ error: 'Invalid URL format' });
-      return;
-    }
-
-    if (!['http:', 'https:'].includes(targetUrl.protocol)) {
-      res.status(400).json({ error: 'Only http and https protocols are supported' });
-      return;
+      targetUrl = await assertPublicHttpUrl(url);
+    } catch (err) {
+      if (err instanceof BlockedUrlError) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
+      throw err;
     }
 
     // Fetch the URL with a timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
 
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'DevSyncBot/1.0 (+https://devsync.com)',
-        'Accept': 'text/html',
-      },
-    });
+    // `Response` here is Express's, not fetch's — hence the inferred type.
+    let response: Awaited<ReturnType<typeof fetch>>;
+    try {
+      response = await fetch(targetUrl, {
+        signal: controller.signal,
+        // `manual` rather than the default `follow`: an allowed public host can
+        // still answer `302 http://169.254.169.254/`, and fetch would follow it
+        // without re-running the check above. One hop, no exceptions.
+        redirect: 'manual',
+        headers: {
+          'User-Agent': 'DevSyncBot/1.0 (+https://devsync.com)',
+          'Accept': 'text/html',
+        },
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
-    clearTimeout(timeoutId);
+    // Upstream's status is deliberately not echoed. Reflecting it turned this
+    // endpoint into a port and host scanner: the caller could tell a refused
+    // connection from a 401 from a 404 on any address the server can reach.
+    if (response.status >= 300 && response.status < 400) {
+      res.status(400).json({ error: 'URL redirects, which is not supported' });
+      return;
+    }
 
     if (!response.ok) {
-      res.status(response.status).json({ error: 'Failed to fetch URL' });
+      res.status(400).json({ error: 'Failed to fetch URL' });
       return;
     }
 
@@ -47,7 +63,11 @@ export const unfurlUrl = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const html = await response.text();
+    // Only the <head> matters for og: tags, so there is no reason to buffer a
+    // response of unbounded size into memory.
+    const MAX_HTML_BYTES = 512 * 1024;
+    const raw = await response.arrayBuffer();
+    const html = Buffer.from(raw.slice(0, MAX_HTML_BYTES)).toString('utf8');
 
     // Very simple regex-based metadata extractor
     const extractMeta = (regex: RegExp) => {

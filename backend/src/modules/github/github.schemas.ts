@@ -1,9 +1,22 @@
 import { z } from 'zod';
 
-// GitHub repo names max out at 100 chars, usernames at 39.
+// GitHub repo names max out at 100 chars, usernames at 39. The charset matters
+// as much as the length: these two are concatenated into `owner/name` and
+// interpolated into every api.github.com URL this module builds, so a value
+// containing `/` or `..` would retarget those requests at a different endpoint
+// under the stored OAuth token. GitHub itself allows only alphanumerics, `-`,
+// `_` and `.`, so pinning the charset costs nothing and closes that door.
+const GithubPathSegment = (label: string, max: number) =>
+  z
+    .string()
+    .min(1, `${label} is required`)
+    .max(max)
+    .regex(/^[A-Za-z0-9._-]+$/, `${label} contains invalid characters`)
+    .refine((v) => v !== '.' && v !== '..', `${label} is not a valid path segment`);
+
 export const connectGithubSchema = z.object({
-  repo_owner: z.string().min(1, 'Repository owner is required').max(100),
-  repo_name: z.string().min(1, 'Repository name is required').max(100),
+  repo_owner: GithubPathSegment('Repository owner', 39),
+  repo_name: GithubPathSegment('Repository name', 100),
 }).strict();
 
 // GitHub caps issue/PR comments at 65,536 chars.
