@@ -1,26 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { HistoryIcon, UserIcon, ZapIcon } from 'lucide-react';
+import { HistoryIcon } from 'lucide-react';
 
 import { ErrorState } from '@/components/layout/PageState';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Filters } from '@/components/reui/filters/filters';
-import { createFilterQuery, flattenFilterConditions } from '@/components/reui/filters/filters-query';
-import type { FilterField, FilterQuery } from '@/components/reui/filters/filters-types';
+
 import { apiFetch, ApiError } from '@/lib/api';
 import { describeAuditAction, summariseChanges } from '@/lib/auditActions';
 import { initialsOf } from '@/lib/initials';
 import type { AuditLogEntry } from '@/types/api';
-
-/** Whether a select condition, applied to one value, matches. */
-function conditionMatches(value: string, operator: string, values: unknown[], negated: boolean): boolean {
-  const included = values.includes(value);
-  const positive = operator === 'is' || operator === 'is_any_of';
-  const result = positive ? included : !included;
-  return negated ? !result : result;
-}
 
 /**
  * Renders `GET /audit/:entityType/:entityId`.
@@ -50,7 +40,9 @@ export function ActivityLog({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
-  const [query, setQuery] = useState<FilterQuery>(() => createFilterQuery([]));
+  const [actorFilter, setActorFilter] = useState('all');
+  const [actionFilter, setActionFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('all');
 
   useEffect(() => {
     if (!entityId) return;
@@ -80,47 +72,34 @@ export function ActivityLog({
     };
   }, [entityType, entityId, limit]);
 
-  // The audit endpoint takes no actor/action query params (it only paginates
-  // by `limit`), so the filter bar narrows the batch already fetched rather
-  // than round-tripping — same approach as every other list filter in the app.
-  const fields = useMemo<FilterField[]>(() => {
-    const actors = new Map<string, string>();
-    const actions = new Set<string>();
+  const { actors, actions } = useMemo(() => {
+    const actorMap = new Map<string, string>();
+    const actionSet = new Set<string>();
     for (const log of logs) {
-      actors.set(log.actorId ?? '__system__', log.actorName ?? 'System');
-      actions.add(log.action);
+      actorMap.set(log.actorId ?? '__system__', log.actorName ?? 'System');
+      actionSet.add(log.action);
     }
-    return [
-      {
-        id: 'actor',
-        label: 'Actor',
-        type: 'select',
-        defaultOperator: 'is_any_of',
-        icon: <UserIcon />,
-        options: [...actors.entries()].map(([value, label]) => ({ value, label })),
-      },
-      {
-        id: 'action',
-        label: 'Action',
-        type: 'select',
-        defaultOperator: 'is_any_of',
-        icon: <ZapIcon />,
-        options: [...actions].map((value) => ({ value, label: describeAuditAction(value) })),
-      },
-    ];
+    return {
+      actors: [...actorMap.entries()].map(([value, label]) => ({ value, label })),
+      actions: [...actionSet].map((value) => ({ value, label: describeAuditAction(value) })),
+    };
   }, [logs]);
 
   const visibleLogs = useMemo(() => {
     if (!filterable) return logs;
-    const conditions = flattenFilterConditions(query);
-    if (conditions.length === 0) return logs;
-    return logs.filter((log) =>
-      conditions.every((c) => {
-        const value = c.field === 'actor' ? (log.actorId ?? '__system__') : log.action;
-        return conditionMatches(value, c.operator, c.values, c.negated);
-      }),
-    );
-  }, [filterable, logs, query]);
+    return logs.filter((log) => {
+      if (actorFilter !== 'all' && (log.actorId ?? '__system__') !== actorFilter) return false;
+      if (actionFilter !== 'all' && log.action !== actionFilter) return false;
+      if (dateFilter !== 'all') {
+        const date = new Date(log.createdAt);
+        const now = new Date();
+        const days = (now.getTime() - date.getTime()) / (1000 * 3600 * 24);
+        if (dateFilter === '7' && days > 7) return false;
+        if (dateFilter === '30' && days > 30) return false;
+      }
+      return true;
+    });
+  }, [filterable, logs, actorFilter, actionFilter, dateFilter]);
 
   if (isLoading) {
     return (
@@ -161,13 +140,55 @@ export function ActivityLog({
   }
 
   const filterBar = filterable ? (
-    <div className="mb-3 flex flex-wrap items-center gap-2">
-      <Filters fields={fields} query={query} onQueryChange={setQuery} variant="basic" showClear />
-      {visibleLogs.length !== logs.length ? (
-        <p className="text-xs text-muted-foreground">
-          {visibleLogs.length} of {logs.length}
-        </p>
+    <div className="mb-4 flex flex-wrap items-center gap-3">
+      <select
+        value={actorFilter}
+        onChange={(e) => setActorFilter(e.target.value)}
+        className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        <option value="all">All actors</option>
+        {actors.map((a) => (
+          <option key={a.value} value={a.value}>{a.label}</option>
+        ))}
+      </select>
+      
+      <select
+        value={actionFilter}
+        onChange={(e) => setActionFilter(e.target.value)}
+        className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        <option value="all">All actions</option>
+        {actions.map((a) => (
+          <option key={a.value} value={a.value}>{a.label}</option>
+        ))}
+      </select>
+
+      <select
+        value={dateFilter}
+        onChange={(e) => setDateFilter(e.target.value)}
+        className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        <option value="all">Any time</option>
+        <option value="7">Past 7 days</option>
+        <option value="30">Past 30 days</option>
+      </select>
+
+      {actorFilter !== 'all' || actionFilter !== 'all' || dateFilter !== 'all' ? (
+        <button
+          onClick={() => { setActorFilter('all'); setActionFilter('all'); setDateFilter('all'); }}
+          className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-4"
+        >
+          Clear filters
+        </button>
       ) : null}
+
+      <div className="ml-auto">
+        {visibleLogs.length !== logs.length ? (
+          <p className="text-xs text-muted-foreground">
+            {visibleLogs.length} of {logs.length}
+          </p>
+        ) : null}
+      </div>
     </div>
   ) : null;
 

@@ -48,7 +48,6 @@ const CreateProjectPage = page(() => import('@/pages/projects/CreateProjectPage'
 const ProjectLayout = page(() => import('@/pages/projects/ProjectLayout'), 'ProjectLayout');
 const ProjectMembersPage = page(() => import('@/pages/projects/ProjectMembersPage'), 'ProjectMembersPage');
 const ProjectSettingsPage = page(() => import('@/pages/projects/ProjectSettingsPage'), 'ProjectSettingsPage');
-const ProjectChannelsPage = page(() => import('@/pages/projects/ProjectChannelsPage'), 'ProjectChannelsPage');
 const ProjectLabelsPage = page(() => import('@/pages/projects/ProjectLabelsPage'), 'ProjectLabelsPage');
 const GitHubIntegration = page(() => import('@/pages/projects/GitHubIntegration'), 'GitHubIntegration');
 const BoardPage = page(() => import('@/pages/projects/BoardPage'), 'BoardPage');
@@ -56,9 +55,6 @@ const BacklogPage = page(() => import('@/pages/projects/BacklogPage'), 'BacklogP
 const TaskDetailPage = page(() => import('@/pages/projects/TaskDetailPage'), 'TaskDetailPage');
 const SprintListPage = page(() => import('@/pages/projects/SprintListPage'), 'SprintListPage');
 const ActiveSprintBoard = page(() => import('@/pages/projects/ActiveSprintBoard'), 'ActiveSprintBoard');
-const ProjectCalendarPage = page(() => import('@/pages/projects/ProjectCalendarPage'), 'ProjectCalendarPage');
-const ProjectRoadmapPage = page(() => import('@/pages/projects/ProjectRoadmapPage'), 'ProjectRoadmapPage');
-const ProjectEpicsPage = page(() => import('@/pages/projects/ProjectEpicsPage'), 'ProjectEpicsPage');
 
 const ChannelPage = page(() => import('@/pages/channels/ChannelPage'), 'ChannelPage');
 const ChannelListPage = page(() => import('@/pages/channels/ChannelListPage'), 'ChannelListPage');
@@ -131,12 +127,7 @@ export default function App() {
                   <Route path="backlog" element={<BacklogPage />} />
                   <Route path="tasks/:taskKey" element={<TaskDetailPage />} />
                   <Route path="sprints" element={<SprintListPage />} />
-                  <Route path="sprints/active" element={<ActiveSprintBoard />} />
                   <Route path="sprints/:sprintId" element={<ActiveSprintBoard />} />
-                  <Route path="epics" element={<ProjectEpicsPage />} />
-                  <Route path="calendar" element={<ProjectCalendarPage />} />
-                  <Route path="roadmap" element={<ProjectRoadmapPage />} />
-                  <Route path="channels" element={<ProjectChannelsPage />} />
                   <Route path="labels" element={<ProjectLabelsPage />} />
                   <Route path="members" element={<ProjectMembersPage />} />
                   <Route path="settings" element={<ProjectSettingsPage />} />
