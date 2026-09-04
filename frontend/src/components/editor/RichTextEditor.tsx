@@ -228,11 +228,16 @@ function EditorToolbar({ editor, disabled }: { editor: Editor; disabled?: boolea
         <StrikethroughIcon className={TOOLBAR_ICON} aria-hidden="true" />
       </Toggle>
 
-      <Separator orientation="vertical" className="mx-1 h-5" />
+      <div className="mx-1 h-5 w-px shrink-0 bg-border" aria-hidden="true" />
+      <MarkButton editor={editor} mark="code" label="Code">
+        <CodeIcon className="size-4" />
+      </MarkButton>
+
+      <div className="mx-1 h-5 w-px shrink-0 bg-border" aria-hidden="true" />
 
       <LinkPopover editor={editor} disabled={disabled} />
 
-      <Separator orientation="vertical" className="mx-1 h-5" />
+      <div className="mx-1 h-5 w-px shrink-0 bg-border" aria-hidden="true" />
 
       <Toggle
         variant="outline"
@@ -255,7 +260,7 @@ function EditorToolbar({ editor, disabled }: { editor: Editor; disabled?: boolea
         <ListIcon className={TOOLBAR_ICON} aria-hidden="true" />
       </Toggle>
 
-      <Separator orientation="vertical" className="mx-1 h-5" />
+      <div className="mx-1 h-5 w-px shrink-0 bg-border" aria-hidden="true" />
 
       <Toggle
         variant="outline"
