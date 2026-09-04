@@ -38,7 +38,7 @@ interface CurrentWorkspaceState {
   joinChannel: (slug: string, channelId: string) => Promise<void>;
   leaveChannel: (slug: string, channelId: string) => Promise<void>;
   createProject: (slug: string, name: string, key: string, description?: string) => Promise<void>;
-  updateMemberPresence: (userId: string, data: { presence?: Presence; statusText?: string; statusEmoji?: string }) => void;
+  updateMemberPresence: (userId: string, data: { presence?: Presence; statusText?: string }) => void;
 }
 
 export const useCurrentWorkspaceStore = create<CurrentWorkspaceState>((set, get) => ({

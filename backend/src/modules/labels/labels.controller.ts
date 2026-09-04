@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { db } from '../../config/db.js';
 import { projectLabels } from '../../db/schema/labels.js';
 import { tasks } from '../../db/schema/tasks.js';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import { logAuditAction } from '../audit/audit.controller.js';
 import { projects } from '../../db/schema/projects.js';
 
@@ -23,11 +23,25 @@ export const ensureProjectLabels = async (tx: any, projectId: string, labels: st
   const names = [...new Set(labels.map(normalizeLabelName).filter(Boolean))];
   if (names.length === 0) return [];
 
+  // `inArray`, not a raw `IN (${array})`. Drizzle expands an array inside an
+  // `sql` template to `IN (($1, $2))` — note the doubled parentheses — and
+  // Postgres reads `($1, $2)` as a row constructor, so the comparison becomes
+  // `text = record` and the query throws. With a single label it happened to
+  // work, because `($1)` is just a parenthesised scalar; that is why the e2e
+  // suite, which only ever posted one label, never caught it. Any task saved
+  // with two or more labels was a 500.
   const existing = await tx
     .select({ name: projectLabels.name })
     .from(projectLabels)
-    .where(and(eq(projectLabels.projectId, projectId), sql`lower(${projectLabels.name}) IN (${names.map(n => n.toLowerCase())})`));
+    .where(
+      and(
+        eq(projectLabels.projectId, projectId),
+        inArray(sql`lower(${projectLabels.name})`, names),
+      ),
+    );
 
+  // `names` are already lowercased by `normalizeLabelName`, so this set and the
+  // comparisons below are all in the same case.
   const existingLower = new Set(existing.map((l: any) => l.name.toLowerCase()));
   const missing = names.filter(n => !existingLower.has(n));
 

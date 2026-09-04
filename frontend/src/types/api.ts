@@ -75,7 +75,7 @@ export interface Workspace {
 
 /**
  * A member row from `GET /workspaces/:slug` and `/workspaces/:slug/members`.
- * `presence`/`statusText`/`statusEmoji` are present on the initial payload but
+ * `presence`/`statusText` are present on the initial payload but
  * also arrive later over the socket as `user_presence_updated`.
  */
 export interface WorkspaceMember {
@@ -90,7 +90,6 @@ export interface WorkspaceMember {
   avatarUrl: string | null;
   presence?: Presence;
   statusText?: string | null;
-  statusEmoji?: string | null;
 }
 
 // ─── Projects ────────────────────────────────────────────────────────────────

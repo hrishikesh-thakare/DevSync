@@ -69,8 +69,14 @@ export const createFileRecord = async (params: {
     );
   }
 
-  if (!isAllowedUploadMime(mimetype)) {
-    throw new FileValidationError(`Files of type "${normalizeMime(mimetype) || 'unknown'}" are not allowed.`);
+  // Default to a safe generic type when the caller doesn't declare one — this
+  // is the case for task-attachment uploads, which pass only filename + base64.
+  // `application/octet-stream` is on the allowlist and is forced to download
+  // rather than render, so it can never become a stored-XSS vector.
+  const effectiveMime = mimetype || 'application/octet-stream';
+
+  if (!isAllowedUploadMime(effectiveMime)) {
+    throw new FileValidationError(`Files of type "${normalizeMime(effectiveMime) || 'unknown'}" are not allowed.`);
   }
 
   // The stored size is the measured one. A client-supplied `sizeBytes` that
@@ -84,7 +90,7 @@ export const createFileRecord = async (params: {
     const { error: uploadError } = await supabase.storage
       .from('workspace-files')
       .upload(storagePath, fileBuffer, {
-        contentType: mimetype || 'application/octet-stream',
+        contentType: effectiveMime,
         upsert: false,
       });
 

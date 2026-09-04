@@ -26,7 +26,6 @@ export interface MemberLike {
   email?: string | null;
   presence?: Presence | null;
   statusText?: string | null;
-  statusEmoji?: string | null;
 }
 
 const nameOf = (m: MemberLike) => m.displayName || m.fullName || 'Unknown';
@@ -71,7 +70,7 @@ export function MemberAvatar({
   );
 
   const statusLine = member.statusText
-    ? `${member.statusEmoji ?? ''} ${member.statusText}`.trim()
+    ? member.statusText
     : null;
 
   return (

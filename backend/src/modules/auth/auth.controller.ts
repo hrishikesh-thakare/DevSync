@@ -77,11 +77,15 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password, fullName, displayName } = req.body;
 
-    // Check if email already exists
+    // Only live accounts reserve an address. `deleteAccount` soft-deletes, so
+    // without the `deletedAt` filter a user who deleted their account could
+    // never sign up again: this said "already exists" while `login` — which
+    // does filter — said "invalid email or password". The partial unique index
+    // added in migration 0014 enforces the same rule in the database.
     const [existingUser] = await db
       .select({ userId: users.userId })
       .from(users)
-      .where(eq(users.email, email.toLowerCase().trim()))
+      .where(and(eq(users.email, email.toLowerCase().trim()), isNull(users.deletedAt)))
       .limit(1);
 
     if (existingUser) {
@@ -188,14 +192,18 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
 
-    // Find user
+    // Only live accounts can log in. With the partial unique index from 0014,
+    // a re-registered email can coexist with its soft-deleted predecessor, so
+    // filtering `deletedAt` here is load-bearing — without it `LIMIT 1` could
+    // return the dead row and reject with 401 while a perfectly valid account
+    // is sitting right next to it.
     const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.email, email.toLowerCase().trim()))
+      .where(and(eq(users.email, email.toLowerCase().trim()), isNull(users.deletedAt)))
       .limit(1);
 
-    if (!user || user.deletedAt) {
+    if (!user) {
       res.status(401).json({ error: 'Invalid email or password.' });
       return;
     }
@@ -414,7 +422,7 @@ export const oauthCallback = async (req: Request, res: Response): Promise<void> 
     let [user] = await db
       .select()
       .from(users)
-      .where(eq(users.email, email))
+      .where(and(eq(users.email, email), isNull(users.deletedAt)))
       .limit(1);
 
     // Supabase carries the GitHub handle as user_metadata.user_name. It was
@@ -456,11 +464,6 @@ export const oauthCallback = async (req: Request, res: Response): Promise<void> 
     if (!isNewUser && githubLogin && user && !user.githubLogin) {
       await db.update(users).set({ githubLogin }).where(eq(users.userId, user.userId));
       user.githubLogin = githubLogin;
-    }
-
-    if (user.deletedAt) {
-      res.status(401).json({ error: 'This account has been deactivated.' });
-      return;
     }
 
     // Generate our custom tokens to establish the session
@@ -800,13 +803,13 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
     const normalized = email.toLowerCase().trim();
 
     const [user] = await db
-      .select({ userId: users.userId, passwordHash: users.passwordHash, deletedAt: users.deletedAt })
+      .select({ userId: users.userId, passwordHash: users.passwordHash })
       .from(users)
-      .where(eq(users.email, normalized))
+      .where(and(eq(users.email, normalized), isNull(users.deletedAt)))
       .limit(1);
 
     let resetToken: string | null = null;
-    if (user && user.passwordHash && !user.deletedAt) {
+    if (user && user.passwordHash) {
       resetToken = await createAuthToken(user.userId, 'password_reset', PASSWORD_RESET_TOKEN_TTL_MS);
       enqueueJob('email.send_password_reset', { toEmail: normalized, resetToken });
 

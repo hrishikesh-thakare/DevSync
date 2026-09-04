@@ -46,8 +46,9 @@ export function ProjectLayout() {
     const socket = socketClient.getSocket();
     if (!socket) return;
 
-    const room = `project:${project.projectId}`;
-    socket.emit('join_room', room);
+    // See `socketClient.joinRoom`: membership has to be re-asserted after a
+    // reconnect, and this effect will not run again to do it.
+    const releaseRoom = socketClient.joinRoom(`project:${project.projectId}`);
 
     const onTaskUpdated = (task: Partial<TaskSummary> & { taskId: string }) => {
       applyTaskUpdate(task);
@@ -57,7 +58,7 @@ export function ProjectLayout() {
 
     return () => {
       socket.off('task_updated', onTaskUpdated);
-      socket.emit('leave_room', room);
+      releaseRoom();
     };
   }, [project?.projectId, applyTaskUpdate]);
 

@@ -7,25 +7,25 @@ import {
   integer,
   timestamp,
   jsonb,
+  index,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 
 // ─── users ───────────────────────────────────────────────────────────────────
 export const users = pgTable('users', {
   userId:       uuid('user_id').primaryKey().defaultRandom(),
-  email:        varchar('email', { length: 255 }).unique().notNull(),
+  email:        varchar('email', { length: 255 }).notNull(),
   fullName:     varchar('full_name', { length: 255 }).notNull(),
   displayName:  varchar('display_name', { length: 80 }),
   avatarUrl:    text('avatar_url'),
-  githubId:     varchar('github_id', { length: 64 }).unique(),
+  githubId:     varchar('github_id', { length: 64 }),
   githubLogin:  varchar('github_login', { length: 64 }),
   githubAccessToken: text('github_access_token'),
-  googleId:     varchar('google_id', { length: 64 }).unique(),
   passwordHash: text('password_hash'),
   emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
   presence:     varchar('presence', { length: 20 }).default('offline'),
   statusText:   varchar('status_text', { length: 100 }),
-  statusEmoji:  varchar('status_emoji', { length: 20 }),
   preferences:  jsonb('preferences').default({}),
   failedLoginAttempts: integer('failed_login_attempts').default(0),
   lockoutUntil: timestamp('lockout_until', { withTimezone: true }),
@@ -33,7 +33,18 @@ export const users = pgTable('users', {
   createdAt:    timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt:    timestamp('updated_at', { withTimezone: true }).defaultNow(),
   deletedAt:    timestamp('deleted_at', { withTimezone: true }),
-});
+}, (table) => [
+  // Identity is unique among *live* accounts only. A plain UNIQUE on email
+  // meant a soft-deleted account kept reserving its address forever: `register`
+  // saw the row and refused, `login` filtered it out and refused too, so the
+  // user was stuck between two contradictory errors with no way back in.
+  uniqueIndex('users_email_active_unique')
+    .on(sql`lower(${table.email})`)
+    .where(sql`${table.deletedAt} IS NULL`),
+  uniqueIndex('users_github_id_active_unique')
+    .on(table.githubId)
+    .where(sql`${table.deletedAt} IS NULL AND ${table.githubId} IS NOT NULL`),
+]);
 
 // ─── refresh_tokens ──────────────────────────────────────────────────────────
 export const refreshTokens = pgTable('refresh_tokens', {
@@ -44,7 +55,10 @@ export const refreshTokens = pgTable('refresh_tokens', {
   issuedAt:   timestamp('issued_at', { withTimezone: true }).defaultNow(),
   expiresAt:  timestamp('expires_at', { withTimezone: true }).notNull(),
   revokedAt:  timestamp('revoked_at', { withTimezone: true }),
-});
+}, (table) => [
+  // Session list, revoke-others, and the 6-hourly cleanup sweep all filter here.
+  index('idx_refresh_tokens_user').on(table.userId),
+]);
 
 // ─── auth_tokens ─────────────────────────────────────────────────────────────
 // Single-use, time-limited tokens for password resets and email verification.

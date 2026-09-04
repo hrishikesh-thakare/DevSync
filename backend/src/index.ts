@@ -190,8 +190,10 @@ const shutdown = async (signal: string) => {
     // Socket.io may not be initialized
   }
 
-  // Drain background job queue and stop periodic sweeps
-  shutdownQueue();
+  // Drain background job queue and stop periodic sweeps. Awaited: the point
+  // is to let queued emails and webhook events finish, and the previous
+  // fire-and-forget call logged success without waiting for any of it.
+  await shutdownQueue();
   stopWorkers();
   console.log('✅ Job queue drained');
 

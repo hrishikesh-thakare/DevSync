@@ -145,6 +145,40 @@ test.describe('Labels — task integration', () => {
     expect(label.usageCount).toBe(1);
   });
 
+  // The single-label case above passes even with a broken `IN` clause, because
+  // Drizzle rendered `IN (($1))` and Postgres reads a one-element parenthesised
+  // list as a plain scalar. Two labels render `IN (($1, $2))`, which is a row
+  // constructor, and the comparison throws — a 500 on any task saved with more
+  // than one label. That is the gap this test exists to hold closed.
+  test('task creation with multiple labels succeeds', async () => {
+    const names = [`multi-a${unique}`, `multi-b${unique}`, `multi-c${unique}`];
+    const { status, data } = await apiRequest(`/workspaces/${SLUG}/projects/${KEY}/tasks`, ownerToken, {
+      method: 'POST',
+      body: JSON.stringify({ title: `Multi-label task ${unique}`, issueType: 'task', labels: names }),
+    });
+
+    expect(status, JSON.stringify(data)).toBe(201);
+    expect([...(data.task.labels ?? [])].sort()).toEqual([...names].sort());
+  });
+
+  test('re-using labels that already exist does not conflict', async () => {
+    // Second task, same labels. Exercises the branch where every name is found
+    // by the lookup and nothing needs inserting — the path that would raise a
+    // unique-violation if the lookup silently returned nothing.
+    const names = [`multi-a${unique}`, `multi-b${unique}`];
+    const { status, data } = await apiRequest(`/workspaces/${SLUG}/projects/${KEY}/tasks`, ownerToken, {
+      method: 'POST',
+      body: JSON.stringify({ title: `Reused labels ${unique}`, issueType: 'task', labels: names }),
+    });
+
+    expect(status, JSON.stringify(data)).toBe(201);
+    expect([...(data.task.labels ?? [])].sort()).toEqual([...names].sort());
+
+    const { data: listed } = await apiRequest(labelsBase, ownerToken);
+    const matching = listed.labels.filter((l: any) => names.includes(l.name));
+    expect(matching, 'labels should be registered once, not duplicated').toHaveLength(2);
+  });
+
   test('renaming a label propagates to tasks case-insensitively', async () => {
     const { data: labels } = await apiRequest(labelsBase, ownerToken);
     const label = labels.labels.find((l: any) => l.name === `auto${unique}`);

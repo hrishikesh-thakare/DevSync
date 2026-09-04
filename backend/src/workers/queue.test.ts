@@ -111,11 +111,51 @@ describe('queue', () => {
     const handler = vi.fn().mockResolvedValue(undefined);
     registerWorker('late.job', handler);
 
-    shutdownQueue();
+    await shutdownQueue();
     enqueueJob('late.job', {});
     await flush();
 
     expect(handler).not.toHaveBeenCalled();
     expect(getQueueStats().pending).toBe(0);
+  });
+
+  it('finishes queued work during shutdown instead of discarding it', async () => {
+    // The regression this guards: shutdown used to set its flag and then
+    // `queue.length = 0`, throwing away every pending job while the server
+    // logged "Job queue drained". In practice that silently dropped invitation
+    // and password-reset emails the user had already been told were sent, and
+    // GitHub webhook events that had already been answered 200.
+    const { registerWorker, enqueueJob, shutdownQueue } = await load();
+
+    const started: string[] = [];
+    const finished: string[] = [];
+    registerWorker('slow.job', async ({ id }: { id: string }) => {
+      started.push(id);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      finished.push(id);
+    });
+
+    // More jobs than MAX_CONCURRENCY (4), so some are still sitting in the
+    // array — unstarted — at the moment shutdown is called.
+    for (let i = 0; i < 10; i++) enqueueJob('slow.job', { id: `job-${i}` });
+
+    await shutdownQueue();
+
+    expect(finished).toHaveLength(10);
+    expect(new Set(finished).size).toBe(10);
+  });
+
+  it('gives up on shutdown rather than hanging on a wedged handler', async () => {
+    const { registerWorker, enqueueJob, shutdownQueue } = await load();
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    registerWorker('wedged.job', () => new Promise(() => {}));
+    enqueueJob('wedged.job', {});
+
+    // A handler that never settles must not block the process from exiting.
+    await shutdownQueue(150);
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('shutdown timed out'));
+    errorSpy.mockRestore();
   });
 });

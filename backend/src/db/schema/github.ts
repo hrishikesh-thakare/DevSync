@@ -8,6 +8,7 @@ import {
   boolean,
   timestamp,
   unique,
+  uniqueIndex,
   jsonb,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
@@ -63,7 +64,13 @@ export const githubCiStatus = pgTable('github_ci_status', {
   triggeredAt:  timestamp('triggered_at', { withTimezone: true }).notNull(),
   completedAt:  timestamp('completed_at', { withTimezone: true }),
   createdAt:    timestamp('created_at', { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+  // The webhook handler treats this pair as a key — select, then update or
+  // insert. GitHub sends three events per run (queued/in_progress/completed),
+  // so without the constraint two concurrent deliveries could both miss the
+  // select and both insert.
+  uniqueIndex('github_ci_status_project_run_unique').on(table.projectId, table.runId),
+]);
 
 // ─── github_issues ───────────────────────────────────────────────────────────
 export const githubIssues = pgTable('github_issues', {

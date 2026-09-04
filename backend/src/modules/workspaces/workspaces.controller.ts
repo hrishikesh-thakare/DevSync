@@ -149,7 +149,6 @@ export const getWorkspace = async (req: Request, res: Response): Promise<void> =
         avatarUrl: users.avatarUrl,
         presence: users.presence,
         statusText: users.statusText,
-        statusEmoji: users.statusEmoji,
       })
       .from(workspaceMembers)
       .innerJoin(users, eq(workspaceMembers.userId, users.userId))
@@ -304,11 +303,11 @@ export const inviteMember = async (req: Request, res: Response): Promise<void> =
 
     const memberRole = role || 'member';
 
-    // Find the user by email
+    // Find the user by email — only among live accounts, same as login/register.
     const [targetUser] = await db
       .select({ userId: users.userId, fullName: users.fullName, email: users.email })
       .from(users)
-      .where(eq(users.email, email.toLowerCase().trim()))
+      .where(and(eq(users.email, email.toLowerCase().trim()), isNull(users.deletedAt)))
       .limit(1);
 
     const [actor] = await db.select({ name: users.fullName }).from(users).where(eq(users.userId, inviterId));

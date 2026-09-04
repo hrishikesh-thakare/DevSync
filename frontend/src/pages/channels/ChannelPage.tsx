@@ -109,7 +109,10 @@ export function ChannelPage() {
       if (payload.channelRoomId === room) setCallUrl(payload.joinUrl);
     };
 
-    socket.emit('join_room', room);
+    // `joinRoom` returns its own release function and replays the join on
+    // every reconnect — a bare `emit` here was lost the moment the socket
+    // dropped, since this effect does not re-run on reconnect.
+    const releaseRoom = socketClient.joinRoom(room);
     socket.on('new_message', onNewMessage);
     socket.on('message_updated', onMessageUpdated);
     socket.on('message_deleted', onMessageDeleted);
@@ -118,7 +121,7 @@ export function ChannelPage() {
     socket.on('call_started', onCallStarted);
 
     return () => {
-      socket.emit('leave_room', room);
+      releaseRoom();
       socket.off('new_message', onNewMessage);
       socket.off('message_updated', onMessageUpdated);
       socket.off('message_deleted', onMessageDeleted);

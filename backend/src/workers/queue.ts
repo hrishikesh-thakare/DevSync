@@ -8,8 +8,10 @@ import { randomUUID } from 'node:crypto';
  * request handler that enqueued them. Failed jobs are retried with
  * exponential backoff up to a per-job attempt limit.
  *
- * NOTE: In-memory only — jobs are lost if the process exits. Swap this
- * module for BullMQ/ioredis if durable queues are needed.
+ * NOTE: In-memory only — jobs enqueued but not yet finished are lost if the
+ * process is killed rather than shut down cleanly. `shutdownQueue` waits for
+ * what is already queued, which covers a normal deploy; it does not survive a
+ * crash. Swap this module for BullMQ/ioredis if that guarantee is needed.
  */
 
 type JobHandler = (payload: any) => Promise<void> | void;
@@ -27,7 +29,11 @@ interface Job {
 const handlers = new Map<string, JobHandler>();
 const queue: Job[] = [];
 let running = 0;
-let drained = false;
+// Two flags rather than one: `accepting` closes the door to new work, while
+// `stopped` closes the drain loop. A single flag could not express "refuse new
+// jobs but finish the ones you have", which is what a clean shutdown needs.
+let accepting = true;
+let stopped = false;
 
 const MAX_CONCURRENCY = 4;
 
@@ -43,7 +49,7 @@ export const enqueueJob = (
   // After shutdown the drain loop is closed, so a pushed job would sit in the
   // array forever and keep the shutdown snapshot looking non-empty. Refuse it
   // at the door instead.
-  if (drained) {
+  if (!accepting) {
     console.warn(`[queue] shutting down — dropping job '${name}'`);
     return;
   }
@@ -73,7 +79,7 @@ export const enqueueJob = (
 };
 
 const drain = (): void => {
-  if (drained) return;
+  if (stopped) return;
 
   while (running < MAX_CONCURRENCY && queue.length > 0) {
     const job = queue.shift()!;
@@ -104,13 +110,39 @@ const processJob = async (job: Job): Promise<void> => {
   }
 };
 
+/** Queue depth, for tests and for anything that wants to observe shutdown. */
 export const getQueueStats = (): { pending: number; running: number; workers: number } => ({
   pending: queue.length,
   running,
   workers: handlers.size,
 });
 
-export const shutdownQueue = (): void => {
-  drained = true;
+/**
+ * Stops accepting new jobs and waits for the queued ones to finish.
+ *
+ * This used to set the flag and then `queue.length = 0` — discarding every
+ * pending job while `index.ts` logged "Job queue drained". On a deploy that
+ * silently threw away invitation, password-reset and verification emails the
+ * user had already been told were sent, plus any GitHub webhook event still in
+ * flight (those are answered `200` on receipt, and GitHub never retries a 200).
+ *
+ * `timeoutMs` bounds the wait so a wedged handler cannot block shutdown
+ * forever; whatever is still pending when it expires is reported, not hidden.
+ */
+export const shutdownQueue = async (timeoutMs = 10_000): Promise<void> => {
+  accepting = false;
+
+  const deadline = Date.now() + timeoutMs;
+  while ((queue.length > 0 || running > 0) && Date.now() < deadline) {
+    drain();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
+  const abandoned = queue.length + running;
+  if (abandoned > 0) {
+    console.error(`[queue] shutdown timed out with ${abandoned} job(s) unfinished`);
+  }
+
+  stopped = true;
   queue.length = 0;
 };

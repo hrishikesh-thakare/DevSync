@@ -22,7 +22,6 @@ export const projects = pgTable('projects', {
   leadUserId:          uuid('lead_user_id').references(() => users.userId, { onDelete: 'set null' }),
   githubRepoOwner:     varchar('github_repo_owner', { length: 100 }),
   githubRepoName:      varchar('github_repo_name', { length: 200 }),
-  githubWebhookSecret: varchar('github_webhook_secret', { length: 128 }), // encrypted HMAC secret
   issueCounter:        integer('issue_counter').default(0),
   status:              varchar('status', { length: 20 }).default('active'), // active|archived
   createdAt:           timestamp('created_at', { withTimezone: true }).defaultNow(),
