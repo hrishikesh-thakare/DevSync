@@ -19,6 +19,32 @@ test.describe('Workspace CRUD', () => {
     await expect(createBtn.first()).toBeVisible({ timeout: 10_000 });
   });
 
+  test('creating a workspace via the dialog derives the slug unless customized (UI)', async ({ ownerPage }) => {
+    const accessToken = getAuthToken('owner');
+    const name = `Slug UI Test ${Date.now()}`;
+    const customSlug = `slug-ui-${Date.now()}`;
+
+    await ownerPage.goto(ROUTES.workspaces);
+    await ownerPage.getByRole('button', { name: 'New Workspace' }).click();
+    await ownerPage.getByLabel('Name').fill(name);
+
+    // The slug field is not a field at all by default — just a preview of the
+    // derived URL and a way to opt into customizing it.
+    await expect(ownerPage.getByLabel('URL slug')).not.toBeVisible();
+    await expect(ownerPage.getByText(/Will live at \/w\//)).toBeVisible();
+
+    await ownerPage.getByRole('button', { name: 'Customize URL' }).click();
+    await ownerPage.getByLabel('URL slug').fill(customSlug);
+    await ownerPage.getByRole('button', { name: 'Create workspace' }).click();
+
+    await expect(ownerPage).toHaveURL(new RegExp(`/w/${customSlug}$`), { timeout: 10_000 });
+
+    const { data } = await apiRequest(`/workspaces/${customSlug}`, accessToken);
+    expect(data.workspace.slug).toBe(customSlug);
+
+    await apiRequest(`/workspaces/${customSlug}`, accessToken, { method: 'DELETE' });
+  });
+
   test('can create workspace via API and verify it exists', async () => {
     const accessToken = getAuthToken('owner');
     const uniqueSlug = `e2e-crud-${Date.now()}`;

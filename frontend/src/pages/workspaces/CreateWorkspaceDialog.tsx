@@ -45,6 +45,7 @@ function slugify(value: string) {
 export function CreateWorkspaceDialog() {
   const [open, setOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [customizingSlug, setCustomizingSlug] = useState(false);
   const createWorkspace = useCreateWorkspace();
   const navigate = useNavigate();
 
@@ -83,6 +84,7 @@ export function CreateWorkspaceDialog() {
         if (!next) {
           form.reset();
           setSubmitError(null);
+          setCustomizingSlug(false);
         }
       }}
     >
@@ -120,23 +122,41 @@ export function CreateWorkspaceDialog() {
               <FieldError errors={[errors.name]} />
             </Field>
 
-            <Field data-invalid={!!errors.slug}>
-              <FieldLabel htmlFor="ws-slug">URL slug</FieldLabel>
-              <Input
-                id="ws-slug"
-                type="text"
-                placeholder={slugify(nameValue || '') || 'acme-engineering'}
-                aria-invalid={!!errors.slug}
-                {...form.register('slug')}
-              />
-              {errors.slug ? (
-                <FieldError errors={[errors.slug]} />
-              ) : (
-                <FieldDescription>
-                  {effectiveSlug ? `Your workspace will live at /w/${effectiveSlug}` : 'Derived from the name if left blank.'}
-                </FieldDescription>
-              )}
-            </Field>
+            {customizingSlug ? (
+              <Field data-invalid={!!errors.slug}>
+                <FieldLabel htmlFor="ws-slug">URL slug</FieldLabel>
+                <Input
+                  id="ws-slug"
+                  type="text"
+                  placeholder={slugify(nameValue || '') || 'acme-engineering'}
+                  aria-invalid={!!errors.slug}
+                  autoFocus
+                  {...form.register('slug')}
+                />
+                {errors.slug ? (
+                  <FieldError errors={[errors.slug]} />
+                ) : (
+                  <FieldDescription>
+                    {effectiveSlug ? `Your workspace will live at /w/${effectiveSlug}` : 'Derived from the name if left blank.'}
+                  </FieldDescription>
+                )}
+              </Field>
+            ) : (
+              // Most workspaces never need a hand-picked URL — the derived one
+              // is fine and can still be changed later in workspace settings —
+              // so this stays a name + description dialog by default rather
+              // than a three-field form every time.
+              <p className="text-xs text-muted-foreground">
+                {effectiveSlug ? `Will live at /w/${effectiveSlug}. ` : ''}
+                <button
+                  type="button"
+                  className="underline underline-offset-2 hover:text-foreground"
+                  onClick={() => setCustomizingSlug(true)}
+                >
+                  Customize URL
+                </button>
+              </p>
+            )}
 
             <Field>
               <FieldLabel htmlFor="ws-description">Description</FieldLabel>

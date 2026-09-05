@@ -1,12 +1,12 @@
 # DevSync E2E Test Suite — Complete Test Reference
 
-The DevSync Playwright end-to-end suite contains **337 tests across 42 spec files**. It verifies the full product surface: authentication & sessions (including password recovery, email verification, enforcement of verified emails on sign-in, and rate limiting behind a trusted proxy), workspace/project/channel/task/sprint/label CRUD (including soft-delete isolation of deleted workspaces), messaging (including threads and reactions), XSS sanitization of message HTML, RBAC at workspace and project level, GitHub integration, search, notifications, file storage, WebSocket realtime events, security/tenant-scoping, and audit logging.
+The DevSync Playwright end-to-end suite contains **338 tests across 42 spec files**. It verifies the full product surface: authentication & sessions (including password recovery, email verification, enforcement of verified emails on sign-in, and rate limiting behind a trusted proxy), workspace/project/channel/task/sprint/label CRUD (including soft-delete isolation of deleted workspaces), messaging (including threads and reactions), XSS sanitization of message HTML, RBAC at workspace and project level, GitHub integration, search, notifications, file storage, WebSocket realtime events, security/tenant-scoping, and audit logging.
 
 ## Running the Suite
 
 | Command | Purpose |
 | :--- | :--- |
-| `npx playwright test` | Run the full suite (337 tests) |
+| `npx playwright test` | Run the full suite (338 tests) |
 | `npx playwright test tests/<dir>` | Run one module (e.g. `tests/rbac`) |
 | `npx playwright test tests/<dir>/<file>.spec.ts --workers 1` | Run one spec file serially |
 | `npm run test:rbac` / `test:auth` | Run tests tagged `@rbac` / `@auth` |
@@ -143,6 +143,7 @@ Persona-based `GET /workspaces/:slug/dashboard` — what each role sees on works
 | Test | Verifies |
 | :--- | :--- |
 | owner can create a new workspace | "Create workspace" UI is available to owners |
+| creating a workspace via the dialog derives the slug unless customized (UI) | Slug field hidden by default behind "Customize URL"; typing a name shows the derived `/w/…` preview; customizing and submitting creates the workspace at that exact slug |
 | can create workspace via API and verify it exists | POST returns 201 with slug/id; GET returns the record (workspace deleted in cleanup) |
 | duplicate workspace slug is rejected with 409 | Same slug → 409 "already exists" |
 | can update workspace name via API | PATCH persists the new name (restored afterwards) |
