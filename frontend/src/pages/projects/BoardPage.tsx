@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PlusIcon } from 'lucide-react';
+import { ListChecksIcon, PlusIcon, XIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { BoardSkeleton, ErrorState } from '@/components/layout/PageState';
 import {
   Select,
@@ -16,12 +17,14 @@ import { Kanban, KanbanBoard, KanbanOverlay, type KanbanCommitMeta } from '@/com
 import { BoardColumn } from '@/pages/projects/board/BoardColumn';
 import { KanbanTaskCard } from '@/pages/projects/board/KanbanTaskCard';
 import { CreateTaskDialog } from '@/pages/projects/board/CreateTaskDialog';
-import { useTasksQuery, useMoveTaskMutation, byRank, EMPTY_TASKS } from '@/queries/tasks';
+import { useTasksQuery, useMoveTaskMutation, useBulkUpdateTasksMutation, byRank, EMPTY_TASKS } from '@/queries/tasks';
 import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
-import { PRIORITY_META, PRIORITY_ORDER, STATUS_ORDER } from '@/lib/taskMeta';
+import { useLabelStore } from '@/store/labelStore';
+import { PRIORITY_META, PRIORITY_ORDER, STATUS_META, STATUS_ORDER } from '@/lib/taskMeta';
 import type { TaskStatus, TaskSummary } from '@/types/api';
 
 const ANY = '__any__';
+const UNASSIGN = '__unassign__';
 
 const EMPTY_COLUMNS: Record<TaskStatus, TaskSummary[]> = {
   todo: [],
@@ -35,13 +38,43 @@ export function BoardPage() {
   const navigate = useNavigate();
   const { data: tasks = EMPTY_TASKS, isPending: isLoading, error } = useTasksQuery(slug, key);
   const { mutate: moveTask } = useMoveTaskMutation(slug, key);
+  const { mutateAsync: bulkUpdate } = useBulkUpdateTasksMutation(slug, key);
   const members = useProjectStore((s) => s.members);
+  const { labels, fetchLabels } = useLabelStore();
   const myRole = useMyProjectRole();
   const canEdit = myRole === 'project_admin' || myRole === 'developer';
 
   const [assignee, setAssignee] = useState(ANY);
   const [priority, setPriority] = useState(ANY);
   const [createIn, setCreateIn] = useState<TaskStatus | null>(null);
+
+  // Bulk select — a separate mode from filtering, so the same checkbox click
+  // never also has to fight the drag sensor for the same gesture (see
+  // `BoardColumn`, which disables dragging for the duration).
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (slug && key) void fetchLabels(slug, key);
+  }, [slug, key, fetchLabels]);
+
+  const toggleSelect = (taskId: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  };
+
+  const runBulk = async (successVerb: string, patch: (t: TaskSummary) => Record<string, unknown>) => {
+    const selectedTasks = tasks.filter((t) => selected.has(t.taskId));
+    if (selectedTasks.length === 0) return;
+    const { ok, failed, total } = await bulkUpdate({ tasks: selectedTasks, patch });
+    if (failed === 0) toast.success(`${successVerb} ${ok} task${ok === 1 ? '' : 's'}`);
+    else toast.error(`${successVerb}: only ${ok} of ${total} succeeded`);
+    setSelected(new Set());
+  };
 
   const filtered = useMemo(
     () =>
@@ -56,9 +89,9 @@ export function BoardPage() {
 
   // `Kanban`'s `value` is genuinely owned by it during a drag gesture — this
   // is the live, per-drag-reorderable copy, re-derived whenever the filtered
-  // task list changes. `moveTask` reverts `tasks` itself on a failed request
-  // (see `taskStore.ts`), which flows back through `filtered` and resyncs
-  // this without any extra revert logic here.
+  // task list changes. `useMoveTaskMutation` reverts the query cache itself on
+  // a failed request (see `queries/tasks.ts`), which flows back through
+  // `filtered` and resyncs this without any extra revert logic here.
   const [columns, setColumns] = useState<Record<TaskStatus, TaskSummary[]>>(EMPTY_COLUMNS);
 
   useEffect(() => {
@@ -172,12 +205,85 @@ export function BoardPage() {
         </span>
 
         {canEdit ? (
+          <Button
+            variant={selectMode ? 'secondary' : 'outline'}
+            size="sm"
+            className={canEdit ? undefined : 'ml-auto'}
+            onClick={() => {
+              setSelectMode((v) => !v);
+              setSelected(new Set());
+            }}
+          >
+            <ListChecksIcon className="size-4" aria-hidden="true" />
+            {selectMode ? 'Done selecting' : 'Select'}
+          </Button>
+        ) : null}
+
+        {canEdit ? (
           <Button className="ml-auto" onClick={() => setCreateIn('todo')}>
             <PlusIcon className="size-4" aria-hidden="true" />
             Create task
           </Button>
         ) : null}
       </div>
+
+      {selectMode && selected.size > 0 ? (
+        <Card className="mb-4">
+          <CardContent className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-foreground">{selected.size} selected</span>
+
+            <Select onValueChange={(v) => void runBulk('Assigned', () => ({ assigneeId: v === UNASSIGN ? null : v }))}>
+              <SelectTrigger className="w-48" aria-label="Bulk assign">
+                <SelectValue placeholder="Assign to…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={UNASSIGN}>Unassigned</SelectItem>
+                {members.map((m) => (
+                  <SelectItem key={m.userId} value={m.userId}>
+                    {m.displayName || m.fullName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              disabled={labels.length === 0}
+              onValueChange={(v) =>
+                void runBulk('Labelled', (t) => ({ labels: Array.from(new Set([...(t.labels ?? []), v])) }))
+              }
+            >
+              <SelectTrigger className="w-48" aria-label="Bulk add label">
+                <SelectValue placeholder={labels.length ? 'Add label…' : 'No labels yet'} />
+              </SelectTrigger>
+              <SelectContent>
+                {labels.map((l) => (
+                  <SelectItem key={l.labelId} value={l.name}>
+                    {l.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select onValueChange={(v) => void runBulk('Moved', () => ({ status: v as TaskStatus }))}>
+              <SelectTrigger className="w-44" aria-label="Bulk move status">
+                <SelectValue placeholder="Move to…" />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_ORDER.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {STATUS_META[s].label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setSelected(new Set())}>
+              <XIcon className="size-4" aria-hidden="true" />
+              Clear selection
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Kanban value={columns} onValueChange={setColumns} onValueCommit={onBoardCommit} getItemValue={(t) => t.taskId}>
         <KanbanBoard className="flex-1 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
@@ -190,6 +296,9 @@ export function BoardPage() {
               onCreate={setCreateIn}
               onOpen={(task) => navigate(`/w/${slug}/projects/${key}/tasks/${task.taskKey}`)}
               hrefFor={(task) => `/w/${slug}/projects/${key}/tasks/${task.taskKey}`}
+              selectMode={selectMode}
+              selected={selected}
+              onToggleSelect={toggleSelect}
             />
           ))}
         </KanbanBoard>

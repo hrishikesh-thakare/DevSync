@@ -21,6 +21,9 @@ export function BoardColumn({
   onCreate,
   onOpen,
   hrefFor,
+  selectMode,
+  selected,
+  onToggleSelect,
 }: {
   status: TaskStatus;
   tasks: TaskSummary[];
@@ -28,6 +31,11 @@ export function BoardColumn({
   onCreate: (status: TaskStatus) => void;
   onOpen: (task: TaskSummary) => void;
   hrefFor: (task: TaskSummary) => string;
+  /** Bulk-select mode: shows a checkbox per card and suspends dragging so the
+   * two interactions (drag a card / select several) don't fight each other. */
+  selectMode?: boolean;
+  selected?: Set<string>;
+  onToggleSelect?: (taskId: string) => void;
 }) {
   const meta = STATUS_META[status];
   const visible = tasks.slice(0, COLUMN_RENDER_CAP);
@@ -58,22 +66,50 @@ export function BoardColumn({
 
       <div className="flex-1 rounded-xl bg-muted/30 p-2">
         <KanbanColumnContent value={status} className="min-h-24">
-          {visible.map((task) => (
-            <KanbanItem key={task.taskId} value={task.taskId} disabled={!canEdit}>
-              {/* The whole card is its own drag handle — dnd-kit's distance-
-                  based activation (configured on the Kanban root's sensors)
-                  is what lets a stationary click still open the task instead
-                  of starting a drag. Keyboard users open a task through the
-                  title link inside the card, since the handle owns
-                  `onKeyDown` for dnd-kit's keyboard sensor. */}
-              <KanbanItemHandle
-                onClick={() => onOpen(task)}
-                className="block rounded-[min(var(--radius-4xl),24px)] outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <KanbanTaskCard task={task} href={hrefFor(task)} />
-              </KanbanItemHandle>
-            </KanbanItem>
-          ))}
+          {visible.map((task) => {
+            const card = (
+              <KanbanTaskCard
+                task={task}
+                href={hrefFor(task)}
+                selectable={selectMode}
+                selected={selected?.has(task.taskId)}
+                onToggleSelect={() => onToggleSelect?.(task.taskId)}
+              />
+            );
+            const wrapperClassName =
+              'block rounded-[min(var(--radius-4xl),24px)] outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+            return (
+              // `disabled` stays tied to edit permission only — not select
+              // mode — because `KanbanItem` dims disabled cards to
+              // `opacity-50`, and select mode should look like the normal
+              // board, not a greyed-out one.
+              <KanbanItem key={task.taskId} value={task.taskId} disabled={!canEdit}>
+                {selectMode ? (
+                  // No `KanbanItemHandle` here at all: dnd-kit's drag
+                  // listeners are only ever attached to what that component
+                  // renders (see docs/kanban.md §5), so omitting it — rather
+                  // than trying to `disabled`-flag the drag away — is what
+                  // actually stops a card from being draggable while
+                  // selecting, without the dimmed styling `disabled` implies.
+                  <div onClick={() => onOpen(task)} className={wrapperClassName}>
+                    {card}
+                  </div>
+                ) : (
+                  // The whole card is its own drag handle — dnd-kit's
+                  // distance-based activation (configured on the Kanban
+                  // root's sensors) is what lets a stationary click still
+                  // open the task instead of starting a drag. Keyboard users
+                  // open a task through the title link inside the card, since
+                  // the handle owns `onKeyDown` for dnd-kit's keyboard
+                  // sensor.
+                  <KanbanItemHandle onClick={() => onOpen(task)} className={wrapperClassName}>
+                    {card}
+                  </KanbanItemHandle>
+                )}
+              </KanbanItem>
+            );
+          })}
         </KanbanColumnContent>
 
         {tasks.length === 0 ? (

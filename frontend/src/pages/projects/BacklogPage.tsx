@@ -36,14 +36,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CreateTaskDialog } from '@/pages/projects/board/CreateTaskDialog';
-import { useTasksQuery, useMoveTaskMutation, byRank, EMPTY_TASKS } from '@/queries/tasks';
+import { useTasksQuery, useMoveTaskMutation, useBulkUpdateTasksMutation, byRank, EMPTY_TASKS } from '@/queries/tasks';
 import { useSprintStore } from '@/store/sprintStore';
 import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
+import { useLabelStore } from '@/store/labelStore';
 import { ISSUE_TYPE_META, ISSUE_TYPE_ORDER, PRIORITY_META, PRIORITY_ORDER, STATUS_META } from '@/lib/taskMeta';
 import { cn } from '@/lib/utils';
 import type { TaskSummary } from '@/types/api';
 
 const ANY = '__any__';
+const UNASSIGN = '__unassign__';
 
 /**
  * The backlog is every task not attached to a sprint, ordered by rank.
@@ -57,8 +59,10 @@ export function BacklogPage() {
   const navigate = useNavigate();
   const { data: tasks = EMPTY_TASKS, isPending: isLoading, error, refetch } = useTasksQuery(slug, key);
   const { mutateAsync: moveTask } = useMoveTaskMutation(slug, key);
+  const { mutateAsync: bulkUpdate } = useBulkUpdateTasksMutation(slug, key);
   const { sprints, fetchSprints, addTask } = useSprintStore();
   const members = useProjectStore((s) => s.members);
+  const { labels, fetchLabels } = useLabelStore();
   const myRole = useMyProjectRole();
   const canEdit = myRole === 'project_admin' || myRole === 'developer';
 
@@ -71,8 +75,11 @@ export function BacklogPage() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    if (slug && key) void fetchSprints(slug, key);
-  }, [slug, key, fetchSprints]);
+    if (slug && key) {
+      void fetchSprints(slug, key);
+      void fetchLabels(slug, key);
+    }
+  }, [slug, key, fetchSprints, fetchLabels]);
 
   const backlog = useMemo(() => tasks.filter((t) => !t.sprintId).sort(byRank), [tasks]);
 
@@ -148,6 +155,24 @@ export function BacklogPage() {
         err instanceof Error ? `${err.message} (${ok} of ${ids.length} moved)` : 'Could not assign.',
       );
       await refetch();
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  // Assign-to-member and add-label share this shape with `assignToSprint`
+  // above — loop the single-task PATCH, tolerate partial failure, report the
+  // count — but go through the reusable mutation since neither one needs the
+  // sprint-specific "add task to sprint" endpoint.
+  const runBulk = async (successVerb: string, patch: (t: TaskSummary) => Record<string, unknown>) => {
+    const selectedTasks = visible.filter((t) => selected.has(t.taskId));
+    if (selectedTasks.length === 0) return;
+    setAssigning(true);
+    try {
+      const { ok, failed, total } = await bulkUpdate({ tasks: selectedTasks, patch });
+      if (failed === 0) toast.success(`${successVerb} ${ok} task${ok === 1 ? '' : 's'}`);
+      else toast.error(`${successVerb}: only ${ok} of ${total} succeeded`);
+      setSelected(new Set());
     } finally {
       setAssigning(false);
     }
@@ -266,7 +291,7 @@ export function BacklogPage() {
               {selected.size} selected
             </span>
             <Select disabled={assigning || openSprints.length === 0} onValueChange={(v) => void assignToSprint(v)}>
-              <SelectTrigger className="w-64" aria-label="Add selected tasks to sprint">
+              <SelectTrigger className="w-56" aria-label="Add selected tasks to sprint">
                 <SelectValue
                   placeholder={openSprints.length ? 'Add to sprint…' : 'No open sprint available'}
                 />
@@ -279,7 +304,43 @@ export function BacklogPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
+
+            <Select
+              disabled={assigning}
+              onValueChange={(v) => void runBulk('Assigned', () => ({ assigneeId: v === UNASSIGN ? null : v }))}
+            >
+              <SelectTrigger className="w-48" aria-label="Bulk assign">
+                <SelectValue placeholder="Assign to…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={UNASSIGN}>Unassigned</SelectItem>
+                {members.map((m) => (
+                  <SelectItem key={m.userId} value={m.userId}>
+                    {m.displayName || m.fullName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              disabled={assigning || labels.length === 0}
+              onValueChange={(v) =>
+                void runBulk('Labelled', (t) => ({ labels: Array.from(new Set([...(t.labels ?? []), v])) }))
+              }
+            >
+              <SelectTrigger className="w-48" aria-label="Bulk add label">
+                <SelectValue placeholder={labels.length ? 'Add label…' : 'No labels yet'} />
+              </SelectTrigger>
+              <SelectContent>
+                {labels.map((l) => (
+                  <SelectItem key={l.labelId} value={l.name}>
+                    {l.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setSelected(new Set())}>
               Clear selection
             </Button>
           </CardContent>

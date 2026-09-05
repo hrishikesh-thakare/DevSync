@@ -5,6 +5,7 @@ import { CalendarIcon } from 'lucide-react';
 import { MemberAvatar } from '@/components/MemberAvatar';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { PRIORITY_META } from '@/lib/taskMeta';
 import { cn } from '@/lib/utils';
@@ -54,10 +55,17 @@ export function KanbanTaskCard({
   task,
   dragging,
   href,
+  selectable,
+  selected,
+  onToggleSelect,
 }: {
   task: TaskSummary;
   dragging?: boolean;
   href?: string;
+  /** Bulk-select mode: renders a checkbox and stops it from also starting a drag. */
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const priority = PRIORITY_META[task.priority];
 
@@ -65,17 +73,28 @@ export function KanbanTaskCard({
     <Card className={cn('gap-0 py-0 text-left transition-shadow', dragging ? 'shadow-lg' : 'hover:shadow-md')}>
       <CardContent className="space-y-2 p-3">
         <div className="flex items-start justify-between gap-2">
-          {href ? (
-            <Link
-              to={href}
-              onClick={(e) => e.stopPropagation()}
-              className="line-clamp-2 min-w-0 rounded-sm text-sm font-medium text-foreground outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {task.title}
-            </Link>
-          ) : (
-            <span className="line-clamp-2 min-w-0 text-sm font-medium text-foreground">{task.title}</span>
-          )}
+          <div className="flex min-w-0 items-start gap-2">
+            {selectable ? (
+              <Checkbox
+                checked={selected}
+                onCheckedChange={onToggleSelect}
+                onClick={(e) => e.stopPropagation()}
+                aria-label={`Select ${task.taskKey}`}
+                className="mt-0.5 shrink-0"
+              />
+            ) : null}
+            {href ? (
+              <Link
+                to={href}
+                onClick={(e) => e.stopPropagation()}
+                className="line-clamp-2 min-w-0 rounded-sm text-sm font-medium text-foreground outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {task.title}
+              </Link>
+            ) : (
+              <span className="line-clamp-2 min-w-0 text-sm font-medium text-foreground">{task.title}</span>
+            )}
+          </div>
           {priority ? (
             <Badge
               variant="secondary"

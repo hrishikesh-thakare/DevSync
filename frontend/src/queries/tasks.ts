@@ -227,3 +227,57 @@ export function renameCachedTaskLabel(slug: string, key: string, from: string, t
 export function byRank(a: TaskSummary, b: TaskSummary) {
   return (a.rank ?? '').localeCompare(b.rank ?? '');
 }
+
+interface BulkUpdateResult {
+  ok: number;
+  failed: number;
+  total: number;
+}
+
+/**
+ * Applies one `PATCH /tasks/:taskKey` per selected task — there is no bulk
+ * endpoint on the backend, so this is the same "loop the single-item API"
+ * shape `BacklogPage.assignToSprint` already used for sprint assignment,
+ * generalized to any field `updateTaskSchema` accepts. `patch` is a function
+ * rather than a fixed object so a caller can compute a per-task body (bulk
+ * "add this label" has to union it onto each task's *existing* labels, not
+ * overwrite them).
+ *
+ * A partial failure (one task 403s, a rank race, …) does not roll back the
+ * tasks that already succeeded — same tolerance `assignToSprint` has, for the
+ * same reason: reporting "6 of 8 updated" is more useful than undoing the 6
+ * that worked because 2 didn't.
+ *
+ * Refetches rather than hand-patching the cache: a bulk assignee change needs
+ * the assignee's name/avatar, which `PATCH`'s response doesn't carry (only
+ * the list endpoint joins those in), and a background refetch against a
+ * warm cache doesn't cost a visible skeleton the way the initial load would.
+ */
+export function useBulkUpdateTasksMutation(slug: string, key: string) {
+  const client = useQueryClient();
+  const listKey = taskKeys.list(slug, key);
+
+  return useMutation({
+    mutationFn: async ({
+      tasks,
+      patch,
+    }: {
+      tasks: TaskSummary[];
+      patch: (task: TaskSummary) => Record<string, unknown>;
+    }): Promise<BulkUpdateResult> => {
+      const results = await Promise.allSettled(
+        tasks.map((task) =>
+          apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${task.taskKey}`, {
+            method: 'PATCH',
+            body: JSON.stringify(patch(task)),
+          }),
+        ),
+      );
+      const ok = results.filter((r) => r.status === 'fulfilled').length;
+      return { ok, failed: results.length - ok, total: results.length };
+    },
+    onSuccess: (result) => {
+      if (result.ok > 0) void client.invalidateQueries({ queryKey: listKey });
+    },
+  });
+}
