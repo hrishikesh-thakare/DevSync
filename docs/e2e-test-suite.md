@@ -1,12 +1,12 @@
 # DevSync E2E Test Suite — Complete Test Reference
 
-The DevSync Playwright end-to-end suite contains **325 tests across 36 spec files**. It verifies the full product surface: authentication & sessions (including password recovery, email verification, enforcement of verified emails on sign-in, and rate limiting behind a trusted proxy), workspace/project/channel/task/sprint/label CRUD (including soft-delete isolation of deleted workspaces), messaging (including threads and reactions), XSS sanitization of message HTML, RBAC at workspace and project level, GitHub integration, search, notifications, file storage, WebSocket realtime events, security/tenant-scoping, and audit logging.
+The DevSync Playwright end-to-end suite contains **336 tests across 42 spec files**. It verifies the full product surface: authentication & sessions (including password recovery, email verification, enforcement of verified emails on sign-in, and rate limiting behind a trusted proxy), workspace/project/channel/task/sprint/label CRUD (including soft-delete isolation of deleted workspaces), messaging (including threads and reactions), XSS sanitization of message HTML, RBAC at workspace and project level, GitHub integration, search, notifications, file storage, WebSocket realtime events, security/tenant-scoping, and audit logging.
 
 ## Running the Suite
 
 | Command | Purpose |
 | :--- | :--- |
-| `npx playwright test` | Run the full suite (325 tests) |
+| `npx playwright test` | Run the full suite (336 tests) |
 | `npx playwright test tests/<dir>` | Run one module (e.g. `tests/rbac`) |
 | `npx playwright test tests/<dir>/<file>.spec.ts --workers 1` | Run one spec file serially |
 | `npm run test:rbac` / `test:auth` | Run tests tagged `@rbac` / `@auth` |
@@ -53,6 +53,7 @@ The suite runs automatically in CI on every push to `main`/`develop` and on ever
 | revoking a non-existent session returns 404 | Random UUID revoke → 404 |
 | cannot revoke another user's session (404) | Cross-user revoke is impossible |
 | revoking a session invalidates its refresh token | Revoked session's refresh cookie → 401 |
+| reusing an already-rotated refresh token revokes its whole family | Replaying a token already used once (the stolen-and-raced token signal) doesn't just fail itself — it revokes the entire rotation chain, including the currently-valid descendant token |
 | revoke-others keeps the current session and revokes the rest | `revoke-others` kills every session except the current one |
 | account is locked after 5 failed attempts | 6th attempt with correct password → 423 with lockout message |
 | failed attempts report a generic error (no user enumeration) | Unknown email returns identical error to wrong password |
@@ -109,6 +110,11 @@ The suite runs automatically in CI on every push to `main`/`develop` and on ever
 | can delete own account via API and gets logged out | Soft-delete → 200; subsequent authenticated request → 401 |
 | can re-register with the email of a deleted account | Regression: delete → register same email → 201 (not "already exists"), new row starts unverified |
 | can delete own account via UI (Account Settings) | Typing the account name confirms deletion and signs the user out |
+
+### Avatar Upload (`tests/account/avatar-upload.spec.ts`)
+| Test | Verifies |
+| :--- | :--- |
+| uploading an avatar persists it to the profile | `POST /auth/avatar` then `PATCH /auth/profile` — both requests actually fire; verified on the `PATCH` response itself, since `/auth/me` never returns `avatarUrl` |
 
 ## 📊 Dashboard (`tests/dashboard/dashboard.spec.ts`)
 
@@ -180,6 +186,8 @@ Persona-based `GET /workspaces/:slug/dashboard` — what each role sees on works
 | can get project details via API | GET by key → 200 with matching key |
 | can update project description via API | PATCH persists description |
 | archive project succeeds via API | Disposable project archives (`status: archived`) |
+| delete project via API is a real (soft) delete, and frees its key | DELETE → 200; GET/list → gone; recreating the same key → 201 (partial unique index, not a dead key forever) |
+| deleting a project requires project_admin and 404s for an unknown key | Developer → 403; unknown key → 404 |
 | can view project board (UI) | Kanban columns (Todo/In Progress/In Review/Done) render |
 
 ### `project-members.spec.ts`
@@ -230,6 +238,17 @@ Persona-based `GET /workspaces/:slug/dashboard` — what each role sees on works
 | message endpoints require authentication (401) | List + post without token → 401 |
 | malicious HTML in a message renders inert in the browser | `<img onerror>`/`<script>`/`<svg onload>`/`javascript:` hrefs stored verbatim via API render with no executable element or handler, no dialog, no window flag; plain text still visible (XSS regression test) |
 
+### `mentions.spec.ts`
+| Test | Verifies |
+| :--- | :--- |
+| mentioning a member by name notifies them | Plain-text `@Dave` fallback resolves against `fullName`, files a `channel_mentioned` notification |
+| mentioning someone outside the workspace resolves to nobody | The lookup is joined to `workspace_members`, so a name that exists elsewhere in the app never resolves here |
+
+### `zoom-call.spec.ts`
+| Test | Verifies |
+| :--- | :--- |
+| starting a call creates a real Zoom meeting; ending it clears the link | `POST` creates a real meeting via Zoom's Server-to-Server API (201, `joinUrl`); a second `POST` while active reuses it (200, same link) rather than minting another; `DELETE` clears it and ends the meeting on Zoom's side too |
+
 ## 🎯 Tasks (`tests/tasks/`)
 
 ### `task-crud.spec.ts`
@@ -254,6 +273,17 @@ Persona-based `GET /workspaces/:slug/dashboard` — what each role sees on works
 | RBAC: viewer read-only, developer can add/delete, outsider blocked | Viewer list 200/add 403; developer 201/delete 200; outsider 403 |
 | adding an attachment to a non-existent task returns 404 | Unknown key → 404 |
 | task audit trail logs task.attachment_added | Audit log contains action with `file_id` |
+
+### `kanban-drag.spec.ts`
+| Test | Verifies |
+| :--- | :--- |
+| dragging a card to another column persists the new status | A real dnd-kit pointer-drag sequence (past the 10px activation distance) from Todo to In Progress; verified against the `PATCH .../reorder` response and a follow-up `GET` |
+
+### `bulk-operations.spec.ts`
+| Test | Verifies |
+| :--- | :--- |
+| Board: select mode bulk-assigns and bulk-moves several cards at once | "Select" mode checkboxes + bulk assignee/status selects apply to every selected card in one pass; verified over the API, not just the toast |
+| Backlog: selecting several rows bulk-adds a label to all of them | Same bulk pattern, extended to Backlog's pre-existing multi-select (previously sprint-assign only) |
 
 ## 🏃 Sprints (`tests/sprints/sprint-lifecycle.spec.ts`) — serial suite
 
@@ -502,6 +532,11 @@ Regression coverage for the cross-workspace/injection findings from the security
 | a reconnected socket that rejoins receives messages again | Client replays its joined rooms on `connect`, so a reconnect doesn't silently stop delivering board/chat updates |
 | rooms do not survive a reconnect on their own | Proves the underlying server behaviour: without client-side replay, a fresh connection id has none of the old `project:`/`channel:` rooms |
 | the server refuses a room the user cannot access | `room_join_denied` is emitted and observed by the client for an unauthorized room |
+
+### `workspace-eviction.spec.ts`
+| Test | Verifies |
+| :--- | :--- |
+| removing a member evicts their already-open socket from the workspace room | Before: presence broadcasts reach a fresh member's live socket. After removal, without any reconnect on their end, the same broadcast no longer reaches them — `evictFromWorkspaceRoom` reaches every live connection via the personal `user:{id}` room |
 
 ## 📜 Audit Logs (`tests/audit/audit.spec.ts`)
 

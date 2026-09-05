@@ -19,14 +19,13 @@ import { apiLogin, apiRequest } from '../../helpers/api-helpers.js';
  * enough other specs have piled up ahead of it. A private, empty project
  * makes that impossible instead of just unlikely.
  *
- * Tasks and the label are deleted again at the end of each test — there is
- * no reason a run of this suite should leave rows behind that a DELETE
- * endpoint exists for. The one thing that *can't* be cleaned up here is the
- * project itself: the API has `archiveProject` but no `DELETE
- * /workspaces/:slug/projects/:key` at all, so these two rows persist for the
- * life of the database, same as every other project-creating test in this
- * suite (e.g. `project-crud.spec.ts`'s "can create project via API"). Adding
- * a real delete-project endpoint would fix that; it's out of scope here.
+ * Each throwaway project is deleted again at the end (`DELETE
+ * /workspaces/:slug/projects/:key` — a real soft-delete, see
+ * `project-crud.spec.ts`'s "delete project" tests), which takes its tasks
+ * and label down with it: they aren't separately deleted first, because a
+ * soft-deleted project already makes everything scoped to it unreachable
+ * through the API, the same way a soft-deleted workspace does for its
+ * projects.
  */
 
 const SLUG = TEST_WORKSPACE.slug;
@@ -52,8 +51,8 @@ async function createTask(token: string, key: string, title: string) {
   return data.task;
 }
 
-async function deleteTask(token: string, key: string, taskKey: string) {
-  await apiRequest(`/workspaces/${SLUG}/projects/${key}/tasks/${taskKey}`, token, { method: 'DELETE' });
+async function deleteProject(token: string, key: string) {
+  await apiRequest(`/workspaces/${SLUG}/projects/${key}`, token, { method: 'DELETE' });
 }
 
 test.describe('Bulk operations', () => {
@@ -108,8 +107,7 @@ test.describe('Bulk operations', () => {
       expect(movedA.status).toBe('done');
       expect(movedB.status).toBe('done');
     } finally {
-      await deleteTask(owner.accessToken, key, taskA.taskKey);
-      await deleteTask(owner.accessToken, key, taskB.taskKey);
+      await deleteProject(owner.accessToken, key);
     }
   });
 
@@ -146,19 +144,7 @@ test.describe('Bulk operations', () => {
       expect(a.labels).toContain(labelName);
       expect(b.labels).toContain(labelName);
     } finally {
-      // Deleting the tasks first strips the label from them server-side;
-      // deleting the label itself afterward removes the catalogue entry too,
-      // rather than leaving an unused label sitting on a project nothing else
-      // will ever look at again.
-      await deleteTask(owner.accessToken, key, taskA.taskKey);
-      await deleteTask(owner.accessToken, key, taskB.taskKey);
-      const { data: labelsData } = await apiRequest(`/workspaces/${SLUG}/projects/${key}/labels`, owner.accessToken);
-      const created = labelsData.labels?.find((l: any) => l.name === labelName);
-      if (created) {
-        await apiRequest(`/workspaces/${SLUG}/projects/${key}/labels/${created.labelId}`, owner.accessToken, {
-          method: 'DELETE',
-        });
-      }
+      await deleteProject(owner.accessToken, key);
     }
   });
 });

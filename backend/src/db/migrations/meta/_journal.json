@@ -120,6 +120,13 @@
       "when": 1788617116546,
       "tag": "0016_refresh_token_family",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788619428954,
+      "tag": "0017_project_soft_delete",
+      "breakpoints": true
     }
   ]
 }

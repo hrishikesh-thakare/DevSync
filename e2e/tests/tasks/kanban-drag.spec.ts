@@ -69,6 +69,6 @@ test('dragging a card to another column persists the new status', async ({ owner
     const { data: after } = await apiRequest(`/workspaces/${SLUG}/projects/${key}/tasks/${task.taskKey}`, owner.accessToken);
     expect(after.task.status).toBe('in_progress');
   } finally {
-    await apiRequest(`/workspaces/${SLUG}/projects/${key}/tasks/${task.taskKey}`, owner.accessToken, { method: 'DELETE' });
+    await apiRequest(`/workspaces/${SLUG}/projects/${key}`, owner.accessToken, { method: 'DELETE' });
   }
 });

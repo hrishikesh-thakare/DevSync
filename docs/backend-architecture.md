@@ -177,7 +177,8 @@ POST /api/workspaces/:slug/projects/:key/tasks
 | GET | `/` | ✅ | W: any | List all projects in workspace |
 | GET | `/:key` | ✅ | P: any | Get project details |
 | PATCH | `/:key` | ✅ | P: admin/dev | Update project name, description, lead |
-| PATCH | `/:key/archive` | ✅ | P: admin | Archive/unarchive project |
+| PATCH | `/:key/archive` | ✅ | P: admin | Archive project |
+| DELETE | `/:key` | ✅ | P: admin | Soft-delete project (`deleted_at`); frees its key for reuse in this workspace |
 
 ### Project Members — `/api/workspaces/:slug/projects/:key`
 | Method | Path | Auth | Role | Description |

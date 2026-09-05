@@ -62,7 +62,7 @@ export const getWorkspaceDashboard = async (req: Request, res: Response): Promis
             status: projects.status,
           })
           .from(projects)
-          .where(and(eq(projects.workspaceId, workspaceId), eq(projects.status, 'active')))
+          .where(and(eq(projects.workspaceId, workspaceId), eq(projects.status, 'active'), isNull(projects.deletedAt)))
       : await db
           .select({
             projectId: projects.projectId,
@@ -78,7 +78,7 @@ export const getWorkspaceDashboard = async (req: Request, res: Response): Promis
               eq(projectMembers.userId, userId),
             ),
           )
-          .where(and(eq(projects.workspaceId, workspaceId), eq(projects.status, 'active')));
+          .where(and(eq(projects.workspaceId, workspaceId), eq(projects.status, 'active'), isNull(projects.deletedAt)));
 
     const projectIds = projectRows.map((p) => p.projectId).filter((id): id is string => id !== null);
 

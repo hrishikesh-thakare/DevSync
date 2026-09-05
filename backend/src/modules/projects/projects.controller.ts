@@ -3,7 +3,7 @@ import { db } from '../../config/db.js';
 import { projects, projectMembers } from '../../db/schema/projects.js';
 import { workspaceMembers } from '../../db/schema/workspaces.js';
 import { users } from '../../db/schema/auth.js';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { getIO } from '../../sockets/index.js';
 import { logAuditAction } from '../audit/audit.controller.js';
 import { createNotification } from '../notifications/notifications.controller.js';
@@ -18,11 +18,13 @@ export const createProject = async (req: Request, res: Response): Promise<void> 
 
     const projectKey = key; // Zod handles upper case and constraints
 
-    // Check for duplicate key in this workspace
+    // Check for duplicate key in this workspace — only among live projects,
+    // same reasoning as the `register` email check: without the `deletedAt`
+    // filter a deleted project's key would be unusable forever.
     const [existing] = await db
       .select({ projectId: projects.projectId })
       .from(projects)
-      .where(and(eq(projects.workspaceId, workspaceId), eq(projects.key, projectKey)))
+      .where(and(eq(projects.workspaceId, workspaceId), eq(projects.key, projectKey), isNull(projects.deletedAt)))
       .limit(1);
 
     if (existing) {
@@ -95,7 +97,7 @@ export const listProjects = async (req: Request, res: Response): Promise<void> =
       })
       .from(projects)
       .leftJoin(users, eq(projects.leadUserId, users.userId))
-      .where(and(eq(projects.workspaceId, workspaceId), eq(projects.status, 'active')));
+      .where(and(eq(projects.workspaceId, workspaceId), eq(projects.status, 'active'), isNull(projects.deletedAt)));
 
     // If the user is just a regular workspace member, they can only see projects they are explicitly added to.
     if (workspaceRole === 'member') {
@@ -116,8 +118,8 @@ export const listProjects = async (req: Request, res: Response): Promise<void> =
         .from(projects)
         .leftJoin(users, eq(projects.leadUserId, users.userId))
         .innerJoin(projectMembers, and(eq(projects.projectId, projectMembers.projectId), eq(projectMembers.userId, userId)))
-        .where(and(eq(projects.workspaceId, workspaceId), eq(projects.status, 'active')));
-        
+        .where(and(eq(projects.workspaceId, workspaceId), eq(projects.status, 'active'), isNull(projects.deletedAt)));
+
       res.json({ projects: results });
       return;
     }
@@ -544,5 +546,60 @@ export const archiveProject = async (req: Request, res: Response): Promise<void>
   } catch (err) {
     console.error('Archive project error:', err);
     res.status(500).json({ error: 'Server error archiving project.' });
+  }
+};
+
+// ─── DELETE PROJECT ──────────────────────────────────────────────────────────
+// DELETE /api/workspaces/:workspaceId/projects/:key
+//
+// Soft-delete, same shape as `deleteWorkspace`: stamp `deletedAt` rather than
+// removing the row. Tasks, sprints, channels and labels that point at this
+// project are left exactly where they are — they simply become unreachable,
+// because `resolveProjectKey` (every `:key`-scoped route) and `listProjects`
+// both filter on `deletedAt IS NULL` now. That mirrors how a soft-deleted
+// workspace already leaves its projects in place without this module having
+// to know about it; nothing here has to cascade a delete through five child
+// tables to get the same effect.
+export const deleteProject = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+
+    const result = await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ workspaceId: projects.workspaceId, name: projects.name, key: projects.key })
+        .from(projects)
+        .where(and(eq(projects.projectId, projectId), isNull(projects.deletedAt)))
+        .limit(1);
+
+      if (!existing) return null;
+
+      await tx
+        .update(projects)
+        .set({ deletedAt: new Date(), updatedAt: new Date() })
+        .where(eq(projects.projectId, projectId));
+
+      await logAuditAction({
+        actorId: req.user!.userId,
+        action: 'project.deleted',
+        entityType: 'project',
+        entityId: projectId,
+        workspaceId: existing.workspaceId ?? undefined,
+        newValues: null,
+        oldValues: { name: existing.name, key: existing.key },
+        tx,
+      });
+
+      return existing;
+    });
+
+    if (!result) {
+      res.status(404).json({ error: 'Project not found.' });
+      return;
+    }
+
+    res.json({ message: 'Project deleted' });
+  } catch (err) {
+    console.error('Delete project error:', err);
+    res.status(500).json({ error: 'Server error deleting project.' });
   }
 };

@@ -6,8 +6,9 @@ import {
   integer,
   timestamp,
   unique,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import { users } from './auth.js';
 import { workspaces } from './workspaces.js';
 
@@ -26,8 +27,16 @@ export const projects = pgTable('projects', {
   status:              varchar('status', { length: 20 }).default('active'), // active|archived
   createdAt:           timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt:           timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  deletedAt:           timestamp('deleted_at', { withTimezone: true }),
 }, (table) => [
-  unique('projects_workspace_key_unique').on(table.workspaceId, table.key),
+  // Partial, not a plain unique constraint — same reasoning as `users.email`
+  // (migration 0014): without `WHERE deleted_at IS NULL` a deleted project's
+  // key is gone forever, and nobody could ever create "PROJ" in this
+  // workspace again just because a project by that key once existed and got
+  // deleted.
+  uniqueIndex('projects_workspace_key_unique')
+    .on(table.workspaceId, table.key)
+    .where(sql`${table.deletedAt} IS NULL`),
 ]);
 
 // ─── project_members ─────────────────────────────────────────────────────────

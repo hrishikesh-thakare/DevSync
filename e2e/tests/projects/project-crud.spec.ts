@@ -96,6 +96,64 @@ test.describe('Project CRUD', () => {
     expect(fetched.data.project.status).toBe('archived');
   });
 
+  test('delete project via API is a real (soft) delete, and frees its key', async () => {
+    const accessToken = getAuthToken('owner');
+    const uniqueKey = `D${Date.now().toString().slice(-4)}`;
+
+    const created = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'To Delete', key: uniqueKey }),
+    });
+    expect(created.status).toBe(201);
+
+    const { status: deleteStatus } = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, accessToken, {
+      method: 'DELETE',
+    });
+    expect(deleteStatus).toBe(200);
+
+    // Gone from the API entirely — not archived, not listed, not fetchable
+    // by key. `resolveProjectKey` filters `deletedAt`, the same choke point
+    // every `:key`-scoped route (tasks, sprints, labels, github, members,
+    // settings) goes through.
+    const afterDelete = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, accessToken);
+    expect(afterDelete.status).toBe(404);
+
+    const list = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken);
+    expect(list.data.projects.some((p: any) => p.key === uniqueKey)).toBe(false);
+
+    // The key is free again — a plain unique constraint would keep it dead
+    // forever; the partial index (`WHERE deleted_at IS NULL`) does not.
+    const recreated = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Reusing the key', key: uniqueKey }),
+    });
+    expect(recreated.status).toBe(201);
+    await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, accessToken, { method: 'DELETE' });
+  });
+
+  test('deleting a project requires project_admin and 404s for an unknown key', async () => {
+    const ownerToken = getAuthToken('owner');
+    const devToken = getAuthToken('developer');
+    const uniqueKey = `R${Date.now().toString().slice(-4)}`;
+
+    await apiRequest(`/workspaces/${SLUG}/projects`, ownerToken, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'RBAC Delete Check', key: uniqueKey }),
+    });
+
+    const { status: devStatus } = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, devToken, {
+      method: 'DELETE',
+    });
+    expect(devStatus).toBe(403);
+
+    const { status: unknownStatus } = await apiRequest(`/workspaces/${SLUG}/projects/NOPE${Date.now()}`, ownerToken, {
+      method: 'DELETE',
+    });
+    expect(unknownStatus).toBe(404);
+
+    await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, ownerToken, { method: 'DELETE' });
+  });
+
   test('can view project board (UI)', async ({ ownerPage }) => {
     await ownerPage.goto(ROUTES.projectBoard(SLUG, KEY));
     await ownerPage.waitForLoadState('networkidle');

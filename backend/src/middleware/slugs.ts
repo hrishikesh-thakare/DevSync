@@ -58,7 +58,7 @@ export const resolveProjectKey = async (req: Request, res: Response, next: NextF
       }
     }
 
-    const conditions = [eq(projects.key, key.toUpperCase())];
+    const conditions = [eq(projects.key, key.toUpperCase()), isNull(projects.deletedAt)];
     if (workspaceId) {
       conditions.push(eq(projects.workspaceId, workspaceId));
     }
