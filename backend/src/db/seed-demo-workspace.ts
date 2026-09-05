@@ -359,12 +359,20 @@ async function main() {
         allTasks.push({
           task_id: taskId, task_key: `${p.key}-${n}`, project_id: projectId,
           epic_id: epicId, sprint_id: sprint?.id ?? null,
-          title: pick(TITLES[issueType]), description: '{}', description_text: '',
+          title: pick(TITLES[issueType]), description: {}, description_text: '',
           issue_type: issueType, status: stage,
           priority: pick(['critical', 'high', 'medium', 'medium', 'medium', 'low']),
           reporter_id: reporter.userId, assignee_id: rand() < 0.9 ? assignee.userId : null,
           due_date: rand() < 0.35 ? addDays(createdAt, ri(3, 30)) : null,
-          labels: JSON.stringify(some(labelNames, ri(0, 2))),
+          // `tasks.labels` is jsonb — `postgres` already serializes a plain
+          // JS array into it correctly. Passing a pre-stringified string here
+          // instead makes the driver serialize *that*, producing a jsonb
+          // scalar string whose text content merely looks like an array
+          // (`"[\"backend\"]"`, not `["backend"]`). Every reader that expects
+          // a real array — `jsonb_array_elements(tasks.labels)` in
+          // `labels.controller.ts` chief among them — throws on a scalar,
+          // which is exactly the 500 that shipped with this bug.
+          labels: some(labelNames, ri(0, 2)),
           rank: `a${String(taskSeq).padStart(6, '0')}`,
           story_points: issueType === 'epic' ? null : pick([1, 2, 2, 3, 3, 5, 5, 8, 13]),
           linked_commits_count: stage === 'done' ? ri(0, 4) : 0,
@@ -384,15 +392,17 @@ async function main() {
           log_id: randomUUID(), actor_id: reporter.userId, action: 'task.created',
           entity_type: 'task', entity_id: taskId, workspace_id: wsId,
           old_values: null,
-          new_values: JSON.stringify({ task_key: `${p.key}-${n}`, title: 'seeded', status: 'todo', project_id: projectId }),
+          // Same jsonb double-encoding bug as `tasks.labels` above — `postgres`
+          // serializes a plain JS object into jsonb correctly on its own.
+          new_values: { task_key: `${p.key}-${n}`, title: 'seeded', status: 'todo', project_id: projectId },
           created_at: createdAt,
         });
         if (stage === 'done') {
           allAudit.push({
             log_id: randomUUID(), actor_id: assignee.userId, action: 'task.status_changed',
             entity_type: 'task', entity_id: taskId, workspace_id: wsId,
-            old_values: JSON.stringify({ status: 'in_review' }),
-            new_values: JSON.stringify({ status: 'done' }),
+            old_values: { status: 'in_review' },
+            new_values: { status: 'done' },
             created_at: doneAt,
           });
         }
@@ -504,7 +514,7 @@ async function main() {
             title: pick(TITLES.bug), body: null, state: rand() < 0.6 ? 'closed' : 'open',
             html_url: `https://github.com/${p.repo}/issues/${i}`,
             author_github_login: a.name.split(' ')[0].toLowerCase(), author_user_id: a.userId,
-            labels: JSON.stringify(['bug']), closed_at: rand() < 0.6 ? merged : null,
+            labels: ['bug'], closed_at: rand() < 0.6 ? merged : null,
             created_at: opened, updated_at: opened,
           });
         }
