@@ -104,6 +104,40 @@ test.describe('Session Management — API @auth', () => {
     expect(refresh.status).toBe(401);
   });
 
+  test('reusing an already-rotated refresh token revokes its whole family', async () => {
+    // Rotation chain: login -> A0. Refresh -> A0 revoked, A1 issued (same
+    // family). Replaying A0 now is exactly what a stolen-and-raced token
+    // looks like from the server's side — there is no way to tell whether
+    // A1 is in the real user's hands or a thief's, so the fix is to kill the
+    // whole chain rather than guess. Confirmed two ways: the replay itself is
+    // rejected, and so is the previously-valid A1 that had done nothing wrong.
+    const loginA0 = await realLogin(testEmail);
+
+    const refreshToA1 = await fetch(`${API_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { Cookie: loginA0.cookie },
+    });
+    expect(refreshToA1.status).toBe(200);
+    const setCookieA1 = refreshToA1.headers.get('set-cookie');
+    expect(setCookieA1).toBeTruthy();
+    const cookieA1 = setCookieA1!.split(';')[0];
+
+    // Replay the already-rotated A0.
+    const replay = await fetch(`${API_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { Cookie: loginA0.cookie },
+    });
+    expect(replay.status).toBe(401);
+
+    // A1 never did anything wrong, but it shares A0's family and must be
+    // revoked too — otherwise reuse detection would be pure theatre.
+    const a1AfterReplay = await fetch(`${API_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { Cookie: cookieA1 },
+    });
+    expect(a1AfterReplay.status).toBe(401);
+  });
+
   test('revoke-others keeps the current session and revokes the rest', async () => {
     const loginA = await realLogin(testEmail);
     const loginB = await realLogin(testEmail);

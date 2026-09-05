@@ -51,6 +51,13 @@ export const refreshTokens = pgTable('refresh_tokens', {
   tokenId:    uuid('token_id').primaryKey().defaultRandom(),
   userId:     uuid('user_id').references(() => users.userId, { onDelete: 'cascade' }),
   tokenHash:  varchar('token_hash', { length: 64 }).unique().notNull(),
+  // Shared by every token in one rotation chain: a fresh value on login/
+  // register/oauth, carried forward unchanged on each `/auth/refresh` rotation.
+  // Lets `refresh` tell "this token was already rotated out" (reuse — the
+  // classic signal a refresh token was stolen and the thief raced the real
+  // user) apart from "this token never existed", and revoke the *whole*
+  // chain rather than just the one token when reuse is detected.
+  familyId:   uuid('family_id').notNull().defaultRandom(),
   deviceInfo: jsonb('device_info'),
   issuedAt:   timestamp('issued_at', { withTimezone: true }).defaultNow(),
   expiresAt:  timestamp('expires_at', { withTimezone: true }).notNull(),
@@ -58,6 +65,8 @@ export const refreshTokens = pgTable('refresh_tokens', {
 }, (table) => [
   // Session list, revoke-others, and the 6-hourly cleanup sweep all filter here.
   index('idx_refresh_tokens_user').on(table.userId),
+  // Reuse detection revokes every row sharing a family in one UPDATE.
+  index('idx_refresh_tokens_family').on(table.familyId),
 ]);
 
 // ─── auth_tokens ─────────────────────────────────────────────────────────────

@@ -24,7 +24,11 @@ const generateAccessToken = (user: { userId: string; email: string }) => {
   );
 };
 
-const createRefreshToken = async (userId: string, req: Request): Promise<string> => {
+// `familyId` is omitted for a fresh session (login/register/oauth) — Drizzle's
+// `defaultRandom()` mints one — and passed through on a `/auth/refresh`
+// rotation, so the new token stays part of the same chain as the one it
+// replaces. See the column comment in `db/schema/auth.ts` for why that matters.
+const createRefreshToken = async (userId: string, req: Request, familyId?: string): Promise<string> => {
   // Generate random token
   const rawToken = crypto.randomBytes(40).toString('hex');
   // Hash token for database storage
@@ -44,6 +48,7 @@ const createRefreshToken = async (userId: string, req: Request): Promise<string>
     tokenHash,
     deviceInfo,
     expiresAt,
+    ...(familyId ? { familyId } : {}),
   });
 
   return rawToken;
@@ -305,6 +310,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
       .select({
         tokenId: refreshTokens.tokenId,
         userId: refreshTokens.userId,
+        familyId: refreshTokens.familyId,
         expiresAt: refreshTokens.expiresAt,
         revokedAt: refreshTokens.revokedAt,
         user: {
@@ -319,7 +325,24 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
       .where(eq(refreshTokens.tokenHash, tokenHash))
       .limit(1);
 
-    if (!tokenRecord || tokenRecord.revokedAt || tokenRecord.user.deletedAt) {
+    if (!tokenRecord || tokenRecord.user.deletedAt) {
+      res.status(401).json({ error: 'Invalid or revoked refresh token.' });
+      return;
+    }
+
+    if (tokenRecord.revokedAt) {
+      // This exact token was already rotated out once. A legitimate client
+      // never presents it again — it overwrote its stored copy with the
+      // token `/refresh` handed back last time. Seeing it again means either
+      // that response never reached the real client (replayed off the wire)
+      // or someone else has a copy: the currently-active token in this chain
+      // may not be in the hands of whoever holds it any more, so there is no
+      // way to tell victim from thief. Revoke every token in the chain and
+      // force a fresh login rather than guess.
+      await db
+        .update(refreshTokens)
+        .set({ revokedAt: new Date() })
+        .where(and(eq(refreshTokens.familyId, tokenRecord.familyId), isNull(refreshTokens.revokedAt)));
       res.status(401).json({ error: 'Invalid or revoked refresh token.' });
       return;
     }
@@ -337,7 +360,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
 
     // Generate new Access and Refresh tokens
     const accessToken = generateAccessToken(tokenRecord.user);
-    const newRefreshToken = await createRefreshToken(tokenRecord.user.userId, req);
+    const newRefreshToken = await createRefreshToken(tokenRecord.user.userId, req, tokenRecord.familyId);
 
     res.cookie('refreshToken', newRefreshToken, refreshCookieOptions());
 

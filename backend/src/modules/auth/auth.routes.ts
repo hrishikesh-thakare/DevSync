@@ -10,7 +10,7 @@ const router = Router();
 // Public routes
 router.post('/register', authLimiter, validate(registerSchema), register);
 router.post('/login', authLimiter, validate(loginSchema), login);
-router.post('/refresh', refresh);
+router.post('/refresh', authLimiter, refresh);
 router.post('/logout', logout);
 
 // Password recovery & email verification
@@ -19,7 +19,7 @@ router.post('/reset-password', authLimiter, validate(resetPasswordSchema), reset
 router.post('/verify-email', authLimiter, validate(verifyEmailSchema), verifyEmail);
 
 // Supabase OAuth Callback
-router.post('/oauth/callback', oauthCallback);
+router.post('/oauth/callback', authLimiter, oauthCallback);
 
 // Protected route to fetch logged in user details
 router.get('/me', requireAuth, (req, res) => {

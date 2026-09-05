@@ -9,7 +9,10 @@
 
 // ─── Roles ───────────────────────────────────────────────────────────────────
 
-export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'guest';
+// No 'guest' tier: the backend never implemented permissions for one (every
+// role check is 'owner' | 'admin' | 'member'), so the option was removed
+// rather than left able to silently lock someone out.
+export type WorkspaceRole = 'owner' | 'admin' | 'member';
 export type ProjectRole = 'project_admin' | 'developer' | 'viewer';
 export type MemberState = 'active' | 'invited' | 'deactivated';
 export type Presence = 'online' | 'away' | 'offline';

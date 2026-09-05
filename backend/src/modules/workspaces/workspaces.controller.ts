@@ -8,7 +8,27 @@ import { projects } from '../../db/schema/projects.js';
 import { logAuditAction } from '../audit/audit.controller.js';
 import { createNotification } from '../notifications/notifications.controller.js';
 import { enqueueJob } from '../../workers/queue.js';
+import { getIO } from '../../sockets/index.js';
 import crypto from 'crypto';
+
+// A socket only joins `workspace:{id}` once, on connect (see `sockets/index.ts`)
+// — membership is re-checked there but nowhere else, so removing someone here
+// does nothing to a socket they already hold open. `user:{userId}` is the one
+// room every one of a user's connections is always in, so it is how to reach
+// "every live connection this specific person has" without an explicit
+// socket-id registry: evict them from the workspace room directly rather than
+// waiting for them to reconnect on their own.
+const evictFromWorkspaceRoom = (userId: string, workspaceId: string): void => {
+  // Best-effort: the membership change is already committed by the time this
+  // runs, so a missing/uninitialized socket server (getIO() throws rather
+  // than returning null) must never turn an already-successful removal into
+  // a 500 for the caller.
+  try {
+    getIO().in(`user:${userId}`).socketsLeave(`workspace:${workspaceId}`);
+  } catch (err) {
+    console.warn('evictFromWorkspaceRoom: could not reach socket server', err);
+  }
+};
 
 // ─── Helper: generate a URL-safe slug from a workspace name ──────────────────
 const generateSlug = (name: string): string => {
@@ -599,6 +619,8 @@ export const removeMember = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
+    evictFromWorkspaceRoom(userId, workspaceId);
+
     res.json({ message: userId === currentUserId ? 'You have left the workspace' : 'Member removed' });
   } catch (err) {
     console.error('Remove member error:', err);
@@ -662,6 +684,8 @@ export const leaveWorkspace = async (req: Request, res: Response): Promise<void>
       res.status(404).json({ error: 'You are not a member of this workspace.' });
       return;
     }
+
+    evictFromWorkspaceRoom(userId, workspaceId);
 
     res.json({ message: 'You have left the workspace' });
   } catch (err) {

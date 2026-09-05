@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
-const RoleEnum = z.enum(['owner', 'admin', 'member', 'guest']);
+// 'guest' used to be accepted here with no role check anywhere in the app
+// ever granting it anything — inviting or demoting someone to it silently
+// locked them out of the whole workspace (every `requireWorkspaceRole` guard
+// lists 'owner' | 'admin' | 'member' and would reject 'guest' at every route).
+// Removed rather than half-implemented: add it back only alongside real
+// guest-tier permissions.
+const RoleEnum = z.enum(['owner', 'admin', 'member']);
 
 export const createWorkspaceSchema = z.object({
   name: z.string().min(1, 'Workspace name is required'),
