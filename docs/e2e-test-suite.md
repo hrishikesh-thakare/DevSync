@@ -1,12 +1,12 @@
 # DevSync E2E Test Suite — Complete Test Reference
 
-The DevSync Playwright end-to-end suite contains **336 tests across 42 spec files**. It verifies the full product surface: authentication & sessions (including password recovery, email verification, enforcement of verified emails on sign-in, and rate limiting behind a trusted proxy), workspace/project/channel/task/sprint/label CRUD (including soft-delete isolation of deleted workspaces), messaging (including threads and reactions), XSS sanitization of message HTML, RBAC at workspace and project level, GitHub integration, search, notifications, file storage, WebSocket realtime events, security/tenant-scoping, and audit logging.
+The DevSync Playwright end-to-end suite contains **337 tests across 42 spec files**. It verifies the full product surface: authentication & sessions (including password recovery, email verification, enforcement of verified emails on sign-in, and rate limiting behind a trusted proxy), workspace/project/channel/task/sprint/label CRUD (including soft-delete isolation of deleted workspaces), messaging (including threads and reactions), XSS sanitization of message HTML, RBAC at workspace and project level, GitHub integration, search, notifications, file storage, WebSocket realtime events, security/tenant-scoping, and audit logging.
 
 ## Running the Suite
 
 | Command | Purpose |
 | :--- | :--- |
-| `npx playwright test` | Run the full suite (336 tests) |
+| `npx playwright test` | Run the full suite (337 tests) |
 | `npx playwright test tests/<dir>` | Run one module (e.g. `tests/rbac`) |
 | `npx playwright test tests/<dir>/<file>.spec.ts --workers 1` | Run one spec file serially |
 | `npm run test:rbac` / `test:auth` | Run tests tagged `@rbac` / `@auth` |
@@ -189,6 +189,7 @@ Persona-based `GET /workspaces/:slug/dashboard` — what each role sees on works
 | delete project via API is a real (soft) delete, and frees its key | DELETE → 200; GET/list → gone; recreating the same key → 201 (partial unique index, not a dead key forever) |
 | deleting a project requires project_admin and 404s for an unknown key | Developer → 403; unknown key → 404 |
 | can view project board (UI) | Kanban columns (Todo/In Progress/In Review/Done) render |
+| delete project via the settings page requires typing the key first (UI) | Confirm button disabled until the typed text matches the project key exactly; wrong text stays disabled, matching text enables it and deletes |
 
 ### `project-members.spec.ts`
 | Test | Verifies |

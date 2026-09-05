@@ -162,4 +162,33 @@ test.describe('Project CRUD', () => {
     const statusText = ownerPage.locator('text=/Todo|In Progress|In Review|Done/i');
     await expect(statusText.first()).toBeVisible({ timeout: 10_000 });
   });
+
+  test('delete project via the settings page requires typing the key first (UI)', async ({ ownerPage }) => {
+    const accessToken = getAuthToken('owner');
+    const uniqueKey = `U${Date.now().toString().slice(-4)}`;
+    const { status: createStatus } = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'To Delete via UI', key: uniqueKey }),
+    });
+    expect(createStatus).toBe(201);
+
+    await ownerPage.goto(ROUTES.projectSettings(SLUG, uniqueKey));
+    await ownerPage.getByRole('button', { name: 'Delete project' }).click();
+
+    const confirmButton = ownerPage.getByRole('button', { name: 'Delete permanently' });
+    await expect(confirmButton).toBeDisabled();
+
+    await ownerPage.getByLabel(`Type ${uniqueKey} to confirm`).fill('wrong key entirely');
+    await expect(confirmButton).toBeDisabled();
+
+    await ownerPage.getByLabel(`Type ${uniqueKey} to confirm`).fill(uniqueKey);
+    await expect(confirmButton).toBeEnabled();
+    await confirmButton.click();
+
+    await expect(ownerPage.getByText(`${uniqueKey} deleted`)).toBeVisible({ timeout: 10_000 });
+    await expect(ownerPage).toHaveURL(new RegExp(`/w/${SLUG}/projects$`));
+
+    const { status } = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, accessToken);
+    expect(status).toBe(404);
+  });
 });

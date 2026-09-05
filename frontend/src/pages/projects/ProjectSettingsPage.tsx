@@ -39,11 +39,13 @@ type Values = z.infer<typeof schema>;
 export function ProjectSettingsPage() {
   const { slug = '', key = '' } = useParams();
   const navigate = useNavigate();
-  const { project, updateProject, archiveProject, error: projectError } = useProjectStore();
+  const { project, updateProject, archiveProject, deleteProject, error: projectError } = useProjectStore();
   const myRole = useMyProjectRole();
   const canEdit = myRole === 'project_admin' || myRole === 'developer';
   const canArchive = myRole === 'project_admin';
   const [archiving, setArchiving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
 
   const form = useForm<Values>({
     resolver: zodResolver(schema),
@@ -78,6 +80,19 @@ export function ProjectSettingsPage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not archive the project.');
       setArchiving(false);
+    }
+  };
+
+  const onDelete = async () => {
+    setDeleting(true);
+    try {
+      const deletedKey = project?.key;
+      await deleteProject(slug, key);
+      toast.success(`${deletedKey} deleted`);
+      navigate(`/w/${slug}/projects`, { replace: true });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not delete the project.');
+      setDeleting(false);
     }
   };
 
@@ -217,6 +232,63 @@ export function ProjectSettingsPage() {
             >
               Restore project
             </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {canArchive ? (
+        <Card className="mt-8 ring-destructive/30">
+          <CardHeader>
+            <CardTitle className="text-destructive">Delete project</CardTitle>
+            <CardDescription>
+              Removes {project.key} from every list for everyone. Unlike archiving, there is no
+              {' '}
+              restore button — only a direct link to this page could ever bring it back, and nothing
+              in the app offers one. Its tasks, sprints and history are kept but become unreachable.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AlertDialog onOpenChange={(open) => !open && setConfirmText('')}>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" disabled={deleting}>
+                  {deleting ? <Loader2Icon className="size-4 animate-spin" aria-hidden="true" /> : null}
+                  Delete project
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete {project.name}?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This cannot be undone from the app. Type the project key to confirm.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+
+                <Input
+                  value={confirmText}
+                  onChange={(e) => setConfirmText(e.target.value)}
+                  placeholder={project.key}
+                  aria-label={`Type ${project.key} to confirm`}
+                  className="font-mono"
+                />
+
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={confirmText !== project.key || deleting}
+                    onClick={(e) => {
+                      // Keep the dialog open if the typed key does not match.
+                      if (confirmText !== project.key) {
+                        e.preventDefault();
+                        return;
+                      }
+                      void onDelete();
+                    }}
+                  >
+                    Delete permanently
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </CardContent>
         </Card>
       ) : null}

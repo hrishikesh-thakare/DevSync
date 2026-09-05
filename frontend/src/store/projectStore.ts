@@ -29,6 +29,7 @@ interface ProjectState {
   createProject: (slug: string, input: CreateProjectInput) => Promise<Project>;
   updateProject: (slug: string, key: string, input: UpdateProjectInput) => Promise<Project>;
   archiveProject: (slug: string, key: string) => Promise<void>;
+  deleteProject: (slug: string, key: string) => Promise<void>;
 
   addMember: (slug: string, key: string, userId: string, role: ProjectRole) => Promise<void>;
   updateMemberRole: (slug: string, key: string, userId: string, role: ProjectRole) => Promise<void>;
@@ -127,6 +128,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     useCurrentWorkspaceStore.setState((state) => ({
       projects: state.projects.filter((p) => p.projectId !== data.project.projectId),
     }));
+  },
+
+  deleteProject: async (slug, key) => {
+    const projectId = get().project?.projectId;
+    await apiFetch(`/workspaces/${slug}/projects/${key}`, { method: 'DELETE' });
+    set({ project: null, members: [] });
+
+    if (projectId) {
+      useCurrentWorkspaceStore.setState((state) => ({
+        projects: state.projects.filter((p) => p.projectId !== projectId),
+      }));
+    }
   },
 
   addMember: async (slug, key, userId, role) => {
