@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/layout/PageState';
 import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
-import { useTaskStore } from '@/store/taskStore';
+import { applyTaskUpdate } from '@/queries/tasks';
 import { socketClient } from '@/lib/socket';
 import { cn } from '@/lib/utils';
 import type { TaskSummary } from '@/types/api';
@@ -29,7 +29,6 @@ export function ProjectLayout() {
   const navigate = useNavigate();
   const { project, isLoading, error, fetchProject, reset } = useProjectStore();
   const myRole = useMyProjectRole();
-  const applyTaskUpdate = useTaskStore((s) => s.applyTaskUpdate);
 
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -70,7 +69,7 @@ export function ProjectLayout() {
     const releaseRoom = socketClient.joinRoom(`project:${project.projectId}`);
 
     const onTaskUpdated = (task: Partial<TaskSummary> & { taskId: string }) => {
-      applyTaskUpdate(task);
+      applyTaskUpdate(slug, key, task);
     };
 
     socket.on('task_updated', onTaskUpdated);
@@ -79,7 +78,7 @@ export function ProjectLayout() {
       socket.off('task_updated', onTaskUpdated);
       releaseRoom();
     };
-  }, [project?.projectId, applyTaskUpdate]);
+  }, [project?.projectId, slug, key]);
 
   if (isLoading) {
     return (

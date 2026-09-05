@@ -30,7 +30,7 @@ directive, and skips them as identical.
 | `frontend/src/pages/projects/board/KanbanTaskCard.tsx` | the card, shared by both boards |
 | `frontend/src/pages/workspaces/MyTasksPage.tsx` | cross-project board behind a List/Board toggle |
 | `frontend/src/pages/projects/BacklogPage.tsx` | a sortable *list*, plain dnd-kit — not this component (§7) |
-| `frontend/src/store/taskStore.ts` | `moveTask`, the optimistic commit |
+| `frontend/src/queries/tasks.ts` | `useMoveTaskMutation`, the optimistic commit; also the task-list query cache both boards read |
 | `backend/src/modules/tasks/tasks.controller.ts` | `reorderTask`, the persistence endpoint |
 
 ---
@@ -39,9 +39,10 @@ directive, and skips them as identical.
 
 Ordering is a `text` column holding a lexicographically-sortable key
 (`fractional-indexing`'s `generateKeyBetween`, a LexoRank equivalent). Sorting
-is `a.rank.localeCompare(b.rank)` (`byRank` in the store). Inserting between
-two cards never touches any other row — that is the entire point, and it is
-why a drag is a single `UPDATE` rather than a renumbering of the column.
+is `a.rank.localeCompare(b.rank)` (`byRank`, exported from `queries/tasks.ts`).
+Inserting between two cards never touches any other row — that is the entire
+point, and it is why a drag is a single `UPDATE` rather than a renumbering of
+the column.
 
 **The sharp edge:**
 
@@ -91,25 +92,30 @@ In order:
 The audit + transition + notification block is the expensive part to
 rediscover. The rank arithmetic is five lines.
 
-## 4. `taskStore.moveTask` computes the rank twice on purpose
+## 4. `useMoveTaskMutation` computes the rank twice on purpose
 
 The naive optimistic update patches `status` only. That leaves the card
 holding its *old* rank, so it sorts to the wrong slot among its new column's
 siblings, then jumps a second time when the PATCH returns the real rank. Two
 visible snaps per drag — reads as lag even when the request is fast.
 
-So it computes the same key the server will, from the same neighbours the
-caller already resolved, with the same library — then **adopts the server's
-rank** on success. Skipping that adoption means the next drag computes
-neighbours from a stale value and positions drift over a session.
+So its `onMutate` computes the same key the server will, from the same
+neighbours the caller already resolved, with the same library, and writes it
+straight into the TanStack Query cache for `['tasks', slug, key]` — then
+`onSuccess` **adopts the server's rank**, overwriting the guess. Skipping that
+adoption means the next drag computes neighbours from a stale value and
+positions drift over a session.
 
-On failure it does `set({ tasks: previous })` and rethrows. That self-healing
-revert is why `BoardPage` needs *no* revert logic of its own: the store
-restores `tasks`, which flows through the page's `filtered` memo into the
-`columns`-sync effect automatically.
+`onMutate` returns a snapshot of the pre-mutation cache (`{ previous }`), and
+`onError` restores it with `setQueryData`. That self-healing revert is why
+`BoardPage` needs *no* revert logic of its own: the cache goes back to what it
+was, `useTasksQuery` re-renders with it, and the page's `filtered` memo and
+`columns`-sync effect pick it up automatically — the same shape the old
+Zustand-store version had, just backed by the query cache instead of
+`set({ tasks: previous })`.
 
 `MyTasksPage` is the opposite case — it owns its `tasks` locally, outside the
-store, so it *does* hand-write a revert in `onBoardCommit`'s catch. Worth
+cache, so it *does* hand-write a revert in `onBoardCommit`'s catch. Worth
 keeping that asymmetry in mind before moving board state around.
 
 ## 5. Component contracts worth knowing
@@ -222,8 +228,9 @@ list, not the full backlog — the drop target the user actually saw.
 
 ## 8. Test coverage
 
-Baseline for the full suite is **295 passed / 2 skipped** (a few specs skip
-conditionally on seeded data, so the skip count occasionally reads 3).
+Baseline for the full suite is **323 passed / 2 skipped** out of 325 (a few
+specs skip conditionally on seeded data, so the skip count occasionally
+reads 3).
 
 - `projects/project-crud.spec.ts` — board renders its columns.
 - `tasks/task-crud.spec.ts` — board renders tasks; reorder via API returns

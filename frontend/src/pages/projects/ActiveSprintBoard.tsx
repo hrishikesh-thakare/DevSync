@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/empty';
 import { CalendarClockIcon } from 'lucide-react';
 import { useSprintStore } from '@/store/sprintStore';
-import { useTaskStore, byRank } from '@/store/taskStore';
+import { useTasksQuery, byRank, EMPTY_TASKS } from '@/queries/tasks';
 import { STATUS_META, STATUS_ORDER } from '@/lib/taskMeta';
 import { PRIORITY_META } from '@/lib/taskMeta';
 import { MemberAvatar } from '@/components/MemberAvatar';
@@ -33,14 +33,11 @@ import { cn } from '@/lib/utils';
 export function ActiveSprintBoard() {
   const { slug = '', key = '', sprintId } = useParams();
   const { sprints, isLoading: sprintsLoading, fetchSprints } = useSprintStore();
-  const { tasks, isLoading: tasksLoading, fetchTasks } = useTaskStore();
+  const { data: tasks = EMPTY_TASKS, isPending: tasksLoading } = useTasksQuery(slug, key);
 
   useEffect(() => {
-    if (slug && key) {
-      void fetchSprints(slug, key);
-      void fetchTasks(slug, key);
-    }
-  }, [slug, key, fetchSprints, fetchTasks]);
+    if (slug && key) void fetchSprints(slug, key);
+  }, [slug, key, fetchSprints]);
 
   const sprint = useMemo(
     () =>

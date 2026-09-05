@@ -36,7 +36,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CreateTaskDialog } from '@/pages/projects/board/CreateTaskDialog';
-import { useTaskStore, byRank } from '@/store/taskStore';
+import { useTasksQuery, useMoveTaskMutation, byRank, EMPTY_TASKS } from '@/queries/tasks';
 import { useSprintStore } from '@/store/sprintStore';
 import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
 import { ISSUE_TYPE_META, ISSUE_TYPE_ORDER, PRIORITY_META, PRIORITY_ORDER, STATUS_META } from '@/lib/taskMeta';
@@ -55,7 +55,8 @@ const ANY = '__any__';
 export function BacklogPage() {
   const { slug = '', key = '' } = useParams();
   const navigate = useNavigate();
-  const { tasks, isLoading, error, fetchTasks, moveTask, reset } = useTaskStore();
+  const { data: tasks = EMPTY_TASKS, isPending: isLoading, error, refetch } = useTasksQuery(slug, key);
+  const { mutateAsync: moveTask } = useMoveTaskMutation(slug, key);
   const { sprints, fetchSprints, addTask } = useSprintStore();
   const members = useProjectStore((s) => s.members);
   const myRole = useMyProjectRole();
@@ -70,12 +71,8 @@ export function BacklogPage() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    if (slug && key) {
-      void fetchTasks(slug, key);
-      void fetchSprints(slug, key);
-    }
-    return () => reset();
-  }, [slug, key, fetchTasks, fetchSprints, reset]);
+    if (slug && key) void fetchSprints(slug, key);
+  }, [slug, key, fetchSprints]);
 
   const backlog = useMemo(() => tasks.filter((t) => !t.sprintId).sort(byRank), [tasks]);
 
@@ -119,7 +116,7 @@ export function BacklogPage() {
     const beforeId = after && before && (after.rank ?? '') >= (before.rank ?? '') ? null : (before?.taskId ?? null);
 
     try {
-      await moveTask(slug, key, moving.taskId, moving.status, after?.taskId ?? null, beforeId);
+      await moveTask({ taskId: moving.taskId, status: moving.status, afterTaskId: after?.taskId ?? null, beforeTaskId: beforeId });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not reorder.');
     }
@@ -145,12 +142,12 @@ export function BacklogPage() {
       }
       toast.success(`${ok} task${ok === 1 ? '' : 's'} added to the sprint`);
       setSelected(new Set());
-      await fetchTasks(slug, key);
+      await refetch();
     } catch (err) {
       toast.error(
         err instanceof Error ? `${err.message} (${ok} of ${ids.length} moved)` : 'Could not assign.',
       );
-      await fetchTasks(slug, key);
+      await refetch();
     } finally {
       setAssigning(false);
     }
@@ -170,7 +167,7 @@ export function BacklogPage() {
   if (error) {
     return (
       <div className="mx-auto w-full max-w-5xl p-6">
-        <ErrorState message={error} />
+        <ErrorState message={error instanceof Error ? error.message : 'Could not load tasks.'} />
       </div>
     );
   }

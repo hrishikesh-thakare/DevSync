@@ -16,7 +16,7 @@ import { Kanban, KanbanBoard, KanbanOverlay, type KanbanCommitMeta } from '@/com
 import { BoardColumn } from '@/pages/projects/board/BoardColumn';
 import { KanbanTaskCard } from '@/pages/projects/board/KanbanTaskCard';
 import { CreateTaskDialog } from '@/pages/projects/board/CreateTaskDialog';
-import { useTaskStore, byRank } from '@/store/taskStore';
+import { useTasksQuery, useMoveTaskMutation, byRank, EMPTY_TASKS } from '@/queries/tasks';
 import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
 import { PRIORITY_META, PRIORITY_ORDER, STATUS_ORDER } from '@/lib/taskMeta';
 import type { TaskStatus, TaskSummary } from '@/types/api';
@@ -33,7 +33,8 @@ const EMPTY_COLUMNS: Record<TaskStatus, TaskSummary[]> = {
 export function BoardPage() {
   const { slug = '', key = '' } = useParams();
   const navigate = useNavigate();
-  const { tasks, isLoading, error, fetchTasks, moveTask, reset } = useTaskStore();
+  const { data: tasks = EMPTY_TASKS, isPending: isLoading, error } = useTasksQuery(slug, key);
+  const { mutate: moveTask } = useMoveTaskMutation(slug, key);
   const members = useProjectStore((s) => s.members);
   const myRole = useMyProjectRole();
   const canEdit = myRole === 'project_admin' || myRole === 'developer';
@@ -41,11 +42,6 @@ export function BoardPage() {
   const [assignee, setAssignee] = useState(ANY);
   const [priority, setPriority] = useState(ANY);
   const [createIn, setCreateIn] = useState<TaskStatus | null>(null);
-
-  useEffect(() => {
-    if (slug && key) void fetchTasks(slug, key);
-    return () => reset();
-  }, [slug, key, fetchTasks, reset]);
 
   const filtered = useMemo(
     () =>
@@ -101,9 +97,10 @@ export function BoardPage() {
       beforeTaskId = null;
     }
 
-    void moveTask(slug, key, task.taskId, targetStatus, afterTaskId, beforeTaskId).catch((err) => {
-      toast.error(err instanceof Error ? err.message : 'Could not move the task.');
-    });
+    moveTask(
+      { taskId: task.taskId, status: targetStatus, afterTaskId, beforeTaskId },
+      { onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not move the task.') },
+    );
   };
 
   if (isLoading) {
@@ -117,7 +114,7 @@ export function BoardPage() {
   if (error) {
     return (
       <div className="mx-auto w-full max-w-5xl p-6">
-        <ErrorState message={error} />
+        <ErrorState message={error instanceof Error ? error.message : 'Could not load tasks.'} />
       </div>
     );
   }

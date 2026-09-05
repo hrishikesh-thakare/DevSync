@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { apiFetch } from '@/lib/api';
 import { classifyFile, fileToBase64, formatBytes, MAX_UPLOAD_BYTES } from '@/lib/files';
 import { useAuthStore } from '@/store/auth';
-import { useTaskStore } from '@/store/taskStore';
+import { patchCachedTask, removeCachedTask } from '@/queries/tasks';
 import type {
   LinkedCommit,
   Task,
@@ -90,23 +90,7 @@ export const useTaskDetailStore = create<TaskDetailState>((set, get) => ({
     set({ task: data.task });
 
     // Keep a board rendered behind this panel in step with the edit.
-    useTaskStore.setState((state) => ({
-      tasks: state.tasks.map((t) =>
-        t.taskId === data.task.taskId
-          ? {
-              ...t,
-              title: data.task.title,
-              status: data.task.status,
-              priority: data.task.priority,
-              issueType: data.task.issueType,
-              assigneeId: data.task.assigneeId,
-              storyPoints: data.task.storyPoints,
-              sprintId: data.task.sprintId,
-              labels: data.task.labels ?? [],
-            }
-          : t,
-      ),
-    }));
+    patchCachedTask(slug, key, data.task);
   },
 
   addComment: async (slug, key, taskKey, bodyText) => {
@@ -120,9 +104,7 @@ export const useTaskDetailStore = create<TaskDetailState>((set, get) => ({
   deleteTask: async (slug, key, taskKey) => {
     const taskId = get().task?.taskId;
     await apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${taskKey}`, { method: 'DELETE' });
-    if (taskId) {
-      useTaskStore.setState((state) => ({ tasks: state.tasks.filter((t) => t.taskId !== taskId) }));
-    }
+    if (taskId) removeCachedTask(slug, key, taskId);
   },
 
   addAttachment: async (slug, key, taskKey, file) => {

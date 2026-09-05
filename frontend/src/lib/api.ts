@@ -74,8 +74,8 @@ function refreshAccessToken(): Promise<string | null> {
  *    escape hatch costs nothing where types exist.
  *  - Narrowing the default to `unknown` is not a lint fix but a data-layer
  *    refactor. Several stores currently assign a partially-built object literal
- *    to a fully-specified interface (see `useTaskStore.fetchTasks`, which omits
- *    `projectId`, `activityLog`, `createdBy` and more) and only typecheck
+ *    to a fully-specified interface (see `queries/tasks.ts`'s `fetchTasks`,
+ *    which omits `projectId`, `activityLog`, `createdBy` and more) and only typecheck
  *    because `any` flows through. Tightening this signature means completing
  *    those interfaces against the real API responses first.
  *

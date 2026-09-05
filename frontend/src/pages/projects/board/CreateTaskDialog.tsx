@@ -25,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useTaskStore } from '@/store/taskStore';
+import { useCreateTaskMutation } from '@/queries/tasks';
 import { useProjectStore } from '@/store/projectStore';
 import {
   ISSUE_TYPE_META,
@@ -63,7 +63,7 @@ export function CreateTaskDialog({
   status: TaskStatus;
   onOpenChange: (open: boolean) => void;
 }) {
-  const createTask = useTaskStore((s) => s.createTask);
+  const { mutateAsync: createTask } = useCreateTaskMutation(slug, projectKey);
   const members = useProjectStore((s) => s.members);
 
   const [issueType, setIssueType] = useState<IssueType>('task');
@@ -83,7 +83,7 @@ export function CreateTaskDialog({
     try {
       // createTaskSchema is .strict(): send only keys it declares, and omit
       // rather than send empty strings.
-      const task = await createTask(slug, projectKey, {
+      const task = await createTask({
         title: values.title,
         status,
         issueType,

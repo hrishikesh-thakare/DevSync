@@ -1,7 +1,8 @@
 import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 
+import { queryClient } from '@/lib/queryClient';
 import { AuthBootstrap } from '@/components/auth/AuthBootstrap';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { GuestGuard } from '@/components/auth/GuestGuard';
@@ -72,15 +73,6 @@ const AnalyticsPage = page(() => import('@/pages/AnalyticsPage'), 'AnalyticsPage
  * Neither are `/reset-password` and `/verify-email`, which the email service
  * hard-codes against `FRONTEND_URL`.
  */
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      refetchOnWindowFocus: false,
-    },
-  },
-});
-
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>

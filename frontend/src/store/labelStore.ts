@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { apiFetch } from '@/lib/api';
-import { useTaskStore } from '@/store/taskStore';
+import { renameCachedTaskLabel } from '@/queries/tasks';
 import type { ProjectLabel } from '@/types/api';
 
 /**
@@ -32,27 +32,6 @@ interface LabelState {
 }
 
 const base = (slug: string, key: string) => `/workspaces/${slug}/projects/${key}/labels`;
-
-/**
- * Applies a label rename (or removal, when `to` is null) to the tasks already
- * loaded in `useTaskStore`, matching case-insensitively the way the server does.
- */
-function renameOnLoadedTasks(from: string, to: string | null): void {
-  const lower = from.toLowerCase();
-  useTaskStore.setState((state) => ({
-    tasks: state.tasks.map((task) => {
-      const labels = task.labels ?? [];
-      if (!labels.some((l) => l.toLowerCase() === lower)) return task;
-      return {
-        ...task,
-        labels:
-          to === null
-            ? labels.filter((l) => l.toLowerCase() !== lower)
-            : labels.map((l) => (l.toLowerCase() === lower ? to : l)),
-      };
-    }),
-  }));
-}
 
 export const useLabelStore = create<LabelState>((set, get) => ({
   labels: [],
@@ -102,7 +81,7 @@ export const useLabelStore = create<LabelState>((set, get) => ({
     // same strings and would otherwise show the old name until a refetch.
     const renamed = get().labels.find((l) => l.labelId === labelId)?.name;
     if (previous && renamed && renamed !== previous) {
-      renameOnLoadedTasks(previous, renamed);
+      renameCachedTaskLabel(slug, key, previous, renamed);
     }
   },
 
@@ -111,7 +90,7 @@ export const useLabelStore = create<LabelState>((set, get) => ({
     await apiFetch(`${base(slug, key)}/${labelId}`, { method: 'DELETE' });
     set((state) => ({ labels: state.labels.filter((l) => l.labelId !== labelId) }));
     // Deleting also strips the label off every task that carried it.
-    if (removed) renameOnLoadedTasks(removed, null);
+    if (removed) renameCachedTaskLabel(slug, key, removed, null);
   },
 
   reset: () => set({ labels: [], isLoading: true, error: null }),
