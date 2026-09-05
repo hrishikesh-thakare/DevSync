@@ -1,12 +1,12 @@
 # DevSync E2E Test Suite — Complete Test Reference
 
-The DevSync Playwright end-to-end suite contains **315 tests across 36 spec files**. It verifies the full product surface: authentication & sessions (including password recovery, email verification, enforcement of verified emails on sign-in, and rate limiting behind a trusted proxy), workspace/project/channel/task/sprint/label CRUD (including soft-delete isolation of deleted workspaces), messaging (including threads and reactions), XSS sanitization of message HTML, RBAC at workspace and project level, GitHub integration, search, notifications, file storage, WebSocket realtime events, security/tenant-scoping, and audit logging.
+The DevSync Playwright end-to-end suite contains **325 tests across 36 spec files**. It verifies the full product surface: authentication & sessions (including password recovery, email verification, enforcement of verified emails on sign-in, and rate limiting behind a trusted proxy), workspace/project/channel/task/sprint/label CRUD (including soft-delete isolation of deleted workspaces), messaging (including threads and reactions), XSS sanitization of message HTML, RBAC at workspace and project level, GitHub integration, search, notifications, file storage, WebSocket realtime events, security/tenant-scoping, and audit logging.
 
 ## Running the Suite
 
 | Command | Purpose |
 | :--- | :--- |
-| `npx playwright test` | Run the full suite (315 tests) |
+| `npx playwright test` | Run the full suite (325 tests) |
 | `npx playwright test tests/<dir>` | Run one module (e.g. `tests/rbac`) |
 | `npx playwright test tests/<dir>/<file>.spec.ts --workers 1` | Run one spec file serially |
 | `npm run test:rbac` / `test:auth` | Run tests tagged `@rbac` / `@auth` |
@@ -98,6 +98,8 @@ The suite runs automatically in CI on every push to `main`/`develop` and on ever
 | :--- | :--- |
 | POST /auth/status updates statusText and presence | `statusText` + `presence` are persisted and returned |
 | POST /auth/presence updates presence | Presence alone updates (`away`) |
+| presence is constrained to the three rendered states | `online`/`away`/`offline` accepted; `busy`/`BUSY`/empty/trailing-space/`dnd`/missing/unknown-key all rejected with 400 |
+| status text is length-bounded and its presence is validated | Over 100 chars → 400; invalid `presence` on `/auth/status` → 400; clearing to `''` → 200 |
 | PATCH /auth/preferences merges preferences instead of replacing them | Second patch keeps first patch's keys (jsonb merge) |
 | status, presence and preferences require authentication (401) | All three endpoints reject missing tokens |
 
@@ -324,15 +326,25 @@ Regression coverage for the cross-workspace/injection findings from the security
 
 | Test | Verifies |
 | :--- | :--- |
-| rejects a client-supplied isSystem / systemType | Client can no longer forge a system message to bypass announcement-channel admin gating |
+| rejects a client-supplied isSystem | Client can no longer forge a system message to bypass announcement-channel admin gating |
+| rejects a client-supplied systemType | Same guard on the paired field |
 | rejects a threadId belonging to another channel | Thread injection across channels is blocked |
 | accepts a threadId in the same channel | Legitimate same-channel replies still work |
-| rejects runId values containing path segments | GitHub `runId` is validated as `/^\d+$/`, closing the `../../` path-injection route |
+| rejects runId "..%2F..%2Fuser%2Frepos" | GitHub `runId` is validated as `/^\d+$/`, closing the path-traversal route to an arbitrary `api.github.com` endpoint |
+| rejects runId "abc" | Non-numeric `runId` rejected |
+| rejects runId "1;2" | Injection-shaped `runId` rejected |
+| rejects runId "-1" | Negative `runId` rejected |
 | rejects a non-numeric issueNumber | Same numeric-only validation on issue endpoints |
 | rejects a non-numeric prNumber | Same numeric-only validation on PR endpoints |
 | rejects a repo owner containing a path separator | `repo_owner`/`repo_name` charset validation |
-| refuses private/loopback/link-local unfurl targets | SSRF blocklist rejects RFC1918, loopback and link-local addresses after DNS resolution |
-| refuses a non-http scheme | Unfurl still rejects non-http(s) protocols |
+| refuses http://169.254.169.254/latest/meta-data/ | Cloud metadata endpoint blocked |
+| refuses http://127.0.0.1:3001/api/health | Loopback by address blocked |
+| refuses http://localhost:5432 | Loopback by name blocked (resolved before checking) |
+| refuses http://10.0.0.1/ | RFC1918 blocked |
+| refuses http://192.168.1.1/ | RFC1918 blocked |
+| refuses http://[::1]/ | IPv6 loopback blocked |
+| refuses http://0.0.0.0/ | "This network" address blocked |
+| refuses a non-http scheme | `file://` and other non-http(s) protocols rejected |
 | rejects a disallowed mimetype | Upload MIME allowlist blocks unlisted types |
 | rejects SVG, which is an image to a user and a script host to a browser | SVG specifically excluded from inline-safe types |
 | rejects an unknown key | Strict upload schema rejects extra fields |
