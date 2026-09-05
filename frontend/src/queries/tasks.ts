@@ -228,6 +228,25 @@ export function byRank(a: TaskSummary, b: TaskSummary) {
   return (a.rank ?? '').localeCompare(b.rank ?? '');
 }
 
+/**
+ * Stable `getItemValue` for every `<Kanban>` board in the app (`BoardPage`,
+ * `MyTasksPage`). The vendored component (`components/reui/kanban.tsx`) puts
+ * `getItemValue` in the dependency array of several of its own internal
+ * `useMemo`/`useCallback` hooks (`columnIds`, `findContainer`,
+ * `handleDragOver`, its context value, …) — passing `(t) => t.taskId` as a
+ * fresh arrow function on every render defeats every one of those and hands
+ * every descendant a new context value on every render too. Usually harmless
+ * — React just does extra work — but during a drag, fast pointer-move events
+ * plus a large column (dozens of cards to re-measure per cycle) can turn that
+ * into a genuine feedback loop with dnd-kit's own rect-measurement effect,
+ * which is exactly what "Maximum update depth exceeded" during a drag looks
+ * like. One module-level function has a referentially stable identity across
+ * every render, which is all `getItemValue` was ever supposed to need.
+ */
+export function getTaskId(task: TaskSummary): string {
+  return task.taskId;
+}
+
 interface BulkUpdateResult {
   ok: number;
   failed: number;

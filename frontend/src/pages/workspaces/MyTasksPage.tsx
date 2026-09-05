@@ -31,6 +31,7 @@ import {
 import type { KanbanCommitMeta } from '@/components/reui/kanban';
 import { TaskCardBody } from '@/pages/projects/board/TaskCard';
 import { KanbanTaskCard } from '@/pages/projects/board/KanbanTaskCard';
+import { getTaskId } from '@/queries/tasks';
 import { STATUS_META, STATUS_ORDER } from '@/lib/taskMeta';
 import { cn } from '@/lib/utils';
 import type { TaskStatus, TaskSummary } from '@/types/api';
@@ -103,45 +104,54 @@ export function MyTasksPage() {
     setColumns(groups);
   }, [tasks]);
 
-  const onBoardCommit = (_value: Record<TaskStatus, MyTask[]>, meta: KanbanCommitMeta<MyTask>) => {
-    if (meta.kind !== 'item') return;
-    // `Kanban` hands back exactly where a card came from and landed —
-    // `activeContainer`/`activeIndex` index straight into `previousValue`,
-    // no re-deriving which task moved from the raw drag event.
-    const fromStatus = meta.activeContainer as TaskStatus;
-    const toStatus = meta.overContainer as TaskStatus;
-    // My Tasks has no rank to persist (unlike the project board), so a
-    // same-column reorder is a genuine no-op here — nothing to send.
-    if (fromStatus === toStatus) return;
+  // `useCallback`, not a plain function: the vendored `Kanban` puts
+  // `onValueCommit` in the dependency array of several of its own internal
+  // `useCallback`s (see `components/reui/kanban.tsx` — this is the same
+  // instability that caused a render-loop crash on the project board's
+  // `onBoardCommit`; this page has smaller columns so it hasn't surfaced
+  // here yet, but the bug class is identical).
+  const onBoardCommit = useCallback(
+    (_value: Record<TaskStatus, MyTask[]>, meta: KanbanCommitMeta<MyTask>) => {
+      if (meta.kind !== 'item') return;
+      // `Kanban` hands back exactly where a card came from and landed —
+      // `activeContainer`/`activeIndex` index straight into `previousValue`,
+      // no re-deriving which task moved from the raw drag event.
+      const fromStatus = meta.activeContainer as TaskStatus;
+      const toStatus = meta.overContainer as TaskStatus;
+      // My Tasks has no rank to persist (unlike the project board), so a
+      // same-column reorder is a genuine no-op here — nothing to send.
+      if (fromStatus === toStatus) return;
 
-    const task = meta.previousValue[fromStatus]?.[meta.activeIndex];
-    if (!task) return;
-    const taskId = task.taskId;
+      const task = meta.previousValue[fromStatus]?.[meta.activeIndex];
+      if (!task) return;
+      const taskId = task.taskId;
 
-    void (async () => {
-      try {
-        await patchTask(workspaceSlug, task.projectKey, task.taskKey, { status: toStatus });
-        // Drives the `tasks`-derived effect above, which keeps `columns` (and
-        // the list view, if the reader switches back to it) in sync with what
-        // just landed on the server.
-        setTasks((prev) => prev.map((t) => (t.taskId === taskId ? { ...t, status: toStatus } : t)));
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : `Could not move ${task.taskKey}.`);
-        // The write failed, so `tasks` never changed and the effect above
-        // never reruns — undo the drag's own optimistic move by hand. (The
-        // project board gets this for free from `taskStore.moveTask`, which
-        // owns its list; this page owns `tasks` locally, so it does not.)
-        setColumns((prev) => {
-          const reverted: Record<TaskStatus, MyTask[]> = { todo: [], in_progress: [], in_review: [], done: [] };
-          for (const status of STATUS_ORDER) {
-            reverted[status] = prev[status].filter((t) => t.taskId !== taskId);
-          }
-          reverted[fromStatus] = [...reverted[fromStatus], task];
-          return reverted;
-        });
-      }
-    })();
-  };
+      void (async () => {
+        try {
+          await patchTask(workspaceSlug, task.projectKey, task.taskKey, { status: toStatus });
+          // Drives the `tasks`-derived effect above, which keeps `columns` (and
+          // the list view, if the reader switches back to it) in sync with what
+          // just landed on the server.
+          setTasks((prev) => prev.map((t) => (t.taskId === taskId ? { ...t, status: toStatus } : t)));
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : `Could not move ${task.taskKey}.`);
+          // The write failed, so `tasks` never changed and the effect above
+          // never reruns — undo the drag's own optimistic move by hand. (The
+          // project board gets this for free from `taskStore.moveTask`, which
+          // owns its list; this page owns `tasks` locally, so it does not.)
+          setColumns((prev) => {
+            const reverted: Record<TaskStatus, MyTask[]> = { todo: [], in_progress: [], in_review: [], done: [] };
+            for (const status of STATUS_ORDER) {
+              reverted[status] = prev[status].filter((t) => t.taskId !== taskId);
+            }
+            reverted[fromStatus] = [...reverted[fromStatus], task];
+            return reverted;
+          });
+        }
+      })();
+    },
+    [patchTask, workspaceSlug],
+  );
 
   const overdue = useMemo(() => tasks.filter(isOverdue), [tasks]);
 
@@ -247,7 +257,7 @@ export function MyTasksPage() {
               value={columns}
               onValueChange={setColumns}
               onValueCommit={onBoardCommit}
-              getItemValue={(t) => t.taskId}
+              getItemValue={getTaskId}
             >
               <KanbanBoard className="grid auto-rows-fr grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 {STATUS_ORDER.map((status) => (

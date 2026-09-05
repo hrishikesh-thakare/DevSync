@@ -135,7 +135,7 @@ const KEYBOARD_SENSOR_OPTIONS = {
   coordinateGetter: sortableKeyboardCoordinates,
 }
 const MEASURING_CONFIG = {
-  droppable: { strategy: MeasuringStrategy.Always },
+  droppable: { strategy: MeasuringStrategy.WhileDragging },
 }
 
 export interface KanbanMoveEvent {

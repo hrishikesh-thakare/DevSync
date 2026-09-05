@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ListChecksIcon, PlusIcon, XIcon } from 'lucide-react';
@@ -17,7 +17,7 @@ import { Kanban, KanbanBoard, KanbanOverlay, type KanbanCommitMeta } from '@/com
 import { BoardColumn } from '@/pages/projects/board/BoardColumn';
 import { KanbanTaskCard } from '@/pages/projects/board/KanbanTaskCard';
 import { CreateTaskDialog } from '@/pages/projects/board/CreateTaskDialog';
-import { useTasksQuery, useMoveTaskMutation, useBulkUpdateTasksMutation, byRank, EMPTY_TASKS } from '@/queries/tasks';
+import { useTasksQuery, useMoveTaskMutation, useBulkUpdateTasksMutation, byRank, getTaskId, EMPTY_TASKS } from '@/queries/tasks';
 import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
 import { useLabelStore } from '@/store/labelStore';
 import { PRIORITY_META, PRIORITY_ORDER, STATUS_META, STATUS_ORDER } from '@/lib/taskMeta';
@@ -102,39 +102,53 @@ export function BoardPage() {
     setColumns(map);
   }, [filtered]);
 
-  const onBoardCommit = (value: Record<TaskStatus, TaskSummary[]>, meta: KanbanCommitMeta<TaskSummary>) => {
-    if (meta.kind !== 'item') return;
+  // `useCallback`, not a plain function: the vendored `Kanban` puts
+  // `onValueCommit` in the dependency array of several of its *own* internal
+  // `useCallback`s (`commitChange`, `handleDragStart`, `handleDragOver`,
+  // `handleDragEnd` — see `components/reui/kanban.tsx`). A fresh function
+  // identity here on every `BoardPage` render defeats all of those the same
+  // way an unmemoized `getItemValue` did (see `queries/tasks.ts`'s
+  // `getTaskId`) — and since `handleDragOver` itself calls `setColumns` on
+  // every pointer move mid-drag, an unstable `onValueCommit` turns "BoardPage
+  // re-rendered" into "dnd-kit's internal handlers were rebuilt", which drives
+  // exactly the kind of render-measure-render cascade `getTaskId` alone did
+  // not fully close off on a large column.
+  const onBoardCommit = useCallback(
+    (value: Record<TaskStatus, TaskSummary[]>, meta: KanbanCommitMeta<TaskSummary>) => {
+      if (meta.kind !== 'item') return;
 
-    // `Kanban` only ever calls `onValueCommit` once a card genuinely landed
-    // somewhere new (it checks that itself before firing), and it already
-    // hands back exactly where: `overContainer`/`overIndex` in `value`, the
-    // array it just finished reordering. Nothing here re-derives either.
-    const targetStatus = meta.overContainer as TaskStatus;
-    const destination = value[targetStatus] ?? [];
-    const task = destination[meta.overIndex];
-    if (!task) return;
+      // `Kanban` only ever calls `onValueCommit` once a card genuinely landed
+      // somewhere new (it checks that itself before firing), and it already
+      // hands back exactly where: `overContainer`/`overIndex` in `value`, the
+      // array it just finished reordering. Nothing here re-derives either.
+      const targetStatus = meta.overContainer as TaskStatus;
+      const destination = value[targetStatus] ?? [];
+      const task = destination[meta.overIndex];
+      if (!task) return;
 
-    const after = meta.overIndex > 0 ? destination[meta.overIndex - 1] : null;
-    const before = meta.overIndex < destination.length - 1 ? destination[meta.overIndex + 1] : null;
+      const after = meta.overIndex > 0 ? destination[meta.overIndex - 1] : null;
+      const before = meta.overIndex < destination.length - 1 ? destination[meta.overIndex + 1] : null;
 
-    const afterTaskId = after?.taskId ?? null;
-    let beforeTaskId = before?.taskId ?? null;
+      const afterTaskId = after?.taskId ?? null;
+      let beforeTaskId = before?.taskId ?? null;
 
-    // The server derives the new rank with `generateKeyBetween(afterRank,
-    // beforeRank)`, which needs afterRank strictly less than beforeRank. Tasks
-    // created but never reordered all share the same default rank, so equal
-    // neighbours are common. Dropping one side asks for "append after the tied
-    // run", which is the same thing the server falls back to — sending it
-    // explicitly keeps the optimistic rank and the persisted one identical.
-    if (after && before && (after.rank ?? '') >= (before.rank ?? '')) {
-      beforeTaskId = null;
-    }
+      // The server derives the new rank with `generateKeyBetween(afterRank,
+      // beforeRank)`, which needs afterRank strictly less than beforeRank. Tasks
+      // created but never reordered all share the same default rank, so equal
+      // neighbours are common. Dropping one side asks for "append after the tied
+      // run", which is the same thing the server falls back to — sending it
+      // explicitly keeps the optimistic rank and the persisted one identical.
+      if (after && before && (after.rank ?? '') >= (before.rank ?? '')) {
+        beforeTaskId = null;
+      }
 
-    moveTask(
-      { taskId: task.taskId, status: targetStatus, afterTaskId, beforeTaskId },
-      { onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not move the task.') },
-    );
-  };
+      moveTask(
+        { taskId: task.taskId, status: targetStatus, afterTaskId, beforeTaskId },
+        { onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not move the task.') },
+      );
+    },
+    [moveTask],
+  );
 
   if (isLoading) {
     return (
@@ -285,7 +299,7 @@ export function BoardPage() {
         </Card>
       ) : null}
 
-      <Kanban value={columns} onValueChange={setColumns} onValueCommit={onBoardCommit} getItemValue={(t) => t.taskId}>
+      <Kanban value={columns} onValueChange={setColumns} onValueCommit={onBoardCommit} getItemValue={getTaskId}>
         <KanbanBoard className="flex-1 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
           {STATUS_ORDER.map((status) => (
             <BoardColumn
