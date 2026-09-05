@@ -21,13 +21,18 @@ import path from 'path';
 import { generateKeyBetween } from 'fractional-indexing';
 
 // ─── HELPER: Broadcast to Project Channels ───────────────────────────────────
-const broadcastToProjectChannels = async (tx: any, projectId: string, bodyText: string): Promise<void> => {
+// Writes the system message inside the caller's transaction but does NOT emit
+// — emitting here would fire before the transaction is known to commit, so a
+// later rollback would leave clients holding a message that never happened.
+// Callers emit the returned list themselves, after `db.transaction` resolves.
+const broadcastToProjectChannels = async (tx: any, projectId: string, bodyText: string): Promise<Array<{ channelId: string; message: any }>> => {
   // Find all channels linked to this project
   const projectChannels = await tx.select({ channelId: channels.channelId }).from(channels).where(eq(channels.projectId, projectId));
-  if (projectChannels.length === 0) return;
+  if (projectChannels.length === 0) return [];
 
   const now = new Date();
-  
+  const broadcasts: Array<{ channelId: string; message: any }> = [];
+
   for (const { channelId } of projectChannels) {
     // Insert system message
     const [msg] = await tx.insert(messages).values({
@@ -39,27 +44,34 @@ const broadcastToProjectChannels = async (tx: any, projectId: string, bodyText: 
       updatedAt: now,
     }).returning();
 
-    // Broadcast to connected clients
-    const io = getIO();
-    if (io) {
-      // Create a hydrated message object similar to what the frontend expects
-      const populatedMessage = {
-        messageId: msg.messageId,
-        channelId: msg.channelId,
-        authorId: msg.authorId,
-        authorName: 'DevSync Bot',
-        authorAvatar: null,
-        isSystem: msg.isSystem,
-        systemType: msg.systemType,
-        bodyText: msg.bodyText,
-        threadId: msg.threadId,
-        replyCount: msg.replyCount,
-        isEdited: msg.isEdited,
-        createdAt: msg.createdAt,
-        updatedAt: msg.updatedAt,
-      };
-      io.to(`channel:${channelId}`).emit('new_message', populatedMessage);
-    }
+    // Create a hydrated message object similar to what the frontend expects
+    const populatedMessage = {
+      messageId: msg.messageId,
+      channelId: msg.channelId,
+      authorId: msg.authorId,
+      authorName: 'DevSync Bot',
+      authorAvatar: null,
+      isSystem: msg.isSystem,
+      systemType: msg.systemType,
+      bodyText: msg.bodyText,
+      threadId: msg.threadId,
+      replyCount: msg.replyCount,
+      isEdited: msg.isEdited,
+      createdAt: msg.createdAt,
+      updatedAt: msg.updatedAt,
+    };
+    broadcasts.push({ channelId, message: populatedMessage });
+  }
+  return broadcasts;
+};
+
+// Emit a batch of channel broadcasts. Call only after the transaction that
+// produced them has committed.
+const emitBroadcasts = (broadcasts: Array<{ channelId: string; message: any }>): void => {
+  const io = getIO();
+  if (!io) return;
+  for (const { channelId, message } of broadcasts) {
+    io.to(`channel:${channelId}`).emit('new_message', message);
   }
 };
 
@@ -95,7 +107,7 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
       parentTaskId, epicId, sprintId, storyPoints,
     } = req.body;
 
-    const result = await db.transaction(async (tx) => {
+    const txResult = await db.transaction(async (tx) => {
       // 1. Atomically increment the project's issue counter to generate task key
       const [project] = await tx
         .update(projects)
@@ -208,10 +220,13 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
       });
 
       // 7. Broadcast to project channels
-      await broadcastToProjectChannels(tx, projectId, `✅ **${creator?.fullName || 'User'}** created task @${task.taskKey}: ${task.title}`);
+      const broadcasts = await broadcastToProjectChannels(tx, projectId, `✅ **${creator?.fullName || 'User'}** created task @${task.taskKey}: ${task.title}`);
 
-      return task;
+      return { task, broadcasts };
     });
+
+    const { task: result, broadcasts } = txResult;
+    emitBroadcasts(broadcasts);
 
     if (result.assigneeId && result.assigneeId !== userId) {
       const [actor] = await db.select({ name: users.fullName }).from(users).where(eq(users.userId, userId));
@@ -414,7 +429,7 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
       if (completedAt !== undefined) updateData.completedAt = completedAt;
     }
 
-    const result = await db.transaction(async (tx) => {
+    const txResult = await db.transaction(async (tx) => {
       await validateTaskRelations(tx, oldTask.projectId as string, { assigneeId, parentTaskId, epicId, sprintId });
 
       // Register + normalize labels (case-insensitive reconciliation)
@@ -572,6 +587,7 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
 
       // --- BROADCAST TO CHANNELS ---
       let broadcastMessage = '';
+      let broadcasts: Array<{ channelId: string; message: any }> = [];
       if (oldTask) {
         const actorId = req.user!.userId;
         const [actor] = await tx.select({ fullName: users.fullName }).from(users).where(eq(users.userId, actorId));
@@ -595,23 +611,28 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
             broadcastMessage = `👤 **${actorName}** unassigned @${updated.taskKey}`;
           }
         }
-        
+
         if (broadcastMessage && updated.projectId) {
-          await broadcastToProjectChannels(tx, updated.projectId, broadcastMessage);
+          broadcasts = await broadcastToProjectChannels(tx, updated.projectId, broadcastMessage);
         }
       }
 
-      const io = getIO();
-      if (io && updated.projectId) {
-        io.to(`project:${updated.projectId}`).emit('task_updated', updated);
-      }
-
-      return updated;
+      return { updated, broadcasts };
     });
 
-    if (!result) {
+    if (!txResult) {
       res.status(404).json({ error: 'Task not found.' });
       return;
+    }
+
+    // Emit only now that the transaction has actually committed — a rollback
+    // above this point never reaches here, so clients never see a change
+    // that got undone.
+    const { updated: result, broadcasts } = txResult;
+    emitBroadcasts(broadcasts);
+    const io = getIO();
+    if (io && result.projectId) {
+      io.to(`project:${result.projectId}`).emit('task_updated', result);
     }
 
     // --- NOTIFICATIONS ---
@@ -792,11 +813,6 @@ export const reorderTask = async (req: Request, res: Response): Promise<void> =>
         });
       }
 
-      const io = getIO();
-      if (io && updated.projectId) {
-        io.to(`project:${updated.projectId}`).emit('task_updated', updated);
-      }
-
       return {
         updated,
         oldStatus: oldTask.status,
@@ -810,6 +826,14 @@ export const reorderTask = async (req: Request, res: Response): Promise<void> =>
     if (!result) {
       res.status(404).json({ error: 'Task not found.' });
       return;
+    }
+
+    // Emit only after the transaction has committed, not from inside it —
+    // otherwise a rollback could still have shown clients a move that never
+    // actually happened.
+    const io = getIO();
+    if (io && result.updated.projectId) {
+      io.to(`project:${result.updated.projectId}`).emit('task_updated', result.updated);
     }
 
     // --- NOTIFICATIONS ---

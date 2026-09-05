@@ -1,18 +1,18 @@
 # DevSync E2E Test Suite — Complete Test Reference
 
-The DevSync Playwright end-to-end suite contains **297 tests across 33 spec files**. It verifies the full product surface: authentication & sessions (including password recovery, email verification, enforcement of verified emails on sign-in, and rate limiting behind a trusted proxy), workspace/project/channel/task/sprint/label CRUD (including soft-delete isolation of deleted workspaces), messaging (including threads and reactions), XSS sanitization of message HTML, RBAC at workspace and project level, GitHub integration, search, notifications, file storage, WebSocket realtime events, and audit logging.
+The DevSync Playwright end-to-end suite contains **315 tests across 36 spec files**. It verifies the full product surface: authentication & sessions (including password recovery, email verification, enforcement of verified emails on sign-in, and rate limiting behind a trusted proxy), workspace/project/channel/task/sprint/label CRUD (including soft-delete isolation of deleted workspaces), messaging (including threads and reactions), XSS sanitization of message HTML, RBAC at workspace and project level, GitHub integration, search, notifications, file storage, WebSocket realtime events, security/tenant-scoping, and audit logging.
 
 ## Running the Suite
 
 | Command | Purpose |
 | :--- | :--- |
-| `npx playwright test` | Run the full suite (297 tests) |
+| `npx playwright test` | Run the full suite (315 tests) |
 | `npx playwright test tests/<dir>` | Run one module (e.g. `tests/rbac`) |
 | `npx playwright test tests/<dir>/<file>.spec.ts --workers 1` | Run one spec file serially |
 | `npm run test:rbac` / `test:auth` | Run tests tagged `@rbac` / `@auth` |
 | `npx playwright test --headed` / `--ui` | Interactive debugging |
 
-The suite runs automatically in CI on every push to `main`/`develop` and on every PR targeting them (`.github/workflows/e2e-tests.yml`): fresh Postgres 16, migrations (all 13 versioned migrations, 0000→0012, applied with the same drizzle-orm migrator the deployed app uses), seed, then the full run.
+The suite runs automatically in CI on every push to `main`/`develop` and on every PR targeting them (`.github/workflows/e2e-tests.yml`): fresh Postgres 16, migrations (all 16 versioned migrations, 0000→0015, applied with the same drizzle-orm migrator the deployed app uses), seed, then the full run.
 
 ## Test Infrastructure
 
@@ -100,6 +100,34 @@ The suite runs automatically in CI on every push to `main`/`develop` and on ever
 | POST /auth/presence updates presence | Presence alone updates (`away`) |
 | PATCH /auth/preferences merges preferences instead of replacing them | Second patch keeps first patch's keys (jsonb merge) |
 | status, presence and preferences require authentication (401) | All three endpoints reject missing tokens |
+
+### Account Deletion (`tests/account/delete-account.spec.ts`)
+| Test | Verifies |
+| :--- | :--- |
+| can delete own account via API and gets logged out | Soft-delete → 200; subsequent authenticated request → 401 |
+| can re-register with the email of a deleted account | Regression: delete → register same email → 201 (not "already exists"), new row starts unverified |
+| can delete own account via UI (Account Settings) | Typing the account name confirms deletion and signs the user out |
+
+## 📊 Dashboard (`tests/dashboard/dashboard.spec.ts`)
+
+Persona-based `GET /workspaces/:slug/dashboard` — what each role sees on workspace home.
+
+| Test | Verifies |
+| :--- | :--- |
+| returns the shared my-work and sprint sections | Every persona gets `myTasks` + `activeSprintProgress` |
+| my-work never includes completed tasks | Done tasks excluded from "my work" |
+| owners receive the admin sections | Owner sees workspace-wide admin data |
+| admins also receive the admin sections | Admin parity with owner |
+| plain members get their own work but no admin sections | Member response omits admin-only fields |
+| persona distinguishes a contributor from a read-only viewer | Viewer's response shape differs from a developer's |
+| sprint progress never exceeds its totals | `completedPoints <= totalPoints` invariant |
+| non-members are denied | Outsider → 403 |
+| requires authentication | No token → 401 |
+| defaults to open tasks only | `myTasks` excludes completed unless asked |
+| status=all includes completed tasks | Explicit opt-in surfaces done items |
+| narrows to an explicit status list | `status=todo,in_progress` filters correctly |
+| rejects an unknown status rather than ignoring it | Bad status value → 400, not silently dropped |
+| rows carry the fields the task card renders | `taskKey`/`title`/`status`/`dueDate` etc. present |
 
 ## 🏢 Workspaces (`tests/workspaces/`)
 
@@ -255,12 +283,60 @@ The suite runs automatically in CI on every push to `main`/`develop` and on ever
 | rename conflict returns 409 | Rename onto existing name → 409 |
 | update/delete of non-existent label returns 404 | Random UUID → 404 |
 | task creation auto-registers labels and increments usageCount | Task with `labels: [auto…]` → label `usageCount: 1` |
+| task creation with multiple labels succeeds | Regression for the `IN ((...))` row-constructor bug — two labels no longer 500s |
+| re-using labels that already exist does not conflict | Existing label ids are reused, not duplicated |
 | renaming a label propagates to tasks case-insensitively | Task's label array follows the rename |
 | deleting a label removes it from tasks and usage count | Task labels empty, label gone |
 | unauthenticated requests are rejected with 401 | All endpoints without token |
 | viewer can list but not modify labels | List 200; create/patch/delete → 403 |
 | developer can create but not delete labels | Create 201; delete → 403 |
 | outsider is blocked from all label endpoints | List/create → 403 |
+
+## 📈 Analytics (`tests/analytics/analytics.spec.ts`)
+
+Covers the 7 SQL aggregations behind `AnalyticsPage` and their honest-empty-state contract.
+
+| Test | Verifies |
+| :--- | :--- |
+| returns every section with the expected shape | All 7 aggregation sections present with their documented fields |
+| a task moved through the board produces cycle time and throughput | Real status transitions feed the `LEAD()` cycle-time window |
+| completing a task stamps completedAt and reopening clears it | `completedAt` is derived, not a free-form field |
+| contribution totals are non-negative and attributed to real users | No orphaned/negative contribution rows |
+| burndown never reports more remaining than the sprint holds | `remaining <= totalPoints` invariant |
+| CI success rate stays within 0-100 and succeeded never exceeds total | Percentage and count invariants hold |
+| velocity only counts work that actually shipped | Unfinished sprints don't inflate velocity |
+| projectKey narrows the scope | Single-project filter returns only that project's data |
+| an unknown or inaccessible projectKey is refused | Bad/foreign key → 400/403, not silently ignored |
+| rejects a malformed or inverted date window | `from > to` or unparsable dates → 400 |
+| a member sees only the projects they belong to | Workspace-wide scope respects project membership |
+| an admin sees the whole workspace | Admin gets unrestricted scope |
+| non-members are denied | Outsider → 403 |
+| requires authentication | No token → 401 |
+| workspace analytics renders every chart section (UI) | `AnalyticsPage` mounts all 7 cards |
+| states plainly that these are not DORA metrics (UI) | Disclaimer copy is visible |
+| the range selector refetches without breaking the page (UI) | Changing the date range re-renders cleanly |
+| project analytics is reachable from the project tab bar (UI) | Nav link present and functional |
+| a member with no project access sees empty states, not an error (UI) | Honest empty state, no axis-over-zeros |
+
+## 🔒 Security & Tenant Scoping (`tests/security/injection-and-scoping.spec.ts`)
+
+Regression coverage for the cross-workspace/injection findings from the security audit.
+
+| Test | Verifies |
+| :--- | :--- |
+| rejects a client-supplied isSystem / systemType | Client can no longer forge a system message to bypass announcement-channel admin gating |
+| rejects a threadId belonging to another channel | Thread injection across channels is blocked |
+| accepts a threadId in the same channel | Legitimate same-channel replies still work |
+| rejects runId values containing path segments | GitHub `runId` is validated as `/^\d+$/`, closing the `../../` path-injection route |
+| rejects a non-numeric issueNumber | Same numeric-only validation on issue endpoints |
+| rejects a non-numeric prNumber | Same numeric-only validation on PR endpoints |
+| rejects a repo owner containing a path separator | `repo_owner`/`repo_name` charset validation |
+| refuses private/loopback/link-local unfurl targets | SSRF blocklist rejects RFC1918, loopback and link-local addresses after DNS resolution |
+| refuses a non-http scheme | Unfurl still rejects non-http(s) protocols |
+| rejects a disallowed mimetype | Upload MIME allowlist blocks unlisted types |
+| rejects SVG, which is an image to a user and a script host to a browser | SVG specifically excluded from inline-safe types |
+| rejects an unknown key | Strict upload schema rejects extra fields |
+| accepts an allowed type and stores the measured size | Valid upload still succeeds, size taken from the decoded buffer not the client claim |
 
 ## 🛡️ RBAC (`tests/rbac/`)
 
@@ -395,11 +471,10 @@ The suite runs automatically in CI on every push to `main`/`develop` and on ever
 | download of a non-existent file returns 404 | Random UUID → 404 |
 | outsider cannot upload or download | Both → 403 |
 | upload and download require authentication | Both → 401 |
-| presigned upload URL endpoint returns a fileRecord (legacy flow) | POST upload-url → 200 with fileRecord (uploadUrl may be null locally) |
-| presigned upload URL requires a filename (400) | Empty body → 400 |
 
-## ⚡ Realtime WebSockets (`tests/realtime/realtime.spec.ts`)
+## ⚡ Realtime WebSockets (`tests/realtime/`)
 
+### `realtime.spec.ts`
 | Test | Verifies |
 | :--- | :--- |
 | socket receives new_message event | Socket joined to `channel:<id>` receives the posted message |
@@ -408,6 +483,13 @@ The suite runs automatically in CI on every push to `main`/`develop` and on ever
 | socket receives new_notification when a task is assigned to me | Assign → `new_notification` with `recipientId`/`entityId` |
 | socket connection is rejected with an invalid token | `connect_error` on bad token |
 | socket connection is rejected without a token | `connect_error` on missing token |
+
+### `reconnect-rooms.spec.ts`
+| Test | Verifies |
+| :--- | :--- |
+| a reconnected socket that rejoins receives messages again | Client replays its joined rooms on `connect`, so a reconnect doesn't silently stop delivering board/chat updates |
+| rooms do not survive a reconnect on their own | Proves the underlying server behaviour: without client-side replay, a fresh connection id has none of the old `project:`/`channel:` rooms |
+| the server refuses a room the user cannot access | `room_join_denied` is emitted and observed by the client for an unauthorized room |
 
 ## 📜 Audit Logs (`tests/audit/audit.spec.ts`)
 

@@ -269,13 +269,21 @@ POST /api/workspaces/:slug/projects/:key/tasks
 |---|---|---|---|---|
 | POST | `/:projectId` | ❌ | HMAC | Receive push and workflow events from GitHub |
 
+### GitHub User Routes — `/api/github`
+| Method | Path | Auth | Role | Description |
+|---|---|---|---|---|
+| GET | `/oauth/url` | ✅ | — | Get the GitHub OAuth authorize URL |
+| POST | `/oauth/exchange` | ✅ | — | Exchange an OAuth code for an encrypted, stored access token |
+| GET | `/user/repos` | ✅ | — | List the caller's own GitHub repositories |
+
 ---
 
 ### File Routes — `/api/workspaces/:slug/files`
 | Method | Path | Auth | Role | Description |
 |---|---|---|---|---|
-| POST | `/upload-url` | ✅ | W: any | Get presigned upload URL for Supabase Storage |
-| GET | `/:fileId/download` | ✅ | W: any | Get presigned download URL |
+| GET | `/:fileId/raw` | Signed URL token | — | Stream file content; MIME allowlisted, forced `attachment` unless the type is inline-safe |
+| POST | `/upload` | ✅ | W: any | Direct server-side upload (base64 body), MIME + size validated against the decoded buffer |
+| GET | `/:fileId/download` | ✅ | W: any | Get a scoped download URL |
 
 ---
 
@@ -292,6 +300,20 @@ POST /api/workspaces/:slug/projects/:key/tasks
 | Method | Path | Auth | Role | Description |
 |---|---|---|---|---|
 | GET | `/?q=...&type=task\|message` | ✅ | — | Full-text search across tasks and messages |
+
+---
+
+### Dashboard Routes — `/api/workspaces/:slug/dashboard`
+| Method | Path | Auth | Role | Description |
+|---|---|---|---|---|
+| GET | `/` | ✅ | W: owner/admin/member | Persona-based workspace home: shared my-work + sprint sections for everyone, plus workspace-wide admin sections for owners/admins |
+
+---
+
+### Analytics Routes — `/api/workspaces/:slug/analytics`
+| Method | Path | Auth | Role | Description |
+|---|---|---|---|---|
+| GET | `/?projectKey=...&from=...&to=...` | ✅ | W: owner/admin/member | 7 delivery-metric aggregations (cycle time, throughput, contribution, burndown, CI success rate, velocity); scoped to the caller's project memberships unless the caller is an admin |
 
 ---
 
@@ -313,7 +335,9 @@ POST /api/workspaces/:slug/projects/:key/tasks
 | Room Pattern | Purpose |
 |---|---|
 | `user:{userId}` | Personal room (auto-joined on connect) for direct notifications |
-| `channel:{channelId}` | Message room — joined/left via `join_room` / `leave_room` events |
+| `workspace:{workspaceId}` | Presence + workspace-wide events (auto-joined on connect, restored per-connection from DB membership) |
+| `channel:{channelId}` | Message room — joined/left via `join_room` / `leave_room` events, client-requested (not auto-restored on reconnect) |
+| `project:{projectId}` | Task-board room — joined/left via `join_room` / `leave_room` events, client-requested (not auto-restored on reconnect) |
 
 ### Events
 | Event | Direction | Payload | Description |
