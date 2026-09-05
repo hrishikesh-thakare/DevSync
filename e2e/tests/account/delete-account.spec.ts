@@ -108,9 +108,10 @@ test.describe('Self-Service Account Deletion @account', () => {
     await page.click('button[type="submit"]');
     await page.waitForURL('/workspaces');
 
-    // Go to Account Settings
+    // Go to Account Settings — the "Account" tab holds the delete card
     await page.goto('/account');
     await page.waitForLoadState('networkidle');
+    await page.getByRole('tab', { name: 'Account' }).click();
 
     // Click "Delete account" trigger
     await page.click('button:has-text("Delete account")');

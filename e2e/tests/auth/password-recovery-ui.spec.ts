@@ -79,8 +79,10 @@ test.describe('Password Recovery — UI', () => {
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page).toHaveURL(`${BASE}/workspaces`);
 
-    // Change password via the account settings page
+    // Change password via the account settings page — the "Security" tab
+    // holds the change-password card
     await page.goto(`${BASE}/account`);
+    await page.getByRole('tab', { name: 'Security' }).click();
     await expect(page.getByText('Change Password')).toBeVisible();
 
     await page.getByLabel('Current password').fill(TEST_PASSWORD);

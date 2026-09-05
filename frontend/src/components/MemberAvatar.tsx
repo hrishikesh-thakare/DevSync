@@ -3,20 +3,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { initialsOf } from '@/lib/initials';
 import { cn } from '@/lib/utils';
+import { PRESENCE_STYLE } from '@/lib/presence';
 import type { Presence } from '@/types/api';
-
-/**
- * Presence colours.
- *
- * Reuses the status domain tokens rather than inventing a parallel palette —
- * they are the categorical ramp already used by the boards, and the rose
- * `--chart-*` scale cannot separate categories (see index.css:99).
- */
-const PRESENCE_STYLE: Record<Presence, { dot: string; label: string }> = {
-  online: { dot: 'bg-status-done', label: 'Online' },
-  away: { dot: 'bg-status-in-review', label: 'Away' },
-  offline: { dot: 'bg-muted-foreground', label: 'Offline' },
-};
 
 export interface MemberLike {
   userId?: string | null;

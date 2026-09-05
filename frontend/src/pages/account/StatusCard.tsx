@@ -23,7 +23,7 @@ const PRESENCE_LABELS: Record<Presence, string> = {
   offline: 'Offline',
 };
 
-export function StatusCard() {
+export function StatusCard({ onSaved }: { onSaved?: (presence: Presence) => void }) {
   const [presence, setPresence] = useState<Presence>('online');
   const [statusText, setStatusText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -57,6 +57,7 @@ export function StatusCard() {
         method: 'POST',
         body: JSON.stringify({ presence, statusText: statusText.slice(0, 100) }),
       });
+      onSaved?.(presence);
       toast.success('Status updated.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not update your status.');
