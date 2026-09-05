@@ -1,6 +1,6 @@
 import { test, expect } from '../../fixtures/test-fixtures.js';
-import { TEST_WORKSPACE, TEST_PROJECT, TEST_USERS, API_URL } from '../../helpers/constants.js';
-import { apiLogin, apiRequest } from '../../helpers/api-helpers.js';
+import { TEST_WORKSPACE, TEST_PROJECT, TEST_USERS, TEST_PASSWORD, API_URL } from '../../helpers/constants.js';
+import { apiLogin, apiRequest, verifyEmail } from '../../helpers/api-helpers.js';
 import { io } from 'socket.io-client';
 
 const SLUG = TEST_WORKSPACE.slug;
@@ -185,6 +185,77 @@ test.describe('Realtime (WebSockets)', () => {
     expect(received.presence).toBe('away');
 
     socket.disconnect();
+  });
+
+  test('a workspace-less user hears their own presence change, and nobody else does', async () => {
+    // `broadcastPresence` used to address only `workspace:{id}` rooms. Two
+    // problems, both from a user with *zero* active memberships (reachable
+    // any time before someone accepts their first invite — `/account` is
+    // deliberately open pre-workspace):
+    //
+    //  1. A second tab open on `/account` has no workspace room to listen on,
+    //     so it never heard its own change without a manual reload.
+    //  2. Worse: `server.to(rooms)` with an *empty* `rooms` array is not
+    //     "address zero sockets" to Socket.io — it's no filter at all, which
+    //     falls back to the exact global-broadcast leak this function's own
+    //     history says was already fixed once. A workspace-less user calling
+    //     `/auth/status` leaked their presence to every stranger connected to
+    //     the server.
+    //
+    // `user:{userId}` fixes both: it is always non-empty, and it is scoped to
+    // exactly one person. This test proves both halves with a third, wholly
+    // unconnected bystander account — the two users share no workspace, no
+    // channel, nothing.
+    const ts = Date.now();
+    const register = async (label: string) => {
+      const email = `presence-${label}-${ts}@demo.com`;
+      const regRes = await fetch(`${API_URL}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, fullName: `Presence ${label}`, password: TEST_PASSWORD }),
+      });
+      expect(regRes.status).toBe(201);
+      await verifyEmail(await regRes.json());
+      return apiLogin(email);
+    };
+
+    const author = await register('solo');
+    const bystander = await register('bystander');
+    const authorId = author.user?.userId || author.user?.id;
+
+    const authorSocket = await connectSocket(author.accessToken);
+    const bystanderSocket = await connectSocket(bystander.accessToken);
+    const statusText = `solo presence ${ts}`;
+
+    let bystanderHeardIt = false;
+    bystanderSocket.on('user_presence_updated', () => {
+      bystanderHeardIt = true;
+    });
+
+    const presencePromise = new Promise<any>((resolve, reject) => {
+      authorSocket.on('user_presence_updated', (ev) => {
+        if (ev.userId === authorId && ev.statusText === statusText) resolve(ev);
+      });
+      setTimeout(() => reject(new Error('Timeout waiting for user_presence_updated')), 8000);
+    });
+
+    const { status } = await apiRequest('/auth/status', author.accessToken, {
+      method: 'POST',
+      body: JSON.stringify({ statusText, presence: 'offline' }),
+    });
+    expect(status).toBe(200);
+
+    const received = await presencePromise;
+    expect(received.presence).toBe('offline');
+
+    // Give a leak every chance to arrive before declaring it absent.
+    await new Promise((r) => setTimeout(r, 1000));
+    expect(bystanderHeardIt).toBe(false);
+
+    authorSocket.disconnect();
+    bystanderSocket.disconnect();
+    await apiRequest('/auth/me', author.accessToken, { method: 'DELETE' });
+    await apiRequest('/auth/me', bystander.accessToken, { method: 'DELETE' });
   });
 
   test('socket receives new_notification when a task is assigned to me', async () => {

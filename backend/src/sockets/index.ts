@@ -219,6 +219,24 @@ export const initSocket = (server: HttpServer) => {
  * server — so a status message like "at the doctor" was delivered to users who
  * shared no workspace with its author. Addressing the author's workspace rooms
  * keeps the update inside the tenancy boundary the rest of the API enforces.
+ *
+ * Also addressed to the author's own `user:{userId}` room (every connection
+ * auto-joins this on connect, regardless of workspace) — `/account` has no
+ * workspace in scope at all, so it is the only room a second tab or device
+ * open on that page can be listening on to hear its own change reflected
+ * back without a manual reload.
+ *
+ * That second room is not just a nice-to-have: `server.to(rooms)` with an
+ * *empty* `rooms` array does not address zero sockets — Socket.io treats no
+ * rooms specified as no filter at all and falls straight back to the exact
+ * global-broadcast behaviour this function's own history says was already
+ * fixed once. A user with zero active workspace memberships (reachable any
+ * time before their first invite is accepted) would leak their presence to
+ * every stranger connected to the server. Confirmed both ways: reverting to
+ * workspace-only rooms let an unrelated second user's socket receive a
+ * presence update that named a third, unconnected account. `user:{userId}`
+ * guarantees `rooms` is never empty, closing that path as a side effect of
+ * fixing the cross-tab sync it was added for.
  */
 export const broadcastPresence = async (
   userId: string,
@@ -234,9 +252,14 @@ export const broadcastPresence = async (
     const payload = { userId, presence, statusText };
     const server = getIO();
 
-    for (const m of memberships) {
-      if (m.workspaceId) server.to(`workspace:${m.workspaceId}`).emit('user_presence_updated', payload);
-    }
+    // One call across every target room, not one call per room: a socket
+    // sitting in more than one of these (the common case — anyone inside a
+    // workspace is in both its `workspace:` room and their own `user:` room)
+    // would otherwise receive the same event once per room it happens to be
+    // in. `.to([...])` targets the union and delivers to each matched socket
+    // exactly once.
+    const rooms = [`user:${userId}`, ...memberships.filter((m) => m.workspaceId).map((m) => `workspace:${m.workspaceId}`)];
+    server.to(rooms).emit('user_presence_updated', payload);
   } catch (err) {
     console.error('broadcastPresence error:', err);
   }

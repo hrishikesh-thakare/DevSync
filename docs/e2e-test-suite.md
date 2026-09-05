@@ -1,12 +1,12 @@
 # DevSync E2E Test Suite — Complete Test Reference
 
-The DevSync Playwright end-to-end suite contains **338 tests across 42 spec files**. It verifies the full product surface: authentication & sessions (including password recovery, email verification, enforcement of verified emails on sign-in, and rate limiting behind a trusted proxy), workspace/project/channel/task/sprint/label CRUD (including soft-delete isolation of deleted workspaces), messaging (including threads and reactions), XSS sanitization of message HTML, RBAC at workspace and project level, GitHub integration, search, notifications, file storage, WebSocket realtime events, security/tenant-scoping, and audit logging.
+The DevSync Playwright end-to-end suite contains **339 tests across 42 spec files**. It verifies the full product surface: authentication & sessions (including password recovery, email verification, enforcement of verified emails on sign-in, and rate limiting behind a trusted proxy), workspace/project/channel/task/sprint/label CRUD (including soft-delete isolation of deleted workspaces), messaging (including threads and reactions), XSS sanitization of message HTML, RBAC at workspace and project level, GitHub integration, search, notifications, file storage, WebSocket realtime events, security/tenant-scoping, and audit logging.
 
 ## Running the Suite
 
 | Command | Purpose |
 | :--- | :--- |
-| `npx playwright test` | Run the full suite (338 tests) |
+| `npx playwright test` | Run the full suite (339 tests) |
 | `npx playwright test tests/<dir>` | Run one module (e.g. `tests/rbac`) |
 | `npx playwright test tests/<dir>/<file>.spec.ts --workers 1` | Run one spec file serially |
 | `npm run test:rbac` / `test:auth` | Run tests tagged `@rbac` / `@auth` |
@@ -524,6 +524,7 @@ Regression coverage for the cross-workspace/injection findings from the security
 | socket receives new_message event | Socket joined to `channel:<id>` receives the posted message |
 | socket receives message_updated, message_reaction and message_deleted events | Edit/reaction-add/reaction-remove/delete each emit their event with matching ids |
 | socket receives user_presence_updated when own status changes | `POST /auth/status` emits presence event with `statusText`/`presence` |
+| a workspace-less user hears their own presence change, and nobody else does | `broadcastPresence` addresses the author's `user:{userId}` room so a workspace-less account (reachable pre-first-invite, e.g. on `/account`) still gets its own update; also closes a real leak — `server.to(rooms)` with an *empty* rooms array is no filter at all to Socket.io, so a workspace-less user updating status used to broadcast to every connected stranger |
 | socket receives new_notification when a task is assigned to me | Assign → `new_notification` with `recipientId`/`entityId` |
 | socket connection is rejected with an invalid token | `connect_error` on bad token |
 | socket connection is rejected without a token | `connect_error` on missing token |

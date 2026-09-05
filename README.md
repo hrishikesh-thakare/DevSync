@@ -124,7 +124,7 @@ To receive external GitHub webhooks (such as commit triggers or PR auto-linking)
 
 ## 🧪 Testing
 
-DevSync ships with an extensive **Playwright E2E suite** (338 tests across 42 spec files) covering authentication & sessions, workspace/project/channel CRUD, sprint lifecycles, task management, and a rigorous RBAC matrix including cross-project isolation. 
+DevSync ships with an extensive **Playwright E2E suite** (339 tests across 42 spec files) covering authentication & sessions, workspace/project/channel CRUD, sprint lifecycles, task management, and a rigorous RBAC matrix including cross-project isolation. 
 
 There are also **38 backend unit tests** for critical utility code.
 
