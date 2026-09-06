@@ -30,6 +30,7 @@ const page = <T extends Record<string, unknown>, K extends keyof T>(
 ) => lazy(() => loader().then((m) => ({ default: m[name] as React.ComponentType })));
 
 const OAuthCallbackPage = page(() => import('@/pages/auth/OAuthCallbackPage'), 'OAuthCallbackPage');
+const GithubCallbackPage = page(() => import('@/pages/projects/GithubCallbackPage'), 'GithubCallbackPage');
 const ForgotPasswordPage = page(() => import('@/pages/auth/ForgotPasswordPage'), 'ForgotPasswordPage');
 const ResetPasswordPage = page(() => import('@/pages/auth/ResetPasswordPage'), 'ResetPasswordPage');
 const VerifyEmailPage = page(() => import('@/pages/auth/VerifyEmailPage'), 'VerifyEmailPage');
@@ -109,6 +110,13 @@ export default function App() {
             <Route element={<AuthGuard />}>
               <Route path="/workspaces" element={<WorkspacePickerPage />} />
               <Route path="/account" element={<AccountSettingsPage />} />
+              {/*
+                GitHub's OAuth redirect target for linking a personal GitHub
+                account (see GitHubIntegration.tsx / GithubOauthController).
+                Requires an existing DevSync session — the user starts this
+                flow from an already-authenticated project settings page.
+              */}
+              <Route path="/github/callback" element={<GithubCallbackPage />} />
 
               <Route path="/w/:slug" element={<WorkspaceLayout />}>
                 <Route index element={<WorkspaceHome />} />

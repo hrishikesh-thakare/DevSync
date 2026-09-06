@@ -223,9 +223,9 @@ test.describe('GitHub Input Validation', () => {
     }
   });
 
-  test('oauth exchange validates providerToken', async () => {
+  test('oauth exchange validates code and state', async () => {
     const token = await projectAdminTokenPromise;
-    for (const body of [{}, { providerToken: '' }, { providerToken: 42 }]) {
+    for (const body of [{}, { code: '' }, { code: 42, state: 'x' }, { code: 'abc' }, { code: 'abc', state: '' }]) {
       const { status, data } = await apiRequest('/github/oauth/exchange', token, {
         method: 'POST',
         body: JSON.stringify(body),
@@ -233,6 +233,26 @@ test.describe('GitHub Input Validation', () => {
       expect(status, `exchange body ${JSON.stringify(body)} should be 400`).toBe(400);
       expect(data.error).toBeTruthy();
     }
+  });
+
+  test('oauth exchange rejects a state signed for a different user', async () => {
+    const token = await projectAdminTokenPromise;
+    const other = await apiLogin(TEST_USERS.developer.email);
+
+    // Mint a real state as the developer, then try to redeem it as projectAdmin.
+    // GITHUB_CLIENT_ID isn't set in every environment (see "can request OAuth
+    // URL" above) — without it there's no state to mint, so skip rather than
+    // report a false failure for missing OAuth app config.
+    const urlRes = await apiRequest('/github/oauth/url', other.accessToken);
+    test.skip(urlRes.status !== 200, 'GitHub OAuth is not configured in this environment');
+    const state = new URL(urlRes.data.url).searchParams.get('state')!;
+
+    const { status, data } = await apiRequest('/github/oauth/exchange', token, {
+      method: 'POST',
+      body: JSON.stringify({ code: 'irrelevant-would-fail-at-github-anyway', state }),
+    });
+    expect(status).toBe(400);
+    expect(data.error).toBeTruthy();
   });
 });
 

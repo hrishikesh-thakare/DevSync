@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import { EmptyState, ErrorState } from '@/components/layout/PageState';
+import { apiFetch } from '@/lib/api';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -600,6 +601,7 @@ function ConnectCard({
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [linkingAccount, setLinkingAccount] = useState(false);
 
   if (!canConnect) {
     return (
@@ -628,6 +630,24 @@ function ConnectCard({
     }
   };
 
+  // Repo connect calls GitHub's API as *this user*, so it needs their GitHub
+  // account linked first (a stored access token). That's a one-time,
+  // per-user step, separate from picking a repo — GET /github/oauth/url
+  // returns the real GitHub consent screen URL, tagged with a `returnTo` so
+  // GithubCallbackPage can land back on this exact tab once linked.
+  const linkGithubAccount = async () => {
+    setLinkingAccount(true);
+    setError(null);
+    try {
+      const returnTo = `${window.location.pathname}${window.location.search}`;
+      const { url } = await apiFetch(`/github/oauth/url?returnTo=${encodeURIComponent(returnTo)}`);
+      window.location.href = url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not start GitHub sign-in.');
+      setLinkingAccount(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -645,6 +665,17 @@ function ConnectCard({
             description="Connecting requires your GitHub account to be linked to DevSync first."
           />
         ) : null}
+
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed p-3">
+          <p className="text-sm text-muted-foreground">
+            First time connecting a repository? Link your GitHub account once — DevSync uses it to
+            verify the repo and register the webhook on your behalf.
+          </p>
+          <Button variant="outline" size="sm" onClick={() => void linkGithubAccount()} disabled={linkingAccount}>
+            {linkingAccount ? <Loader2Icon className="size-4 animate-spin" aria-hidden="true" /> : null}
+            Connect GitHub account
+          </Button>
+        </div>
 
         <div className="flex flex-wrap items-end gap-2">
           <div className="min-w-40 flex-1">

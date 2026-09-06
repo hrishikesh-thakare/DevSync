@@ -46,7 +46,12 @@ export const createBranchSchema = z.object({
   taskId: z.string().uuid('Invalid task ID format').nullable().optional(),
 }).strict();
 
-// GitHub OAuth authorization codes are short-lived, opaque strings.
+// `code` is the short-lived, opaque authorization code GitHub's redirect
+// carries back to /github/callback. `state` is the signed token this same
+// user was issued by GET /github/oauth/url — see github.oauth.controller.ts
+// for why the exchange endpoint verifies it rather than trusting the code
+// alone.
 export const exchangeGithubCodeSchema = z.object({
-  providerToken: z.string().min(1, 'Authorization code is required').max(2000),
+  code: z.string().min(1, 'Authorization code is required').max(2000),
+  state: z.string().min(1, 'State is required').max(4000),
 }).strict();
