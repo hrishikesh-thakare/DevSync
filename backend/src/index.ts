@@ -134,6 +134,13 @@ app.use('/api/notifications', notificationsRoutes);
 import auditRoutes from './modules/audit/audit.routes.js';
 app.use('/api/audit', auditRoutes);
 
+// Test-only surface (never mounted in production) — see
+// internal-test.routes.ts for why it exists.
+import { internalTestRouter } from './modules/internal-test/internal-test.routes.js';
+if (env.NODE_ENV !== 'production') {
+  app.use('/api/workspaces/:slug/projects/:key/internal-test', internalTestRouter);
+}
+
 // ─── 404 + Error handling (must be registered after every route) ─────────────
 //
 // Without these, Express's built-in handlers answer with an HTML page. In
