@@ -75,6 +75,9 @@ jobs:
           BACKEND_URL=http://localhost:3001
           SUPABASE_URL=http://localhost:3001
           SUPABASE_SERVICE_ROLE_KEY=test-key-do-not-use-in-production
+          ZOOM_ACCOUNT_ID=${{ secrets.ZOOM_ACCOUNT_ID }}
+          ZOOM_CLIENT_ID=${{ secrets.ZOOM_CLIENT_ID }}
+          ZOOM_CLIENT_SECRET=${{ secrets.ZOOM_CLIENT_SECRET }}
           EOF
 
       - name: Create frontend .env for CI
