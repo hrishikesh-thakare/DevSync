@@ -29,7 +29,6 @@ export const sprints = pgTable('sprints', {
   capacityPoints:        integer('capacity_points'),   // story-point capacity for the sprint (Jira-style)
   sequenceNumber:        integer('sequence_number').notNull(),
   aiSummary:             jsonb('ai_summary'),
-  aiContributionReport:  jsonb('ai_contribution_report'),
   summaryMessageId:      uuid('summary_message_id'), // FK to messages added in migration (circular)
   createdAt:             timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt:             timestamp('updated_at', { withTimezone: true }).defaultNow(),

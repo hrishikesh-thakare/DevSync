@@ -920,11 +920,23 @@ export const getTaskComments = async (req: Request, res: Response): Promise<void
 
     // Fetch the task to get its discussionThreadId
     const [task] = await db.select({ discussionThreadId: tasks.discussionThreadId }).from(tasks).where(eq(tasks.taskId, taskId));
-    
+
     if (!task || !task.discussionThreadId) {
       res.json({ comments: [] });
       return;
     }
+
+    // Opt-in paging, same shape as listTasks: default stays "everything" so
+    // the task detail panel keeps rendering the full comment thread in one
+    // request, but a hard ceiling stops an unbounded response on a task
+    // that has accumulated a very long discussion.
+    const MAX_LIMIT = 2000;
+    const requestedLimit = parseInt(String(req.query.limit ?? ''), 10);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, MAX_LIMIT)
+      : MAX_LIMIT;
+    const requestedOffset = parseInt(String(req.query.offset ?? ''), 10);
+    const offset = Number.isFinite(requestedOffset) && requestedOffset > 0 ? requestedOffset : 0;
 
     const comments = await db
       .select({
@@ -940,7 +952,9 @@ export const getTaskComments = async (req: Request, res: Response): Promise<void
       .from(messages)
       .leftJoin(users, eq(users.userId, messages.authorId))
       .where(eq(messages.threadId, task.discussionThreadId))
-      .orderBy(asc(messages.createdAt));
+      .orderBy(asc(messages.createdAt))
+      .limit(limit)
+      .offset(offset);
 
     res.json({ comments });
   } catch (err) {

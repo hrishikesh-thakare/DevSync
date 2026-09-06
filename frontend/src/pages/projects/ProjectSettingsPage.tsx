@@ -39,7 +39,7 @@ type Values = z.infer<typeof schema>;
 export function ProjectSettingsPage() {
   const { slug = '', key = '' } = useParams();
   const navigate = useNavigate();
-  const { project, updateProject, archiveProject, deleteProject, error: projectError } = useProjectStore();
+  const { project, updateProject, archiveProject, unarchiveProject, deleteProject, error: projectError } = useProjectStore();
   const myRole = useMyProjectRole();
   const canEdit = myRole === 'project_admin' || myRole === 'developer';
   const canArchive = myRole === 'project_admin';
@@ -212,7 +212,7 @@ export function ProjectSettingsPage() {
         </Card>
       ) : null}
 
-      {project.status === 'archived' && canEdit ? (
+      {project.status === 'archived' && canArchive ? (
         <Card className="mt-8">
           <CardHeader>
             <CardTitle>This project is archived</CardTitle>
@@ -223,7 +223,7 @@ export function ProjectSettingsPage() {
           <CardContent>
             <Button
               onClick={() => {
-                void updateProject(slug, key, { status: 'active' })
+                void unarchiveProject(slug, key)
                   .then(() => toast.success('Project restored'))
                   .catch((err: unknown) =>
                     toast.error(err instanceof Error ? err.message : 'Could not restore.'),

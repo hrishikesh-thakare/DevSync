@@ -377,6 +377,18 @@ export const getThreadReplies = async (req: Request, res: Response): Promise<voi
       return;
     }
 
+    // Opt-in paging, same shape as tasks.controller.ts's listTasks: the
+    // default stays "everything" so a thread panel keeps rendering the full
+    // conversation in one request, but a hard ceiling stops an unbounded
+    // response on a thread that has grown very large.
+    const MAX_LIMIT = 2000;
+    const requestedLimit = parseInt(String(req.query.limit ?? ''), 10);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, MAX_LIMIT)
+      : MAX_LIMIT;
+    const requestedOffset = parseInt(String(req.query.offset ?? ''), 10);
+    const offset = Number.isFinite(requestedOffset) && requestedOffset > 0 ? requestedOffset : 0;
+
     const results = await db
       .select({
         messageId: messages.messageId,
@@ -393,8 +405,9 @@ export const getThreadReplies = async (req: Request, res: Response): Promise<voi
       .from(messages)
       .leftJoin(users, eq(messages.authorId, users.userId))
       .where(eq(messages.threadId, messageId))
-
-      .orderBy(asc(messages.createdAt)); // Chronological order for threads
+      .orderBy(asc(messages.createdAt)) // Chronological order for threads
+      .limit(limit)
+      .offset(offset);
 
     const replyIds = results.map(r => r.messageId);
     const reactionsMap: Record<string, any[]> = {};

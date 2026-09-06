@@ -96,6 +96,57 @@ test.describe('Project CRUD', () => {
     expect(fetched.data.project.status).toBe('archived');
   });
 
+  test('unarchive project succeeds via API and restores it to the project list', async () => {
+    const accessToken = getAuthToken('owner');
+    const uniqueKey = `U${Date.now().toString().slice(-4)}`;
+    const { status: createStatus } = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken, {
+      method: 'POST', body: JSON.stringify({ name: 'To Unarchive', key: uniqueKey }),
+    });
+    expect(createStatus).toBe(201);
+
+    await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}/archive`, accessToken, { method: 'PATCH' });
+
+    const { status, data } = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}/unarchive`, accessToken, { method: 'PATCH' });
+    expect(status).toBe(200);
+    expect(data.project.status).toBe('active');
+
+    const list = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken);
+    expect(list.data.projects.some((p: any) => p.key === uniqueKey)).toBe(true);
+  });
+
+  test('a developer cannot archive or unarchive a project through either endpoint', async () => {
+    // Regression guard: updateProjectSchema used to accept a `status` field
+    // on a route reachable by 'developer' (requireProjectRole(['project_admin',
+    // 'developer'])), letting a developer archive/unarchive through the
+    // generic update endpoint despite /archive and /unarchive both being
+    // project_admin-only. `status` no longer exists on that schema at all.
+    const owner = await apiLogin(TEST_USERS.owner.email);
+    const dev = await apiLogin(TEST_USERS.developer.email);
+    const uniqueKey = `D${Date.now().toString().slice(-4)}`;
+    const { status: createStatus } = await apiRequest(`/workspaces/${SLUG}/projects`, owner.accessToken, {
+      method: 'POST', body: JSON.stringify({ name: 'Developer Bypass Test', key: uniqueKey }),
+    });
+    expect(createStatus).toBe(201);
+    const addMember = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}/members`, owner.accessToken, {
+      method: 'POST', body: JSON.stringify({ userId: dev.user.userId, role: 'developer' }),
+    });
+    expect(addMember.status).toBe(201);
+
+    const viaUpdate = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, dev.accessToken, {
+      method: 'PATCH', body: JSON.stringify({ status: 'archived' }),
+    });
+    expect(viaUpdate.status).toBe(400);
+
+    const viaArchive = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}/archive`, dev.accessToken, { method: 'PATCH' });
+    expect(viaArchive.status).toBe(403);
+
+    const viaUnarchive = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}/unarchive`, dev.accessToken, { method: 'PATCH' });
+    expect(viaUnarchive.status).toBe(403);
+
+    const fetched = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, owner.accessToken);
+    expect(fetched.data.project.status).toBe('active');
+  });
+
   test('delete project via API is a real (soft) delete, and frees its key', async () => {
     const accessToken = getAuthToken('owner');
     const uniqueKey = `D${Date.now().toString().slice(-4)}`;

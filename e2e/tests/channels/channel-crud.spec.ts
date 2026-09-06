@@ -27,6 +27,22 @@ test.describe('Channel CRUD', () => {
     expect(status).toBe(200);
   });
 
+  test('channel list honors an opt-in limit, without breaking visibility rules', async () => {
+    // Regression guard: listChannels used to fetch every channel in the
+    // workspace and filter visibility in memory — a LIMIT on that raw query
+    // would have silently dropped or leaked channels depending on fetch
+    // order. Visibility now lives in the query itself, so paging is safe.
+    const { accessToken: ownerToken } = await apiLogin(TEST_USERS.owner.email);
+    const { accessToken: outsiderToken } = await apiLogin(TEST_USERS.outsider.email);
+
+    const limited = await apiRequest(`/workspaces/${SLUG}/channels?limit=3`, ownerToken);
+    expect(limited.status).toBe(200);
+    expect(limited.data.channels).toHaveLength(3);
+
+    const outsider = await apiRequest(`/workspaces/${SLUG}/channels?limit=3`, outsiderToken);
+    expect(outsider.status).toBe(403);
+  });
+
   test('member can join a channel via API', async () => {
     const { accessToken: ownerToken } = await apiLogin(TEST_USERS.owner.email);
 

@@ -3,9 +3,7 @@ import { db } from '../../config/db.js';
 import { projects, projectMembers } from '../../db/schema/projects.js';
 import { tasks } from '../../db/schema/tasks.js';
 import { sprints, sprintTasks } from '../../db/schema/sprints.js';
-import { users } from '../../db/schema/auth.js';
-import { githubCommits, githubPullRequests } from '../../db/schema/github.js';
-import { eq, and, isNull, isNotNull, gte, lte, asc, desc, inArray, sql } from 'drizzle-orm';
+import { eq, and, isNull, asc, desc, inArray, sql } from 'drizzle-orm';
 
 /** Default reporting window when the caller does not supply one. */
 const DEFAULT_WINDOW_DAYS = 90;
@@ -85,7 +83,6 @@ export const getWorkspaceAnalytics = async (req: Request, res: Response): Promis
         cycleTime: [],
         throughput: [],
         velocity: [],
-        contribution: [],
         ciTrend: [],
         burndown: [],
       });
@@ -186,99 +183,6 @@ export const getWorkspaceAnalytics = async (req: Request, res: Response): Promis
       .where(and(inArray(sprints.projectId, projectIds), eq(sprints.status, 'closed')))
       .groupBy(sprints.sprintId, sprints.name, sprints.sequenceNumber, sprints.endDate, sprints.projectId)
       .orderBy(asc(sprints.sequenceNumber));
-
-    // ── Contribution, per member ────────────────────────────────────────────
-    // Task completion is attributed to the assignee (who did the work), not the
-    // actor who dragged the card.
-    const [taskCredit, commitCredit, prCredit] = await Promise.all([
-      db
-        .select({
-          userId: tasks.assigneeId,
-          tasksCompleted: sql<number>`count(*)::int`,
-        })
-        .from(tasks)
-        .where(
-          and(
-            inArray(tasks.projectId, projectIds),
-            isNull(tasks.deletedAt),
-            isNotNull(tasks.assigneeId),
-            isNotNull(tasks.completedAt),
-            gte(tasks.completedAt, fromDate),
-            lte(tasks.completedAt, toDate),
-          ),
-        )
-        .groupBy(tasks.assigneeId),
-
-      db
-        .select({
-          userId: githubCommits.authorUserId,
-          commits: sql<number>`count(*)::int`,
-        })
-        .from(githubCommits)
-        .where(
-          and(
-            inArray(githubCommits.projectId, projectIds),
-            isNotNull(githubCommits.authorUserId),
-            gte(githubCommits.committedAt, fromDate),
-            lte(githubCommits.committedAt, toDate),
-          ),
-        )
-        .groupBy(githubCommits.authorUserId),
-
-      db
-        .select({
-          userId: githubPullRequests.authorUserId,
-          prsMerged: sql<number>`count(*)::int`,
-        })
-        .from(githubPullRequests)
-        .where(
-          and(
-            inArray(githubPullRequests.projectId, projectIds),
-            isNotNull(githubPullRequests.authorUserId),
-            eq(githubPullRequests.state, 'merged'),
-            isNotNull(githubPullRequests.mergedAt),
-            gte(githubPullRequests.mergedAt, fromDate),
-            lte(githubPullRequests.mergedAt, toDate),
-          ),
-        )
-        .groupBy(githubPullRequests.authorUserId),
-    ]);
-
-    const contributionByUser = new Map<
-      string,
-      { tasksCompleted: number; commits: number; prsMerged: number }
-    >();
-    const bump = (id: string | null, patch: Partial<{ tasksCompleted: number; commits: number; prsMerged: number }>) => {
-      if (!id) return;
-      const cur = contributionByUser.get(id) ?? { tasksCompleted: 0, commits: 0, prsMerged: 0 };
-      contributionByUser.set(id, { ...cur, ...patch });
-    };
-    for (const r of taskCredit) bump(r.userId, { tasksCompleted: r.tasksCompleted });
-    for (const r of commitCredit) {
-      const cur = contributionByUser.get(r.userId!) ?? { tasksCompleted: 0, commits: 0, prsMerged: 0 };
-      bump(r.userId, { ...cur, commits: r.commits });
-    }
-    for (const r of prCredit) {
-      const cur = contributionByUser.get(r.userId!) ?? { tasksCompleted: 0, commits: 0, prsMerged: 0 };
-      bump(r.userId, { ...cur, prsMerged: r.prsMerged });
-    }
-
-    const contributorIds = [...contributionByUser.keys()];
-    const contributorRows = contributorIds.length
-      ? await db
-          .select({ userId: users.userId, fullName: users.fullName, avatarUrl: users.avatarUrl })
-          .from(users)
-          .where(inArray(users.userId, contributorIds))
-      : [];
-
-    const contribution = contributorRows
-      .map((u) => ({
-        userId: u.userId,
-        fullName: u.fullName,
-        avatarUrl: u.avatarUrl,
-        ...(contributionByUser.get(u.userId) ?? { tasksCompleted: 0, commits: 0, prsMerged: 0 }),
-      }))
-      .sort((a, b) => b.tasksCompleted - a.tasksCompleted || b.commits - a.commits);
 
     // ── CI trend ────────────────────────────────────────────────────────────
     const ciRows = (await db.execute(sql`
@@ -392,7 +296,6 @@ export const getWorkspaceAnalytics = async (req: Request, res: Response): Promis
       cycleTime,
       throughput,
       velocity,
-      contribution,
       ciTrend,
       burndown,
     });

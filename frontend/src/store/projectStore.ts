@@ -15,7 +15,6 @@ export interface CreateProjectInput {
 export interface UpdateProjectInput {
   name?: string;
   description?: string;
-  status?: 'active' | 'archived';
 }
 
 interface ProjectState {
@@ -29,6 +28,7 @@ interface ProjectState {
   createProject: (slug: string, input: CreateProjectInput) => Promise<Project>;
   updateProject: (slug: string, key: string, input: UpdateProjectInput) => Promise<Project>;
   archiveProject: (slug: string, key: string) => Promise<void>;
+  unarchiveProject: (slug: string, key: string) => Promise<void>;
   deleteProject: (slug: string, key: string) => Promise<void>;
 
   addMember: (slug: string, key: string, userId: string, role: ProjectRole) => Promise<void>;
@@ -128,6 +128,38 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     useCurrentWorkspaceStore.setState((state) => ({
       projects: state.projects.filter((p) => p.projectId !== data.project.projectId),
     }));
+  },
+
+  // The generic `updateProject` used to double as "unarchive" via a `status`
+  // field — removed once that turned out to let any project developer
+  // archive/unarchive through it, bypassing this action's actual
+  // project_admin-only gate (see the matching backend comment). This is the
+  // one path for it now, same shape as `archiveProject`.
+  unarchiveProject: async (slug, key) => {
+    const data = await apiFetch(`/workspaces/${slug}/projects/${key}/unarchive`, { method: 'PATCH' });
+    set({ project: data.project });
+
+    useCurrentWorkspaceStore.setState((state) =>
+      state.projects.some((p) => p.projectId === data.project.projectId)
+        ? state
+        : {
+            projects: [
+              ...state.projects,
+              {
+                projectId: data.project.projectId,
+                name: data.project.name,
+                key: data.project.key,
+                description: data.project.description,
+                iconUrl: data.project.iconUrl,
+                status: data.project.status,
+                issueCounter: data.project.issueCounter,
+                createdAt: data.project.createdAt,
+                leadName: null,
+                leadAvatar: null,
+              },
+            ],
+          },
+    );
   },
 
   deleteProject: async (slug, key) => {

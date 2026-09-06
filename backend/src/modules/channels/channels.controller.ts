@@ -4,7 +4,7 @@ import { channels, channelMembers } from '../../db/schema/channels.js';
 import { workspaceMembers } from '../../db/schema/workspaces.js';
 import { projectMembers } from '../../db/schema/projects.js';
 import { users } from '../../db/schema/auth.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or, isNull, isNotNull, inArray, asc, sql } from 'drizzle-orm';
 import { logAuditAction } from '../audit/audit.controller.js';
 import { getIO } from '../../sockets/index.js';
 import { createZoomMeeting, endZoomMeeting } from '../../lib/zoom.js';
@@ -87,37 +87,64 @@ export const listChannels = async (req: Request, res: Response): Promise<void> =
     const workspaceId = req.params.workspaceId || res.locals.workspaceId;
     const userId = req.user!.userId;
     const workspaceRole = req.workspaceRole; // from middleware
+    const isWorkspaceAdmin = workspaceRole === 'owner' || workspaceRole === 'admin';
 
-    const allChannels = await db
-      .select()
-      .from(channels)
-      .where(and(eq(channels.workspaceId, workspaceId), eq(channels.isArchived, false)));
+    // Opt-in paging, same shape as tasks.controller.ts's listTasks — a hard
+    // ceiling on top of the default "everything". This used to fetch every
+    // channel in the workspace and filter visibility in memory; a LIMIT
+    // applied to that raw, unfiltered query would silently drop channels the
+    // caller can see (or even truncate before reaching ones they can), so
+    // the visibility check moved into the query itself first.
+    const MAX_LIMIT = 2000;
+    const requestedLimit = parseInt(String(req.query.limit ?? ''), 10);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, MAX_LIMIT)
+      : MAX_LIMIT;
+    const requestedOffset = parseInt(String(req.query.offset ?? ''), 10);
+    const offset = Number.isFinite(requestedOffset) && requestedOffset > 0 ? requestedOffset : 0;
 
-    // Fetch user's project memberships
+    // These two are naturally bounded by the caller's own memberships, not
+    // the workspace's total size, so they were never the risk this paging
+    // closes — kept as-is, just used to build the visibility condition below
+    // instead of an in-memory filter.
     const userProjects = await db
       .select({ projectId: projectMembers.projectId })
       .from(projectMembers)
       .where(eq(projectMembers.userId, userId));
-    const userProjectIds = new Set(userProjects.map(p => p.projectId));
+    const userProjectIds = userProjects.map(p => p.projectId).filter((id): id is string => id !== null);
 
-    // Fetch user's private channel memberships
     const userChannels = await db
       .select({ channelId: channelMembers.channelId })
       .from(channelMembers)
       .where(eq(channelMembers.userId, userId));
-    const userChannelIds = new Set(userChannels.map(c => c.channelId));
+    const userChannelIds = userChannels.map(c => c.channelId).filter((id): id is string => id !== null);
 
-    const visibleChannels = allChannels.filter(c => {
-      if (c.projectId) {
-        // Project-scoped channel
-        if (workspaceRole === 'owner' || workspaceRole === 'admin') return true;
-        return userProjectIds.has(c.projectId);
-      } else {
-        // Workspace-scoped channel
-        if (c.type === 'public') return true;
-        return userChannelIds.has(c.channelId);
-      }
-    });
+    // Mirrors the original in-memory filter's branching exactly: a
+    // project-scoped channel's visibility never depends on its `type`
+    // (only project membership, or workspace owner/admin), and a
+    // workspace-scoped channel's visibility never depends on project
+    // membership (only its `type` or explicit channel membership).
+    const visibilityCondition = isWorkspaceAdmin
+      ? sql`true`
+      : or(
+          and(isNull(channels.projectId), eq(channels.type, 'public')),
+          and(
+            isNull(channels.projectId),
+            userChannelIds.length > 0 ? inArray(channels.channelId, userChannelIds) : sql`false`,
+          ),
+          and(
+            isNotNull(channels.projectId),
+            userProjectIds.length > 0 ? inArray(channels.projectId, userProjectIds) : sql`false`,
+          ),
+        );
+
+    const visibleChannels = await db
+      .select()
+      .from(channels)
+      .where(and(eq(channels.workspaceId, workspaceId), eq(channels.isArchived, false), visibilityCondition))
+      .orderBy(asc(channels.createdAt))
+      .limit(limit)
+      .offset(offset);
 
     res.json({ channels: visibleChannels });
   } catch (err) {

@@ -58,17 +58,17 @@ export interface SprintTaskInput {
   assigneeId: string | null;
 }
 
-export interface SprintContribution {
-  userId: string | null;
-  fullName: string;
-  summary: string;
-  tasksCompleted: number;
-}
-
+// Deliberately team-level only. This used to also return a
+// `contributionReport` — one AI-written sentence per assignee judging "their
+// contribution" plus a task count, posted automatically and publicly to the
+// project channel on every sprint close, no review step. Individual
+// activity-count metrics are a documented anti-pattern (see the Analytics
+// Contribution chart removed the same session this was) — a narrative
+// sentence stated with false authority from nothing but a task list is a
+// sharper version of the same problem, not a milder one.
 export interface SprintReport {
   summary: string;
   highlights: string[];
-  contributionReport: SprintContribution[];
 }
 
 export const generateSprintReport = async (params: {
@@ -102,15 +102,14 @@ IMPORTANT: The completion rate is EXACTLY ${completionRate}%. Do NOT state or im
 Tasks:
 ${taskLines || '(no tasks)'}
 
-Include every assignee that appears in the task list. Do not claim a completion rate higher than the percentage provided above. Respond with STRICT JSON (no markdown, no commentary) in exactly this shape:
+Describe the sprint as a whole — do not single out or evaluate individual
+people. Do not claim a completion rate higher than the percentage provided
+above. Respond with STRICT JSON (no markdown, no commentary) in exactly this
+shape:
 {
   "summary": "2-3 sentence retrospective summary, professional and neutral tone",
-  "highlights": ["2-4 bullet highlights, one line each"],
-  "contributionReport": [
-    {"userId": "<assignee userId or null>", "fullName": "<assignee name or 'Unassigned'>", "summary": "one sentence on their contribution", "tasksCompleted": <number of completed tasks by them>}
-  ]
-}
-Include every assignee that appears in the task list.`;
+  "highlights": ["2-4 bullet highlights, one line each"]
+}`;
 
   const text = await callGemini(prompt);
   const parsed = parseJson<Partial<SprintReport>>(text);
@@ -120,25 +119,12 @@ Include every assignee that appears in the task list.`;
     return null;
   }
 
-  // The model may invent friendly identifiers; only keep real assignee UUIDs
-  const validAssigneeIds = new Set(
-    tasks.map(t => t.assigneeId).filter((id): id is string => id !== null)
-  );
-
-  const contributionReport = Array.isArray(parsed.contributionReport)
-    ? parsed.contributionReport.map(c => ({
-        ...c,
-        userId: c.userId !== null && c.userId !== undefined && validAssigneeIds.has(c.userId) ? c.userId : null,
-      }))
-    : [];
-
   return {
     summary: parsed.summary,
     highlights: [
       `Completed ${completedCount} of ${totalCount} tasks (${completionRate}%)`,
       ...(Array.isArray(parsed.highlights) ? parsed.highlights : []),
     ],
-    contributionReport,
   };
 };
 

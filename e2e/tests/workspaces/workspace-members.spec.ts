@@ -22,6 +22,24 @@ test.describe('Workspace Members', () => {
     expect(status).toBe(200);
   });
 
+  test('members list honors an opt-in limit/offset', async () => {
+    // Regression guard: listWorkspaceMembers used to have no ceiling at all.
+    // Default behavior (no params) is untouched; this only proves the new
+    // opt-in paging actually takes effect when asked for.
+    const { accessToken } = await apiLogin(TEST_USERS.owner.email);
+    const page1 = await apiRequest(`/workspaces/${SLUG}/members?limit=5`, accessToken);
+    expect(page1.status).toBe(200);
+    expect(page1.data.members).toHaveLength(5);
+
+    const page2 = await apiRequest(`/workspaces/${SLUG}/members?limit=5&offset=5`, accessToken);
+    expect(page2.status).toBe(200);
+    expect(page2.data.members).toHaveLength(5);
+
+    const page1Ids = page1.data.members.map((m: any) => m.userId);
+    const page2Ids = page2.data.members.map((m: any) => m.userId);
+    expect(page1Ids.some((id: string) => page2Ids.includes(id))).toBe(false);
+  });
+
   test('owner can invite a user via API', async () => {
     const { accessToken } = await apiLogin(TEST_USERS.owner.email);
     const testEmail = `invite-test-${Date.now()}@demo.com`;
@@ -41,6 +59,23 @@ test.describe('Workspace Members', () => {
       body: JSON.stringify({ email: testEmail, role: 'member' }),
     });
     expect([200, 201]).toContain(status);
+  });
+
+  test('admin cannot invite someone as owner (privilege escalation)', async () => {
+    // Regression guard: inviteMemberSchema used to accept the full role enum
+    // (including 'owner') on a route gated to owner OR admin, so any admin
+    // could mint a co-owner by inviting them directly with role: 'owner'.
+    // Granting ownership now has exactly one path — updateMemberRole, which
+    // is locked to the real owner alone.
+    const { accessToken } = await apiLogin(TEST_USERS.admin.email);
+    const testEmail = `escalation-test-${Date.now()}@demo.com`;
+
+    const { status, data } = await apiRequest(`/workspaces/${SLUG}/invite`, accessToken, {
+      method: 'POST',
+      body: JSON.stringify({ email: testEmail, role: 'owner' }),
+    });
+    expect(status).toBe(400);
+    expect(data.error).toBeTruthy();
   });
 
   test('admin can remove a member via API', async () => {

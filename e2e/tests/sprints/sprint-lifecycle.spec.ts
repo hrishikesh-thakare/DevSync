@@ -195,3 +195,28 @@ test.describe('Sprint Lifecycle', () => {
     await expect(ownerPage).toHaveURL(new RegExp(`/projects/${KEY}/sprints`));
   });
 });
+
+test.describe('Sprint list pagination', () => {
+  // Regression guard: listSprints used to have no ceiling at all. Isolated in
+  // its own throwaway project so it doesn't touch the serial suite above,
+  // which relies on there being exactly one sprint at a time.
+  test('honors an opt-in limit', async () => {
+    const accessToken = getAuthToken('owner');
+    const key = `SP${Date.now().toString().slice(-6)}`;
+    const { status: createStatus } = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken, {
+      method: 'POST', body: JSON.stringify({ name: `Sprint paging ${key}`, key }),
+    });
+    expect(createStatus).toBe(201);
+
+    for (let i = 0; i < 3; i++) {
+      const r = await apiRequest(`/workspaces/${SLUG}/projects/${key}/sprints`, accessToken, {
+        method: 'POST', body: JSON.stringify({ name: `Sprint ${i}` }),
+      });
+      expect(r.status).toBe(201);
+    }
+
+    const { status, data } = await apiRequest(`/workspaces/${SLUG}/projects/${key}/sprints?limit=2`, accessToken);
+    expect(status).toBe(200);
+    expect(data.sprints).toHaveLength(2);
+  });
+});

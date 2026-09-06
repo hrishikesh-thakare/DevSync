@@ -22,9 +22,18 @@ export const updateWorkspaceSchema = z.object({
   iconUrl: z.string().optional(),
 }).strict();
 
+// Deliberately narrower than `RoleEnum` — 'owner' is excluded on purpose.
+// This route is gated to `requireWorkspaceRole(['owner', 'admin'])`, so
+// without this restriction any admin (not just the real owner) could invite
+// or reactivate someone straight into a co-owner role, or silently promote
+// an existing deactivated member to owner on reactivation. Granting
+// ownership has exactly one legitimate path: `updateMemberRole`, which is
+// correctly locked to `requireWorkspaceRole(['owner'])` alone.
+const InvitableRole = z.enum(['admin', 'member']);
+
 export const inviteMemberSchema = z.object({
   email: z.string().email('Invalid email format'),
-  role: RoleEnum.optional().default('member'),
+  role: InvitableRole.optional().default('member'),
 }).strict();
 
 export const updateMemberRoleSchema = z.object({

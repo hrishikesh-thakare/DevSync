@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { db } from '../../config/db.js';
 import { workspaces, workspaceMembers, workspaceInvites } from '../../db/schema/workspaces.js';
 import { users } from '../../db/schema/auth.js';
-import { eq, and, ne, isNull, desc, inArray } from 'drizzle-orm';
+import { eq, and, ne, isNull, asc, desc, inArray } from 'drizzle-orm';
 import { tasks } from '../../db/schema/tasks.js';
 import { projects } from '../../db/schema/projects.js';
 import { logAuditAction } from '../audit/audit.controller.js';
@@ -187,6 +187,18 @@ export const listWorkspaceMembers = async (req: Request, res: Response): Promise
   try {
     const workspaceId = req.params.workspaceId || res.locals.workspaceId;
 
+    // Opt-in paging, same shape as tasks.controller.ts's listTasks: the
+    // default stays "everything" so the members page keeps rendering the
+    // full roster in one request, but a hard ceiling stops an unbounded
+    // response on a workspace with a very large membership.
+    const MAX_LIMIT = 2000;
+    const requestedLimit = parseInt(String(req.query.limit ?? ''), 10);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, MAX_LIMIT)
+      : MAX_LIMIT;
+    const requestedOffset = parseInt(String(req.query.offset ?? ''), 10);
+    const offset = Number.isFinite(requestedOffset) && requestedOffset > 0 ? requestedOffset : 0;
+
     const members = await db
       .select({
         id: workspaceMembers.id,
@@ -202,7 +214,10 @@ export const listWorkspaceMembers = async (req: Request, res: Response): Promise
       })
       .from(workspaceMembers)
       .innerJoin(users, eq(workspaceMembers.userId, users.userId))
-      .where(eq(workspaceMembers.workspaceId, workspaceId));
+      .where(eq(workspaceMembers.workspaceId, workspaceId))
+      .orderBy(asc(workspaceMembers.joinedAt))
+      .limit(limit)
+      .offset(offset);
 
     res.json({ members });
   } catch (err) {
@@ -741,6 +756,18 @@ export const getMyTasks = async (req: Request, res: Response) => {
       conditions.push(inArray(tasks.status, requested));
     }
 
+    // Opt-in paging, same shape as tasks.controller.ts's listTasks: default
+    // stays "everything" so My Tasks keeps rendering the full list in one
+    // request, but a hard ceiling stops an unbounded response for someone
+    // assigned a very large number of tasks.
+    const MAX_LIMIT = 2000;
+    const requestedLimit = parseInt(String(req.query.limit ?? ''), 10);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, MAX_LIMIT)
+      : MAX_LIMIT;
+    const requestedOffset = parseInt(String(req.query.offset ?? ''), 10);
+    const offset = Number.isFinite(requestedOffset) && requestedOffset > 0 ? requestedOffset : 0;
+
     // The assignee is always the caller, but the join keeps the row shape
     // identical to the board's TaskSummary — the frontend renders both with the
     // same card component, which reads assigneeName and linkedCommitsCount.
@@ -771,7 +798,9 @@ export const getMyTasks = async (req: Request, res: Response) => {
       .innerJoin(projects, eq(tasks.projectId, projects.projectId))
       .leftJoin(users, eq(tasks.assigneeId, users.userId))
       .where(and(...conditions))
-      .orderBy(desc(tasks.updatedAt));
+      .orderBy(desc(tasks.updatedAt))
+      .limit(limit)
+      .offset(offset);
 
     res.json({ tasks: userTasks });
   } catch (err) {

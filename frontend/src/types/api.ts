@@ -262,14 +262,6 @@ export interface Sprint {
     highlights: string[];
     generatedAt: string;
   } | null;
-  aiContributionReport:
-    | {
-        userId: string | null;
-        fullName: string;
-        summary: string;
-        tasksCompleted: number;
-      }[]
-    | null;
   stats?: {
     taskCount: number;
     totalPoints: number;

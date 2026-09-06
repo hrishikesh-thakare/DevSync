@@ -7,6 +7,7 @@ import {
   getProject,
   updateProject,
   archiveProject,
+  unarchiveProject,
   deleteProject,
   listProjectMembers,
   addProjectMember,
@@ -33,6 +34,7 @@ router.get('/', listProjects);
 router.get('/:key', requireProjectRole(['project_admin', 'developer', 'viewer']), getProject);
 router.patch('/:key', requireProjectRole(['project_admin', 'developer']), validate(updateProjectSchema), updateProject);
 router.patch('/:key/archive', requireProjectRole(['project_admin']), archiveProject);
+router.patch('/:key/unarchive', requireProjectRole(['project_admin']), unarchiveProject);
 router.delete('/:key', requireProjectRole(['project_admin']), deleteProject);
 
 // ─── Project Member Management ───────────────────────────────────────────────

@@ -102,7 +102,9 @@ export const initSocket = (server: HttpServer) => {
         return next(new Error('Authentication error: No token provided'));
       }
 
-      const decoded = jwt.verify(token, env.JWT_SECRET) as { userId: string; email: string };
+      // Pinned to the algorithm this token is actually signed with — see the
+      // matching comment in middleware/auth.ts.
+      const decoded = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] }) as { userId: string; email: string };
       
       const [user] = await db
         .select({ userId: users.userId, deletedAt: users.deletedAt })

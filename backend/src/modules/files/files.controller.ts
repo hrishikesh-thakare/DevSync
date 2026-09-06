@@ -201,17 +201,28 @@ export const uploadFile = async (req: Request, res: Response): Promise<void> => 
 
 
 /**
- * A signed URL/JWT good for ten years — effectively permanent for a link that
- * gets stored once and displayed forever (a chat attachment in `bodyBlocks`,
- * an avatar), as opposed to the default one-hour link `TaskAttachments.tsx`
- * fetches fresh on every click. `workspace-files` is a private bucket
- * (confirmed against the actual Supabase project, not assumed), so
- * `getPublicUrl()` never works there — a long-lived signed URL, generated
- * once at upload time and stored, is the same shape of URL either way, it
- * just doesn't expire out from under content nothing ever re-signs.
+ * A signed URL/JWT good for one year — long enough that `auth.controller.ts`
+ * (the only caller left; see below) doesn't need to re-mint an avatar URL on
+ * every login, short enough to bound how long a leaked link stays live.
+ * `workspace-files` is a private bucket (confirmed against the actual
+ * Supabase project, not assumed), so `getPublicUrl()` never works there — a
+ * signed URL, generated once at upload time and stored, is the shape this
+ * takes either way.
+ *
+ * This used to be ten years and covered chat attachments too. It was cut
+ * down to this after finding a chat attachment's URL — JWT and all — was
+ * getting baked straight into the message (`bodyBlocks`) and never
+ * re-resolved, so a leaked link worked for a decade with no way to revoke
+ * one file without rotating the JWT secret for every file in the app. Chat
+ * attachments now resolve a fresh short-lived URL on render instead (see
+ * `ChannelPage.tsx`'s `ChatAttachmentBlock`) — the same "fetched fresh, never
+ * persisted" pattern `TaskAttachments.tsx` already used. An avatar is lower
+ * stakes (a profile picture, not a shared document) and re-rendering every
+ * avatar on every page load isn't a small change, so it keeps this pattern
+ * rather than getting the full fix — just with a bound that isn't a decade.
  */
-const PERSISTENT_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 365 * 10;
-const PERSISTENT_JWT_EXPIRES_IN = '3650d';
+const PERSISTENT_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 365;
+const PERSISTENT_JWT_EXPIRES_IN = '365d';
 
 /**
  * The actual URL-resolution logic behind `getDownloadUrl`, pulled out so a
@@ -294,7 +305,9 @@ export const getRawFile = async (req: Request, res: Response): Promise<void> => 
     }
 
     try {
-      const decoded = jwt.verify(token as string, env.JWT_SECRET) as { fileId: string };
+      // Pinned to the algorithm this token is actually signed with — see the
+      // matching comment in middleware/auth.ts.
+      const decoded = jwt.verify(token as string, env.JWT_SECRET, { algorithms: ['HS256'] }) as { fileId: string };
       if (decoded.fileId !== fileId) {
         res.status(403).send('Forbidden: Invalid token for this file.');
         return;

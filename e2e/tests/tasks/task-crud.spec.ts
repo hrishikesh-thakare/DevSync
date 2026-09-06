@@ -215,4 +215,31 @@ test.describe('Task Comments', () => {
     );
     expect(status).toBe(200);
   });
+
+  test('task comments honor an opt-in limit', async () => {
+    // Regression guard: getTaskComments used to have no ceiling at all.
+    const accessToken = getAuthToken('owner');
+
+    const created = await apiRequest(`/workspaces/${SLUG}/projects/${KEY}/tasks`, accessToken, {
+      method: 'POST',
+      body: JSON.stringify({ title: `Comment paging test ${Date.now()}`, issueType: 'task' }),
+    });
+    expect(created.status).toBe(201);
+    const taskKey = created.data.task.taskKey;
+
+    for (let i = 0; i < 3; i++) {
+      const c = await apiRequest(`/workspaces/${SLUG}/projects/${KEY}/tasks/${taskKey}/comments`, accessToken, {
+        method: 'POST',
+        body: JSON.stringify({ bodyText: `paging comment ${i}` }),
+      });
+      expect([200, 201]).toContain(c.status);
+    }
+
+    const { status, data } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}/tasks/${taskKey}/comments?limit=2`,
+      accessToken,
+    );
+    expect(status).toBe(200);
+    expect(data.comments).toHaveLength(2);
+  });
 });

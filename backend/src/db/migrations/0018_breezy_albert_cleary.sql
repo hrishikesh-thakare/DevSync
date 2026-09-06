@@ -1,0 +1,1 @@
+ALTER TABLE "sprints" DROP COLUMN "ai_contribution_report";

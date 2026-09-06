@@ -48,13 +48,6 @@ interface Analytics {
     completedPoints: number;
     completedCount: number;
   }[];
-  contribution: {
-    userId: string;
-    fullName: string;
-    tasksCompleted: number;
-    commits: number;
-    prsMerged: number;
-  }[];
   ciTrend: {
     day: string;
     total: number;
@@ -171,7 +164,6 @@ export function AnalyticsPage() {
         <CycleTimeCard entries={data?.cycleTime ?? []} />
         <ThroughputCard points={data?.throughput ?? []} />
         <VelocityCard sprints={data?.velocity ?? []} />
-        <ContributionCard members={data?.contribution ?? []} />
         <CiTrendCard days={data?.ciTrend ?? []} />
       </div>
 
@@ -344,53 +336,6 @@ function VelocityCard({
           <YAxis allowDecimals={false} width={32} {...axisProps} />
           <ChartTooltip content={<ChartTooltipContent />} />
           <Bar dataKey="points" fill="var(--color-points)" radius={4} />
-        </BarChart>
-      </ChartContainer>
-    </ChartCard>
-  );
-}
-
-function ContributionCard({
-  members,
-}: {
-  members: {
-    userId: string;
-    fullName: string;
-    tasksCompleted: number;
-    commits: number;
-    prsMerged: number;
-  }[];
-}) {
-  const rows = members.slice(0, 8).map((m) => ({
-    // Charts get unreadable fast with full names on a vertical axis.
-    name: m.fullName.split(' ')[0],
-    tasks: m.tasksCompleted,
-    commits: m.commits,
-    prs: m.prsMerged,
-  }));
-
-  const config: ChartConfig = {
-    tasks: { label: 'Tasks done', color: 'var(--color-status-done)' },
-    commits: { label: 'Commits', color: 'var(--color-status-in-progress)' },
-    prs: { label: 'PRs merged', color: 'var(--color-status-in-review)' },
-  };
-
-  return (
-    <ChartCard
-      title="Contribution"
-      subtitle="Per member, for workload balance rather than ranking."
-      isEmpty={rows.length === 0}
-      emptyText="No attributed activity in this window."
-    >
-      <ChartContainer config={config} className="h-56 w-full">
-        <BarChart data={rows} margin={{ left: 4, right: 12 }}>
-          <CartesianGrid vertical={false} stroke="var(--color-border)" />
-          <XAxis dataKey="name" {...axisProps} />
-          <YAxis allowDecimals={false} width={32} {...axisProps} />
-          <ChartTooltip content={<ChartTooltipContent />} />
-          <Bar dataKey="tasks" fill="var(--color-tasks)" radius={3} />
-          <Bar dataKey="commits" fill="var(--color-commits)" radius={3} />
-          <Bar dataKey="prs" fill="var(--color-prs)" radius={3} />
         </BarChart>
       </ChartContainer>
     </ChartCard>

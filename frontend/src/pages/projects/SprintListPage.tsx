@@ -429,8 +429,6 @@ function SprintRetrospective({ sprint }: { sprint: Sprint }) {
   const report = sprint.aiSummary;
   if (!report) return null;
 
-  const contributions = sprint.aiContributionReport ?? [];
-
   return (
     <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
       <div className="flex items-start gap-2">
@@ -439,37 +437,15 @@ function SprintRetrospective({ sprint }: { sprint: Sprint }) {
           <p className="text-sm font-medium text-foreground">Retrospective</p>
           <p className="mt-1 text-sm text-muted-foreground">{report.summary}</p>
 
-          {open ? (
-            <>
-              {report.highlights.length > 0 ? (
-                <ul className="mt-3 list-disc space-y-1 pl-4 text-sm text-muted-foreground">
-                  {report.highlights.map((h) => (
-                    <li key={h}>{h}</li>
-                  ))}
-                </ul>
-              ) : null}
-
-              {contributions.length > 0 ? (
-                <div className="mt-3 space-y-2">
-                  <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                    Contributions
-                  </p>
-                  {contributions.map((c) => (
-                    <div key={`${c.userId ?? c.fullName}`} className="text-sm">
-                      <span className="text-foreground">{c.fullName}</span>
-                      <span className="text-muted-foreground">
-                        {' '}
-                        · {c.tasksCompleted} {c.tasksCompleted === 1 ? 'task' : 'tasks'}
-                      </span>
-                      <p className="text-muted-foreground">{c.summary}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </>
+          {open && report.highlights.length > 0 ? (
+            <ul className="mt-3 list-disc space-y-1 pl-4 text-sm text-muted-foreground">
+              {report.highlights.map((h) => (
+                <li key={h}>{h}</li>
+              ))}
+            </ul>
           ) : null}
 
-          {report.highlights.length > 0 || contributions.length > 0 ? (
+          {report.highlights.length > 0 ? (
             <Button
               variant="ghost"
               size="sm"

@@ -78,11 +78,26 @@ export const listSprints = async (req: Request, res: Response): Promise<void> =>
   try {
     const projectId = req.params.projectId || res.locals.projectId;
 
+    // Opt-in paging, same shape as tasks.controller.ts's listTasks. Sprints
+    // per project are naturally small in practice, but a long-lived project
+    // still deserves a hard ceiling rather than none at all. The aggregate
+    // queries below key off `sprintIds` from this already-limited result, so
+    // paging here doesn't need the extra care listChannels required.
+    const MAX_LIMIT = 2000;
+    const requestedLimit = parseInt(String(req.query.limit ?? ''), 10);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, MAX_LIMIT)
+      : MAX_LIMIT;
+    const requestedOffset = parseInt(String(req.query.offset ?? ''), 10);
+    const offset = Number.isFinite(requestedOffset) && requestedOffset > 0 ? requestedOffset : 0;
+
     const results = await db
       .select()
       .from(sprints)
       .where(eq(sprints.projectId, projectId))
-      .orderBy(sql`sequence_number ASC`);
+      .orderBy(sql`sequence_number ASC`)
+      .limit(limit)
+      .offset(offset);
 
     const sprintIds = results.map(s => s.sprintId);
 
@@ -593,20 +608,14 @@ const buildSummaryMessage = (sprintName: string, projectName: string | undefined
     lines.push('Highlights:', ...report.highlights.map(h => `- ${h}`), '');
   }
 
-  if (report.contributionReport.length > 0) {
-    lines.push('Contributions:');
-    for (const c of report.contributionReport) {
-      lines.push(`- ${c.fullName}: ${c.summary} (${c.tasksCompleted} tasks completed)`);
-    }
-  }
-
   return lines.join('\n');
 };
 
 /**
- * Generates the AI sprint retrospective (summary + per-member contribution
- * report), persists it on the sprint row, and posts it to the project's
- * first channel as a system message. Fails silently on any error.
+ * Generates the AI sprint retrospective (team-level summary + highlights —
+ * no per-member breakdown, see the doc comment on `SprintReport`), persists
+ * it on the sprint row, and posts it to the project's first channel as a
+ * system message. Fails silently on any error.
  */
 const generateSprintReportAndPost = async (params: { sprintId: string; projectId: string }): Promise<void> => {
   const { sprintId, projectId } = params;
@@ -711,7 +720,6 @@ const generateSprintReportAndPost = async (params: { sprintId: string; projectId
         highlights: report.highlights,
         generatedAt: new Date().toISOString(),
       },
-      aiContributionReport: report.contributionReport,
       summaryMessageId,
       updatedAt: new Date(),
     })
@@ -723,6 +731,6 @@ const generateSprintReportAndPost = async (params: { sprintId: string; projectId
     entityType: 'sprint',
     entityId: sprintId,
     workspaceId: project?.workspaceId ?? undefined,
-    newValues: { has_summary: true, has_contribution_report: true, posted_to_channel: Boolean(summaryMessageId) },
+    newValues: { has_summary: true, posted_to_channel: Boolean(summaryMessageId) },
   });
 };

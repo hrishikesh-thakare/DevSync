@@ -203,6 +203,24 @@ test.describe('Messages — CRUD, threads, reactions', () => {
     expect(parent.replyCount).toBeGreaterThanOrEqual(1);
   });
 
+  test('thread replies honor an opt-in limit', async () => {
+    // Regression guard: getThreadReplies used to have no ceiling at all.
+    for (let i = 0; i < 4; i++) {
+      const r = await apiRequest(`/workspaces/${SLUG}/channels/${publicChannelId}/messages`, ownerToken, {
+        method: 'POST',
+        body: JSON.stringify({ bodyText: `paging reply ${ts}-${i}`, threadId: parentMessageId }),
+      });
+      expect(r.status).toBe(201);
+    }
+
+    const { status, data } = await apiRequest(
+      `/workspaces/${SLUG}/channels/${publicChannelId}/messages/${parentMessageId}/thread?limit=2`,
+      ownerToken,
+    );
+    expect(status).toBe(200);
+    expect(data.replies).toHaveLength(2);
+  });
+
   test('reactions add, list, and remove', async () => {
     const add = await apiRequest(`/workspaces/${SLUG}/channels/${publicChannelId}/messages/${parentMessageId}/reactions`, ownerToken, {
       method: 'POST',

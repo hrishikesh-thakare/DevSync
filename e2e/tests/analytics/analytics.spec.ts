@@ -27,7 +27,7 @@ test.describe('Team & delivery analytics', () => {
 
     for (const key of [
       'role', 'window', 'projects',
-      'cycleTime', 'throughput', 'velocity', 'contribution', 'ciTrend', 'burndown',
+      'cycleTime', 'throughput', 'velocity', 'ciTrend', 'burndown',
     ]) {
       expect(data, `payload should carry ${key}`).toHaveProperty(key);
     }
@@ -83,17 +83,6 @@ test.describe('Team & delivery analytics', () => {
     const reopened = await apiRequest(`/workspaces/${SLUG}/projects/${KEY}/tasks/${taskKey}`, ownerToken);
     // A reopened task is not delivered work and must stop counting as such.
     expect(reopened.data.task.completedAt, 'completedAt cleared on reopen').toBeNull();
-  });
-
-  test('contribution totals are non-negative and attributed to real users', async () => {
-    const { data } = await analytics(ownerToken);
-    for (const member of data.contribution) {
-      expect(member.userId).toBeTruthy();
-      expect(member.fullName).toBeTruthy();
-      expect(member.tasksCompleted).toBeGreaterThanOrEqual(0);
-      expect(member.commits).toBeGreaterThanOrEqual(0);
-      expect(member.prsMerged).toBeGreaterThanOrEqual(0);
-    }
   });
 
   test('burndown never reports more remaining than the sprint holds', async () => {
@@ -156,7 +145,6 @@ test.describe('Team & delivery analytics', () => {
     expect(data.role).toBe('member');
     expect(data.projects, 'no project memberships means no project scope').toHaveLength(0);
     expect(data.cycleTime).toEqual([]);
-    expect(data.contribution).toEqual([]);
   });
 
   test('an admin sees the whole workspace', async () => {
@@ -189,7 +177,7 @@ test.describe('Analytics page (UI)', () => {
       timeout: 10_000,
     });
 
-    for (const section of ['Cycle time', 'Throughput', 'Velocity', 'Contribution', 'CI health']) {
+    for (const section of ['Cycle time', 'Throughput', 'Velocity', 'CI health']) {
       await expect(
         ownerPage.getByText(section, { exact: true }).first(),
         `${section} card should render`,

@@ -59,7 +59,9 @@ export const exchangeGithubCode = async (req: Request, res: Response): Promise<v
 
     let statePayload: jwt.JwtPayload;
     try {
-      statePayload = jwt.verify(state, env.JWT_SECRET) as jwt.JwtPayload;
+      // Pinned to the algorithm this token is actually signed with — see the
+      // matching comment in middleware/auth.ts.
+      statePayload = jwt.verify(state, env.JWT_SECRET, { algorithms: ['HS256'] }) as jwt.JwtPayload;
     } catch {
       res.status(400).json({ error: 'This GitHub sign-in link has expired or is invalid. Please try connecting again.' });
       return;

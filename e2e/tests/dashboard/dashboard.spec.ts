@@ -183,6 +183,16 @@ test.describe('My tasks filtering', () => {
     expect(data.error).toContain('Unknown status');
   });
 
+  test('honors an opt-in limit', async () => {
+    // Regression guard: getMyTasks used to have no ceiling at all.
+    const all = await apiRequest(`/workspaces/${SLUG}/my-tasks?status=all`, ownerToken);
+    test.skip(all.data.tasks.length < 2, 'Not enough tasks assigned to the owner to observe a limit');
+
+    const { status, data } = await apiRequest(`/workspaces/${SLUG}/my-tasks?status=all&limit=1`, ownerToken);
+    expect(status).toBe(200);
+    expect(data.tasks).toHaveLength(1);
+  });
+
   test('rows carry the fields the task card renders', async () => {
     const { data } = await apiRequest(`/workspaces/${SLUG}/my-tasks`, ownerToken);
     test.skip(data.tasks.length === 0, 'No tasks assigned to the owner');

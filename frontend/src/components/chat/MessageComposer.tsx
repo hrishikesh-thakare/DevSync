@@ -33,7 +33,15 @@ interface PendingAttachment {
   name: string;
   sizeBytes: number;
   state: 'uploading' | 'done' | 'error';
-  url?: string;
+  /** Set once the upload finishes — the stable reference sent to the server. */
+  fileId?: string;
+  /**
+   * A local `URL.createObjectURL(file)` for the composer's own image preview
+   * only, made from the raw `File` the moment it's picked. Never sent to the
+   * server and never what ends up stored on the message — see the doc
+   * comment above this component for why. Revoked on removal/send.
+   */
+  previewUrl?: string;
   type: string;
   /** Only set on `error` — the description shows this instead of the size, per `Attachment`'s own a11y guidance: the failure reason has to be legible text, not just the destructive colour. */
   error?: string;
@@ -51,11 +59,17 @@ interface PendingAttachment {
  * Attachments upload through the backend (`/files/upload`, same as
  * `TaskAttachments.tsx`), not straight to Supabase from the browser —
  * `workspace-files` is a private bucket, so only the service-role key the
- * backend holds can write to it or mint a URL for what it stores. The
- * `?persistent=true` download call asks for a signed URL good for ten years
- * rather than the endpoint's usual one hour: this URL gets stored on the
- * message forever (`bodyBlocks`), unlike a task attachment's URL, which is
- * fetched fresh on every click and never persisted.
+ * backend holds can write to it or mint a URL for what it stores. What gets
+ * sent to the server is the uploaded file's `fileId`, not a resolved URL —
+ * `ChannelPage.tsx`'s `ChatAttachmentBlock` fetches a fresh, short-lived URL
+ * each time the message renders, the same "fetched fresh, never persisted"
+ * pattern `TaskAttachments.tsx` already used. This composer used to ask for
+ * a ten-year signed URL and bake it into the message permanently; that
+ * meant a leaked chat link never expired and couldn't be revoked without
+ * rotating the server's JWT secret for every file in the app. The composer's
+ * own local image preview (before the message is even sent) uses a plain
+ * `URL.createObjectURL(file)` instead — no network round trip needed for
+ * something that only has to exist client-side, briefly.
  *
  * Video/voice notes (the record buttons) share the upload plumbing with
  * ordinary attachments — `MediaRecorder` produces a plain
@@ -90,11 +104,30 @@ export function MessageComposer({
   const editorRef = useRef<RichTextEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Blob URLs outlive the component that created them — an SPA route change
+  // unmounts this composer without a page reload, so a staged image
+  // attachment's preview URL would otherwise leak for the rest of the tab's
+  // life. A ref (not `attachments` itself) is what makes the cleanup below
+  // see whatever is staged at unmount time rather than whatever was staged
+  // on the render that registered the effect.
+  const attachmentsRef = useRef(attachments);
+  useEffect(() => {
+    attachmentsRef.current = attachments;
+  }, [attachments]);
+  useEffect(() => {
+    return () => {
+      for (const a of attachmentsRef.current) {
+        if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+      }
+    };
+  }, []);
+
   const uploadFile = async (file: File) => {
     const id = crypto.randomUUID();
+    const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
     setAttachments((prev) => [
       ...prev,
-      { id, name: file.name, sizeBytes: file.size, type: file.type, state: 'uploading' as const },
+      { id, name: file.name, sizeBytes: file.size, type: file.type, state: 'uploading' as const, previewUrl },
     ]);
 
     try {
@@ -113,11 +146,7 @@ export function MessageComposer({
         }),
       });
 
-      const { downloadUrl } = await apiFetch(
-        `/workspaces/${slug}/files/${uploaded.fileRecord.fileId}/download?persistent=true`,
-      );
-
-      setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, state: 'done', url: downloadUrl } : a)));
+      setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, state: 'done', fileId: uploaded.fileRecord.fileId } : a)));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       toast.error(`Upload failed: ${message}`);
@@ -277,14 +306,11 @@ export function MessageComposer({
         }),
       });
 
-      const { downloadUrl } = await apiFetch(
-        `/workspaces/${slug}/files/${uploaded.fileRecord.fileId}/download?persistent=true`,
-      );
-      setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, state: 'done', url: downloadUrl } : a)));
+      setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, state: 'done', fileId: uploaded.fileRecord.fileId } : a)));
 
       const body = editorRef.current?.getMarkdown().trim() ?? '';
       const ok = await onSend(body, [
-        { name: file.name, url: downloadUrl, sizeBytes: file.size, mimetype: file.type },
+        { name: file.name, fileId: uploaded.fileRecord.fileId, sizeBytes: file.size, mimetype: file.type },
       ]);
 
       // A failure here is a business-rule rejection `ChannelPage.submit`
@@ -305,7 +331,11 @@ export function MessageComposer({
   };
 
   const removeAttachment = (id: string) => {
-    setAttachments((prev) => prev.filter((a) => a.id !== id));
+    setAttachments((prev) => {
+      const target = prev.find((a) => a.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((a) => a.id !== id);
+    });
   };
 
   const handleSubmit = () => {
@@ -326,13 +356,16 @@ export function MessageComposer({
         body,
         attachments.filter((a) => a.state === 'done').map((a) => ({
           name: a.name,
-          url: a.url,
+          fileId: a.fileId,
           sizeBytes: a.sizeBytes,
           mimetype: a.type,
         })),
       ),
     ).then((ok) => {
       if (ok === false) return;
+      attachments.forEach((a) => {
+        if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+      });
       editorRef.current?.clear();
       setIsEmpty(true);
       setAttachments([]);
@@ -378,8 +411,8 @@ export function MessageComposer({
                       component's own default for the small file/PDF case. */}
                   {att.state === 'uploading' ? (
                     <Spinner className={isImage ? 'size-12!' : undefined} />
-                  ) : isImage && att.url ? (
-                    <img src={att.url} alt="" />
+                  ) : isImage && att.previewUrl ? (
+                    <img src={att.previewUrl} alt="" />
                   ) : (
                     <Icon />
                   )}

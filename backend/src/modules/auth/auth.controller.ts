@@ -539,6 +539,18 @@ export const listSessions = async (req: Request, res: Response): Promise<void> =
     const userId = req.user!.userId;
     const currentHash = currentTokenHash(req);
 
+    // Opt-in paging, same shape as tasks.controller.ts's listTasks. Live
+    // sessions per user are naturally small, but a hard ceiling is cheap
+    // insurance against an account that's accumulated an unusual number of
+    // never-expired, never-revoked tokens.
+    const MAX_LIMIT = 2000;
+    const requestedLimit = parseInt(String(req.query.limit ?? ''), 10);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, MAX_LIMIT)
+      : MAX_LIMIT;
+    const requestedOffset = parseInt(String(req.query.offset ?? ''), 10);
+    const offset = Number.isFinite(requestedOffset) && requestedOffset > 0 ? requestedOffset : 0;
+
     const sessions = await db
       .select({
         tokenId: refreshTokens.tokenId,
@@ -549,7 +561,9 @@ export const listSessions = async (req: Request, res: Response): Promise<void> =
       })
       .from(refreshTokens)
       .where(and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt), gt(refreshTokens.expiresAt, new Date())))
-      .orderBy(refreshTokens.issuedAt);
+      .orderBy(refreshTokens.issuedAt)
+      .limit(limit)
+      .offset(offset);
 
     res.json({
       sessions: sessions.map((s) => ({

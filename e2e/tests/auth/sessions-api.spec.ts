@@ -163,4 +163,20 @@ test.describe('Session Management — API @auth', () => {
     const currentRefresh = await fetch(`${API_URL}/auth/refresh`, { method: 'POST', headers: { Cookie: loginA.cookie } });
     expect(currentRefresh.status).toBe(200);
   });
+
+  test('sessions list honors an opt-in limit', async () => {
+    // Regression guard: listSessions used to have no ceiling at all. The
+    // previous test leaves this user with one session; log in a few more
+    // times to guarantee enough to actually observe a limit taking effect.
+    let latest = await realLogin(testEmail);
+    for (let i = 0; i < 3; i++) {
+      latest = await realLogin(testEmail);
+    }
+
+    const { status, data } = await apiRequest('/auth/sessions?limit=2', latest.accessToken, {
+      headers: { Cookie: latest.cookie },
+    });
+    expect(status).toBe(200);
+    expect(data.sessions).toHaveLength(2);
+  });
 });

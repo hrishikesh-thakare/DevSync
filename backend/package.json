@@ -32,7 +32,6 @@
     "nodemailer": "^9.1.0",
     "postgres": "^3.4.7",
     "socket.io": "^4.8.3",
-    "ws": "^8.18.0",
     "zod": "^3.25.36"
   },
   "devDependencies": {

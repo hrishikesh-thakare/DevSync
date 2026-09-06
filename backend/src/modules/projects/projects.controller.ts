@@ -195,15 +195,12 @@ export const getProject = async (req: Request, res: Response): Promise<void> => 
 export const updateProject = async (req: Request, res: Response): Promise<void> => {
   try {
     const { projectId } = req.params as Record<string, string>;
-    const { name, description, iconUrl, status } = req.body;
+    const { name, description, iconUrl } = req.body;
 
     const updateData: Record<string, any> = { updatedAt: new Date() };
     if (name !== undefined) updateData.name = name.trim();
     if (description !== undefined) updateData.description = description;
     if (iconUrl !== undefined) updateData.iconUrl = iconUrl;
-    if (status !== undefined) {
-      updateData.status = status;
-    }
 
     const result = await db.transaction(async (tx) => {
       const [oldProject] = await tx.select().from(projects).where(eq(projects.projectId, projectId)).limit(1);
@@ -232,14 +229,6 @@ export const updateProject = async (req: Request, res: Response): Promise<void> 
       }
       if (oldProject.leadUserId !== updated.leadUserId) {
         await logAuditAction({ actorId, action: 'project.lead_changed', entityType: eType, entityId: eId, workspaceId, newValues: { lead_user_id: updated.leadUserId }, oldValues: { lead_user_id: oldProject.leadUserId }, tx });
-      }
-
-      if (oldProject.status !== updated.status) {
-        if (updated.status === 'archived') {
-          await logAuditAction({ actorId, action: 'project.archived', entityType: eType, entityId: eId, workspaceId, newValues: { status: 'archived' }, oldValues: { status: 'active' }, tx });
-        } else {
-          await logAuditAction({ actorId, action: 'project.unarchived', entityType: eType, entityId: eId, workspaceId, newValues: { status: 'active' }, oldValues: { status: 'archived' }, tx });
-        }
       }
 
       return updated;
@@ -546,6 +535,50 @@ export const archiveProject = async (req: Request, res: Response): Promise<void>
   } catch (err) {
     console.error('Archive project error:', err);
     res.status(500).json({ error: 'Server error archiving project.' });
+  }
+};
+
+// ─── UNARCHIVE PROJECT ────────────────────────────────────────────────────────
+// PATCH /api/workspaces/:workspaceId/projects/:key/unarchive
+//
+// The symmetric counterpart to `archiveProject`, added when `status` was
+// removed from `updateProjectSchema` — restoring a project needs a path of
+// its own now, gated the same project_admin-only way archiving already was.
+export const unarchiveProject = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+
+    const result = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(projects)
+        .set({ status: 'active', updatedAt: new Date() })
+        .where(eq(projects.projectId, projectId))
+        .returning();
+
+      if (updated) {
+        await logAuditAction({
+          actorId: req.user!.userId,
+          action: 'project.unarchived',
+          entityType: 'project',
+          entityId: projectId,
+          workspaceId: updated.workspaceId ?? undefined,
+          newValues: { status: 'active' },
+          oldValues: { status: 'archived' },
+          tx
+        });
+      }
+      return updated;
+    });
+
+    if (!result) {
+      res.status(404).json({ error: 'Project not found.' });
+      return;
+    }
+
+    res.json({ message: 'Project restored', project: result });
+  } catch (err) {
+    console.error('Unarchive project error:', err);
+    res.status(500).json({ error: 'Server error restoring project.' });
   }
 };
 

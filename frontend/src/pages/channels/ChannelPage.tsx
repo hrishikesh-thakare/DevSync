@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { createElement, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { format, isSameDay } from 'date-fns';
 import { toast } from 'sonner';
@@ -420,9 +420,98 @@ export function ChannelPage() {
 
 export interface AttachmentPayload {
   name: string;
+  /**
+   * Stable reference to the uploaded file — the message stores this, and
+   * the URL is resolved fresh (short-lived, revocable) each time the
+   * message renders. This is what every new attachment carries.
+   */
+  fileId?: string;
+  /**
+   * A URL baked directly into the message at send time. This is the OLD
+   * format (see git history around the file-serving JWT fix) — a signed
+   * URL good for ten years, stored verbatim. Kept only so messages sent
+   * before that fix still render; nothing writes this field anymore.
+   */
   url?: string;
   sizeBytes: number;
   mimetype: string;
+}
+
+/**
+ * Renders one chat attachment. New-format blocks (`fileId`, no `url`) fetch a
+ * fresh, short-lived download URL on mount rather than trusting anything
+ * baked into the message — a leaked chat link now expires like any other
+ * signed URL instead of working for ten years. Old messages (`url` already
+ * set, sent before this fix) just use that URL directly; there's nothing to
+ * re-resolve for them, and no way to retroactively shorten a URL that's
+ * already been handed out.
+ */
+function ChatAttachmentBlock({
+  slug,
+  block,
+}: {
+  slug: string;
+  block: AttachmentPayload & { type: string };
+}) {
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(block.url ?? null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (block.url || !block.fileId) return;
+    let cancelled = false;
+    apiFetch(`/workspaces/${slug}/files/${block.fileId}/download`)
+      .then((data) => {
+        if (!cancelled) setResolvedUrl(data.downloadUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, block.fileId, block.url]);
+
+  const isImage = block.mimetype?.startsWith('image/');
+
+  return (
+    <Attachment
+      orientation={isImage ? 'vertical' : 'horizontal'}
+      // `!` (important) is load-bearing on the image case: the component's
+      // own vertical-orientation styling already sets
+      // `has-data-[slot=attachment-content]:w-30` on the root, and a plain
+      // `w-72` here loses to it — same specificity, and Tailwind's generated
+      // order puts the `has-*` variant later. Verified directly (measured
+      // the rendered box) rather than assumed. Files/PDFs stay at the
+      // component's own default horizontal size — only images are meant to
+      // be big.
+      className={isImage ? 'w-72!' : undefined}
+    >
+      <AttachmentMedia variant={isImage ? 'image' : 'icon'}>
+        {/* `createElement`, not a `const Icon = attachmentIcon(...)` local
+            rendered as `<Icon/>` — that shape reads as "a component created
+            during render" to the react-compiler lint rule, even though
+            `attachmentIcon` only ever returns one of three fixed,
+            module-level icon components. This sidesteps the false positive
+            without disabling the rule. */}
+        {isImage && resolvedUrl ? <img src={resolvedUrl} alt="" /> : createElement(attachmentIcon(block.mimetype))}
+      </AttachmentMedia>
+      <AttachmentContent>
+        <AttachmentTitle>{block.name}</AttachmentTitle>
+        <AttachmentDescription>
+          {failed ? 'Could not load this file' : `${Math.round(block.sizeBytes / 1024)} KB`}
+        </AttachmentDescription>
+      </AttachmentContent>
+      {/* The whole card opens the file — not just a small icon button — for
+          every attachment type alike (image, PDF, anything else). No
+          separate download action: it would just be the same href a second
+          time, competing for the same click. */}
+      {resolvedUrl && (
+        <AttachmentTrigger asChild aria-label={`Open ${block.name}`}>
+          <a href={resolvedUrl} target="_blank" rel="noopener noreferrer" />
+        </AttachmentTrigger>
+      )}
+    </Attachment>
+  );
 }
 
 const OTHER_USER_VARIANTS = ["blue", "green", "amber", "purple", "pink", "teal"] as const;
@@ -574,42 +663,7 @@ function MessageRow({
                   {message.bodyBlocks.map((b: unknown, idx) => {
                     const block = b as AttachmentPayload & { type: string };
                     if (block.type !== 'attachment') return null;
-                    const isImage = block.mimetype?.startsWith('image/');
-                    const Icon = attachmentIcon(block.mimetype);
-                    return (
-                      <Attachment
-                        key={idx}
-                        orientation={isImage ? 'vertical' : 'horizontal'}
-                        // `!` (important) is load-bearing on the image case:
-                        // the component's own vertical-orientation styling
-                        // already sets `has-data-[slot=attachment-content]:w-30`
-                        // on the root, and a plain `w-72` here loses to it —
-                        // same specificity, and Tailwind's generated order
-                        // puts the `has-*` variant later. Verified directly
-                        // (measured the rendered box) rather than assumed.
-                        // Files/PDFs stay at the component's own default
-                        // horizontal size — only images are meant to be big.
-                        className={isImage ? 'w-72!' : undefined}
-                      >
-                        <AttachmentMedia variant={isImage ? 'image' : 'icon'}>
-                          {isImage ? <img src={block.url} alt="" /> : <Icon />}
-                        </AttachmentMedia>
-                        <AttachmentContent>
-                          <AttachmentTitle>{block.name}</AttachmentTitle>
-                          <AttachmentDescription>{Math.round(block.sizeBytes / 1024)} KB</AttachmentDescription>
-                        </AttachmentContent>
-                        {/* The whole card opens the file — not just a small
-                            icon button — for every attachment type alike
-                            (image, PDF, anything else). No separate download
-                            action: it would just be the same href a second
-                            time, competing for the same click. */}
-                        {block.url && (
-                          <AttachmentTrigger asChild aria-label={`Open ${block.name}`}>
-                            <a href={block.url} target="_blank" rel="noopener noreferrer" />
-                          </AttachmentTrigger>
-                        )}
-                      </Attachment>
-                    );
+                    return <ChatAttachmentBlock key={idx} slug={slug} block={block} />;
                   })}
                 </AttachmentGroup>
               </div>
