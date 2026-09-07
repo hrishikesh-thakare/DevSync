@@ -74,12 +74,23 @@ const CODE = [
   'application/typescript',
   'application/json',
   'text/css',
-  'text/html',
   'application/xml',
   'text/xml',
   'application/sql',
   'text/x-sql',
 ];
+
+// `text/html` deliberately does not appear above, in either the mimetype
+// list or the extension list — it's the one entry that would directly
+// contradict this file's own reason for existing (see the top-of-file
+// comment). A `.html` source file is a real thing a coding-collaboration
+// tool's users might want to share, but this allowlist can't tell "genuine
+// template file" apart from "stored XSS payload with a friendly extension",
+// and the test that encodes that decision (`injection-and-scoping.spec.ts`'s
+// "rejects a disallowed mimetype") expects exactly that: `text/html` is
+// rejected regardless of what the filename looks like. Confirmed as a real
+// regression, not a hypothetical — CI caught a `payload.html` upload
+// starting to pass once `.html` was added here.
 
 const UPLOAD_MIMES = new Set([
   ...IMAGE,
@@ -101,8 +112,9 @@ const UPLOAD_MIMES = new Set([
 const CODE_EXTENSIONS = new Set([
   'py', 'java', 'c', 'h', 'cpp', 'cc', 'hpp', 'cs', 'go', 'rs', 'rb', 'php',
   'pl', 'swift', 'kt', 'kts', 'scala', 'sh', 'bash', 'zsh', 'ps1', 'sql',
-  'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'env', 'json', 'xml', 'html',
-  'htm', 'css', 'scss', 'less', 'js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs', 'vue',
+  'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'env', 'json', 'xml',
+  // 'html'/'htm' intentionally excluded — see the `CODE` list's comment above.
+  'css', 'scss', 'less', 'js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs', 'vue',
   'r', 'm', 'lua', 'dart', 'ex', 'exs', 'erl', 'clj', 'hs', 'jl', 'sol',
   'proto', 'graphql', 'dockerfile', 'makefile', 'gitignore', 'editorconfig',
   'txt', 'log', 'diff', 'patch', 'gradle', 'lock',
@@ -124,8 +136,26 @@ export const MAX_FILE_BYTES = 25 * 1024 * 1024;
 export const normalizeMime = (mimetype?: string | null): string =>
   (mimetype ?? '').split(';')[0].trim().toLowerCase();
 
-export const isAllowedUploadMime = (mimetype?: string | null, filename?: string | null): boolean =>
-  UPLOAD_MIMES.has(normalizeMime(mimetype)) || hasAllowedCodeExtension(filename);
+export const isAllowedUploadMime = (mimetype?: string | null, filename?: string | null): boolean => {
+  const normalized = normalizeMime(mimetype);
+  if (UPLOAD_MIMES.has(normalized)) return true;
+
+  // The extension fallback exists for the case a browser reports *nothing*
+  // useful for a source file (an empty mimetype — every caller here already
+  // defaults that to `application/octet-stream` before this runs, which is
+  // itself on `UPLOAD_MIMES`, so in practice this only matters for a caller
+  // that explicitly passes `''`). It must never override an explicit,
+  // recognized mimetype the allowlist deliberately rejects — `text/html`
+  // above all, since that's exactly the stored-XSS vector this allowlist
+  // exists to close, and `.html` is also a legitimate source-file extension
+  // for the coding-collaboration use case. Confirmed by a real regression:
+  // `injection-and-scoping.spec.ts`'s "rejects a disallowed mimetype" test
+  // (an upload of `payload.html` with `mimetype: text/html`) started
+  // passing when it shouldn't have, the moment `.html` joined the code
+  // extension list — the OR let the extension silently outrank the mimetype
+  // the caller actually declared.
+  return !normalized && hasAllowedCodeExtension(filename);
+};
 
 /**
  * What to send for a stored file: the content type to declare, and whether the
