@@ -146,7 +146,7 @@ test.describe('Mention popup — tasks', () => {
     // Picking a task inserts *plain* `@KEY` text, not a node — this is what
     // keeps it understood by the backend's existing task-mention regex
     // without any backend change.
-    const row = ownerPage.locator('.rich-message-content', { hasText: taskKey });
+    const row = ownerPage.locator('.rich-message-content', { hasText: taskKey }).last();
     await expect(row).toBeVisible();
 
     await expect
@@ -170,7 +170,7 @@ test.describe('Mention popup — tasks', () => {
     await editor.type(`${marker} @${taskKey}`, { delay: 30 });
     await ownerPage.keyboard.press('Enter');
 
-    const row = ownerPage.locator('.rich-message-content', { hasText: marker });
+    const row = ownerPage.locator('.rich-message-content', { hasText: marker }).last();
     const link = row.locator('a[data-type="task-mention"]');
     await expect(link).toHaveAttribute('href', new RegExp(`/projects/${KEY}/tasks/${taskKey}$`));
 
