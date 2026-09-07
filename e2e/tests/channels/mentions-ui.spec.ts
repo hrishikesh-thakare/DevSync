@@ -168,6 +168,9 @@ test.describe('Mention popup — tasks', () => {
     await editor.click();
     const marker = `click-through-${Date.now()}`;
     await editor.type(`${marker} @${taskKey}`, { delay: 30 });
+    const popup = ownerPage.getByTestId('mention-list');
+    await expect(popup).toBeVisible();
+    await ownerPage.keyboard.press('Escape');
     await ownerPage.keyboard.press('Enter');
 
     const row = ownerPage.locator('.rich-message-content', { hasText: marker }).last();

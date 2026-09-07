@@ -241,7 +241,7 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
       }
 
       // Task mentions
-      const taskMentionRegex = /@([a-z]+-\d+)/gi;
+      const taskMentionRegex = /@([a-z0-9]+-\d+)/gi;
       const taskMatches = [...bodyText.matchAll(taskMentionRegex)];
       if (taskMatches.length > 0) {
         const taskKeys = [...new Set(taskMatches.map(m => m[1]))];

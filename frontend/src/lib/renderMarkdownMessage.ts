@@ -12,7 +12,7 @@ marked.setOptions({
 // `taskMentionRegex`) — same shape, same "letters, hyphen, digits" contract,
 // so a key this treats as clickable is exactly a key the backend already
 // resolved and notified about.
-const TASK_KEY_RE = /@([A-Za-z]+-\d+)\b/g;
+const TASK_KEY_RE = /@([A-Za-z0-9]+-\d+)\b/g;
 
 /**
  * Turns a task-key mention (`@DS-12`, inserted as plain text by the
