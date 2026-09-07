@@ -3,6 +3,7 @@ import type { SuggestionKeyDownProps } from '@tiptap/suggestion';
 import { HashIcon } from 'lucide-react';
 
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { initialsOf } from '@/lib/initials';
 import type { MentionItem } from '@/components/editor/mentionSuggestion';
@@ -86,49 +87,51 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
       value={items[selected] ? itemValue(items[selected]) : undefined}
       className="w-72 rounded-lg border bg-popover text-popover-foreground shadow-md"
     >
-      <CommandList>
-        {loading ? (
-          <p className="px-3 py-4 text-center text-xs text-muted-foreground">Searching…</p>
-        ) : items.length === 0 ? (
-          <CommandEmpty>No matches.</CommandEmpty>
-        ) : (
-          <>
-            {users.length > 0 ? (
-              <CommandGroup heading="People">
-                {users.map((item) => (
-                  <CommandItem
-                    key={itemValue(item)}
-                    value={itemValue(item)}
-                    onSelect={() => command(item)}
-                    onMouseEnter={() => setSelected(items.indexOf(item))}
-                  >
-                    <Avatar className="size-5 shrink-0">
-                      <AvatarImage src={item.avatarUrl ?? undefined} alt="" />
-                      <AvatarFallback className="text-[10px]">{initialsOf(item.label)}</AvatarFallback>
-                    </Avatar>
-                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ) : null}
-            {tasks.length > 0 ? (
-              <CommandGroup heading="Tasks">
-                {tasks.map((item) => (
-                  <CommandItem
-                    key={itemValue(item)}
-                    value={itemValue(item)}
-                    onSelect={() => command(item)}
-                    onMouseEnter={() => setSelected(items.indexOf(item))}
-                  >
-                    <HashIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                    <code className="shrink-0 font-mono text-xs text-muted-foreground">{item.taskKey}</code>
-                    <span className="min-w-0 flex-1 truncate">{item.title}</span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ) : null}
-          </>
-        )}
+      <CommandList className="overflow-hidden">
+        <ScrollArea className="max-h-72">
+          {loading ? (
+            <p className="px-3 py-4 text-center text-xs text-muted-foreground">Searching…</p>
+          ) : items.length === 0 ? (
+            <CommandEmpty>No matches.</CommandEmpty>
+          ) : (
+            <>
+              {users.length > 0 ? (
+                <CommandGroup heading="People">
+                  {users.map((item) => (
+                    <CommandItem
+                      key={itemValue(item)}
+                      value={itemValue(item)}
+                      onSelect={() => command(item)}
+                      onMouseEnter={() => setSelected(items.indexOf(item))}
+                    >
+                      <Avatar className="size-5 shrink-0">
+                        <AvatarImage src={item.avatarUrl ?? undefined} alt="" />
+                        <AvatarFallback className="text-[10px]">{initialsOf(item.label)}</AvatarFallback>
+                      </Avatar>
+                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null}
+              {tasks.length > 0 ? (
+                <CommandGroup heading="Tasks">
+                  {tasks.map((item) => (
+                    <CommandItem
+                      key={itemValue(item)}
+                      value={itemValue(item)}
+                      onSelect={() => command(item)}
+                      onMouseEnter={() => setSelected(items.indexOf(item))}
+                    >
+                      <HashIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      <code className="shrink-0 font-mono text-xs text-muted-foreground">{item.taskKey}</code>
+                      <span className="min-w-0 flex-1 truncate">{item.title}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null}
+            </>
+          )}
+        </ScrollArea>
       </CommandList>
     </Command>
   );
