@@ -42,26 +42,28 @@ export function buildMentionSuggestion(
         .run();
     },
     render: () => {
-      let component: ReactRenderer<MentionListHandle, { items: MentionItem[]; loading: boolean; command: (item: MentionItem) => void }> | null = null;
-      let unmount: (() => void) | null = null;
+      let component: ReactRenderer<MentionListHandle, any> | null = null;
 
       return {
         onStart: (props) => {
           component = new ReactRenderer(MentionList, { props, editor: props.editor });
-          unmount = props.mount(component.element);
+          // Mount the invisible wrapper to the DOM so React events bubble correctly.
+          // The actual MentionList will use Shadcn Popover to portal to the body.
+          document.body.appendChild(component.element);
         },
         onUpdate: (props) => {
           component?.updateProps(props);
         },
         onKeyDown: (props) => {
           if (props.event.key === 'Escape') {
-            unmount?.();
-            return true;
+            return true; // Let tiptap handle escape to exit
           }
           return component?.ref?.onKeyDown(props) ?? false;
         },
         onExit: () => {
-          unmount?.();
+          if (component?.element) {
+            component.element.remove();
+          }
           component?.destroy();
         },
       };
