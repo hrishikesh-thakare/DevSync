@@ -231,6 +231,33 @@ export function ChannelPage() {
     bottomRef.current?.scrollIntoView({ block: 'end' });
   }, [messages.length]);
 
+  useEffect(() => {
+    const el = bottomRef.current;
+    if (!el) return;
+    const content = el.parentElement;
+    if (!content) return;
+    const viewport = content.closest('[data-radix-scroll-area-viewport]');
+    if (!viewport) return;
+
+    let prevHeight = viewport.scrollHeight;
+    const observer = new ResizeObserver(() => {
+      const currentHeight = viewport.scrollHeight;
+      const heightDiff = currentHeight - prevHeight;
+      prevHeight = currentHeight;
+
+      if (heightDiff > 0) {
+        // If the user was already near the bottom before this height increase
+        // (e.g. an image just loaded asynchronously), keep them at the bottom.
+        const distanceToBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+        if (distanceToBottom <= heightDiff + 10) {
+          el.scrollIntoView({ block: 'end' });
+        }
+      }
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+
   // `bodyText` is markdown from the composer (`RichTextEditor`'s wire format
   // — see that component's doc comment), trimmed there before this is ever
   // called; the composer itself already gates on the editor's own `isEmpty`
