@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import sgMail from '@sendgrid/mail';
 import { env } from '../config/env.js';
 
 // ─── Gate 1: is real mail allowed to leave this machine at all? ──────────────
@@ -12,29 +12,28 @@ import { env } from '../config/env.js';
 // one day and got the sending Gmail account suspended for spam.
 //
 // Sending now requires a deliberate decision rather than the absence of one.
-const smtpConfigured = Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS);
+//
+// This used to be nodemailer over raw SMTP. Confirmed live on the deployed
+// host: `connect ENETUNREACH ...:587` then `ETIMEDOUT` trying to reach
+// Gmail's SMTP server — Render blocks outbound SMTP ports on standard web
+// services, so that transport could never have worked there regardless of
+// how correct the credentials were (they were; the exact same config sent
+// real mail successfully from a local machine). SendGrid's HTTP API rides
+// on ordinary HTTPS, which no host blocks, so this is a provider swap driven
+// by that platform constraint, not a preference.
+const emailConfigured = Boolean(env.SENDGRID_API_KEY && env.EMAIL_FROM);
 const sendingAllowed = env.NODE_ENV === 'production' || env.SMTP_ALLOW_DEV;
 
-let transporter: nodemailer.Transporter | null = null;
-
-if (smtpConfigured && sendingAllowed) {
-  transporter = nodemailer.createTransport({
-    host: env.SMTP_HOST,
-    port: parseInt(env.SMTP_PORT || '587', 10),
-    secure: env.SMTP_SECURE === 'true',
-    auth: {
-      user: env.SMTP_USER,
-      pass: env.SMTP_PASS,
-    },
-  });
-  console.log(`[email] Live SMTP enabled via ${env.SMTP_HOST} as ${env.SMTP_USER}.`);
-} else if (smtpConfigured) {
+if (emailConfigured && sendingAllowed) {
+  sgMail.setApiKey(env.SENDGRID_API_KEY);
+  console.log(`[email] Live SendGrid sending enabled as ${env.EMAIL_FROM}.`);
+} else if (emailConfigured) {
   console.log(
-    '[email] SMTP is configured but sending is off outside production. ' +
+    '[email] SendGrid is configured but sending is off outside production. ' +
       'Links will be logged to this console. Set SMTP_ALLOW_DEV=true to send for real.',
   );
 } else {
-  console.log('[email] No SMTP configured — links will be logged to this console.');
+  console.log('[email] No SendGrid API key configured — links will be logged to this console.');
 }
 
 // ─── Gate 2: is this address one that can actually receive mail? ─────────────
@@ -124,7 +123,7 @@ const deliver = async (toEmail: string, subject: string, html: string, text: str
   // A skipped send is a deliberate outcome, not a failure — never throw here,
   // or the job queue retries it three times and registration reports an error
   // for something that worked.
-  if (!transporter) {
+  if (!emailConfigured || !sendingAllowed) {
     mockLog(toEmail, subject, text);
     return;
   }
@@ -146,16 +145,20 @@ const deliver = async (toEmail: string, subject: string, html: string, text: str
 
   sentCount += 1;
   try {
-    await transporter.sendMail({
-      from: env.SMTP_FROM || '"DevSync" <noreply@devsync.local>',
+    await sgMail.send({
+      from: { email: env.EMAIL_FROM, name: 'DevSync' },
       to: toEmail,
       subject,
       text,
       html,
     });
     console.log(`Email sent to ${toEmail}`);
-  } catch (error) {
-    console.error(`Failed to send email to ${toEmail}:`, error);
+  } catch (error: any) {
+    // SendGrid's SDK nests the actually-useful detail (e.g. "sender not
+    // verified", "invalid recipient") inside `response.body.errors` — the
+    // top-level error message alone is usually just "Bad Request".
+    const detail = error?.response?.body?.errors ?? error;
+    console.error(`Failed to send email to ${toEmail}:`, detail);
     throw new Error('Failed to send email.');
   }
 };

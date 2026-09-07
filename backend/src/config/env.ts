@@ -42,13 +42,17 @@ export const env = {
   ZOOM_CLIENT_ID: process.env.ZOOM_CLIENT_ID || '',
   ZOOM_CLIENT_SECRET: process.env.ZOOM_CLIENT_SECRET || '',
 
-  // SMTP Email
-  SMTP_HOST: process.env.SMTP_HOST || '',
-  SMTP_PORT: process.env.SMTP_PORT || '',
-  SMTP_USER: process.env.SMTP_USER || '',
-  SMTP_PASS: process.env.SMTP_PASS || '',
-  SMTP_SECURE: process.env.SMTP_SECURE || '',
-  SMTP_FROM: process.env.SMTP_FROM || '',
+  // Email — SendGrid's HTTP API, not SMTP. Render (where this deploys)
+  // blocks outbound SMTP ports (587/465/25) at the network level for every
+  // standard web service — confirmed live via `ENETUNREACH`/`ETIMEDOUT`
+  // connecting to Gmail's SMTP host, not a credentials problem. An HTTP API
+  // call on port 443 has no such restriction, which is the entire reason
+  // this is SendGrid-over-HTTP and not nodemailer-over-SMTP.
+  SENDGRID_API_KEY: process.env.SENDGRID_API_KEY || '',
+  // Must be a SendGrid-verified sender (Single Sender Verification, or a
+  // verified domain) — SendGrid rejects a send `from` any address it hasn't
+  // confirmed you control.
+  EMAIL_FROM: process.env.EMAIL_FROM || '',
 
   // Real mail is only sent in production. Set this to 'true' to override that
   // for a deliberate local test — never leave it on, because the e2e seed
@@ -56,7 +60,7 @@ export const env = {
   SMTP_ALLOW_DEV: process.env.SMTP_ALLOW_DEV === 'true',
 
   // Hard ceiling on messages per calendar day. 0 uses the built-in default
-  // (500 in production, matching Gmail's own free-tier limit; 25 elsewhere).
+  // (500 in production, matching SendGrid's own free-tier limit; 25 elsewhere).
   SMTP_MAX_PER_DAY: parseInt(process.env.SMTP_MAX_PER_DAY || '0', 10) || 0,
 
   // Encryption (for GitHub tokens, secrets)

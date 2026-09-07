@@ -77,14 +77,13 @@ services:
       - key: ZOOM_CLIENT_SECRET
         sync: false
 
-      # ─── SMTP ─────────────────────────────────────────────────────────────
-      - key: SMTP_HOST
+      # ─── Email (SendGrid HTTP API — not SMTP) ───────────────────────────────
+      # Render blocks outbound SMTP ports on standard web services; confirmed
+      # live via ENETUNREACH/ETIMEDOUT trying to reach Gmail's SMTP host.
+      # SendGrid's API is a normal HTTPS call, which isn't blocked.
+      - key: SENDGRID_API_KEY
         sync: false
-      - key: SMTP_PORT
-        value: 587
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASS
-        sync: false
-      - key: SMTP_FROM
+      # Must be a SendGrid-verified sender (Single Sender Verification or a
+      # verified domain).
+      - key: EMAIL_FROM
         sync: false
