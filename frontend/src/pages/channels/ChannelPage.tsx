@@ -99,19 +99,20 @@ export function ChannelPage() {
   // Resolved client-side from the sidebar's already-fetched project list —
   // no extra request. `null` for a channel with no linked project (or a DM),
   // which just means the composer's mention picker only ever offers people.
+  const workspaceMembers = useCurrentWorkspaceStore((s) => s.members);
   const projects = useCurrentWorkspaceStore((s) => s.projects);
   const projectKey = channel?.projectId
     ? (projects.find((p) => p.projectId === channel.projectId)?.key ?? null)
     : null;
 
   // Backs the composer's `@` mention popup — user results are filtered
-  // client-side from `members` (already loaded for this channel), task
+  // client-side from `workspaceMembers`, task
   // results are a live search scoped to the channel's linked project, if it
   // has one. Fails soft to user-only results: a member without project
   // access, or a network hiccup, shouldn't block mentioning a person.
   const getMentionItems = async (query: string, signal: AbortSignal): Promise<MentionItem[]> => {
     const q = query.trim().toLowerCase();
-    const userItems: MentionItem[] = members
+    const userItems: MentionItem[] = workspaceMembers
       // Not yourself — you don't @-mention the person typing.
       .filter((m) => m.userId !== me?.userId)
       .filter((m) => !q || m.fullName.toLowerCase().includes(q) || (m.displayName ?? '').toLowerCase().includes(q))
