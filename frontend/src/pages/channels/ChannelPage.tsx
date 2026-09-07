@@ -246,7 +246,7 @@ export function ChannelPage() {
           instead, taking the composer down with it — not "sticky", the
           opposite of sticky. */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-2 border-b px-6 py-3">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-6">
           {isDirect ? (
             <MessageSquareIcon className="size-4 text-muted-foreground" aria-hidden="true" />
           ) : (
@@ -367,13 +367,13 @@ export function ChannelPage() {
 
       {/* Thread panel */}
       {threadRoot ? (
-        <aside className="flex min-h-0 w-96 min-w-0 shrink-0 flex-col border-l bg-card">
-          <header className="flex items-center gap-2 border-b px-4 py-3">
+        <aside className="flex min-h-0 w-96 min-w-0 shrink-0 flex-col border-l bg-background">
+          <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
             <MessageSquareIcon className="size-4 text-muted-foreground" aria-hidden="true" />
             <h2 className="font-medium text-foreground">Thread</h2>
             <Button
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               className="ml-auto"
               aria-label="Close thread"
               onClick={closeThread}
@@ -389,13 +389,12 @@ export function ChannelPage() {
             message rather than clamp to the available space, so `<main>`'s
             own overflow-y-auto ends up scrolling everything (header
             included) instead of this list scrolling internally. */}
-        <ScrollArea className="min-h-0 flex-1">
+          <ScrollArea className="min-h-0 flex-1">
             <div className="flex flex-col justify-end min-h-full px-4 pt-3 pb-8">
               <MessageRow
                 slug={slug}
                 message={threadRoot}
                 currentUserId={me?.userId}
-                compact
                 onReact={(emoji) => void toggleReaction(threadRoot, emoji)}
               />
               <Separator className="my-3" />
@@ -406,13 +405,13 @@ export function ChannelPage() {
                 <EmptyState compact title="No replies yet" description="Reply to start the thread." />
               ) : (
                 <ul className="space-y-1">
-                  {threadReplies.map((reply) => (
+                  {threadReplies.map((reply, i) => (
                     <MessageRow
                       slug={slug}
                       key={reply.messageId}
                       message={reply}
+                      previous={i > 0 ? threadReplies[i - 1] : undefined}
                       currentUserId={me?.userId}
-                      compact
                       onReact={(emoji) => void toggleReaction(reply, emoji)}
                       onDelete={() => {
                         void remove(slug, channelId, reply.messageId).catch((err: unknown) =>
@@ -678,12 +677,10 @@ function MessageRow({
   return (
     <>
       {showDate ? (
-        <li className="my-3 flex items-center gap-3">
-          <Separator className="flex-1" />
-          <span className="text-xs text-muted-foreground">
+        <li className="my-4 flex justify-center">
+          <span className="rounded-full bg-muted/80 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm">
             {format(new Date(message.createdAt), 'd MMMM yyyy')}
           </span>
-          <Separator className="flex-1" />
         </li>
       ) : null}
 
