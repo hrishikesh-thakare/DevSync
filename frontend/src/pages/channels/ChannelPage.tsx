@@ -1,5 +1,5 @@
 import { createElement, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { format, isSameDay } from 'date-fns';
 import { toast } from 'sonner';
 import {
@@ -712,6 +712,8 @@ function MessageRow({
   onReact: (emoji: string) => void;
   onDelete?: () => void;
 }) {
+  const navigate = useNavigate();
+
   // Group consecutive messages from the same author within the same day.
   const grouped =
     !compact &&
@@ -731,7 +733,7 @@ function MessageRow({
   // not HTML, so this render path is unchanged: converted to HTML and
   // sanitized in one step; see `e2e/tests/channels/messages.spec.ts`'s "XSS
   // sanitization" suite for exactly what has to survive that inert.
-  const safeBodyHtml = useMemo(() => renderMarkdownMessage(message.bodyText ?? ''), [message.bodyText]);
+  const safeBodyHtml = useMemo(() => renderMarkdownMessage(message.bodyText ?? '', slug), [message.bodyText, slug]);
 
   // Collapse the flat reaction rows into counts per emoji.
   const reactions = useMemo(() => {
@@ -812,21 +814,54 @@ function MessageRow({
                     '[&_code]:rounded [&_code]:bg-black/10 dark:[&_code]:bg-white/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[0.85em]',
                     '[&_pre]:my-1 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-black/10 dark:[&_pre]:bg-white/10 [&_pre]:p-2',
                     '[&_pre_code]:bg-transparent [&_pre_code]:p-0',
+                    // Plain markdown links (`[text](url)`) — a plain
+                    // underline, no fill. Kept as the fallback style; the two
+                    // mention rules below are more specific selectors and win
+                    // for their own elements.
                     '[&_a]:underline [&_a]:underline-offset-2',
-                    // Matches `RichTextEditor.tsx`'s composer-time styling for
-                    // the same `span[data-type="mention"]` the Mention
-                    // extension serializes to — see that file's comment for
-                    // why this exact markup survives sanitization. Background
-                    // is a `currentColor` mix rather than a fixed `bg-primary`
-                    // — confirmed live that a fixed primary tint is invisible
-                    // on an own-message bubble, which is *already*
-                    // `bg-primary text-primary-foreground` (`bubble.tsx`'s
-                    // `default` variant): primary-on-primary. Deriving from
+                    // User mention (`span[data-type="mention"]`, from the
+                    // composer's Mention extension — see that file's comment
+                    // for why this exact markup survives sanitization): a
+                    // filled, bold "pill". Background is a `currentColor` mix
+                    // rather than a fixed `bg-primary` — confirmed live that a
+                    // fixed primary tint is invisible on an own-message
+                    // bubble, which is *already* `bg-primary
+                    // text-primary-foreground` (`bubble.tsx`'s `default`
+                    // variant): primary-on-primary. Deriving from
                     // `currentColor` means the chip always contrasts against
                     // whatever text color the surrounding bubble variant set,
                     // own message or not.
-                    '[&_span[data-type="mention"]]:rounded [&_span[data-type="mention"]]:px-1 [&_span[data-type="mention"]]:py-0.5 [&_span[data-type="mention"]]:font-semibold [&_span[data-type="mention"]]:bg-[color-mix(in_srgb,currentColor_18%,transparent)]'
+                    '[&_span[data-type="mention"]]:rounded [&_span[data-type="mention"]]:px-1 [&_span[data-type="mention"]]:py-0.5 [&_span[data-type="mention"]]:font-semibold [&_span[data-type="mention"]]:bg-[color-mix(in_srgb,currentColor_18%,transparent)]',
+                    // Task mention (`a[data-type="task-mention"]`, linkified
+                    // by `renderMarkdownMessage.ts`): a lighter, monospace,
+                    // dot-underlined "code link" — visually distinct from the
+                    // bold user-mention pill at a glance, same
+                    // `currentColor`-derived background for the same
+                    // contrast-safety reason. The line itself still comes
+                    // from the generic `[&_a]:underline` rule above (same
+                    // specificity, same value — nothing to override); this
+                    // only needs to swap its *style* to dotted. First attempt
+                    // tried to set the line via an arbitrary property
+                    // alongside `no-underline` on the same element —
+                    // confirmed live that `no-underline` always won
+                    // regardless of source order, so the line silently never
+                    // rendered. `decoration-dotted` is the real Tailwind
+                    // utility for this and doesn't have that conflict.
+                    '[&_a[data-type="task-mention"]]:rounded [&_a[data-type="task-mention"]]:px-1 [&_a[data-type="task-mention"]]:py-0.5 [&_a[data-type="task-mention"]]:font-mono [&_a[data-type="task-mention"]]:text-[0.85em] [&_a[data-type="task-mention"]]:decoration-dotted [&_a[data-type="task-mention"]]:underline-offset-2 [&_a[data-type="task-mention"]]:bg-[color-mix(in_srgb,currentColor_10%,transparent)]',
                   )}
+                  onClick={(e) => {
+                    // `dangerouslySetInnerHTML` content isn't real React
+                    // children, so a real `<Link>` can't live inside it — the
+                    // anchor `renderMarkdownMessage.ts` builds is a plain
+                    // `<a href>`, which would otherwise cause a full page
+                    // reload. Intercept just the task-mention kind here and
+                    // route it through the SPA instead.
+                    const link = (e.target as HTMLElement).closest('a[data-type="task-mention"]');
+                    if (link instanceof HTMLAnchorElement) {
+                      e.preventDefault();
+                      navigate(link.getAttribute('href') || '');
+                    }
+                  }}
                   dangerouslySetInnerHTML={{ __html: safeBodyHtml }}
                 />
                 {message.isEdited ? (

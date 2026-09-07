@@ -1,0 +1,1 @@
+ALTER TABLE "github_ci_status" ADD COLUMN "ai_failure_summary" text;
