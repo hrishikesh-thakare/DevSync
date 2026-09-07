@@ -42,6 +42,7 @@ export function buildMentionSuggestion(
         .run();
     },
     render: () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let component: ReactRenderer<MentionListHandle, any> | null = null;
 
       return {

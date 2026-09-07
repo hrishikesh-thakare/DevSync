@@ -67,7 +67,8 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
 
   return (
     <Popover open={true}>
-      <PopoverAnchor virtualRef={virtualRef as any} />
+      {/* @ts-expect-error -- Radix UI virtualRef types don't strictly match here in older versions, but it works */}
+      <PopoverAnchor virtualRef={virtualRef} />
       <PopoverContent
         onOpenAutoFocus={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
