@@ -309,7 +309,7 @@ export function ChannelPage() {
   }
 
   return (
-    <div className="flex flex-1 min-h-0 w-full bg-background">
+    <div className="absolute inset-0 flex bg-background">
       {/* Main conversation.
           `min-h-0` is what actually makes the message list scroll internally
           instead of the whole column growing past the viewport — a flex
