@@ -44,32 +44,27 @@ export function buildMentionSuggestion(
     render: () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let component: ReactRenderer<MentionListHandle, any> | null = null;
-      let unmount: (() => void) | null = null;
 
       return {
         onStart: (props) => {
           component = new ReactRenderer(MentionList, { props, editor: props.editor });
-          // `mount()` is Tiptap Suggestion's own managed positioning — backed
-          // by Floating UI's `autoUpdate`, which is what actually keeps this
-          // anchored through a layout shift elsewhere on the page (an image
-          // or video in the message list finishing its async load and
-          // pushing the composer down), not just ordinary scroll/resize. See
-          // `MentionList.tsx`'s doc comment for why a hand-rolled
-          // Popover/virtualRef was tried and dropped.
-          unmount = props.mount(component.element);
+          // Mount the invisible wrapper to the DOM so React events bubble correctly.
+          // The actual MentionList will use Shadcn Popover to portal to the body.
+          document.body.appendChild(component.element);
         },
         onUpdate: (props) => {
           component?.updateProps(props);
         },
         onKeyDown: (props) => {
           if (props.event.key === 'Escape') {
-            unmount?.();
-            return true;
+            return true; // Let tiptap handle escape to exit
           }
           return component?.ref?.onKeyDown(props) ?? false;
         },
         onExit: () => {
-          unmount?.();
+          if (component?.element) {
+            component.element.remove();
+          }
           component?.destroy();
         },
       };
