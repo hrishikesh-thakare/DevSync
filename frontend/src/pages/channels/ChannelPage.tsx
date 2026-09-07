@@ -116,14 +116,13 @@ export function ChannelPage() {
       // Not yourself — you don't @-mention the person typing.
       .filter((m) => m.userId !== me?.userId)
       .filter((m) => !q || m.fullName.toLowerCase().includes(q) || (m.displayName ?? '').toLowerCase().includes(q))
-      .slice(0, 6)
       .map((m) => ({ kind: 'user', id: m.userId, label: m.displayName || m.fullName, avatarUrl: m.avatarUrl }));
 
     if (!projectKey) return userItems;
 
     try {
       const data = await apiFetch(
-        `/workspaces/${slug}/projects/${projectKey}/tasks?${q ? `search=${encodeURIComponent(q)}&` : ''}limit=6`,
+        `/workspaces/${slug}/projects/${projectKey}/tasks?${q ? `search=${encodeURIComponent(q)}&` : ''}limit=20`,
         { signal },
       );
       const taskItems: MentionItem[] = (data.tasks ?? []).map(
