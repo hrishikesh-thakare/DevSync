@@ -316,7 +316,11 @@ export const listTasks = async (req: Request, res: Response): Promise<void> => {
     if (search && typeof search === 'string') {
       const searchCondition = or(
         ilike(tasks.title, `%${search}%`),
-        ilike(tasks.descriptionText, `%${search}%`)
+        ilike(tasks.descriptionText, `%${search}%`),
+        // Also matches by key (e.g. "DS-12") — the mention-suggestion picker
+        // in the chat composer is the main caller that benefits from this;
+        // title/description alone miss an exact key search entirely.
+        ilike(tasks.taskKey, `%${search}%`)
       );
       whereClause = and(whereClause, searchCondition);
     }

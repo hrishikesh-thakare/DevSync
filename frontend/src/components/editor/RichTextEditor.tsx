@@ -2,7 +2,9 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type Reac
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extension-placeholder';
+import { Mention } from '@tiptap/extension-mention';
 import { Markdown } from 'tiptap-markdown';
+import { buildMentionSuggestion, type MentionItem } from '@/components/editor/mentionSuggestion';
 import {
   BoldIcon,
   Code2Icon,
@@ -76,6 +78,15 @@ export interface RichTextEditorProps {
    */
   leading?: ReactNode;
   trailing?: ReactNode;
+  /**
+   * Enables `@` mentions when provided. Returns the ranked results for the
+   * text typed after `@` — a mix of `{kind:'user', ...}` and `{kind:'task',
+   * ...}` items is exactly what the popup expects (see
+   * `components/editor/mentionSuggestion.tsx`). Omitted entirely (a task
+   * description, say) means typing `@` does nothing special, same as before
+   * this existed.
+   */
+  mentions?: (query: string, signal: AbortSignal) => Promise<MentionItem[]> | MentionItem[];
 }
 
 /**
@@ -105,6 +116,11 @@ const EDITOR_CONTENT_CLASS = cn(
   '[&_pre]:my-1 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-2',
   '[&_pre_code]:bg-transparent [&_pre_code]:p-0',
   '[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2',
+  // Mirrors the sanitized `span[data-type="mention"]` this same node
+  // serializes to on the wire (see the `Mention` extension below) — see
+  // `ChannelPage.tsx`'s matching rule (and its longer comment on why
+  // `currentColor`, not a fixed `bg-primary`) for the sent-message side.
+  '[&_span[data-type="mention"]]:rounded [&_span[data-type="mention"]]:px-1 [&_span[data-type="mention"]]:py-0.5 [&_span[data-type="mention"]]:font-semibold [&_span[data-type="mention"]]:bg-[color-mix(in_srgb,currentColor_18%,transparent)]',
   // Tiptap's Placeholder extension marks the empty first paragraph with this
   // class + a `data-placeholder` attribute; there is no element to attach a
   // real `placeholder=` attribute to, so the text is a CSS pseudo-element.
@@ -283,7 +299,7 @@ function EditorToolbar({ editor, disabled }: { editor: Editor; disabled?: boolea
 }
 
 export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(function RichTextEditor(
-  { defaultValue = '', onChange, onSubmit, placeholder, disabled, autoFocus, className, leading, trailing },
+  { defaultValue = '', onChange, onSubmit, placeholder, disabled, autoFocus, className, leading, trailing, mentions },
   ref,
 ) {
   // Read inside stable callbacks below instead of being dependencies of
@@ -296,10 +312,12 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
   const onChangeRef = useRef(onChange);
   const onSubmitRef = useRef(onSubmit);
   const placeholderRef = useRef(placeholder);
+  const mentionsRef = useRef(mentions);
   useEffect(() => {
     onChangeRef.current = onChange;
     onSubmitRef.current = onSubmit;
     placeholderRef.current = placeholder;
+    mentionsRef.current = mentions;
   });
 
   const editor = useEditor(
@@ -325,6 +343,38 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         // a lone Enter should be a line break once rendered, not silently
         // swallowed until a blank line starts a new paragraph.
         Markdown.configure({ html: false, breaks: true, linkify: false, tightLists: true }),
+        // Serializes to the exact `<span data-type="mention" data-id="...">`
+        // markup `sanitizeMessageHtml.ts`'s allowlist and
+        // `messages.controller.ts`'s notification parser already expect —
+        // both were written anticipating this and (per their own comments)
+        // had nothing wired up to actually produce it until now. `marked`
+        // (the render-time markdown parser) passes inline HTML in its source
+        // straight through, so this raw string is exactly what ends up in
+        // front of the sanitizer on render — same trust boundary as any
+        // other markdown source text, nothing new to defend against.
+        Mention.extend({
+          addStorage() {
+            return {
+              ...this.parent?.(),
+              markdown: {
+                serialize(state: { write: (s: string) => void }, node: { attrs: { id: string; label?: string } }) {
+                  const label = node.attrs.label ?? node.attrs.id;
+                  state.write(`<span data-type="mention" data-id="${node.attrs.id}">@${label}</span>`);
+                },
+              },
+            };
+          },
+          // eslint-disable-next-line react-hooks/refs -- read by Tiptap's suggestion plugin, not during React's render
+        }).configure({
+          HTMLAttributes: { 'data-type': 'mention' },
+          suggestion: {
+            // eslint-disable-next-line react-hooks/refs -- read by Tiptap's suggestion plugin, not during React's render
+            ...buildMentionSuggestion((query, signal) => mentionsRef.current?.(query, signal) ?? []),
+            // Only active when a consumer actually wired up `mentions` — a
+            // plain field (a task description) leaves `@` as ordinary text.
+            shouldShow: () => !!mentionsRef.current,
+          },
+        }),
         // The rule can't see that this closure is only ever invoked later, by
         // Tiptap's own placeholder decoration plugin while building each
         // ProseMirror transaction — never synchronously here, and never by

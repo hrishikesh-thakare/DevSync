@@ -25,7 +25,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import {
   Select,
@@ -632,7 +631,12 @@ function LabelPicker({
                 No labels in this project yet.
               </p>
             ) : (
-              <ScrollArea className="max-h-64">
+              // Plain scrollable div, not `ScrollArea` — its Viewport is
+              // `height: 100%`, which needs a definite height to resolve
+              // against. `max-h-*` only sets a ceiling, so the list never
+              // actually clips at it; harmless here while label lists stay
+              // short, but see the GitHub repo picker's version of this bug.
+              <div className="max-h-64 overflow-y-auto">
                 <ul>
                   {labels.map((l) => {
                     const checked = selected.some(
@@ -658,7 +662,7 @@ function LabelPicker({
                     );
                   })}
                 </ul>
-              </ScrollArea>
+              </div>
             )}
           </PopoverContent>
         </Popover>

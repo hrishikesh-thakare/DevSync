@@ -20,6 +20,7 @@ import {
   getTaskGithubActivity,
   getIssueComments,
   getWorkflowRunLogs,
+  summarizeWorkflowRunFailure,
 } from './github.controller.js';
 import express from 'express';
 import { validate, numericParam } from '../../middleware/validate.js';
@@ -61,6 +62,7 @@ githubConfigRouter.post('/branches', requireProjectRole(['project_admin', 'devel
 githubConfigRouter.get('/branches', requireProjectRole(['project_admin', 'developer', 'viewer']), getGithubBranches);
 githubConfigRouter.post('/ci/:runId/rerun', requireProjectRole(['project_admin', 'developer']), retriggerWorkflow);
 githubConfigRouter.get('/ci/:runId/logs', requireProjectRole(['project_admin', 'developer', 'viewer']), getWorkflowRunLogs);
+githubConfigRouter.post('/ci/:runId/summarize', requireProjectRole(['project_admin', 'developer', 'viewer']), summarizeWorkflowRunFailure);
 
 // ─── Webhook routes for GitHub payloads ──────────────────────────────────────
 // Mounted at: /api/webhooks/github

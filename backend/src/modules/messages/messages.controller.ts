@@ -173,21 +173,23 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
 
     // 3. channel_mentioned & task_mentioned
     if (bodyText && channel.type !== 'dm' && channel.type !== 'group_dm') {
-      // User mentions (from Tiptap extension)
+      // User mentions — the chat composer's Mention extension serializes a
+      // picked user to `<span data-type="mention" data-id="...">`.
       let mentionedIds: string[] = [];
-      const spanRegex = /<[^>]+>/g;
-      const tagMatches = [...bodyText.matchAll(spanRegex)];
-      for (const match of tagMatches) {
-        const tag = match[0];
-        if (tag.includes('data-type="mention"')) {
-          const idMatch = tag.match(/data-id="([^"]+)"/);
-          if (idMatch) mentionedIds.push(idMatch[1]);
-        }
+      const mentionSpanRegex = /<span[^>]*data-type="mention"[^>]*data-id="([^"]+)"[^>]*>.*?<\/span>/g;
+      const spanMatches = [...bodyText.matchAll(mentionSpanRegex)];
+      for (const match of spanMatches) {
+        mentionedIds.push(match[1]);
       }
 
-      // Plain Text Fallback
+      // Plain-text fallback, for a name typed by hand rather than picked from
+      // the suggestion popup. Matched against `bodyText` with every resolved
+      // span already stripped out — otherwise the visible "@Name" *inside* a
+      // span this loop already resolved precisely gets reprocessed by the
+      // much fuzzier `ilike` prefix match below, which can resolve to a
+      // different person entirely if two members share a first name.
       const plainRegex = /@([a-zA-Z0-9_-]+)/g;
-      const plainMatches = [...bodyText.matchAll(plainRegex)];
+      const plainMatches = [...bodyText.replace(mentionSpanRegex, '').matchAll(plainRegex)];
       const plainUsernames = [...new Set(plainMatches.map(m => m[1]))];
       for (const username of plainUsernames) {
         if (!['all', 'everyone', 'channel'].includes(username.toLowerCase())) {

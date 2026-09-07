@@ -134,6 +134,13 @@
       "when": 1788706133429,
       "tag": "0018_breezy_albert_cleary",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788786354223,
+      "tag": "0019_minor_king_bedlam",
+      "breakpoints": true
     }
   ]
 }

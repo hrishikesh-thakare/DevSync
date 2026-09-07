@@ -34,6 +34,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { apiFetch } from '@/lib/api';
 import { attachmentIcon, classifyFile, fileToBase64, formatBytes, getFileVariant, MAX_UPLOAD_BYTES } from '@/lib/files';
 import { RichTextEditor, type RichTextEditorHandle } from '@/components/editor/RichTextEditor';
+import type { MentionItem } from '@/components/editor/mentionSuggestion';
 import type { AttachmentPayload } from '@/pages/channels/ChannelPage';
 
 interface PendingAttachment {
@@ -95,6 +96,7 @@ export function MessageComposer({
   placeholder,
   disabled,
   onSend,
+  getMentionItems,
 }: {
   slug: string;
   placeholder: string;
@@ -106,6 +108,8 @@ export function MessageComposer({
    * decide whether to clear what was typed.
    */
   onSend: (bodyText: string, attachments: AttachmentPayload[]) => boolean | Promise<boolean>;
+  /** Enables `@` mentions — see `RichTextEditor`'s `mentions` prop for the contract. Omit to leave `@` as plain text (unused elsewhere `MessageComposer` might someday be reused without a channel in scope). */
+  getMentionItems?: (query: string, signal: AbortSignal) => Promise<MentionItem[]> | MentionItem[];
 }) {
   const [isEmpty, setIsEmpty] = useState(true);
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
@@ -587,6 +591,7 @@ export function MessageComposer({
         disabled={disabled}
         onChange={() => setIsEmpty(editorRef.current?.isEmpty() ?? true)}
         onSubmit={handleSubmit}
+        mentions={getMentionItems}
         leading={
           <>
             <input type="file" multiple className="hidden" ref={fileInputRef} onChange={handleFileChange} />

@@ -33,8 +33,10 @@ import { MessageComposer } from '@/components/chat/MessageComposer';
 import { ChannelSettingsSheet } from '@/pages/channels/ChannelSettingsSheet';
 import { useChatStore } from '@/store/chatStore';
 import { useAuthStore } from '@/store/auth';
+import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
 import { socketClient } from '@/lib/socket';
 import { apiFetch } from '@/lib/api';
+import type { MentionItem } from '@/components/editor/mentionSuggestion';
 import { initialsOf } from '@/lib/initials';
 import { firstUrlIn } from '@/lib/messageLinks';
 import { renderMarkdownMessage } from '@/lib/renderMarkdownMessage';
@@ -93,6 +95,50 @@ export function ChannelPage() {
     ? members.filter((m) => m.userId !== me?.userId).map((m) => m.displayName || m.fullName).join(', ') ||
       'Direct message'
     : null;
+
+  // Resolved client-side from the sidebar's already-fetched project list —
+  // no extra request. `null` for a channel with no linked project (or a DM),
+  // which just means the composer's mention picker only ever offers people.
+  const projects = useCurrentWorkspaceStore((s) => s.projects);
+  const projectKey = channel?.projectId
+    ? (projects.find((p) => p.projectId === channel.projectId)?.key ?? null)
+    : null;
+
+  // Backs the composer's `@` mention popup — user results are filtered
+  // client-side from `members` (already loaded for this channel), task
+  // results are a live search scoped to the channel's linked project, if it
+  // has one. Fails soft to user-only results: a member without project
+  // access, or a network hiccup, shouldn't block mentioning a person.
+  const getMentionItems = async (query: string, signal: AbortSignal): Promise<MentionItem[]> => {
+    const q = query.trim().toLowerCase();
+    const userItems: MentionItem[] = members
+      // Not yourself — you don't @-mention the person typing.
+      .filter((m) => m.userId !== me?.userId)
+      .filter((m) => !q || m.fullName.toLowerCase().includes(q) || (m.displayName ?? '').toLowerCase().includes(q))
+      .slice(0, 6)
+      .map((m) => ({ kind: 'user', id: m.userId, label: m.displayName || m.fullName, avatarUrl: m.avatarUrl }));
+
+    if (!projectKey) return userItems;
+
+    try {
+      const data = await apiFetch(
+        `/workspaces/${slug}/projects/${projectKey}/tasks?${q ? `search=${encodeURIComponent(q)}&` : ''}limit=6`,
+        { signal },
+      );
+      const taskItems: MentionItem[] = (data.tasks ?? []).map(
+        (t: { taskId: string; taskKey: string; title: string }) => ({
+          kind: 'task' as const,
+          id: t.taskId,
+          taskKey: t.taskKey,
+          title: t.title,
+        }),
+      );
+      return [...userItems, ...taskItems];
+    } catch {
+      return userItems;
+    }
+  };
+
   const [sending, setSending] = useState(false);
   // The Zoom join link for this channel's live call, if any — `null` means
   // no call is running, so the header button reads "Start call". There is
@@ -361,6 +407,7 @@ export function ChannelPage() {
             disabled={sending}
             placeholder={isDirect ? `Message ${directLabel}` : `Message #${channel.name}`}
             onSend={(bodyText, attachments) => submit(bodyText, attachments, null)}
+            getMentionItems={getMentionItems}
           />
         </div>
       </div>
@@ -435,6 +482,7 @@ export function ChannelPage() {
               disabled={sending}
               placeholder="Reply in thread"
               onSend={(bodyText, attachments) => submit(bodyText, attachments, threadRoot.messageId)}
+              getMentionItems={getMentionItems}
             />
           </div>
         </aside>
@@ -737,7 +785,20 @@ function MessageRow({
                     '[&_code]:rounded [&_code]:bg-black/10 dark:[&_code]:bg-white/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[0.85em]',
                     '[&_pre]:my-1 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-black/10 dark:[&_pre]:bg-white/10 [&_pre]:p-2',
                     '[&_pre_code]:bg-transparent [&_pre_code]:p-0',
-                    '[&_a]:underline [&_a]:underline-offset-2'
+                    '[&_a]:underline [&_a]:underline-offset-2',
+                    // Matches `RichTextEditor.tsx`'s composer-time styling for
+                    // the same `span[data-type="mention"]` the Mention
+                    // extension serializes to — see that file's comment for
+                    // why this exact markup survives sanitization. Background
+                    // is a `currentColor` mix rather than a fixed `bg-primary`
+                    // — confirmed live that a fixed primary tint is invisible
+                    // on an own-message bubble, which is *already*
+                    // `bg-primary text-primary-foreground` (`bubble.tsx`'s
+                    // `default` variant): primary-on-primary. Deriving from
+                    // `currentColor` means the chip always contrasts against
+                    // whatever text color the surrounding bubble variant set,
+                    // own message or not.
+                    '[&_span[data-type="mention"]]:rounded [&_span[data-type="mention"]]:px-1 [&_span[data-type="mention"]]:py-0.5 [&_span[data-type="mention"]]:font-semibold [&_span[data-type="mention"]]:bg-[color-mix(in_srgb,currentColor_18%,transparent)]'
                   )}
                   dangerouslySetInnerHTML={{ __html: safeBodyHtml }}
                 />

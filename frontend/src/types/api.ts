@@ -428,6 +428,8 @@ export interface GithubCiRun {
   htmlUrl: string | null;
   triggeredAt: string | null;
   completedAt: string | null;
+  /** AI-written likely-cause, generated on demand and cached — see the Summarize button. */
+  aiFailureSummary: string | null;
 }
 
 export interface GithubPullRequest {
@@ -472,6 +474,7 @@ export interface GithubBranch {
   createdAt: string | null;
 }
 
+/** One entry from GET /github/user/repos — the linked account's own GitHub repos, used by the connect-a-repo picker. */
 export interface GithubRepoOption {
   id: number;
   name: string;

@@ -64,6 +64,12 @@ export const githubCiStatus = pgTable('github_ci_status', {
   triggeredAt:  timestamp('triggered_at', { withTimezone: true }).notNull(),
   completedAt:  timestamp('completed_at', { withTimezone: true }),
   createdAt:    timestamp('created_at', { withTimezone: true }).defaultNow(),
+  // AI-written "likely cause" for a failed run. Generated automatically the
+  // moment the webhook reports a failure (also reachable via the Summarize
+  // button as a manual fallback) and cached here so it's computed once per
+  // run, never re-spent. Null until generated, and stays null forever if
+  // GEMINI_API_KEY is unset — see services/ai.service.ts.
+  aiFailureSummary: text('ai_failure_summary'),
 }, (table) => [
   // The webhook handler treats this pair as a key — select, then update or
   // insert. GitHub sends three events per run (queued/in_progress/completed),

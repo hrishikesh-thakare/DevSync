@@ -1,33 +1,39 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import {
   CheckCircle2Icon,
+  CheckIcon,
+  ChevronsUpDownIcon,
   CircleDashedIcon,
   CircleSlashIcon,
   ExternalLinkIcon,
   GitBranchIcon,
   GitCommitHorizontalIcon,
   GitPullRequestIcon,
+  LockIcon,
   Loader2Icon,
   RefreshCwIcon,
   Rows2Icon,
   Rows3Icon,
+  SparklesIcon,
   XCircleIcon,
 } from 'lucide-react';
 
 import { EmptyState, ErrorState } from '@/components/layout/PageState';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, ApiError } from '@/lib/api';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import type { GithubRepoOption } from '@/types/api';
 import {
   Select,
   SelectContent,
@@ -83,6 +89,7 @@ export function GitHubIntegration() {
     disconnect,
     fetchTab,
     rerun,
+    summarizeCiRun,
     reset,
   } = useGithubStore();
 
@@ -92,6 +99,17 @@ export function GitHubIntegration() {
   const [branch, setBranch] = useState('all');
   const [state, setState] = useState('all');
   const [dense, setDense] = useState(false);
+  const [summarizingRunId, setSummarizingRunId] = useState<number | null>(null);
+
+  const handleSummarize = (runId: number) => {
+    setSummarizingRunId(runId);
+    void summarizeCiRun(slug, key, runId)
+      .then((summary) => {
+        if (!summary) toast.error('AI summary unavailable right now.');
+      })
+      .catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Could not summarize this run.'))
+      .finally(() => setSummarizingRunId(null));
+  };
 
   useEffect(() => {
     if (slug && key) void fetchConnection(slug, key);
@@ -296,22 +314,67 @@ export function GitHubIntegration() {
                   when: run.triggeredAt,
                   href: run.htmlUrl,
                   taskKey: null,
-                  action: canRerun ? (
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Re-run ${run.workflowName ?? 'workflow'}`}
-                      onClick={() => {
-                        void rerun(slug, key, run.runId)
-                          .then(() => toast.success('Re-run triggered on GitHub'))
-                          .catch((err: unknown) =>
-                            toast.error(err instanceof Error ? err.message : 'Could not re-run.'),
-                          );
-                      }}
-                    >
-                      <RefreshCwIcon className="size-4" aria-hidden="true" />
-                    </Button>
-                  ) : null,
+                  action: (
+                    <>
+                      {run.conclusion === 'failure' ? (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={
+                            run.aiFailureSummary
+                              ? `AI summary already generated for ${run.workflowName ?? 'workflow'}`
+                              : `Summarize failure for ${run.workflowName ?? 'workflow'}`
+                          }
+                          disabled={summarizingRunId === run.runId || !!run.aiFailureSummary}
+                          onClick={() => handleSummarize(run.runId)}
+                        >
+                          {summarizingRunId === run.runId ? (
+                            <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <SparklesIcon className="size-4" aria-hidden="true" />
+                          )}
+                        </Button>
+                      ) : null}
+                      {canRerun ? (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Re-run ${run.workflowName ?? 'workflow'}`}
+                          onClick={() => {
+                            void rerun(slug, key, run.runId)
+                              .then(() => toast.success('Re-run triggered on GitHub'))
+                              .catch((err: unknown) =>
+                                toast.error(err instanceof Error ? err.message : 'Could not re-run.'),
+                              );
+                          }}
+                        >
+                          <RefreshCwIcon className="size-4" aria-hidden="true" />
+                        </Button>
+                      ) : null}
+                    </>
+                  ),
+                  footer: run.aiFailureSummary ? (
+                    <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 p-3">
+                      <SparklesIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-foreground">AI likely cause</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{run.aiFailureSummary}</p>
+                      </div>
+                    </div>
+                  ) : summarizingRunId === run.runId ? (
+                    // A spinner on the button alone is easy to miss — this fills
+                    // the exact spot the real answer is about to land in, so it
+                    // reads as "working on it" instead of leaving the click
+                    // looking like it did nothing.
+                    <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 p-3">
+                      <SparklesIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <Skeleton className="h-3.5 w-28" />
+                        <Skeleton className="h-3.5 w-full max-w-md" />
+                        <Skeleton className="h-3.5 w-2/3 max-w-sm" />
+                      </div>
+                    </div>
+                  ) : undefined,
                 }))}
                 slug={slug}
                 projectKey={key}
@@ -456,6 +519,8 @@ interface Row {
   badge?: string;
   /** Per-row action, e.g. the CI tab's re-run button. */
   action?: React.ReactNode;
+  /** Optional full-width content rendered as its own row below, e.g. the CI tab's AI summary. */
+  footer?: React.ReactNode;
 }
 
 /**
@@ -496,7 +561,8 @@ function RowList({
       </TableHeader>
       <TableBody>
         {rows.map((row) => (
-          <TableRow key={row.id}>
+          <Fragment key={row.id}>
+          <TableRow>
             <TableCell className={cellPad}>{row.icon}</TableCell>
 
             <TableCell className={cn(cellPad, 'max-w-0 whitespace-normal')}>
@@ -543,6 +609,22 @@ function RowList({
               </div>
             </TableCell>
           </TableRow>
+          {row.footer ? (
+            <TableRow>
+              {/*
+                `TableCell` bakes in `first:pl-6` (a pseudo-class, so a plain
+                `pl-*` here wouldn't reliably win on specificity) — this cell
+                is always first-child of its own row, so overriding the same
+                `first:` variant is what actually takes effect. Set to exactly
+                cancel the AI panel's own `p-3`, so its icon lines up with the
+                row's leading icon above it instead of sitting 12px further in.
+              */}
+              <TableCell colSpan={5} className="whitespace-normal pt-0 pb-3 first:pl-3">
+                {row.footer}
+              </TableCell>
+            </TableRow>
+          ) : null}
+          </Fragment>
         ))}
       </TableBody>
     </Table>
@@ -603,6 +685,46 @@ function ConnectCard({
   const [error, setError] = useState<string | null>(null);
   const [linkingAccount, setLinkingAccount] = useState(false);
 
+  // `repos === null` covers both "still loading" and "account not linked" —
+  // `notLinked` disambiguates. Manual owner/repo entry only makes sense once
+  // an account is linked (POST /connect 403s without one either way), so
+  // there's no point showing those fields before that.
+  const [repos, setRepos] = useState<GithubRepoOption[] | null>(null);
+  const [loadingRepos, setLoadingRepos] = useState(true);
+  const [notLinked, setNotLinked] = useState(false);
+  const [manualEntry, setManualEntry] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [repoSearch, setRepoSearch] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await apiFetch('/github/user/repos');
+        if (!cancelled) {
+          setRepos(data.repos ?? []);
+          setNotLinked(false);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof ApiError && (err.status === 404 || err.status === 401)) {
+          // Not linked yet, or the stored token was revoked — same UI either way.
+          setNotLinked(true);
+        } else {
+          // A real fetch failure (network, 500). Don't strand the user with no
+          // way to connect at all — fall back to manual entry.
+          setManualEntry(true);
+        }
+        setRepos(null);
+      } finally {
+        if (!cancelled) setLoadingRepos(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   if (!canConnect) {
     return (
       <Alert>
@@ -613,6 +735,17 @@ function ConnectCard({
       </Alert>
     );
   }
+
+  const selectRepo = (repo: GithubRepoOption) => {
+    setOwner(repo.owner);
+    setName(repo.name);
+    setPickerOpen(false);
+    setRepoSearch('');
+  };
+
+  const filteredRepos = (repos ?? []).filter((r) =>
+    r.fullName.toLowerCase().includes(repoSearch.trim().toLowerCase()),
+  );
 
   const submit = async () => {
     if (!owner.trim() || !name.trim()) return;
@@ -666,45 +799,135 @@ function ConnectCard({
           />
         ) : null}
 
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed p-3">
-          <p className="text-sm text-muted-foreground">
-            First time connecting a repository? Link your GitHub account once — DevSync uses it to
-            verify the repo and register the webhook on your behalf.
-          </p>
-          <Button variant="outline" size="sm" onClick={() => void linkGithubAccount()} disabled={linkingAccount}>
-            {linkingAccount ? <Loader2Icon className="size-4 animate-spin" aria-hidden="true" /> : null}
-            Connect GitHub account
-          </Button>
-        </div>
+        {notLinked ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed p-3">
+            <p className="text-sm text-muted-foreground">
+              First time connecting a repository? Link your GitHub account once — DevSync uses it to
+              verify the repo and register the webhook on your behalf.
+            </p>
+            <Button variant="outline" size="sm" onClick={() => void linkGithubAccount()} disabled={linkingAccount}>
+              {linkingAccount ? <Loader2Icon className="size-4 animate-spin" aria-hidden="true" /> : null}
+              Connect GitHub account
+            </Button>
+          </div>
+        ) : loadingRepos ? (
+          <Skeleton className="h-9 w-full max-w-md rounded-lg" />
+        ) : !manualEntry ? (
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-64 flex-1">
+              <label className="mb-1.5 block text-sm text-foreground">Repository</label>
+              <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={pickerOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className={cn('truncate', !owner && !name && 'text-muted-foreground')}>
+                      {owner && name ? `${owner}/${name}` : 'Select a repository…'}
+                    </span>
+                    <ChevronsUpDownIcon className="size-4 shrink-0 opacity-50" aria-hidden="true" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-[--radix-popover-trigger-width] p-0">
+                  <div className="p-1.5">
+                    <Input
+                      autoFocus
+                      value={repoSearch}
+                      onChange={(e) => setRepoSearch(e.target.value)}
+                      placeholder="Search your repositories…"
+                      className="h-8"
+                    />
+                  </div>
+                  {filteredRepos.length === 0 ? (
+                    <p className="px-3 py-4 text-center text-xs text-muted-foreground">
+                      {repos && repos.length === 0
+                        ? "No repositories found on this account."
+                        : "No matches."}
+                    </p>
+                  ) : (
+                    // A plain scrollable div, not `ScrollArea` — that component's
+                    // Viewport is `height: 100%`, which needs a *definite* height
+                    // on its parent to resolve against. `max-h-*` alone only sets
+                    // a ceiling, not a definite height, so the list never actually
+                    // clipped: it rendered full-height, and Radix Popover's
+                    // collision avoidance then shoved the whole thing up to fit
+                    // the viewport, overlapping the trigger button entirely.
+                    <div className="max-h-72 overflow-y-auto p-1">
+                      <ul>
+                        {filteredRepos.map((r) => {
+                          const checked = r.owner === owner && r.name === name;
+                          return (
+                            <li key={r.id}>
+                              <button
+                                type="button"
+                                onClick={() => selectRepo(r)}
+                                aria-pressed={checked}
+                                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
+                              >
+                                {r.private ? (
+                                  <LockIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                                ) : (
+                                  <span className="size-3.5 shrink-0" />
+                                )}
+                                <span className="min-w-0 flex-1 truncate">{r.fullName}</span>
+                                {checked ? <CheckIcon className="size-3.5 shrink-0" aria-hidden="true" /> : null}
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
+            <Button onClick={() => void submit()} disabled={busy || !owner.trim() || !name.trim()}>
+              {busy ? <Loader2Icon className="size-4 animate-spin" aria-hidden="true" /> : null}
+              Connect
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-40 flex-1">
+              <label htmlFor="gh-owner" className="mb-1.5 block text-sm text-foreground">
+                Owner
+              </label>
+              <Input
+                id="gh-owner"
+                value={owner}
+                onChange={(e) => setOwner(e.target.value)}
+                placeholder="octocat"
+              />
+            </div>
+            <div className="min-w-40 flex-1">
+              <label htmlFor="gh-name" className="mb-1.5 block text-sm text-foreground">
+                Repository
+              </label>
+              <Input
+                id="gh-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="hello-world"
+              />
+            </div>
+            <Button onClick={() => void submit()} disabled={busy || !owner.trim() || !name.trim()}>
+              {busy ? <Loader2Icon className="size-4 animate-spin" aria-hidden="true" /> : null}
+              Connect
+            </Button>
+          </div>
+        )}
 
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-40 flex-1">
-            <label htmlFor="gh-owner" className="mb-1.5 block text-sm text-foreground">
-              Owner
-            </label>
-            <Input
-              id="gh-owner"
-              value={owner}
-              onChange={(e) => setOwner(e.target.value)}
-              placeholder="octocat"
-            />
-          </div>
-          <div className="min-w-40 flex-1">
-            <label htmlFor="gh-name" className="mb-1.5 block text-sm text-foreground">
-              Repository
-            </label>
-            <Input
-              id="gh-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="hello-world"
-            />
-          </div>
-          <Button onClick={() => void submit()} disabled={busy || !owner.trim() || !name.trim()}>
-            {busy ? <Loader2Icon className="size-4 animate-spin" aria-hidden="true" /> : null}
-            Connect
-          </Button>
-        </div>
+        {!notLinked && !loadingRepos && repos && repos.length > 0 ? (
+          <button
+            type="button"
+            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            onClick={() => setManualEntry((v) => !v)}
+          >
+            {manualEntry ? 'Pick from your repositories instead' : "Can't find it? Enter owner/repo manually"}
+          </button>
+        ) : null}
       </CardContent>
     </Card>
   );

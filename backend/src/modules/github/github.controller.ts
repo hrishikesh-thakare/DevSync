@@ -12,6 +12,7 @@ import { createNotification } from '../notifications/notifications.controller.js
 import { encrypt, decrypt } from '../../lib/encryption.js';
 import { enqueueJob } from '../../workers/queue.js';
 import { getIO } from '../../sockets/index.js';
+import { summarizeCiFailure } from '../../services/ai.service.js';
 
 // ─── HELPER: Verify GitHub Webhook Signature ─────────────────────────────────
 function verifyGitHubSignature(rawBody: Buffer, signatureHeader: string | undefined, webhookSecret: string): boolean {
@@ -706,6 +707,10 @@ const handleWorkflowRunEvent = async (projectId: string, payload: any) => {
           run_id: workflowRun.id,
         },
       });
+
+      // AI failure summary is manual-only (the Summarize button) — see the
+      // doc comment on `computeCiFailureSummary` for why automatic firing
+      // from the webhook was tried and then deliberately reverted.
     }
   }
 };
@@ -1796,6 +1801,146 @@ export const retriggerWorkflow = async (req: Request, res: Response): Promise<vo
   }
 };
 
+// ─── HELPER: Fetch (and clean) logs for a run's failed jobs ─────────────────
+// Shared by the raw-logs endpoint and the AI summary endpoint below, so the
+// GitHub-specific plumbing (redirect-following, ANSI stripping) exists once.
+async function fetchFailedJobLogs(
+  connection: { githubRepoFullName: string; githubAccessToken: string },
+  runId: string
+): Promise<{ jobs: { jobName: string; logs: string }[] } | { error: string }> {
+  const token = decrypt(connection.githubAccessToken);
+
+  const jobsRes = await githubApiFetch(
+    `https://api.github.com/repos/${connection.githubRepoFullName}/actions/runs/${runId}/jobs`,
+    token
+  ) as any;
+
+  if (!jobsRes.ok) {
+    // A 404 here is a distinct, real case worth naming honestly: GitHub
+    // ages out Actions history, and a run recorded via webhook can simply
+    // no longer exist by the time someone opens it. Anything else (network,
+    // auth, rate limit) is transient and worth phrasing as retriable.
+    if (jobsRes.status === 404) {
+      return { error: 'This workflow run no longer exists on GitHub — it may have expired or been deleted.' };
+    }
+    return { error: 'Failed to fetch jobs for the workflow run. Try again in a moment.' };
+  }
+
+  const jobsData = await jobsRes.json();
+  const jobs = jobsData.jobs || [];
+
+  // Filter for failed jobs, or fallback to all jobs if none failed
+  let targetJobs = jobs.filter((j: any) => j.conclusion === 'failure');
+  if (targetJobs.length === 0) {
+    targetJobs = jobs; // just show all if none failed
+  }
+
+  const logsPromises = targetJobs.map(async (job: any) => {
+    try {
+      // GitHub logs endpoint redirects (302) to an S3/Azure URL.
+      // Sending GitHub Authorization header to S3 causes S3 to reject with 400 Bad Request.
+      // We use redirect: 'manual' and then fetch the redirected location without Auth header.
+      const logRes = await fetch(
+        `https://api.github.com/repos/${connection.githubRepoFullName}/actions/jobs/${job.id}/logs`,
+        {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/vnd.github+json',
+            'Authorization': `Bearer ${token}`,
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+          redirect: 'manual',
+        }
+      ) as unknown as globalThis.Response;
+
+      let rawLogs = '';
+      if (logRes.status === 302 || logRes.status === 301 || logRes.status === 307) {
+        const redirectUrl = logRes.headers.get('location');
+        if (redirectUrl) {
+          const s3Res = await fetch(redirectUrl);
+          if (s3Res.ok) {
+            rawLogs = await s3Res.text();
+          }
+        }
+      } else if (logRes.ok) {
+        rawLogs = await logRes.text();
+      }
+
+      if (!rawLogs) {
+        return { jobName: job.name, logs: 'Logs are expired, archived by GitHub, or unavailable.' };
+      }
+
+      // Clean ANSI escape sequences for crisp terminal viewing
+      const cleanLogs = rawLogs.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+      return { jobName: job.name, logs: cleanLogs };
+    } catch (e) {
+      return { jobName: job.name, logs: 'Error fetching logs.' };
+    }
+  });
+
+  return { jobs: await Promise.all(logsPromises) };
+}
+
+// ─── HELPER: Compute (or fetch cached) AI failure summary for one run ───────
+// Only called from the manual Summarize endpoint below — this used to also
+// fire automatically from `handleWorkflowRunEvent` the moment the webhook
+// reported a failure, but that was reverted on purpose: confirmed live that
+// the very first attempt right after a run completes can hit GitHub's
+// Actions logs API before it's finished processing the just-completed run
+// (a plain 404, even though the run and its logs are genuinely there
+// moments later), and there's no good place to surface that failure to a
+// user who never clicked anything. Manual-only means it only ever runs when
+// someone is looking at the screen waiting for it. Never throws for an
+// expected "can't summarize this" case — those come back as a typed result
+// instead, mapped to a status code by the HTTP handler.
+type CiSummaryResult =
+  | { kind: 'not_found' }
+  | { kind: 'not_failure' }
+  | { kind: 'cached'; summary: string }
+  | { kind: 'no_connection' }
+  | { kind: 'fetch_error'; error: string }
+  | { kind: 'unavailable' } // Gemini unset, or the call failed
+  | { kind: 'generated'; summary: string };
+
+async function computeCiFailureSummary(projectId: string, runId: number): Promise<CiSummaryResult> {
+  const [run] = await db
+    .select({
+      id: githubCiStatus.id,
+      conclusion: githubCiStatus.conclusion,
+      workflowName: githubCiStatus.workflowName,
+      headBranch: githubCiStatus.headBranch,
+      aiFailureSummary: githubCiStatus.aiFailureSummary,
+    })
+    .from(githubCiStatus)
+    .where(and(eq(githubCiStatus.projectId, projectId), eq(githubCiStatus.runId, runId)))
+    .limit(1);
+
+  if (!run) return { kind: 'not_found' };
+  if (run.conclusion !== 'failure') return { kind: 'not_failure' };
+  if (run.aiFailureSummary) return { kind: 'cached', summary: run.aiFailureSummary };
+
+  const [connection] = await db
+    .select({ githubRepoFullName: githubConnections.githubRepoFullName, githubAccessToken: githubConnections.githubAccessToken })
+    .from(githubConnections)
+    .where(eq(githubConnections.projectId, projectId))
+    .limit(1);
+
+  if (!connection || !connection.githubAccessToken) return { kind: 'no_connection' };
+
+  const logsResult = await fetchFailedJobLogs(connection as { githubRepoFullName: string; githubAccessToken: string }, String(runId));
+  if ('error' in logsResult) return { kind: 'fetch_error', error: logsResult.error };
+
+  const summary = await summarizeCiFailure({
+    workflowName: run.workflowName,
+    headBranch: run.headBranch,
+    jobs: logsResult.jobs,
+  });
+  if (!summary) return { kind: 'unavailable' };
+
+  await db.update(githubCiStatus).set({ aiFailureSummary: summary }).where(eq(githubCiStatus.id, run.id));
+  return { kind: 'generated', summary };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // NEW: REST API — Get GitHub CI Logs
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1815,77 +1960,58 @@ export const getWorkflowRunLogs = async (req: Request, res: Response): Promise<v
       return;
     }
 
-    const token = decrypt(connection.githubAccessToken);
-
-    // 1. Fetch jobs for the run
-    const jobsRes = await githubApiFetch(
-      `https://api.github.com/repos/${connection.githubRepoFullName}/actions/runs/${runId}/jobs`,
-      token
-    ) as any;
-
-    if (!jobsRes.ok) {
-      res.status(502).json({ error: 'Failed to fetch jobs for the workflow run.' });
+    const result = await fetchFailedJobLogs(connection as { githubRepoFullName: string; githubAccessToken: string }, runId);
+    if ('error' in result) {
+      res.status(502).json({ error: result.error });
       return;
     }
 
-    const jobsData = await jobsRes.json();
-    const jobs = jobsData.jobs || [];
-
-    // Filter for failed jobs, or fallback to all jobs if none failed
-    let targetJobs = jobs.filter((j: any) => j.conclusion === 'failure');
-    if (targetJobs.length === 0) {
-      targetJobs = jobs; // just show all if none failed
-    }
-
-    // 2. Fetch logs for target jobs
-    const logsPromises = targetJobs.map(async (job: any) => {
-      try {
-        // GitHub logs endpoint redirects (302) to an S3/Azure URL.
-        // Sending GitHub Authorization header to S3 causes S3 to reject with 400 Bad Request.
-        // We use redirect: 'manual' and then fetch the redirected location without Auth header.
-        const logRes = await fetch(
-          `https://api.github.com/repos/${connection.githubRepoFullName}/actions/jobs/${job.id}/logs`,
-          {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/vnd.github+json',
-              'Authorization': `Bearer ${token}`,
-              'X-GitHub-Api-Version': '2022-11-28',
-            },
-            redirect: 'manual',
-          }
-        ) as unknown as globalThis.Response;
-
-        let rawLogs = '';
-        if (logRes.status === 302 || logRes.status === 301 || logRes.status === 307) {
-          const redirectUrl = logRes.headers.get('location');
-          if (redirectUrl) {
-            const s3Res = await fetch(redirectUrl);
-            if (s3Res.ok) {
-              rawLogs = await s3Res.text();
-            }
-          }
-        } else if (logRes.ok) {
-          rawLogs = await logRes.text();
-        }
-
-        if (!rawLogs) {
-          return { jobName: job.name, logs: 'Logs are expired, archived by GitHub, or unavailable.' };
-        }
-
-        // Clean ANSI escape sequences for crisp terminal viewing
-        const cleanLogs = rawLogs.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
-        return { jobName: job.name, logs: cleanLogs };
-      } catch (e) {
-        return { jobName: job.name, logs: 'Error fetching logs.' };
-      }
-    });
-
-    const logsData = await Promise.all(logsPromises);
-    res.json({ jobs: logsData });
+    res.json({ jobs: result.jobs });
   } catch (err) {
     console.error('Get workflow run logs error:', err);
     res.status(500).json({ error: 'Server error fetching workflow logs.' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AI: Summarize a failed workflow run's likely cause
+// ═══════════════════════════════════════════════════════════════════════════
+// POST /api/workspaces/:slug/projects/:key/github/ci/:runId/summarize
+// Manual-only — see the doc comment on `computeCiFailureSummary` for why
+// automatic firing from the webhook was tried and deliberately reverted.
+export const summarizeWorkflowRunFailure = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { projectId, runId } = req.params as Record<string, string>;
+    const result = await computeCiFailureSummary(projectId, Number(runId));
+
+    switch (result.kind) {
+      case 'not_found':
+        res.status(404).json({ error: 'Workflow run not found.' });
+        return;
+      case 'not_failure':
+        res.status(400).json({ error: 'Only failed runs can be summarized.' });
+        return;
+      case 'no_connection':
+        res.status(404).json({ error: 'No GitHub connection found.' });
+        return;
+      case 'fetch_error':
+        res.status(502).json({ error: result.error });
+        return;
+      case 'unavailable':
+        // Gemini unset or the call failed — degrade honestly, same as the
+        // other two AI features, rather than pretending we have an answer.
+        res.json({ summary: null });
+        return;
+      case 'cached':
+        res.json({ summary: result.summary, cached: true });
+        return;
+      case 'generated':
+        res.json({ summary: result.summary, cached: false });
+        return;
+    }
+  } catch (err) {
+    console.error('Summarize workflow run error:', err);
+    res.status(500).json({ error: 'Server error summarizing workflow run.' });
   }
 };
 

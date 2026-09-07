@@ -40,6 +40,8 @@ interface GithubState {
   disconnect: (slug: string, key: string) => Promise<void>;
   fetchTab: (slug: string, key: string, tab: GithubTab, opts?: { page?: number; branch?: string; state?: string }) => Promise<void>;
   rerun: (slug: string, key: string, runId: number) => Promise<void>;
+  /** Returns the summary (or null if AI is unavailable) and caches it onto the matching run. */
+  summarizeCiRun: (slug: string, key: string, runId: number) => Promise<string | null>;
   reset: () => void;
 }
 
@@ -144,6 +146,22 @@ export const useGithubStore = create<GithubState>((set) => ({
 
   rerun: async (slug, key, runId) => {
     await apiFetch(`${base(slug, key)}/ci/${runId}/rerun`, { method: 'POST' });
+  },
+
+  summarizeCiRun: async (slug, key, runId) => {
+    const data = await apiFetch(`${base(slug, key)}/ci/${runId}/summarize`, { method: 'POST' });
+    const summary = data.summary ?? null;
+    if (summary) {
+      set((state) => ({
+        ciRuns: {
+          ...state.ciRuns,
+          items: state.ciRuns.items.map((r) =>
+            r.runId === runId ? { ...r, aiFailureSummary: summary } : r,
+          ),
+        },
+      }));
+    }
+    return summary;
   },
 
   reset: () =>

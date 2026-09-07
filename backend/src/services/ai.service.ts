@@ -157,3 +157,64 @@ Respond with STRICT JSON (no markdown): {"estimatedHours": <number>}`;
 
   return Math.min(Math.round(hours * 2) / 2, 80);
 };
+
+// ─── CI Failure Summary ──────────────────────────────────────────────────────
+//
+// Manual-only, unlike the two generators above — triggered by the Summarize
+// button in github.controller.ts, never automatically from the webhook. That
+// was tried (fire-and-forget on every reported failure) and deliberately
+// reverted: confirmed live that firing immediately on webhook delivery can
+// race GitHub's own Actions logs API, which briefly 404s on a run's logs
+// right after it completes. Manual-only means it only ever runs while
+// someone is actually looking at the screen, which sidesteps that race
+// entirely and keeps a person in the loop rather than a silent background
+// failure nobody sees.
+
+export const summarizeCiFailure = async (params: {
+  workflowName: string | null;
+  headBranch: string | null;
+  jobs: { jobName: string; logs: string }[];
+}): Promise<string | null> => {
+  const { workflowName, headBranch, jobs } = params;
+
+  // The actual error is almost always in the last few thousand characters of
+  // a job log — dependency installs and cache restores dominate the start.
+  // Keeping only the tail per job is what keeps this prompt cheap.
+  const MAX_CHARS_PER_JOB = 6000;
+  const jobSections = jobs
+    .map(j => `--- Job: ${j.jobName} ---\n${j.logs.slice(-MAX_CHARS_PER_JOB)}`)
+    .join('\n\n');
+
+  const prompt = `You are a CI/CD debugging assistant. A GitHub Actions workflow run failed. Read the job logs below (each may be truncated to its tail) and explain it to a teammate who has NOT seen the logs and will not go read them.
+
+Workflow: ${workflowName || 'Unknown'}
+Branch: ${headBranch || 'unknown'}
+
+${jobSections.slice(0, 24000)}
+
+Write an INTERPRETATION, not a transcript. Do not quote or paraphrase raw log
+lines back — restating "expected: 200, got: 500" or "exited with code 1" in
+sentence form tells a reader nothing they couldn't get by scrolling the log
+themselves, and it is not useful. Instead say, in plain language a non-expert
+could follow:
+1. What kind of failure this is (a test assertion, a build/compile error, a
+   missing dependency, a timeout, a syntax error, etc.)
+2. What in the code or config most likely needs to change, as specifically as
+   the logs actually support — name the file, function or step if it is
+   identifiable, but do not invent a location the logs don't show.
+3. If the logs are too sparse to say anything concrete, say that plainly
+   instead of dressing up a guess as an explanation.
+
+Respond with STRICT JSON (no markdown, no commentary) in exactly this shape:
+{"cause": "2-4 sentences of plain-language interpretation, not a restatement of the log text"}`;
+
+  const text = await callGemini(prompt);
+  const parsed = parseJson<{ cause?: string }>(text);
+
+  if (!parsed || typeof parsed.cause !== 'string') {
+    console.warn('Gemini CI failure summary: unexpected response shape:', text);
+    return null;
+  }
+
+  return parsed.cause;
+};
