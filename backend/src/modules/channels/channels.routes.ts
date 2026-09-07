@@ -29,7 +29,11 @@ router.use(requireAuth);
 router.use(requireWorkspaceRole(['owner', 'admin', 'member']));
 
 // ─── Channel Management ──────────────────────────────────────────────────────
-router.post('/', requireWorkspaceRole(['owner', 'admin']), validate(createChannelSchema), createChannel);
+// Any workspace member may hit this — a DM/group DM is member-initiated, the
+// same way Teams/Slack works. `createChannel` itself still enforces
+// owner/admin-only for public/private channels; that check depends on the
+// request body's `type`, which is why it isn't a second route-level gate here.
+router.post('/', validate(createChannelSchema), createChannel);
 router.get('/', listChannels);
 router.get('/:channelId', requireChannelAccess, getChannel);
 router.post('/:channelId/join', requireChannelAccess, joinChannel);

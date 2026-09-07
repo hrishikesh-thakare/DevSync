@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { randomUUID } from 'node:crypto';
 import { db } from '../../config/db.js';
 import { channels, channelMembers } from '../../db/schema/channels.js';
 import { workspaceMembers } from '../../db/schema/workspaces.js';
@@ -24,7 +25,67 @@ export const createChannel = async (req: Request, res: Response): Promise<void> 
 
     const channelName = name ? name.trim() : null;
     const channelType = type || 'public';
-    const slug = channelName ? channelSlug(channelName) : '';
+    // `(workspaceId, slug)` is unique (see `channels.ts`'s schema comment).
+    // Every unnamed channel used to get the literal empty string here, which
+    // means the *second* one ever created in a workspace collided on that
+    // constraint — confirmed directly: creating a DM 500'd with a duplicate-
+    // key violation the moment one unnamed channel already existed. DMs are
+    // never looked up by slug (only by `channelId`), so a random one costs
+    // nothing and can never collide with a real name or with each other.
+    const slug = channelName ? channelSlug(channelName) : `_${randomUUID()}`;
+    const isDirect = channelType === 'dm' || channelType === 'group_dm';
+
+    // The route only requires being a workspace member at all (any role can
+    // start a conversation, same as Teams/Slack DMs) — public/private
+    // channels are still admin/owner-only, same as before, checked here
+    // rather than in the route since it depends on the request body.
+    if (!isDirect && req.workspaceRole !== 'owner' && req.workspaceRole !== 'admin') {
+      res.status(403).json({ error: 'Only a workspace owner or admin can create a channel.' });
+      return;
+    }
+
+    if (isDirect && (!Array.isArray(memberIds) || memberIds.length === 0)) {
+      res.status(400).json({ error: 'A direct message needs at least one other member.' });
+      return;
+    }
+
+    // The full member set, deduped — this is what identifies a DM, not its
+    // (client-supplied, usually absent) name. Two people who already have a
+    // DM clicking "message" again must land back in the same channel, not
+    // spawn a duplicate every time.
+    const memberSet = isDirect
+      ? Array.from(new Set<string>([userId, ...(memberIds as string[]).filter((id) => id !== userId)]))
+      : null;
+
+    if (memberSet) {
+      const [existing] = await db
+        .select({ channelId: channelMembers.channelId })
+        .from(channelMembers)
+        .innerJoin(channels, eq(channels.channelId, channelMembers.channelId))
+        .where(and(eq(channels.workspaceId, workspaceId), eq(channels.type, channelType)))
+        .groupBy(channelMembers.channelId)
+        .having(
+          // `inArray()`, not a raw `= any(${memberSet})` — the same "doubled
+          // parens" pitfall `labels.controller.ts` already hit: Drizzle's
+          // `sql` template serializes an interpolated JS array as a row
+          // expression, `($3, $4)`, not a real Postgres array, so
+          // `any(($3, $4))` is invalid SQL (confirmed directly against a
+          // running query, not assumed). `inArray()` is Drizzle's own
+          // dedicated helper for exactly this and generates a correct
+          // `IN ($3, $4)`, already proven against a uuid column elsewhere in
+          // this codebase (`messages.controller.ts`'s file-cleanup query).
+          sql`count(*) filter (where ${inArray(channelMembers.userId, memberSet)}) = ${memberSet.length} and count(*) = ${memberSet.length}`,
+        );
+
+      // `channelMembers.channelId` is nullable at the type level (the FK
+      // itself has no `.notNull()`), even though this join guarantees a real
+      // value at runtime — narrow explicitly rather than asserting past it.
+      if (existing?.channelId) {
+        const [channel] = await db.select().from(channels).where(eq(channels.channelId, existing.channelId)).limit(1);
+        res.status(200).json({ message: 'Channel already exists', channel });
+        return;
+      }
+    }
 
     const result = await db.transaction(async (tx) => {
       const [channel] = await tx
@@ -42,16 +103,14 @@ export const createChannel = async (req: Request, res: Response): Promise<void> 
         })
         .returning();
 
-      // Add creator as first member
-      const newMembers = [{ channelId: channel.channelId, userId }];
-      
-      if (Array.isArray(memberIds)) {
-        for (const mId of memberIds) {
-          if (mId !== userId) {
-            newMembers.push({ channelId: channel.channelId, userId: mId });
-          }
-        }
-      }
+      // For a dm/group_dm, `memberSet` (creator + everyone named, deduped) is
+      // the membership, full stop — that set *is* the channel's identity, per
+      // the existing-channel lookup above. Otherwise, same as before: the
+      // creator plus whichever `memberIds` were also given.
+      const memberIdsToAdd = memberSet
+        ? memberSet
+        : [userId, ...(Array.isArray(memberIds) ? memberIds.filter((mId: string) => mId !== userId) : [])];
+      const newMembers = memberIdsToAdd.map((mId) => ({ channelId: channel.channelId, userId: mId }));
 
       await tx.insert(channelMembers).values(newMembers);
 
@@ -123,20 +182,37 @@ export const listChannels = async (req: Request, res: Response): Promise<void> =
     // project-scoped channel's visibility never depends on its `type`
     // (only project membership, or workspace owner/admin), and a
     // workspace-scoped channel's visibility never depends on project
-    // membership (only its `type` or explicit channel membership).
-    const visibilityCondition = isWorkspaceAdmin
-      ? sql`true`
-      : or(
-          and(isNull(channels.projectId), eq(channels.type, 'public')),
-          and(
-            isNull(channels.projectId),
-            userChannelIds.length > 0 ? inArray(channels.channelId, userChannelIds) : sql`false`,
-          ),
-          and(
-            isNotNull(channels.projectId),
-            userProjectIds.length > 0 ? inArray(channels.projectId, userProjectIds) : sql`false`,
-          ),
-        );
+    // membership (only its `type` or explicit channel membership). The
+    // admin "see everything" shortcut is withheld from dm/group_dm
+    // specifically — same reasoning as `requireChannelAccess`'s fix: a DM is
+    // private to its participants, full stop, and listing *which* DMs exist
+    // (who's talking to whom) is exactly the kind of leak that reasoning
+    // covers, not just reading their contents.
+    const visibilityCondition = or(
+      and(isNull(channels.projectId), eq(channels.type, 'public')),
+      and(
+        isNull(channels.projectId),
+        inArray(channels.type, ['dm', 'group_dm']),
+        userChannelIds.length > 0 ? inArray(channels.channelId, userChannelIds) : sql`false`,
+      ),
+      and(
+        isWorkspaceAdmin
+          ? sql`true`
+          : and(
+              isNull(channels.projectId),
+              userChannelIds.length > 0 ? inArray(channels.channelId, userChannelIds) : sql`false`,
+            ),
+        sql`${channels.type} not in ('dm', 'group_dm')`,
+      ),
+      and(
+        isNotNull(channels.projectId),
+        isWorkspaceAdmin
+          ? sql`true`
+          : userProjectIds.length > 0
+            ? inArray(channels.projectId, userProjectIds)
+            : sql`false`,
+      ),
+    );
 
     const visibleChannels = await db
       .select()
@@ -146,7 +222,41 @@ export const listChannels = async (req: Request, res: Response): Promise<void> =
       .limit(limit)
       .offset(offset);
 
-    res.json({ channels: visibleChannels });
+    // DMs and group DMs have no name — the frontend needs to know *who* a
+    // conversation is with to show anything meaningful in a channel list
+    // (sidebar, "Direct Messages" section). One extra query for the whole
+    // page of results rather than one per DM.
+    const directChannelIds = visibleChannels.filter((c) => c.type === 'dm' || c.type === 'group_dm').map((c) => c.channelId);
+    let participantsByChannel = new Map<string, { userId: string; fullName: string; displayName: string | null; avatarUrl: string | null }[]>();
+    if (directChannelIds.length > 0) {
+      const rows = await db
+        .select({
+          channelId: channelMembers.channelId,
+          userId: users.userId,
+          fullName: users.fullName,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+        })
+        .from(channelMembers)
+        .innerJoin(users, eq(users.userId, channelMembers.userId))
+        .where(and(inArray(channelMembers.channelId, directChannelIds), sql`${channelMembers.userId} != ${userId}`));
+
+      participantsByChannel = new Map();
+      for (const row of rows) {
+        if (!row.channelId) continue;
+        const list = participantsByChannel.get(row.channelId) ?? [];
+        list.push({ userId: row.userId, fullName: row.fullName, displayName: row.displayName, avatarUrl: row.avatarUrl });
+        participantsByChannel.set(row.channelId, list);
+      }
+    }
+
+    const result = visibleChannels.map((c) =>
+      c.type === 'dm' || c.type === 'group_dm'
+        ? { ...c, otherParticipants: participantsByChannel.get(c.channelId) ?? [] }
+        : c,
+    );
+
+    res.json({ channels: result });
   } catch (err) {
     console.error('List channels error:', err);
     res.status(500).json({ error: 'Server error listing channels.' });

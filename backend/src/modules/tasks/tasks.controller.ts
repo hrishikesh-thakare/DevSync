@@ -10,13 +10,10 @@ import { logAuditAction } from '../audit/audit.controller.js';
 import { recordStatusTransition, completedAtFor, DONE_STATUS } from './task-transitions.js';
 import { createNotification } from '../notifications/notifications.controller.js';
 import { getIO } from '../../sockets/index.js';
-import { createFileRecord, FileValidationError } from '../files/files.controller.js';
+import { createFileRecord, FileValidationError, purgeFileRecord } from '../files/files.controller.js';
 import { estimateTaskDuration } from '../../services/ai.service.js';
 import { ensureProjectLabels } from '../labels/labels.controller.js';
-import { supabase } from '../../config/supabase.js';
 import { env } from '../../config/env.js';
-import fs from 'fs';
-import path from 'path';
 
 import { generateKeyBetween } from 'fractional-indexing';
 
@@ -1079,7 +1076,6 @@ const notifyTaskMentions = async (text: string, actorId: string, taskId: string,
 };
 
 // ─── TASK ATTACHMENTS ────────────────────────────────────────────────────────
-const UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
 
 // GET /api/workspaces/:slug/projects/:key/tasks/:taskKey/attachments
 export const listTaskAttachments = async (req: Request, res: Response): Promise<void> => {
@@ -1174,21 +1170,9 @@ export const deleteTaskAttachment = async (req: Request, res: Response): Promise
       return;
     }
 
-    // Best-effort storage cleanup
-    if (fileRecord.storagePath.startsWith('local:')) {
-      try {
-        const fileNameOnDisk = fileRecord.storagePath.replace('local:', '');
-        const filePath = path.join(UPLOADS_DIR, fileNameOnDisk);
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      } catch (err) {
-        console.warn('Failed to remove local attachment file:', err);
-      }
-    } else if (env.SUPABASE_URL && !env.SUPABASE_URL.includes('placeholder')) {
-      const { error } = await supabase.storage.from('workspace-files').remove([fileRecord.storagePath]);
-      if (error) console.warn('Failed to remove Supabase attachment:', error.message);
-    }
-
-    await db.delete(workspaceFiles).where(eq(workspaceFiles.fileId, fileId));
+    // Storage cleanup + DB row, same helper the generic file-delete route
+    // and account-deletion avatar cleanup use.
+    await purgeFileRecord(fileRecord);
 
     await logAuditAction({
       actorId: userId,

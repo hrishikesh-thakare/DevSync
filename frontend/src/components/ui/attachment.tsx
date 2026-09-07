@@ -53,6 +53,10 @@ const attachmentMediaVariants = cva(
         icon: "",
         image:
           "opacity-60 group-data-[state=done]/attachment:opacity-100 group-data-[state=idle]/attachment:opacity-100 *:[img]:aspect-square *:[img]:w-full *:[img]:object-cover",
+        pdf: "bg-red-500/10 text-red-500",
+        video: "bg-purple-500/10 text-purple-500",
+        audio: "bg-emerald-500/10 text-emerald-500",
+        code: "bg-amber-500/10 text-amber-500",
       },
     },
     defaultVariants: {

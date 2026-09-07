@@ -9,6 +9,7 @@ import {
   MessageSquareIcon,
   PhoneIcon,
   PhoneOffIcon,
+  PlayIcon,
   SmilePlusIcon,
   XIcon,
 } from 'lucide-react';
@@ -37,7 +38,8 @@ import { apiFetch } from '@/lib/api';
 import { initialsOf } from '@/lib/initials';
 import { firstUrlIn } from '@/lib/messageLinks';
 import { renderMarkdownMessage } from '@/lib/renderMarkdownMessage';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/types/api';
 import { Bubble, BubbleContent } from '@/components/ui/bubble';
@@ -50,7 +52,7 @@ import {
   AttachmentTrigger,
   AttachmentGroup
 } from '@/components/ui/attachment';
-import { attachmentIcon } from '@/lib/files';
+import { attachmentIcon, downloadAttachment, getFileVariant } from '@/lib/files';
 
 const QUICK_REACTIONS = ['👍', '🎉', '👀', '✅', '❤️', '🚀'];
 
@@ -58,6 +60,7 @@ export function ChannelPage() {
   const { slug = '', channelId = '' } = useParams();
   const {
     channel,
+    members,
     messages,
     threadRoot,
     threadReplies,
@@ -79,6 +82,17 @@ export function ChannelPage() {
   } = useChatStore();
 
   const me = useAuthStore((s) => s.user);
+
+  // A dm/group_dm has no name — its identity is its participants, not a
+  // settable string (see `Channel.name`'s doc comment). `members` is already
+  // fetched for every channel (it backs the member list elsewhere), so the
+  // real names are one filter away rather than a placeholder like "Direct
+  // message" everywhere a real channel would show `#general`.
+  const isDirect = channel?.type === 'dm' || channel?.type === 'group_dm';
+  const directLabel = isDirect
+    ? members.filter((m) => m.userId !== me?.userId).map((m) => m.displayName || m.fullName).join(', ') ||
+      'Direct message'
+    : null;
   const [sending, setSending] = useState(false);
   // The Zoom join link for this channel's live call, if any — `null` means
   // no call is running, so the header button reads "Start call". There is
@@ -233,8 +247,12 @@ export function ChannelPage() {
           opposite of sticky. */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-2 border-b px-6 py-3">
-          <HashIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-          <h1 className="font-medium text-foreground">{channel.name}</h1>
+          {isDirect ? (
+            <MessageSquareIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+          ) : (
+            <HashIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+          )}
+          <h1 className="font-medium text-foreground">{isDirect ? directLabel : channel.name}</h1>
           {channel.isAnnouncementOnly ? <Badge variant="outline">announcements</Badge> : null}
           {channel.description ? (
             <p className="ml-2 hidden min-w-0 truncate text-sm text-muted-foreground sm:block">
@@ -333,11 +351,15 @@ export function ChannelPage() {
             already pinned by ordinary flex layout, but sticky costs nothing
             extra and holds even if some future change reintroduces page-level
             scrolling here. */}
-        <div className="sticky bottom-0 z-10 bg-background">
+        {/* No bar/border/background of its own any more — the composer
+            (`RichTextEditor`) is its own floating, elevated, heavily rounded
+            card now, so this just needs to be a plain sticky spacer that lets
+            the message area's background show through around it. */}
+        <div className="sticky bottom-0 z-10">
           <MessageComposer
             slug={slug}
             disabled={sending}
-            placeholder={`Message #${channel.name}`}
+            placeholder={isDirect ? `Message ${directLabel}` : `Message #${channel.name}`}
             onSend={(bodyText, attachments) => submit(bodyText, attachments, null)}
           />
         </div>
@@ -345,7 +367,7 @@ export function ChannelPage() {
 
       {/* Thread panel */}
       {threadRoot ? (
-        <aside className="flex min-h-0 w-96 min-w-0 shrink-0 flex-col border-l">
+        <aside className="flex min-h-0 w-96 min-w-0 shrink-0 flex-col border-l bg-card">
           <header className="flex items-center gap-2 border-b px-4 py-3">
             <MessageSquareIcon className="size-4 text-muted-foreground" aria-hidden="true" />
             <h2 className="font-medium text-foreground">Thread</h2>
@@ -404,7 +426,11 @@ export function ChannelPage() {
             </div>
           </ScrollArea>
 
-          <div className="sticky bottom-0 z-10 bg-background">
+          {/* No bar/border/background of its own any more — the composer
+            (`RichTextEditor`) is its own floating, elevated, heavily rounded
+            card now, so this just needs to be a plain sticky spacer that lets
+            the message area's background show through around it. */}
+        <div className="sticky bottom-0 z-10">
             <MessageComposer
               slug={slug}
               disabled={sending}
@@ -471,29 +497,85 @@ function ChatAttachmentBlock({
     };
   }, [slug, block.fileId, block.url]);
 
-  const isImage = block.mimetype?.startsWith('image/');
+  const variant = getFileVariant(block.mimetype, block.name);
 
+  // Audio has nothing to enlarge — it stays inline with its native control
+  // bar, same card shell as everything else. No filename/size caption: a
+  // voice note doesn't carry a name worth reading, same reasoning as
+  // WhatsApp/Slack voice messages — that caption only earns its keep on the
+  // chip below, where the name (a real document/code filename) is the point.
+  if (resolvedUrl && variant === 'audio') {
+    return (
+      <Attachment orientation="vertical" className="w-72! overflow-hidden">
+        <div className="w-full p-2">
+          <audio controls src={resolvedUrl} className="w-full" />
+        </div>
+      </Attachment>
+    );
+  }
+
+  // Video and images open a fullscreen viewer on click, WhatsApp-style — the
+  // inline card is a preview, not the actual player. A `<video controls>`
+  // inline would fight a whole-card click handler (every scrub/pause would
+  // also trigger it), so the inline preview is a muted, controls-less frame
+  // with a Play badge; the real player — controls, unmuted, autoplay — only
+  // exists inside the dialog. `AttachmentTrigger` is the same overlay-button
+  // this component already uses for the pdf/download case, just wired to a
+  // dialog instead of a link, so it's fully keyboard/focus accessible.
+  if (resolvedUrl && (variant === 'video' || variant === 'image')) {
+    return (
+      <Attachment orientation="vertical" className="w-72! overflow-hidden">
+        <div className="relative w-full bg-black">
+          {variant === 'video' ? (
+            <>
+              <video src={resolvedUrl} preload="metadata" muted playsInline className="max-h-80 w-full object-contain" />
+              <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="flex size-12 items-center justify-center rounded-full bg-black/60 text-white">
+                  <PlayIcon className="size-6 translate-x-0.5" />
+                </span>
+              </span>
+            </>
+          ) : (
+            <img src={resolvedUrl} alt="" className="max-h-80 w-full object-cover" />
+          )}
+        </div>
+        <Dialog>
+          <DialogTrigger asChild>
+            <AttachmentTrigger aria-label={variant === 'video' ? `Play ${block.name}` : `View ${block.name}`} />
+          </DialogTrigger>
+          <DialogContent
+            // The close button sits over the video's own native controls
+            // (which already include play/pause/fullscreen and their own
+            // exit-fullscreen affordance) — dropped for video specifically.
+            // Esc and clicking the backdrop still close the dialog either
+            // way. Images keep it since there's no native chrome to clash with.
+            showCloseButton={variant !== 'video'}
+            className="flex w-fit max-w-[95vw] items-center justify-center border-none bg-transparent p-0 shadow-none ring-0"
+          >
+            <DialogTitle className="sr-only">{block.name}</DialogTitle>
+            {variant === 'video' ? (
+              <video src={resolvedUrl} controls autoPlay className="max-h-[88vh] max-w-[90vw] rounded-lg" />
+            ) : (
+              <img src={resolvedUrl} alt="" className="max-h-[88vh] max-w-[90vw] rounded-lg object-contain" />
+            )}
+          </DialogContent>
+        </Dialog>
+      </Attachment>
+    );
+  }
+
+  // Not yet resolved, failed, or a non-inline type (pdf/code/other) — the
+  // compact chip, same shape it's always been.
   return (
-    <Attachment
-      orientation={isImage ? 'vertical' : 'horizontal'}
-      // `!` (important) is load-bearing on the image case: the component's
-      // own vertical-orientation styling already sets
-      // `has-data-[slot=attachment-content]:w-30` on the root, and a plain
-      // `w-72` here loses to it — same specificity, and Tailwind's generated
-      // order puts the `has-*` variant later. Verified directly (measured
-      // the rendered box) rather than assumed. Files/PDFs stay at the
-      // component's own default horizontal size — only images are meant to
-      // be big.
-      className={isImage ? 'w-72!' : undefined}
-    >
-      <AttachmentMedia variant={isImage ? 'image' : 'icon'}>
+    <Attachment orientation="horizontal">
+      <AttachmentMedia variant={variant}>
         {/* `createElement`, not a `const Icon = attachmentIcon(...)` local
             rendered as `<Icon/>` — that shape reads as "a component created
             during render" to the react-compiler lint rule, even though
             `attachmentIcon` only ever returns one of three fixed,
             module-level icon components. This sidesteps the false positive
             without disabling the rule. */}
-        {isImage && resolvedUrl ? <img src={resolvedUrl} alt="" /> : createElement(attachmentIcon(block.mimetype))}
+        {createElement(attachmentIcon(block.mimetype))}
       </AttachmentMedia>
       <AttachmentContent>
         <AttachmentTitle>{block.name}</AttachmentTitle>
@@ -501,13 +583,23 @@ function ChatAttachmentBlock({
           {failed ? 'Could not load this file' : `${Math.round(block.sizeBytes / 1024)} KB`}
         </AttachmentDescription>
       </AttachmentContent>
-      {/* The whole card opens the file — not just a small icon button — for
-          every attachment type alike (image, PDF, anything else). No
-          separate download action: it would just be the same href a second
-          time, competing for the same click. */}
       {resolvedUrl && (
         <AttachmentTrigger asChild aria-label={`Open ${block.name}`}>
-          <a href={resolvedUrl} target="_blank" rel="noopener noreferrer" />
+          <a
+            href={resolvedUrl}
+            target={variant === 'pdf' ? '_blank' : undefined}
+            rel="noopener noreferrer"
+            onClick={(e) => {
+              // PDF opens normally — the server answers it `inline` and the
+              // tab renders a real PDF viewer. Everything else here (code,
+              // archives, office docs) the server forces to `attachment`, so
+              // a `target="_blank"` link just leaves an empty tab behind
+              // once the download starts. Download directly instead.
+              if (variant === 'pdf') return;
+              e.preventDefault();
+              downloadAttachment(resolvedUrl, block.name);
+            }}
+          />
         </AttachmentTrigger>
       )}
     </Attachment>
@@ -631,8 +723,18 @@ function MessageRow({
                     for line breaks, and preserving raw \n caused huge gaps. */}
                 <div
                   className={cn(
-                    "rich-message-content min-w-0",
-                    '[&_p]:m-0 [&_p+p]:mt-2',
+                    // `overflow-wrap:anywhere` is the actual fix, same
+                    // reasoning as `RichTextEditor.tsx`'s `EDITOR_CONTENT_CLASS`:
+                    // a message with no spaces at all (a wall of the same
+                    // character, a long hash/URL) has no break opportunity,
+                    // so its intrinsic width just keeps growing — `max-w-[80%]`
+                    // on `Bubble` doesn't stop that, a max-width only caps a
+                    // box that's *able* to shrink. That growth was pushing the
+                    // whole page into horizontal scroll on every load of any
+                    // channel containing such a message, not just while
+                    // composing one.
+                    "rich-message-content min-w-0 overflow-x-hidden",
+                    '[&_p]:m-0 [&_p]:[overflow-wrap:anywhere] [&_p+p]:mt-2',
                     '[&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5',
                     '[&_blockquote]:my-1 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/50 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground',
                     '[&_code]:rounded [&_code]:bg-black/10 dark:[&_code]:bg-white/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[0.85em]',
@@ -681,22 +783,24 @@ function MessageRow({
               // directly under the message it belongs to.
               <div className={cn("mt-1.5 flex flex-wrap items-center gap-1", isMine && "justify-end")}>
                 {reactions.map(([emoji, info]) => (
-                  <Tooltip key={emoji}>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={() => onReact(emoji)}
-                        className={cn(
-                          'flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-xs shadow-sm transition-colors hover:bg-muted',
-                          info.mine ? 'border-primary/50 text-primary font-medium' : 'text-muted-foreground',
-                        )}
-                      >
-                        <span>{emoji}</span>
-                        <span>{info.count}</span>
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>{info.who.join(', ')}</TooltipContent>
-                  </Tooltip>
+                  <TooltipProvider key={emoji}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => onReact(emoji)}
+                          className={cn(
+                            'flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-xs shadow-sm transition-colors hover:bg-muted',
+                            info.mine ? 'border-primary/50 text-primary font-medium' : 'text-muted-foreground',
+                          )}
+                        >
+                          <span>{emoji}</span>
+                          <span>{info.count}</span>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>{info.who.join(', ')}</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 ))}
               </div>
             ) : null}
@@ -722,7 +826,7 @@ function MessageRow({
                   <SmilePlusIcon className="size-3.5" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="flex min-w-0 gap-1 p-1">
+              <DropdownMenuContent align="end" className="flex w-fit gap-1 p-1">
                 {QUICK_REACTIONS.map((emoji) => (
                   <button
                     key={emoji}

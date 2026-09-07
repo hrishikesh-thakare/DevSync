@@ -52,7 +52,20 @@ export const createFileRecord = async (params: {
 
   const safeName = filename.replace(/[^a-zA-Z0-9-_\.]/g, '');
   const uniqueName = `${Date.now()}_${safeName}`;
-  const storagePath = workspaceId ? `workspaces/${workspaceId}/${uniqueName}` : `users/${userId}/${uniqueName}`;
+
+  // Purely organizational — nothing in the app reconstructs this path, every
+  // read/download/delete uses the `storagePath` stored on the row, so this is
+  // free to change without touching how already-stored files resolve. Split
+  // by what the file actually is, same distinction the `taskId` column
+  // itself documents: NULL is a chat attachment (the only thing the generic
+  // `/files/upload` route is ever called for — see `MessageComposer.tsx`),
+  // set means a task attachment. Personal files (`workspaceId` null) are
+  // avatars today; `avatars/` leaves room for another personal-file kind
+  // later without another migration of existing paths.
+  const subfolder = taskId ? 'task-attachments' : 'chats';
+  const storagePath = workspaceId
+    ? `workspaces/${workspaceId}/${subfolder}/${uniqueName}`
+    : `users/${userId}/avatars/${uniqueName}`;
   const fileBuffer = Buffer.from(fileBase64, 'base64');
 
   // Every upload path — generic files, task attachments, avatars — funnels
@@ -75,7 +88,7 @@ export const createFileRecord = async (params: {
   // rather than render, so it can never become a stored-XSS vector.
   const effectiveMime = mimetype || 'application/octet-stream';
 
-  if (!isAllowedUploadMime(effectiveMime)) {
+  if (!isAllowedUploadMime(effectiveMime, filename)) {
     throw new FileValidationError(`Files of type "${normalizeMime(effectiveMime) || 'unknown'}" are not allowed.`);
   }
 
@@ -85,12 +98,26 @@ export const createFileRecord = async (params: {
 
   let isSupabaseUploaded = false;
 
+  // Recorded video/audio notes arrive with `MediaRecorder.mimeType` as their
+  // type — typically `video/webm;codecs=vp8,opus` — which is a fine JS string
+  // or `<source type>` hint but not a valid `Content-Type` *header* value:
+  // RFC 2045 requires an unquoted parameter value to be a single token, and a
+  // bare comma isn't one. Supabase (and the local fallback's own serving
+  // logic) sends whatever is passed here back as the literal response header,
+  // so a raw `codecs=vp8,opus` made every recorded note fail to play at all —
+  // not corrupted, just served with a Content-Type the browser's navigation
+  // path wouldn't recognize as video. Normalizing to the bare base type here
+  // is exactly what `isAllowedUploadMime`/`serveDisposition` already assume
+  // on the read side; this just stops the write side from being the one
+  // place still carrying the un-normalized string through to an HTTP header.
+  const storedMime = normalizeMime(effectiveMime);
+
   // Try Supabase Storage if configured
   if (env.SUPABASE_URL && !env.SUPABASE_URL.includes('placeholder')) {
     const { error: uploadError } = await supabase.storage
       .from('workspace-files')
       .upload(storagePath, fileBuffer, {
-        contentType: effectiveMime,
+        contentType: storedMime,
         upsert: false,
       });
 
@@ -130,7 +157,7 @@ export const createFileRecord = async (params: {
       taskId: taskId || null,
       filename,
       storagePath: finalStoragePath,
-      mimetype: mimetype || null,
+      mimetype: storedMime || null,
       sizeBytes: measuredBytes,
       filetype: filetype || 'other',
     })
@@ -162,6 +189,78 @@ const applyServingHeaders = (res: Response, mimetype: string | null, filename: s
   );
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+};
+
+/**
+ * Removes a file's storage object (local disk or Supabase) and its DB row.
+ * Shared by the generic delete route below, `tasks.controller.ts`'s
+ * attachment removal, and account deletion's avatar cleanup — one place that
+ * knows how a `workspace_files` row maps back to bytes, so a fourth caller
+ * doesn't reinvent the local-vs-Supabase branch a fifth time.
+ */
+export const purgeFileRecord = async (fileRecord: typeof workspaceFiles.$inferSelect): Promise<void> => {
+  if (fileRecord.storagePath.startsWith('local:')) {
+    try {
+      const fileNameOnDisk = fileRecord.storagePath.replace('local:', '');
+      const filePath = path.join(UPLOADS_DIR, fileNameOnDisk);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch (err) {
+      console.warn('Failed to remove local file:', err);
+    }
+  } else if (env.SUPABASE_URL && !env.SUPABASE_URL.includes('placeholder')) {
+    const { error } = await supabase.storage.from('workspace-files').remove([fileRecord.storagePath]);
+    if (error) console.warn('Failed to remove Supabase file:', error.message);
+  }
+
+  await db.delete(workspaceFiles).where(eq(workspaceFiles.fileId, fileRecord.fileId));
+};
+
+// ─── DELETE FILE ─────────────────────────────────────────────────────────────
+// DELETE /api/workspaces/:slug/files/:fileId
+//
+// Generic uploads (`POST .../files/upload`, chat attachments) previously had
+// no delete path at all — the only way a file's storage object ever went
+// away was `tasks.controller.ts`'s `removeAttachment`, which only covers
+// files with a `taskId`. This is the counterpart for everything else: the
+// uploader, or a workspace admin/owner doing moderation, can remove it.
+export const deleteFile = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { fileId } = req.params as Record<string, string>;
+    const workspaceId = (req.params.workspaceId || res.locals.workspaceId) as string;
+    const userId = req.user!.userId;
+
+    const [fileRecord] = await db
+      .select()
+      .from(workspaceFiles)
+      .where(and(eq(workspaceFiles.fileId, fileId), eq(workspaceFiles.workspaceId, workspaceId)))
+      .limit(1);
+
+    if (!fileRecord) {
+      res.status(404).json({ error: 'File not found.' });
+      return;
+    }
+
+    // Task attachments keep their own delete path (task-scoped role check +
+    // audit log entry) — this route only ever owned the generic upload.
+    if (fileRecord.taskId) {
+      res.status(404).json({ error: 'File not found.' });
+      return;
+    }
+
+    const isOwner = fileRecord.uploaderId === userId;
+    const isWorkspaceAdmin = req.workspaceRole === 'owner' || req.workspaceRole === 'admin';
+    if (!isOwner && !isWorkspaceAdmin) {
+      res.status(403).json({ error: 'Only the uploader or a workspace admin can delete this file.' });
+      return;
+    }
+
+    await purgeFileRecord(fileRecord);
+
+    res.status(200).json({ message: 'File deleted.' });
+  } catch (err) {
+    console.error('Delete file error:', err);
+    res.status(500).json({ error: 'Server error deleting file.' });
+  }
 };
 
 // ─── DIRECT FILE UPLOAD (Server-side) ────────────────────────────────────────
@@ -248,9 +347,21 @@ export async function resolveDownloadUrl(
   }
 
   if (env.SUPABASE_URL && !env.SUPABASE_URL.includes('placeholder')) {
+    // Supabase serves this URL directly — `applyServingHeaders` below never
+    // sees it, since that only runs for the `local:` fallback's own /raw
+    // route. Without the `download` option, Supabase answers with whatever
+    // content-type the file was uploaded as and no Content-Disposition at
+    // all, so a `.py`/`.java`/etc. attachment renders inline as plain text
+    // instead of downloading — the same stored-content-type problem
+    // `serveDisposition` exists to prevent, just one layer further out.
+    const { disposition } = serveDisposition(fileRecord.mimetype);
     const { data, error } = await supabase.storage
       .from('workspace-files')
-      .createSignedUrl(fileRecord.storagePath, expiresInSeconds);
+      .createSignedUrl(
+        fileRecord.storagePath,
+        expiresInSeconds,
+        disposition === 'attachment' ? { download: headerSafeFilename(fileRecord.filename) } : undefined,
+      );
 
     if (!error && data?.signedUrl) return data.signedUrl;
   }

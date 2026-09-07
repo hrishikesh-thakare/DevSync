@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
+  CameraIcon,
+  ImageIcon,
   Loader2Icon,
   MicIcon,
   PaperclipIcon,
@@ -13,6 +15,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Attachment,
   AttachmentAction,
   AttachmentActions,
@@ -24,7 +32,7 @@ import {
 } from '@/components/ui/attachment';
 import { Spinner } from '@/components/ui/spinner';
 import { apiFetch } from '@/lib/api';
-import { attachmentIcon, classifyFile, fileToBase64, formatBytes, MAX_UPLOAD_BYTES } from '@/lib/files';
+import { attachmentIcon, classifyFile, fileToBase64, formatBytes, getFileVariant, MAX_UPLOAD_BYTES } from '@/lib/files';
 import { RichTextEditor, type RichTextEditorHandle } from '@/components/editor/RichTextEditor';
 import type { AttachmentPayload } from '@/pages/channels/ChannelPage';
 
@@ -210,7 +218,7 @@ export function MessageComposer({
   }, []);
 
   const startRecording = async (kind: 'video' | 'audio') => {
-    if (disabled || recordingKind) return;
+    if (disabled || recordingKind || takingPhoto) return;
     if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       toast.error('This browser cannot record audio/video.');
       return;
@@ -260,6 +268,84 @@ export function MessageComposer({
       void sendRecording(file);
     };
     active.recorder.stop();
+  };
+
+  // ─── Photo capture ────────────────────────────────────────────────────────
+  // The camera button offers a choice (via dropdown) between this and
+  // `startRecording('video')` — this is deliberately its own small state
+  // machine rather than a third `recordingKind`, since it has no
+  // `MediaRecorder`/chunks/timer at all: just a live preview and a single
+  // "grab the current frame" action.
+  const [takingPhoto, setTakingPhoto] = useState(false);
+  const photoStreamRef = useRef<MediaStream | null>(null);
+  const photoVideoRef = useRef<HTMLVideoElement>(null);
+
+  // Same reason as the recording preview effect above: the `<video>` element
+  // only exists once `takingPhoto` renders it, so the stream can't be
+  // attached until the render after the one that sets the state.
+  useEffect(() => {
+    if (takingPhoto && photoVideoRef.current && photoStreamRef.current) {
+      photoVideoRef.current.srcObject = photoStreamRef.current;
+    }
+  }, [takingPhoto]);
+
+  // Releases the camera light on unmount, same reasoning as the recording
+  // cleanup effect above — closing the thread panel or switching channels
+  // mid-preview shouldn't leave the camera live.
+  useEffect(() => {
+    return () => {
+      photoStreamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  const startPhoto = async () => {
+    if (disabled || recordingKind || takingPhoto) return;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error('This browser cannot access the camera.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      photoStreamRef.current = stream;
+      setTakingPhoto(true);
+    } catch (err) {
+      toast.error(
+        err instanceof Error && err.name === 'NotAllowedError'
+          ? 'Camera permission was denied.'
+          : `Could not open the camera: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  };
+
+  const cancelPhoto = () => {
+    photoStreamRef.current?.getTracks().forEach((t) => t.stop());
+    photoStreamRef.current = null;
+    setTakingPhoto(false);
+  };
+
+  // Grabs the live preview's current frame onto a canvas and ships it as a
+  // regular image attachment through `sendRecording` — same "sends itself
+  // immediately" behavior as a voice/video note, matching how a camera
+  // shutter behaves everywhere else (WhatsApp, iMessage): press it, the
+  // photo is sent, there's no separate staging step.
+  const capturePhoto = () => {
+    const video = photoVideoRef.current;
+    if (!video || video.videoWidth === 0) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      cancelPhoto();
+      return;
+    }
+    ctx.drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (blob) {
+        void sendRecording(new File([blob], `photo-${Date.now()}.png`, { type: 'image/png' }));
+      }
+      cancelPhoto();
+    }, 'image/png');
   };
 
   /**
@@ -381,7 +467,7 @@ export function MessageComposer({
   };
 
   return (
-    <div className="flex flex-col gap-2 border-t px-4 py-3">
+    <div className="flex flex-col gap-2 px-4 pt-2 pb-4 min-w-0">
       {attachments.length > 0 && (
         // `items-start`: the group's own default is `stretch`, which pads a
         // small horizontal file card up to match a tall image card in the
@@ -401,7 +487,7 @@ export function MessageComposer({
                 // size — only images are meant to be big.
                 className={isImage ? 'w-72!' : undefined}
               >
-                <AttachmentMedia variant={isImage ? 'image' : 'icon'}>
+                <AttachmentMedia variant={getFileVariant(att.type, att.name)}>
                   {/* A spinner reads at a glance; nobody stops to read
                       "Uploading…" text. `data-slot="spinner"` is what the
                       component's own vertical/image styling already targets
@@ -467,6 +553,34 @@ export function MessageComposer({
         </div>
       ) : null}
 
+      {takingPhoto ? (
+        <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-3 py-2">
+          {/* Same silent local self-view treatment as the video-recording
+              preview above — a live look at what the shutter would capture,
+              not a media source with a track of its own. */}
+          <video ref={photoVideoRef} muted autoPlay playsInline className="h-14 w-20 rounded-md bg-black object-cover" />
+          <span className="text-sm font-medium text-foreground">Camera ready</span>
+          <div className="ml-auto flex items-center gap-1">
+            <Button variant="ghost" size="icon-sm" aria-label="Cancel photo" onClick={cancelPhoto}>
+              <XIcon className="size-4" aria-hidden="true" />
+            </Button>
+            {/* A filled circle in a ring — the universal shutter-button
+                shape — rather than another labeled icon button, so it reads
+                at a glance as "the capture button" the way a real camera's
+                does. */}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Take photo"
+              onClick={capturePhoto}
+              className="rounded-full border-2 border-foreground p-0.5 hover:bg-transparent"
+            >
+              <span className="block size-full rounded-full bg-foreground" aria-hidden="true" />
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <RichTextEditor
         ref={editorRef}
         placeholder={placeholder}
@@ -479,13 +593,45 @@ export function MessageComposer({
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               onClick={() => fileInputRef.current?.click()}
               aria-label="Attach file"
-              disabled={disabled || recordingKind !== null}
+              disabled={disabled || recordingKind !== null || takingPhoto}
             >
               <PaperclipIcon className={iconBtn} aria-hidden="true" />
             </Button>
+
+            {/* One camera button, two things it can do — a still photo or a
+                video note — same as the combined camera control on
+                WhatsApp/iMessage rather than a separate icon per mode. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0"
+                  aria-label="Camera"
+                  disabled={disabled || recordingKind !== null || takingPhoto}
+                >
+                  <CameraIcon className={iconBtn} aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              {/* `w-auto`: the shared component defaults to matching the
+                  trigger's own width, which is fine for a full-width menu
+                  button but clamps this one to a tiny icon button's width,
+                  wrapping "Record video" onto two lines. */}
+              <DropdownMenuContent align="start" className="w-auto min-w-40">
+                <DropdownMenuItem onSelect={() => void startPhoto()}>
+                  <ImageIcon aria-hidden="true" />
+                  Take photo
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void startRecording('video')}>
+                  <VideoIcon aria-hidden="true" />
+                  Record video
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {/* The trigger is a plain span, not the button itself: a native
                 `disabled` button doesn't reliably fire hover events in every
@@ -497,28 +643,10 @@ export function MessageComposer({
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon-sm"
-                    className="shrink-0"
-                    aria-label="Record video note"
-                    disabled={disabled || recordingKind !== null}
-                    onClick={() => void startRecording('video')}
-                  >
-                    <VideoIcon className={iconBtn} aria-hidden="true" />
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Record a video note</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
+                    size="icon"
                     className="shrink-0"
                     aria-label="Record voice note"
-                    disabled={disabled || recordingKind !== null}
+                    disabled={disabled || recordingKind !== null || takingPhoto}
                     onClick={() => void startRecording('audio')}
                   >
                     <MicIcon className={iconBtn} aria-hidden="true" />
@@ -531,8 +659,9 @@ export function MessageComposer({
         }
         trailing={
           <Button
+            size="icon"
             onClick={handleSubmit}
-            disabled={disabled || recordingKind !== null || (isEmpty && attachments.length === 0)}
+            disabled={disabled || recordingKind !== null || takingPhoto || (isEmpty && attachments.length === 0)}
             aria-label="Send message"
           >
             {disabled ? (

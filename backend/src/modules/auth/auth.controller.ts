@@ -12,7 +12,8 @@ import { supabase } from '../../config/supabase.js';
 import { logAuditAction } from '../audit/audit.controller.js';
 import { broadcastPresence } from '../../sockets/index.js';
 import { enqueueJob } from '../../workers/queue.js';
-import { createFileRecord, resolveDownloadUrl, FileValidationError } from '../files/files.controller.js';
+import { createFileRecord, resolveDownloadUrl, purgeFileRecord, FileValidationError } from '../files/files.controller.js';
+import { workspaceFiles } from '../../db/schema/channels.js';
 
 // ─── Token Helpers ───────────────────────────────────────────────────────────
 
@@ -1002,6 +1003,25 @@ export const deleteAccount = async (req: Request, res: Response): Promise<void> 
 
       await logAuditAction({ actorId: userId, action: 'user.deleted', entityType: 'user', entityId: userId, tx });
     });
+
+    // Personal files — currently just the avatar — have no workspace to be
+    // scoped under (`workspaceId IS NULL`), so nothing else ever cleans them
+    // up. Soft-deleting the user alone left them in storage forever, one
+    // orphan per account deletion. Best-effort and outside the transaction,
+    // same reasoning as everywhere else a Supabase call sits next to a
+    // Postgres one: a storage failure here shouldn't roll back the deletion
+    // that already succeeded.
+    try {
+      const personalFiles = await db
+        .select()
+        .from(workspaceFiles)
+        .where(and(eq(workspaceFiles.uploaderId, userId), isNull(workspaceFiles.workspaceId)));
+      for (const file of personalFiles) {
+        await purgeFileRecord(file);
+      }
+    } catch (err) {
+      console.warn('Failed to purge personal files on account deletion:', err);
+    }
 
     res.json({ message: 'Account deleted successfully.' });
   } catch (err) {

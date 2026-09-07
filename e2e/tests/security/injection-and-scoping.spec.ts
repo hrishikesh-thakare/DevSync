@@ -227,5 +227,10 @@ test.describe('Files — upload validation', () => {
     });
     expect(status).toBe(200);
     expect(data.fileRecord.sizeBytes).toBe(content.length);
+
+    // The only real upload in this block — every rejected one above never
+    // reached storage. Clean it up rather than leaving another object in the
+    // real bucket on every run.
+    await apiRequest(`/workspaces/${SLUG}/files/${data.fileRecord.fileId}`, ownerToken, { method: 'DELETE' });
   });
 });

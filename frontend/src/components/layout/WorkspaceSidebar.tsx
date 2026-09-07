@@ -6,6 +6,7 @@ import {
   HistoryIcon,
   HomeIcon,
   ListTodoIcon,
+  MessageSquareIcon,
   MoreHorizontalIcon,
   PlusIcon,
   SettingsIcon,
@@ -44,9 +45,25 @@ export function WorkspaceSidebar() {
   const { name, projects, channels, isLoading, isAdmin, isOwner } = useCurrentWorkspaceStore();
   const canManage = isAdmin();
   const visibleProjects = projects.slice(0, SIDEBAR_LIST_CAP);
-  const visibleChannels = channels.slice(0, SIDEBAR_LIST_CAP);
   const hiddenProjects = projects.length - visibleProjects.length;
-  const hiddenChannels = channels.length - visibleChannels.length;
+
+  // Split once, here, rather than re-deriving `isDirect` per row below.
+  // Direct messages get their own section entirely — the "Channels" list
+  // below only ever meant named, browsable channels (there's a whole
+  // separate directory page for those, `ChannelListPage.tsx`, that
+  // deliberately excludes DMs), and a DM mixed into that list rendered as a
+  // bare hash icon with a blank label before this existed. No cap on DMs:
+  // unlike channels there's no separate "browse all your DMs" page to hand
+  // the overflow to, and a realistic DM count doesn't need one.
+  const namedChannels = channels.filter(
+    (c): c is typeof c & { name: string } => c.type !== 'dm' && c.type !== 'group_dm',
+  );
+  const directChannels = channels.filter((c) => c.type === 'dm' || c.type === 'group_dm');
+  const visibleChannels = namedChannels.slice(0, SIDEBAR_LIST_CAP);
+  const hiddenChannels = namedChannels.length - visibleChannels.length;
+
+  const directMessageLabel = (channel: (typeof directChannels)[number]): string =>
+    channel.otherParticipants?.map((p) => p.displayName || p.fullName).join(', ') || 'Direct message';
 
   return (
     <Sidebar collapsible="icon">
@@ -130,12 +147,34 @@ export function WorkspaceSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
+          <SidebarGroupLabel>Direct Messages</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {isLoading ? (
+                <SidebarMenuItem><SidebarMenuSkeleton showIcon /></SidebarMenuItem>
+              ) : directChannels.length === 0 ? (
+                <EmptyHint>No conversations yet — message someone from Members</EmptyHint>
+              ) : (
+                directChannels.map((channel) => (
+                  <NavItem
+                    key={channel.channelId}
+                    to={`/w/${slug}/channels/${channel.channelId}`}
+                    icon={<MessageSquareIcon />}
+                    label={directMessageLabel(channel)}
+                  />
+                ))
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
           <SidebarGroupLabel>Channels</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {isLoading ? (
                 <SidebarMenuItem><SidebarMenuSkeleton showIcon /></SidebarMenuItem>
-              ) : channels.length === 0 ? (
+              ) : namedChannels.length === 0 ? (
                 <EmptyHint>No channels yet</EmptyHint>
               ) : (
                 visibleChannels.map((channel) => (

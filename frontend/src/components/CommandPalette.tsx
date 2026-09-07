@@ -5,10 +5,25 @@ import {
   FolderKanbanIcon,
   HashIcon,
   LogOutIcon,
+  MessageSquareIcon,
   SearchIcon,
   SettingsIcon,
   UsersIcon,
 } from 'lucide-react';
+import type { Channel } from '@/types/api';
+
+/**
+ * A dm/group_dm has no name (`channel.name` is `null` — see `Channel`'s doc
+ * comment) — `c.name.toLowerCase()` here used to throw the moment a workspace
+ * had even one DM, crashing the whole palette. ⌘K is exactly where jumping
+ * to a DM by typing the other person's name should work (same as
+ * Linear/Slack's own palettes), so this makes that the actual behavior
+ * instead of merely not crashing.
+ */
+const channelLabel = (channel: Channel): string =>
+  channel.type === 'dm' || channel.type === 'group_dm'
+    ? channel.otherParticipants?.map((p) => p.displayName || p.fullName).join(', ') || 'Direct message'
+    : (channel.name ?? '');
 
 import {
   Command,
@@ -128,7 +143,7 @@ export function CommandPalette() {
     const hit = (text: string) => !needle || text.toLowerCase().includes(needle);
     return {
       projects: projects.filter((p) => hit(p.name) || hit(p.key)).slice(0, 5),
-      channels: channels.filter((c) => hit(c.name)).slice(0, 5),
+      channels: channels.filter((c) => hit(channelLabel(c))).slice(0, 5),
       hit,
     };
   }, [projects, channels, trimmed]);
@@ -198,8 +213,12 @@ export function CommandPalette() {
                   value={`channel-${channel.channelId}`}
                   onSelect={() => run(() => navigate(`/w/${slug}/channels/${channel.channelId}`))}
                 >
-                  <HashIcon aria-hidden="true" />
-                  <span className="truncate">{channel.name}</span>
+                  {channel.type === 'dm' || channel.type === 'group_dm' ? (
+                    <MessageSquareIcon aria-hidden="true" />
+                  ) : (
+                    <HashIcon aria-hidden="true" />
+                  )}
+                  <span className="truncate">{channelLabel(channel)}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

@@ -69,10 +69,18 @@ export function ChannelSettingsSheet({ slug, channel }: { slug: string; channel:
 
   const canAdmin = myRole === 'owner' || myRole === 'admin';
 
+  // A DM/group DM has no name at all (`channel.name` is `null` — its
+  // identity is its participants, not a settable string, same as
+  // Slack/Teams) — renaming, archiving and deleting are all channel-name
+  // concepts that don't apply to it, so this whole panel treats the two
+  // shapes differently rather than assuming every channel has a name.
+  const isDirect = channel.type === 'dm' || channel.type === 'group_dm';
+  const channelLabel = isDirect ? 'this conversation' : `#${channel.name}`;
+
   const [open, setOpen] = useState(false);
   const [members, setMembers] = useState<ChannelMemberRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [name, setName] = useState(channel.name);
+  const [name, setName] = useState(channel.name ?? '');
   const [description, setDescription] = useState(channel.description ?? '');
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -93,6 +101,12 @@ export function ChannelSettingsSheet({ slug, channel }: { slug: string; channel:
   }, [open, slug, channel.channelId]);
 
   const isMember = members.some((m) => m.userId === me?.userId);
+  // Real names once `members` has loaded; "Direct message" is just the
+  // brief loading-state fallback, not a permanent label.
+  const directLabel = isDirect
+    ? members.filter((m) => m.userId !== me?.userId).map((m) => m.displayName || m.fullName).join(', ') ||
+      'Direct message'
+    : null;
 
   const save = async () => {
     const patch: { name?: string; description?: string } = {};
@@ -139,15 +153,20 @@ export function ChannelSettingsSheet({ slug, channel }: { slug: string; channel:
             at all, rather than clamping and scrolling internally. */}
         <ScrollArea className="min-h-0 flex-1">
         <SheetHeader className="p-6 pb-4">
-          <SheetTitle>#{channel.name}</SheetTitle>
+          <SheetTitle>{isDirect ? directLabel : `#${channel.name}`}</SheetTitle>
           <SheetDescription>
-            {channel.type === 'public' ? 'Public channel' : 'Private channel'}
-            {channel.projectId ? ' · scoped to a project' : ' · workspace-wide'}
+            {isDirect
+              ? 'Private to its participants'
+              : channel.type === 'public'
+                ? 'Public channel'
+                : 'Private channel'}
+            {!isDirect && channel.projectId ? ' · scoped to a project' : null}
+            {!isDirect && !channel.projectId ? ' · workspace-wide' : null}
           </SheetDescription>
         </SheetHeader>
 
         <div className="flex flex-col gap-6 px-4 pb-6">
-          {canAdmin ? (
+          {canAdmin && !isDirect ? (
             <section>
               <FieldGroup>
                 <Field>
@@ -181,7 +200,7 @@ export function ChannelSettingsSheet({ slug, channel }: { slug: string; channel:
             </section>
           ) : null}
 
-          {canAdmin ? <Separator /> : null}
+          {canAdmin && !isDirect ? <Separator /> : null}
 
           <section>
             <h3 className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
@@ -228,7 +247,7 @@ export function ChannelSettingsSheet({ slug, channel }: { slug: string; channel:
                   disabled={busy === 'leave'}
                   onClick={() =>
                     void run('leave', () => leaveChannel(slug, channel.channelId), () => {
-                      toast.success(`Left #${channel.name}`);
+                      toast.success(`Left ${channelLabel}`);
                       setOpen(false);
                       navigate(`/w/${slug}/channels`);
                     })
@@ -248,7 +267,7 @@ export function ChannelSettingsSheet({ slug, channel }: { slug: string; channel:
                   disabled={busy === 'join'}
                   onClick={() =>
                     void run('join', () => joinChannel(slug, channel.channelId), () => {
-                      toast.success(`Joined #${channel.name}`);
+                      toast.success(`Joined ${channelLabel}`);
                       // Reflect the new membership without reopening the panel.
                       if (me) {
                         setMembers((prev) => [
@@ -277,7 +296,7 @@ export function ChannelSettingsSheet({ slug, channel }: { slug: string; channel:
             </div>
           </section>
 
-          {canAdmin ? (
+          {canAdmin && !isDirect ? (
             <>
               <Separator />
               <section>

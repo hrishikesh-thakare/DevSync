@@ -33,12 +33,33 @@ export function classifyFile(file: File): Filetype {
   return 'other';
 }
 
+export function getFileVariant(mimetype: string | null | undefined, filename: string = ''): 'image' | 'video' | 'audio' | 'pdf' | 'code' | 'icon' {
+  if (mimetype?.startsWith('image/')) return 'image';
+  if (mimetype?.startsWith('video/')) return 'video';
+  if (mimetype?.startsWith('audio/')) return 'audio';
+  if (mimetype === 'application/pdf') return 'pdf';
+
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  if (CODE_EXTENSIONS.has(ext)) return 'code';
+  return 'icon';
+}
+
 /**
  * Reads a File into a bare base64 string.
  *
  * `FileReader.readAsDataURL` yields `data:<mime>;base64,<payload>`; the server
  * calls `Buffer.from(fileBase64, 'base64')` directly, so the prefix has to go —
  * leaving it on corrupts the first bytes of every stored file.
+ *
+ * The split point is the literal `;base64,` marker, not "the first comma" —
+ * a recorded video/audio note's `file.type` is `MediaRecorder.mimeType`,
+ * typically `video/webm;codecs=vp8,opus`, and that comma inside the codecs
+ * list comes *before* the real separator. Splitting on the first comma sliced
+ * from the middle of "vp8,opus", leaving `opus;base64,` glued onto the front
+ * of the payload — not valid base64, silently mangled by the decoder into a
+ * corrupt file. Every recording was broken this way; plain uploads never hit
+ * it because an ordinary `file.type` (`image/png`, `application/pdf`, ...)
+ * never contains a comma.
  */
 export function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -46,8 +67,9 @@ export function fileToBase64(file: File): Promise<string> {
     reader.onerror = () => reject(new Error(`Could not read ${file.name}.`));
     reader.onload = () => {
       const result = String(reader.result ?? '');
-      const comma = result.indexOf(',');
-      resolve(comma === -1 ? result : result.slice(comma + 1));
+      const marker = ';base64,';
+      const markerIndex = result.indexOf(marker);
+      resolve(markerIndex === -1 ? result : result.slice(markerIndex + marker.length));
     };
     reader.readAsDataURL(file);
   });
@@ -65,6 +87,48 @@ export function attachmentIcon(mimetype: string | undefined): LucideIcon {
   if (mimetype?.startsWith('video/')) return VideoIcon;
   if (mimetype?.startsWith('audio/')) return MicIcon;
   return FileTextIcon;
+}
+
+/**
+ * Whether a mimetype is one the browser can render in place — matches the
+ * backend's own `INLINE_MIMES` (`backend/src/lib/fileTypes.ts`) exactly:
+ * images, PDFs, video, audio. The server only ever answers
+ * `Content-Disposition: inline` for these; everything else — code, archives,
+ * office docs, plain text — comes back `attachment` regardless of what a
+ * `target="_blank"` link asks for.
+ *
+ * That mismatch is what a raw `<a target="_blank">` on every attachment type
+ * used to produce: clicking a `.py` file opened a new tab, the browser
+ * silently downloaded the response into it because of the `attachment`
+ * header, and the tab itself was left showing nothing — the "black screen".
+ * Previewable types open a tab; everything else downloads without one.
+ */
+export function isPreviewableMime(mimetype: string | null | undefined): boolean {
+  if (!mimetype) return false;
+  return (
+    mimetype.startsWith('image/') ||
+    mimetype === 'application/pdf' ||
+    mimetype.startsWith('video/') ||
+    mimetype.startsWith('audio/')
+  );
+}
+
+/**
+ * Triggers a direct download of `url` with no intervening blank tab. Used for
+ * every attachment type the browser can't preview in place — see
+ * `isPreviewableMime`. The `download` attribute is a hint only (the response
+ * already carries its own `Content-Disposition: attachment` and real
+ * filename); it mainly helps same-origin `blob:`/`data:` URLs, which have no
+ * filename of their own.
+ */
+export function downloadAttachment(url: string, filename?: string): void {
+  const a = document.createElement('a');
+  a.href = url;
+  if (filename) a.download = filename;
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 export function formatBytes(bytes: number | null | undefined): string {

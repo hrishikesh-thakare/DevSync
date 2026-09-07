@@ -120,7 +120,12 @@ export interface Channel {
   channelId: string;
   workspaceId: string;
   projectId: string | null;
-  name: string;
+  // A dm/group_dm has no name at all — its identity is its participants,
+  // not a settable string (see `ChannelSettingsSheet.tsx`'s doc comment).
+  // This was typed as a bare `string` until a real null value here crashed
+  // three different pages; typing it honestly is what would have caught
+  // that at compile time instead of at runtime.
+  name: string | null;
   slug: string;
   description: string | null;
   type: ChannelType;
@@ -129,6 +134,8 @@ export interface Channel {
   isAnnouncementOnly: boolean;
   createdBy: string | null;
   createdAt: string;
+  /** Only present on `type: 'dm' | 'group_dm'` rows — everyone in the conversation except the caller. */
+  otherParticipants?: { userId: string; fullName: string; displayName: string | null; avatarUrl: string | null }[];
 }
 
 // ─── Notifications ───────────────────────────────────────────────────────────

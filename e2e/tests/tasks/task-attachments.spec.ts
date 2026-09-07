@@ -163,5 +163,7 @@ test.describe('Task Attachments', () => {
         (l: any) => l.action === 'task.attachment_added' && l.newValues?.file_id === fileId
       )
     ).toBe(true);
+
+    await apiRequest(`${base}/${fileId}`, accessToken, { method: 'DELETE' });
   });
 });

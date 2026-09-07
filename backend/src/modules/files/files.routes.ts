@@ -3,7 +3,7 @@ import { requireAuth } from '../../middleware/auth.js';
 import { requireWorkspaceRole } from '../../middleware/roles.js';
 import { validate } from '../../middleware/validate.js';
 import { uploadFileSchema } from './files.schemas.js';
-import { uploadFile, getDownloadUrl, getRawFile } from './files.controller.js';
+import { uploadFile, getDownloadUrl, getRawFile, deleteFile } from './files.controller.js';
 
 // Mounted at: /api/workspaces/:slug/files
 const router = Router({ mergeParams: true });
@@ -19,5 +19,8 @@ router.post('/upload', validate(uploadFileSchema), uploadFile);
 
 // Download
 router.get('/:fileId/download', getDownloadUrl);
+
+// Delete (generic uploads only — task attachments delete through the task route)
+router.delete('/:fileId', deleteFile);
 
 export default router;

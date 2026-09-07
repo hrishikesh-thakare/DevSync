@@ -25,14 +25,25 @@ import {
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { PageHeader, PageShell } from '@/components/layout/PageHeader';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
-import type { ChannelType } from '@/types/api';
+import type { Channel, ChannelType } from '@/types/api';
 
 const ANY = '__any__';
 
 export function ChannelListPage() {
   const { slug = '' } = useParams();
   const navigate = useNavigate();
-  const { channels, projects, isAdmin, createChannel } = useCurrentWorkspaceStore();
+  const { channels: allChannels, projects, isAdmin, createChannel } = useCurrentWorkspaceStore();
+  // This page is the named-channel directory — search by name, filter by
+  // project, create a public/private channel — none of which make sense for
+  // a DM/group DM (no name, no project, created from the Members page
+  // instead). Filtering them out here, rather than null-guarding `c.name`
+  // below, keeps this page's contract to "channels with a name" as it always
+  // was; DMs live in the sidebar, not this directory (same as Slack's own
+  // "Browse channels" never lists DMs).
+  const channels = useMemo(
+    () => allChannels.filter((c): c is Channel & { name: string } => c.type !== 'dm' && c.type !== 'group_dm'),
+    [allChannels],
+  );
   const canCreate = isAdmin();
 
   const [open, setOpen] = useState(false);

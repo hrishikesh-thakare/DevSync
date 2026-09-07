@@ -65,8 +65,18 @@ export const requireChannelAccess = async (req: Request, res: Response, next: Ne
       return;
     }
 
-    // 3. Workspace owners/admins get implicit access to all channels
-    if (membership.role === 'owner' || membership.role === 'admin') {
+    // 3. Workspace owners/admins get implicit access to every channel
+    //    *except* a DM/group DM — a direct message is private to its
+    //    participants the same way it is on Teams/Slack; the admin-oversight
+    //    reasoning that justifies this bypass for public/private channels
+    //    doesn't extend to someone's personal conversation. Falls through to
+    //    the explicit `channelMembers` check below instead, same as any
+    //    other non-admin caller.
+    if (
+      (membership.role === 'owner' || membership.role === 'admin') &&
+      channel.type !== 'dm' &&
+      channel.type !== 'group_dm'
+    ) {
       return next();
     }
 

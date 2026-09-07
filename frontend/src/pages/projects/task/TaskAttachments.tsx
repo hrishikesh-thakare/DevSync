@@ -5,7 +5,7 @@ import { DownloadIcon, Loader2Icon, PaperclipIcon, PlusIcon, Trash2Icon } from '
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/layout/PageState';
 import { apiFetch } from '@/lib/api';
-import { formatBytes, MAX_UPLOAD_BYTES } from '@/lib/files';
+import { downloadAttachment, formatBytes, isPreviewableMime, MAX_UPLOAD_BYTES } from '@/lib/files';
 import { useFileUpload } from '@/hooks/use-file-upload';
 import { useTaskDetailStore } from '@/store/taskDetailStore';
 import { cn } from '@/lib/utils';
@@ -67,7 +67,15 @@ export function TaskAttachments({
       // own /raw endpoint with a short-lived JWT for locally stored files. Both
       // come back as an absolute URL, so the browser opens it directly.
       const data = await apiFetch(`/workspaces/${slug}/files/${attachment.fileId}/download`);
-      window.open(data.downloadUrl, '_blank', 'noopener,noreferrer');
+      // Only image/pdf/video/audio come back `Content-Disposition: inline` —
+      // those are worth a preview tab. Everything else (code, archives,
+      // office docs) the server forces to `attachment`, so opening a tab for
+      // it just leaves a blank one behind once the download starts.
+      if (isPreviewableMime(attachment.mimetype)) {
+        window.open(data.downloadUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        downloadAttachment(data.downloadUrl, attachment.filename);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not open that file.');
     } finally {

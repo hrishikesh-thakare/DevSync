@@ -115,8 +115,10 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
 
     const populatedMessage = {
       ...result,
-      authorName: author?.fullName,
-      authorAvatar: author?.avatarUrl,
+      authorName: author?.fullName || null,
+      authorAvatar: author?.avatarUrl || null,
+      replyCount: 0,
+      reactions: [],
     };
 
     // Emit real-time event
@@ -565,15 +567,37 @@ export const deleteMessage = async (req: Request, res: Response): Promise<void> 
       isDeletedByAdmin = true;
     }
 
-    // These ids come out of the message body, which the author wrote. They are
-    // untrusted input, not a server-side association — see the scoping on the
-    // delete below.
+    // These ids come out of the message itself, which the author wrote. They
+    // are untrusted input, not a server-side association — see the scoping
+    // on the delete below.
+    //
+    // Two formats, because two eras of message wrote attachments
+    // differently: legacy messages baked `[name](file:id)` into `bodyText`
+    // (still possible to encounter on an old row); the composer now sends a
+    // `bodyBlocks` JSON array of `{ type: 'attachment', fileId, ... }`
+    // objects instead (see `chatStore.ts`'s `send`). Only scanning `bodyText`
+    // meant this cleanup silently stopped doing anything the moment the
+    // composer switched formats — every attachment sent since has been
+    // orphaned in storage on delete, not actually removed.
     let filesToDelete: string[] = [];
     let orphanedStoragePaths: string[] = [];
     if (msg.bodyText) {
       const fileMatches = Array.from(msg.bodyText.matchAll(/\[(.*?)\]\(file:([a-zA-Z0-9-]+)\)/g));
-      filesToDelete = fileMatches.map(m => m[2]);
+      filesToDelete.push(...fileMatches.map((m) => m[2]));
     }
+    if (Array.isArray(msg.bodyBlocks)) {
+      for (const block of msg.bodyBlocks as unknown[]) {
+        if (
+          block &&
+          typeof block === 'object' &&
+          (block as Record<string, unknown>).type === 'attachment' &&
+          typeof (block as Record<string, unknown>).fileId === 'string'
+        ) {
+          filesToDelete.push((block as Record<string, unknown>).fileId as string);
+        }
+      }
+    }
+    filesToDelete = [...new Set(filesToDelete)];
 
     await db.transaction(async (tx) => {
       // If deleting a child reply, decrement parent's replyCount

@@ -11,12 +11,14 @@ import {
   ListIcon,
   ListOrderedIcon,
   StrikethroughIcon,
+  TypeIcon,
 } from 'lucide-react';
 
 import { Toggle } from '@/components/ui/toggle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 /**
@@ -85,8 +87,18 @@ export interface RichTextEditorProps {
  * Tiptap's serializer, not from JSX this component controls.
  */
 const EDITOR_CONTENT_CLASS = cn(
-  'tiptap-content max-h-40 min-h-[28px] overflow-y-auto px-2 py-1 text-sm text-foreground outline-none',
-  '[&_p]:m-0 [&_p+p]:mt-2',
+  'tiptap-content max-h-40 min-h-[32px] overflow-y-auto overflow-x-hidden px-2 py-1.5 text-sm text-foreground outline-none',
+  // `overflow-wrap:anywhere` on paragraphs is the actual fix for a pasted
+  // string with no spaces (a URL, a hash, a wall of "ddddd...") — without it
+  // the text has no break opportunity at all, so the box's intrinsic width
+  // just keeps growing. That used to be masked by `overflow-x-auto` up
+  // above, which only moved the symptom: the *pill* stayed a fixed width and
+  // scrolled internally, but `EditorContent`'s min-w-0 doesn't stop a flex
+  // ancestor further up (the pill, the composer, the page) from being forced
+  // wide by that same unbroken content, which is exactly what blew out the
+  // whole page's layout into a horizontal scrollbar. Wrapping the text is
+  // the fix; the container never needs to grow or scroll sideways at all.
+  '[&_p]:m-0 [&_p]:[overflow-wrap:anywhere] [&_p+p]:mt-2',
   '[&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5',
   '[&_blockquote]:my-1 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground',
   '[&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[0.85em]',
@@ -373,13 +385,42 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     [editor],
   );
 
+  // The formatting toolbar is hidden by default — that's what makes a true
+  // single-line pill possible at all. With it always visible (the previous
+  // behavior), the box was always two rows, and a `rounded-full` on a
+  // two-row box looks broken (the curve cuts across the toolbar buttons).
+  // Collapsed, this is genuinely one row, so `rounded-full` renders as an
+  // actual capsule; expanded, it falls back to the same very-rounded "card"
+  // shape used elsewhere (the media dialog) rather than a broken pill.
+  const [showToolbar, setShowToolbar] = useState(false);
+
   if (!editor) return null;
 
   return (
-    <div className={cn('flex flex-col rounded-lg border focus-within:ring-2 focus-within:ring-ring/40', className)}>
-      <EditorToolbar editor={editor} disabled={disabled} />
-      <div className="flex items-end gap-1 p-2">
+    <div
+      className={cn(
+        'flex flex-col border bg-card shadow-md focus-within:ring-2 focus-within:ring-ring/40 min-w-0',
+        showToolbar ? 'rounded-[min(var(--radius-4xl),24px)]' : 'rounded-[24px]',
+        className,
+      )}
+    >
+      {showToolbar && <EditorToolbar editor={editor} disabled={disabled} />}
+      <div className="flex items-end gap-1 p-2 min-w-0">
         {leading}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Toggle
+              size="icon"
+              pressed={showToolbar}
+              onPressedChange={setShowToolbar}
+              disabled={disabled}
+              aria-label={showToolbar ? 'Hide formatting options' : 'Show formatting options'}
+            >
+              <TypeIcon className="size-4" aria-hidden="true" />
+            </Toggle>
+          </TooltipTrigger>
+          <TooltipContent>{showToolbar ? 'Hide formatting' : 'Formatting'}</TooltipContent>
+        </Tooltip>
         <EditorContent editor={editor} className="min-w-0 flex-1" />
         {trailing}
       </div>

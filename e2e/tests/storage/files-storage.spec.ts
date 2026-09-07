@@ -12,6 +12,20 @@ test.describe('Files & Storage', () => {
   let fileId = '';
   let rawUrl = '';
 
+  // Every upload in this file lands in the real bucket configured for this
+  // environment (Supabase in any deployed run) — there is no dev-only
+  // fallback that makes this free. Nothing here cleaned up after itself
+  // before `deleteFile` existed, so every run left another object behind
+  // forever. Track every fileId this spec creates and delete them all here.
+  const createdFileIds: string[] = [];
+
+  test.afterAll(async () => {
+    const { accessToken } = await apiLogin(TEST_USERS.owner.email);
+    for (const id of createdFileIds) {
+      await apiRequest(`/workspaces/${SLUG}/files/${id}`, accessToken, { method: 'DELETE' });
+    }
+  });
+
   test('upload a file (base64) and get a fileRecord', async () => {
     const { accessToken } = await apiLogin(TEST_USERS.owner.email);
     const { status, data } = await apiRequest(`/workspaces/${SLUG}/files/upload`, accessToken, {
@@ -22,6 +36,7 @@ test.describe('Files & Storage', () => {
     expect(data.fileRecord).toBeTruthy();
     fileId = data.fileRecord.fileId;
     expect(fileId).toBeTruthy();
+    createdFileIds.push(fileId);
   });
 
   test('request a download URL for the uploaded file', async () => {
@@ -82,6 +97,30 @@ test.describe('Files & Storage', () => {
     expect(upload.status).toBe(403);
     const download = await apiRequest(`/workspaces/${SLUG}/files/${fileId}/download`, accessToken);
     expect(download.status).toBe(403);
+  });
+
+  test('outsider cannot delete a file', async () => {
+    const { accessToken } = await apiLogin(TEST_USERS.outsider.email);
+    const { status } = await apiRequest(`/workspaces/${SLUG}/files/${fileId}`, accessToken, { method: 'DELETE' });
+    expect(status).toBe(403);
+  });
+
+  test('a workspace member who neither uploaded the file nor is an admin cannot delete it', async () => {
+    const { accessToken } = await apiLogin(TEST_USERS.developer.email);
+    const { status } = await apiRequest(`/workspaces/${SLUG}/files/${fileId}`, accessToken, { method: 'DELETE' });
+    expect(status).toBe(403);
+  });
+
+  test('the uploader can delete their own file, and a second delete 404s', async () => {
+    const { accessToken } = await apiLogin(TEST_USERS.owner.email);
+    const del = await apiRequest(`/workspaces/${SLUG}/files/${fileId}`, accessToken, { method: 'DELETE' });
+    expect(del.status).toBe(200);
+
+    const again = await apiRequest(`/workspaces/${SLUG}/files/${fileId}`, accessToken, { method: 'DELETE' });
+    expect(again.status).toBe(404);
+
+    // Already gone — drop it so `afterAll` doesn't bother re-deleting it.
+    createdFileIds.length = 0;
   });
 
   test('upload and download require authentication', async () => {

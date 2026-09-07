@@ -78,8 +78,17 @@ export function WorkspaceBreadcrumbs() {
     }
   } else if (segments[0] === 'channels' && channelId) {
     const channel = channels.find((c) => c.channelId === channelId);
+    // A dm/group_dm has no name (`channel.name` is `null`) — `otherParticipants`
+    // (the list API's caller-excluded participant list, see `Channel`'s doc
+    // comment) gives a real label instead of the literal string "#null".
+    const isDirect = channel?.type === 'dm' || channel?.type === 'group_dm';
+    const label = !channel
+      ? 'Channel'
+      : isDirect
+        ? channel.otherParticipants?.map((p) => p.displayName || p.fullName).join(', ') || 'Direct message'
+        : `#${channel.name}`;
     crumbs.push({ label: 'Channels', to: `/w/${slug}/channels` });
-    crumbs.push({ label: channel ? `#${channel.name}` : 'Channel' });
+    crumbs.push({ label });
   } else {
     const section = segments[0];
     crumbs.push({ label: SECTION_LABELS[section] ?? section });

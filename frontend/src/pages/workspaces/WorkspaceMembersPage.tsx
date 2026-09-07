@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { MailPlusIcon, MoreHorizontalIcon, Trash2Icon } from 'lucide-react';
+import { MailPlusIcon, MessageSquareIcon, MoreHorizontalIcon, Trash2Icon } from 'lucide-react';
 
 import { MemberAvatar } from '@/components/MemberAvatar';
 import { ErrorState, TableSkeleton } from '@/components/layout/PageState';
@@ -108,6 +108,7 @@ function StatusBadge({ state }: { state: string }) {
 
 export function WorkspaceMembersPage() {
   const { slug = '' } = useParams();
+  const navigate = useNavigate();
   const {
     members,
     myRole,
@@ -143,7 +144,30 @@ export function WorkspaceMembersPage() {
 
   const canInvite = isAdmin();
   const canChangeRoles = isOwner();
-  const showActionColumn = canInvite || canChangeRoles;
+  // Always shown now — every row but your own has at least the "Message"
+  // action available regardless of role, same as the admin-only actions
+  // used to be the only reason this column existed.
+  const showActionColumn = true;
+
+  // Any member can message any other member, same as Teams/Slack DMs — no
+  // role check here, unlike `invite`/`changeRole` below. Reuses (or
+  // creates) the single DM channel between these two people: the backend
+  // dedups by exact member set, so clicking this repeatedly on the same
+  // person always lands in the same conversation instead of spawning one.
+  const startDm = async (member: WorkspaceMember) => {
+    setBusy(member.userId);
+    try {
+      const data = await apiFetch(`/workspaces/${slug}/channels`, {
+        method: 'POST',
+        body: JSON.stringify({ type: 'dm', memberIds: [member.userId] }),
+      });
+      navigate(`/w/${slug}/channels/${data.channel.channelId}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not start the conversation.');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const invite = async () => {
     if (!email.trim()) return;
@@ -338,7 +362,9 @@ export function WorkspaceMembersPage() {
                 const name = member.displayName || member.fullName;
                 const isMe = member.userId === myUserId;
                 const isTheOwner = member.role === 'owner';
-                const hasActions = (canChangeRoles && !isMe) || (canInvite && !isMe && !isTheOwner);
+                // "Message" alone makes every other row actionable now — the
+                // two `canX` clauses just add more items to the same menu.
+                const hasActions = !isMe;
 
                 return (
                   <TableRow key={member.userId}>
@@ -379,6 +405,15 @@ export function WorkspaceMembersPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-44">
+                              {!isMe ? (
+                                <DropdownMenuItem className="cursor-pointer" onClick={() => void startDm(member)}>
+                                  <MessageSquareIcon className="mr-2 size-4" />
+                                  Message
+                                </DropdownMenuItem>
+                              ) : null}
+
+                              {(canChangeRoles || canInvite) && !isMe ? <DropdownMenuSeparator /> : null}
+
                               {canChangeRoles && !isMe ? (
                                 <>
                                   <DropdownMenuLabel>Role</DropdownMenuLabel>
