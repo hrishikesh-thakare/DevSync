@@ -197,7 +197,7 @@ POST /api/workspaces/:slug/projects/:key/tasks
 | GET | `/` | ✅ | P: any | List tasks (filterable by status, assignee, sprint, priority) |
 | GET | `/:taskKey` | ✅ | P: any | Get single task by key (e.g., FE-3) |
 | PATCH | `/:taskKey` | ✅ | P: admin/dev | Update task fields |
-| PATCH | `/:taskKey/reorder` | ✅ | P: admin/dev | Update LexoRank for drag-drop |
+| PATCH | `/:taskKey/reorder` | ✅ | P: admin/dev | Recompute the fractional-index `rank` for drag-drop |
 | DELETE | `/:taskKey` | ✅ | P: admin | Soft-delete task |
 
 ### Task Comments — `/api/workspaces/:slug/projects/:key/tasks/:taskKey`
@@ -358,22 +358,37 @@ POST /api/workspaces/:slug/projects/:key/tasks
 
 ---
 
-## 🔮 Future Scope
+## 🤖 AI & Background Work
 
 ### AI Integration (`services/ai.service.ts`)
-AI features are implemented via a thin Gemini client in `services/ai.service.ts` (REST `generateContent` on `gemini-2.0-flash`, JSON-mode output). Features:
-- **AI sprint summaries on sprint close** — after `closeSprint` commits, a fire-and-forget job generates a retrospective summary + per-member contribution report, persists them to `sprints.ai_summary` / `sprints.ai_contribution_report`, posts the summary to the project's first channel as a system message (`systemType: 'ai_sprint_summary'`), and records `sprints.summary_message_id`.
-- **AI task duration estimation** — on task creation, a fire-and-forget job estimates hours and stores `tasks.ai_duration_estimate`.
+A thin Gemini client (REST `generateContent` on **`gemini-3.6-flash`**, JSON-mode output). Features:
+- **Sprint retrospective summaries** — generated on sprint close, persisted to `sprints.ai_summary`, posted to the project's first channel as a system message (`systemType: 'ai_sprint_summary'`), with `sprints.summary_message_id` recording which message.
+- **Task duration estimation** — on task creation, a fire-and-forget job estimates hours into `tasks.ai_duration_estimate`.
+- **CI failure explanation** — `summarizeCiFailure` caches its output on `github_ci_status.ai_failure_summary` (added in migration `0019`).
 
-Both calls fail gracefully: if `GEMINI_API_KEY` is unset or the API errors, the feature is silently skipped and never blocks the underlying request. The database fields used are:
+Every call fails gracefully: if `GEMINI_API_KEY` is unset or the API errors, the feature is skipped and never blocks the underlying request. Database fields:
 - `sprints.ai_summary` (jsonb)
-- `sprints.ai_contribution_report` (jsonb)
 - `sprints.summary_message_id` (uuid → messages)
 - `tasks.ai_duration_estimate` (numeric)
+- `github_ci_status.ai_failure_summary` (text)
+
+> **Removed on purpose: per-member contribution reports.** `generateSprintReport`
+> once also returned a `contributionReport` — one AI-written sentence judging each
+> assignee's contribution plus a task count, posted publicly to the project channel
+> on every sprint close with no review step. Individual activity metrics presented
+> with that kind of unearned authority are a documented anti-pattern; it was removed
+> alongside the Analytics contribution chart, and migration `0018` **dropped the
+> `sprints.ai_contribution_report` column**. The function is now deliberately
+> team-level only. Do not reintroduce it.
+
+> **Quota.** The Gemini free tier allows **20 requests per day, per model** — not
+> per minute. Bulk generation (seeding, backfills) exhausts it fast and then returns
+> `429 RESOURCE_EXHAUSTED` until reset. A missing AI summary is far more often quota
+> than a bug.
 
 ### Background Jobs (`workers/`)
 A lightweight in-process job queue (`workers/queue.ts`) processes slow work off the request path with a concurrency pool (4), retries, and exponential backoff. Registered jobs:
-- `email.send_invite` — SMTP invite delivery (enqueued by `inviteMember`; the invite row is committed first, so SMTP latency/failure never blocks the response)
+- `email.send_invite` — invite delivery via the **SendGrid HTTP API** (enqueued by `inviteMember`; the invite row is committed first, so send latency or failure never blocks the response). Not SMTP — Render blocks outbound SMTP ports, so that transport could never connect from the deployed host. Delivery is additionally gated off outside production unless `SMTP_ALLOW_DEV=true`; see `services/email.service.ts`.
 - `github.webhook_event` — GitHub webhook payload processing (push, workflow_run, pull_request, issues, branch create/delete). Signature verification stays in the request handler; the event is enqueued after verification and the webhook returns `200` immediately.
 
 Failures are retried up to 3 times with backoff, then logged as permanently failed. Jobs are in-memory (lost on process exit) — swap `queue.ts` for BullMQ/ioredis if durable queues are needed. AI generation uses the same fire-and-forget pattern directly in the sprint/task controllers.

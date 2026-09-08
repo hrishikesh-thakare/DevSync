@@ -90,10 +90,28 @@ not "fix" it.**
    that doing so reopens exactly the drift described above, so run
    `db:generate` afterwards to bring the snapshot back in step.
 
-## A note on this database
+## Current state
 
-The dev database records 12 applied migrations against 13 journal entries
-(0000–0012) — 0012's objects exist but its row was never recorded, most likely
-because the schema was moved forward with `db:push` at some point. The next
-`db:deploy` will therefore replay 0012 and then 0013. Both are idempotent, so
-this resolves itself on the next deploy rather than needing intervention.
+As of migration `0019_minor_king_bedlam`, the journal holds **20 migrations
+(0000–0019)** and the database records 19 applied. The 12-vs-13 drift described
+in older revisions of this document resolved itself on a subsequent deploy
+exactly as predicted — both migrations involved were idempotent — and needs no
+further action.
+
+Migrations added after the 0013 resync, for orientation:
+
+| Migration | What it does |
+| :--- | :--- |
+| `0014_integrity_and_indexes` | Partial unique indexes on `users.email` and `users.github_id` scoped to live (non-soft-deleted) rows, so a deleted address can be re-registered; a `(project, run)` unique on `github_ci_status`; plus assignee/reporter/due-date indexes on `tasks` |
+| `0015_resync_snapshot` | A **second** snapshot resync, same mechanism as 0013 — hand-written migrations had again moved ahead of `meta/` |
+| `0016_refresh_token_family` | `refresh_tokens.family_id` + index — enables reuse detection across a whole rotation chain |
+| `0017_project_soft_delete` | `projects.deleted_at` and a `(workspace, key)` unique index |
+| `0018` | **Drops `sprints.ai_contribution_report`** — the per-person AI judgement feature, removed as an anti-pattern |
+| `0019` | `github_ci_status.ai_failure_summary` — cached AI explanation of a failed CI run |
+
+That 0015 is a *second* resync is the point worth taking from this table: the
+drift described above is not a one-off historical incident, it recurs whenever
+a hand-written migration lands without a follow-up `db:generate`.
+
+The rule from the resync still stands: **anything hand-written must be followed
+by `db:generate`** so the snapshot stays in step, or the drift reopens.

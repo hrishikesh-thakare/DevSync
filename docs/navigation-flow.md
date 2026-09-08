@@ -16,7 +16,7 @@ The React app uses React Router with nested layouts.
 /reset-password                            ├─ ResetPasswordPage (Public)
 /verify-email                              ├─ VerifyEmailPage (Public)
 /auth/callback                             ├─ OAuthCallbackPage (Public)
-/invite/:inviteToken                       ├─ InviteLandingPage (Auth Required)
+/invite/:inviteToken                       ├─ InviteLandingPage (Public — see note below)
 
 /workspaces                                ├─ WorkspacePickerPage (Auth Required)
 /account                                   ├─ AccountSettingsPage (Auth Required)
@@ -38,14 +38,50 @@ The React app uses React Router with nested layouts.
       ├── /                                ├─ BoardPage (Kanban)
       ├── /backlog                         ├─ BacklogPage
       ├── /tasks/:taskKey                  ├─ TaskDetailPage
-      ├── /sprints                         ├─ SprintList
-      ├── /sprints/:sprintId               ├─ ActiveSprintBoard (Specific)
+      ├── /sprints                         ├─ SprintListPage
+      ├── /sprints/:sprintId               ├─ ActiveSprintBoard
       ├── /labels                          ├─ ProjectLabelsPage
       ├── /members                         ├─ ProjectMembersPage
       ├── /settings                        ├─ ProjectSettingsPage
       ├── /github                          ├─ GitHubIntegration
       └── /analytics                       ├─ AnalyticsPage
 ```
+
+---
+
+## ✉️ How invitations actually route
+
+There are **two separate invite mechanisms**, and which one fires depends on
+whether the invitee already has a DevSync account. Getting this wrong is the
+single easiest way to misread the auth flow.
+
+**1. Invitee has no account yet** → a row in `workspace_invites` with a token.
+The email links to **`/register?inviteToken=…`** — *not* to `/invite/:token`.
+`RegisterPage` forwards the token to `POST /auth/register`, which redeems it
+inside the same transaction that creates the user, and rejects it if the email
+typed does not match the invited address.
+
+**2. Invitee already has an account** → a `workspace_members` row with
+`state: 'invited'` and an in-app notification. **No email is sent at all.** The
+invitee accepts from the "Pending invitations" section of `/workspaces`, which
+calls `POST /workspaces/:slug/invites/accept`. That endpoint takes **no token** —
+it flips the caller's own membership row to `active`.
+
+`/invite/:inviteToken` is a compatibility route the backend never actually
+mints. It is public, and forwards: signed-out → `/register?inviteToken=…`;
+signed-in → `/workspaces`. There is no endpoint to read an invite by token, so
+the page cannot name the workspace behind it.
+
+> **Note for anyone updating this file:** earlier revisions described a
+> token-based accept endpoint that has never existed. If you are reconciling
+> this doc against the code, `InviteLandingPage.tsx`'s header comment is the
+> authoritative account.
+
+**OAuth sign-up redeems invites too.** Because the OAuth handshake cannot carry
+`inviteToken` through Supabase's redirect, `oauthCallback` instead looks up every
+unexpired `workspace_invites` row matching the new account's email and redeems
+them all. Without that, anyone who clicked "Continue with Google" on the invite
+page landed in an account with no workspaces and an invite left dangling.
 
 ---
 
@@ -96,20 +132,26 @@ The app shell wraps everything under `/w/:slug` and consists of three permanent 
 ### 5. Core Project Views (Under `/projects/:key`)
 These screens are wrapped in the `ProjectLayout` which provides the top navigation tabs (Board, Backlog, Sprints, etc.).
 
-14. **Kanban Board (`/projects/:key`)**: 4-column drag-and-drop board (Todo, In Progress, In Review, Done), built on the `@reui/c-kanban-1` primitives over dnd-kit. Filterable by Assignee and Priority. See `docs/kanban.md`.
+14. **Kanban Board (`/projects/:key`)**: 4-column drag-and-drop board (Todo, In Progress, In Review, Done), built on the `@reui/c-kanban-1` primitives over dnd-kit. Filterable by Assignee and Priority.
     *   *RBAC:* `viewer` role cannot drag cards or see the "+ Create Task" button.
-15. **Backlog (`/projects/:key/backlog`)**: Flat list of tasks without an active sprint. Supports drag-and-drop LexoRank reordering. Bulk actions to assign to sprint.
+    *   *Ranking:* card order uses **fractional indexing** — a move generates a key between the two neighbours, so one row is rewritten rather than the whole column renumbered. `useMoveTaskMutation` computes the rank twice on purpose (once optimistically, once authoritatively server-side); if you change one, change both.
+15. **Backlog (`/projects/:key/backlog`)**: Flat list of tasks without an active sprint. Same fractional-indexing reorder as the board. Bulk actions to assign to sprint. It is a **separate component from the board** — they share the ranking scheme, not the implementation.
 16. **Task Detail (`/projects/:key/tasks/:taskKey`)**: Deep-linkable overlay containing title, rich-text description, subtasks, linked GitHub commits, and a threaded discussion panel.
     *   *RBAC:* `developer`+ can edit fields inline. `viewer` sees a read-only state.
 17. **Sprint List (`/projects/:key/sprints`)**: Cards for Future, Active, and Closed sprints.
     *   *RBAC:* "Start Sprint" and "Close Sprint" buttons restricted to `project_admin`.
-18. **Active Sprint Board (`/projects/:key/sprints/active`)**: Status-grouped view of the currently active sprint (read-only, no drag). Displays a progress bar and remaining days.
-
+18. **Sprint Detail (`/projects/:key/sprints/:sprintId`)**: Status-grouped view of one sprint (read-only, no drag). Progress bar and remaining days. Closed sprints may carry an AI retrospective summary.
 
 ### 6. Project Management
-19. **Project Channels (`/projects/:key/channels`)**: Lists channels strictly scoped to this project.
-20. **Project Members (`/projects/:key/members`)**: Table mapping users to project roles (`project_admin`, `developer`, `viewer`).
+19. **Project Members (`/projects/:key/members`)**: Table mapping users to project roles (`project_admin`, `developer`, `viewer`).
     *   *RBAC:* `project_admin` can add/remove/modify roles.
+20. **Project Labels (`/projects/:key/labels`)**: Create, recolour and delete the label set available to this project's tasks.
 21. **Project Settings & GitHub Integration (`/projects/:key/settings` & `/github`)**:
     *   *Settings:* Name/Description updates, Archive project. (`project_admin` only)
-    *   *GitHub:* Connect a repo, view recent commits, view CI workflow run statuses. (`project_admin` only to connect)
+    *   *GitHub:* Connect a repo; browse ingested commits, branches, PRs, issues and CI runs across tabs. (`project_admin` only to connect)
+    *   *Caveat:* a repo can only be connected to **one project** — `github_commits` is globally unique on `(repo_full_name, commit_sha)`, so a second project connecting the same repo silently ingests nothing.
+
+> **Channels are workspace-scoped, not project-scoped.** They live at
+> `/w/:slug/channels/:channelId`. A channel may carry a `project_id` that
+> associates it with a project, but there is no `/projects/:key/channels`
+> route — earlier revisions of this document listed one that never existed.
