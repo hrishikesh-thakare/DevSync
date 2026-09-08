@@ -7,6 +7,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Line,
   LineChart,
   XAxis,
@@ -170,12 +171,6 @@ export function AnalyticsPage() {
       {(data?.burndown ?? []).map((sprint) => (
         <BurndownCard key={sprint.sprintId} sprint={sprint} />
       ))}
-
-      <p className="mt-8 text-xs text-muted-foreground">
-        These are value-stream metrics — how work moves through the board. They are not DORA
-        metrics, which measure deployments and production incidents; DevSync does not track
-        deployments, so those cannot be derived honestly here.
-      </p>
     </PageShell>
   );
 }
@@ -224,7 +219,14 @@ function CycleTimeCard({ entries }: { entries: CycleTimeEntry[] }) {
     hours: e.avgHours ?? 0,
     median: e.medianHours ?? 0,
     sampleSize: e.sampleSize,
-    fill: `var(--color-status-${e.status.replace(/_/g, '-')})`,
+    // `--status-*`, not `--color-status-*`: the latter is a Tailwind theme
+    // alias that only gets emitted as a real CSS variable when Tailwind's
+    // static scanner can find the literal string somewhere in source. Built
+    // dynamically like this, it can't, so `--color-status-todo` etc. never
+    // made it into the compiled CSS and every bar fell back to SVG's fill
+    // default (black). `--status-*` is authored directly in index.css, so it
+    // always exists.
+    fill: `var(--status-${e.status.replace(/_/g, '-')})`,
   }));
 
   const config: ChartConfig = { hours: { label: 'Avg time' } };
@@ -254,7 +256,11 @@ function CycleTimeCard({ entries }: { entries: CycleTimeEntry[] }) {
               />
             }
           />
-          <Bar dataKey="hours" radius={4} />
+          <Bar dataKey="hours" radius={4}>
+            {rows.map((row) => (
+              <Cell key={row.key} fill={row.fill} />
+            ))}
+          </Bar>
         </BarChart>
       </ChartContainer>
       <ul className="mt-4 space-y-1">
@@ -277,7 +283,7 @@ function ThroughputCard({ points }: { points: { week: string; completed: number 
   }));
 
   const config: ChartConfig = {
-    completed: { label: 'Completed', color: 'var(--color-status-done)' },
+    completed: { label: 'Completed', color: 'var(--status-done)' },
   };
 
   return (
@@ -354,7 +360,7 @@ function CiTrendCard({
   }));
 
   const config: ChartConfig = {
-    successRate: { label: 'Success rate %', color: 'var(--color-status-done)' },
+    successRate: { label: 'Success rate %', color: 'var(--status-done)' },
   };
 
   return (
