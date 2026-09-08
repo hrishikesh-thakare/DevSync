@@ -29,6 +29,9 @@ export default defineConfig({
 
   // Global setup: authenticates all test users and saves storage states
   globalSetup: './global-setup.ts',
+  // Global teardown: purges accumulated e2e fixture users after a local run
+  // (no-op in CI — see global-teardown.ts for why).
+  globalTeardown: './global-teardown.ts',
 
   // Timeouts
   timeout: 30_000,
