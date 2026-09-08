@@ -479,6 +479,33 @@ export const oauthCallback = async (req: Request, res: Response): Promise<void> 
           actorId: user.userId, action: 'user.registered_via_github', entityType: 'user', entityId: user.userId,
           newValues: { email: user.email, full_name: user.fullName, auth_method: 'github' }, tx
         });
+
+        // Unlike `register`, OAuth sign-up never carries an `inviteToken` — the
+        // frontend has no way to thread one through the provider's redirect —
+        // so a pending `workspace_invites` row would otherwise sit orphaned
+        // forever if someone accepted an invite email by signing up with
+        // Google/GitHub instead of the password form. The email itself is
+        // what the invite is bound to, so redeem every live invite for it here,
+        // same as `register` does for the one named by its token.
+        const pendingInvites = await tx
+          .select()
+          .from(workspaceInvites)
+          .where(and(eq(workspaceInvites.email, email), gt(workspaceInvites.expiresAt, new Date())));
+
+        for (const invite of pendingInvites) {
+          await tx.insert(workspaceMembers).values({
+            workspaceId: invite.workspaceId,
+            userId: user.userId,
+            role: invite.role,
+            invitedBy: invite.invitedBy,
+            state: 'active',
+          });
+          await tx.delete(workspaceInvites).where(eq(workspaceInvites.inviteId, invite.inviteId));
+          await logAuditAction({
+            actorId: user.userId, action: 'workspace_member.invite_accepted', entityType: 'workspace_member', entityId: user.userId, workspaceId: invite.workspaceId ?? undefined,
+            newValues: { state: 'active' }, oldValues: { state: 'invited' }, tx
+          });
+        }
       });
     }
 
