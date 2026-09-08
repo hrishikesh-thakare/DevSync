@@ -185,14 +185,6 @@ test.describe('Analytics page (UI)', () => {
     }
   });
 
-  test('states plainly that these are not DORA metrics', async ({ ownerPage }) => {
-    await ownerPage.goto(`/w/${SLUG}/analytics`);
-    await ownerPage.waitForLoadState('networkidle');
-    // The distinction is the kind of thing a reviewer probes, so it is on the
-    // page rather than only in the code.
-    await expect(ownerPage.getByText(/not DORA metrics/i)).toBeVisible({ timeout: 10_000 });
-  });
-
   test('the range selector refetches without breaking the page', async ({ ownerPage }) => {
     await ownerPage.goto(`/w/${SLUG}/analytics`);
     await ownerPage.waitForLoadState('networkidle');

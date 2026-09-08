@@ -347,7 +347,6 @@ Covers the 7 SQL aggregations behind `AnalyticsPage` and their honest-empty-stat
 | non-members are denied | Outsider → 403 |
 | requires authentication | No token → 401 |
 | workspace analytics renders every chart section (UI) | `AnalyticsPage` mounts all 7 cards |
-| states plainly that these are not DORA metrics (UI) | Disclaimer copy is visible |
 | the range selector refetches without breaking the page (UI) | Changing the date range re-renders cleanly |
 | project analytics is reachable from the project tab bar (UI) | Nav link present and functional |
 | a member with no project access sees empty states, not an error (UI) | Honest empty state, no axis-over-zeros |
