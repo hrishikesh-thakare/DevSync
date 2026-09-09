@@ -1,526 +1,96 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { Outlet, useParams, NavLink, useNavigate } from 'react-router-dom';
-import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
-import { useAuthStore } from '../../store/auth.js';
-import { Hash, Lock, Search, Bell, Settings, Plus, FolderKanban, Loader2, Home, X, LogOut, ChevronDown as ChevronDownIcon, Command } from 'lucide-react';
-import { CommandPalette } from '../../components/layout/CommandPalette.js';
-import clsx from 'clsx';
+import { useEffect } from 'react';
+import { Outlet, useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
+import { TriangleAlertIcon } from 'lucide-react';
 
-export const WorkspaceLayout = () => {
-  const { slug } = useParams<{ slug: string }>();
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+
+import { Button } from '@/components/ui/button';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { WorkspaceSidebar } from '@/components/layout/WorkspaceSidebar';
+import { WorkspaceTopBar } from '@/components/layout/WorkspaceTopBar';
+import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
+import { useNotificationStore } from '@/store/notificationStore';
+import { socketClient } from '@/lib/socket';
+import { KeyboardShortcutsModal } from '@/components/layout/KeyboardShortcutsModal';
+import type { AppNotification, Presence } from '@/types/api';
+
+export function WorkspaceLayout() {
+  const { slug = '' } = useParams();
   const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
-  const { name, projects, channels, members, isLoading, error, myRole, isAdmin, isOwner, fetchWorkspaceData } = useCurrentWorkspaceStore();
-  const [showChannelModal, setShowChannelModal] = useState(false);
-  const [showDMModal, setShowDMModal] = useState(false);
-  const [newChannelName, setNewChannelName] = useState('');
-  const [selectedDMMemberId, setSelectedDMMemberId] = useState('');
-  const [newChannelType, setNewChannelType] = useState('public');
-  const [isDefaultChannel, setIsDefaultChannel] = useState(false);
-  const [isAnnouncementOnly, setIsAnnouncementOnly] = useState(false);
-  const [isCreatingChannel, setIsCreatingChannel] = useState(false);
-  const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const [showCommandPalette, setShowCommandPalette] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Global Ctrl+K / Cmd+K shortcut
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setShowCommandPalette(prev => !prev);
-      }
-    };
-    document.addEventListener('keydown', handleGlobalKeyDown);
-    return () => document.removeEventListener('keydown', handleGlobalKeyDown);
-  }, []);
+  const { fetchWorkspaceData, updateMemberPresence, isLoading, error, workspaceId } =
+    useCurrentWorkspaceStore();
+  const addNotification = useNotificationStore((s) => s.addNotification);
 
   useEffect(() => {
-    if (slug) {
-      fetchWorkspaceData(slug);
-    }
+    if (slug) void fetchWorkspaceData(slug);
   }, [slug, fetchWorkspaceData]);
 
-  // Close dropdown on outside click
+  // Realtime. The handshake authenticates with the access JWT, not the refresh
+  // cookie, so this must run after the session is resolved.
   useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowUserDropdown(false);
-      }
+    if (!workspaceId) return;
+    const socket = socketClient.connect();
+
+    const onNotification = (notification: AppNotification) => {
+      addNotification(notification);
+      toast(notification.title, { description: notification.body ?? undefined });
     };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
 
-  const handleCreateChannel = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newChannelName || !slug) return;
-    setIsCreatingChannel(true);
-    try {
-      const { apiFetch } = await import('../../lib/api.js');
-      await apiFetch(`/workspaces/${slug}/channels`, {
-        method: 'POST',
-        body: JSON.stringify({ 
-          name: newChannelName, 
-          type: newChannelType,
-          isDefault: isDefaultChannel,
-          isAnnouncementOnly: isAnnouncementOnly
-        })
+    const onPresence = (payload: { userId: string; presence: Presence; statusText?: string }) => {
+      updateMemberPresence(payload.userId, {
+        presence: payload.presence,
+        statusText: payload.statusText,
       });
-      setShowChannelModal(false);
-      setNewChannelName('');
-      setIsDefaultChannel(false);
-      setIsAnnouncementOnly(false);
-      fetchWorkspaceData(slug);
-    } catch (err: any) {
-      alert(err.message || 'Failed to create channel.');
-    } finally {
-      setIsCreatingChannel(false);
-    }
-  };
+    };
 
-  const handleCreateDM = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedDMMemberId || !slug) return;
-    setIsCreatingChannel(true);
-    
-    // Find member to construct a name
-    const member = members.find(m => m.userId === selectedDMMemberId);
-    if (!member) {
-      setIsCreatingChannel(false);
-      return;
-    }
-    
-    const dmName = `dm-${user?.fullName.split(' ')[0]}-${member.fullName.split(' ')[0]}`.toLowerCase();
+    socket.on('new_notification', onNotification);
+    socket.on('user_presence_updated', onPresence);
 
-    try {
-      const { apiFetch } = await import('../../lib/api.js');
-      await apiFetch(`/workspaces/${slug}/channels`, {
-        method: 'POST',
-        body: JSON.stringify({ 
-          name: dmName, 
-          type: 'dm',
-          memberIds: [selectedDMMemberId]
-        })
-      });
-      setShowDMModal(false);
-      setSelectedDMMemberId('');
-      fetchWorkspaceData(slug);
-    } catch (err: any) {
-      alert(err.message || 'Failed to create DM.');
-    } finally {
-      setIsCreatingChannel(false);
-    }
-  };
+    return () => {
+      socket.off('new_notification', onNotification);
+      socket.off('user_presence_updated', onPresence);
+    };
+  }, [workspaceId, addNotification, updateMemberPresence]);
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
-  };
+  // Tear the connection down when leaving the workspace shell entirely.
+  useEffect(() => () => socketClient.disconnect(), []);
 
-  if (isLoading) {
+  if (error && !isLoading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-gray-950">
-        <Loader2 className="w-8 h-8 animate-spin text-white" />
-      </div>
-    );
-  }
-
-  if (error || !name) {
-    return (
-      <div className="flex h-screen w-screen flex-col items-center justify-center bg-gray-950 text-white">
-        <h2 className="text-2xl font-bold text-red-500 mb-2">Workspace Error</h2>
-        <p className="text-gray-400">{error || 'Workspace not found'}</p>
-        <button onClick={() => navigate('/workspaces')} className="mt-6 text-gray-300 hover:underline">
-          Return to Hub
-        </button>
-      </div>
+      <Empty className="min-h-svh">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <TriangleAlertIcon aria-hidden="true" />
+          </EmptyMedia>
+          <EmptyTitle>Couldn&apos;t open this workspace</EmptyTitle>
+          <EmptyDescription>{error}</EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button onClick={() => navigate('/workspaces')}>Back to workspaces</Button>
+        </EmptyContent>
+      </Empty>
     );
   }
 
   return (
-    <div className="flex h-screen w-screen bg-gray-950 text-gray-200 overflow-hidden font-sans">
-      
-      {/* ─── SIDEBAR ────────────────────────────────────────────────────────── */}
-      <aside className="w-64 bg-gray-900 border-r border-gray-800/60 flex flex-col flex-shrink-0">
-        
-        {/* Workspace Header */}
-        <div 
-          className="h-14 px-4 flex items-center justify-between border-b border-gray-800/60 shadow-sm hover:bg-gray-800/50 cursor-pointer transition-colors"
-          onClick={() => navigate(`/w/${slug}`)}
-        >
-          <h1 className="font-bold text-white truncate text-lg">{name}</h1>
-          <ChevronDownIcon className="w-4 h-4 text-gray-400" />
-        </div>
-
-        {/* Scrollable Nav */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar py-4 space-y-6">
-          
-          {/* Main Links */}
-          <div className="px-3 space-y-0.5">
-            <NavLink
-              to={`/w/${slug}`}
-              end
-              className={({ isActive }) => clsx(
-                "flex items-center px-2 py-1.5 rounded-md text-sm transition-colors group",
-                isActive ? "bg-white/10 text-gray-300 font-medium" : "text-gray-400 hover:bg-gray-800/60 hover:text-gray-200"
-              )}
-            >
-              <Home className="w-4 h-4 mr-2.5 opacity-70 group-hover:opacity-100" />
-              Dashboard
-            </NavLink>
-            <button onClick={() => setShowCommandPalette(true)} className="w-full flex items-center px-2 py-1.5 rounded-md text-sm text-gray-400 hover:bg-gray-800/60 hover:text-gray-200 transition-colors group">
-              <Search className="w-4 h-4 mr-2.5 opacity-70 group-hover:opacity-100" />
-              Search
-              <kbd className="ml-auto text-[10px] bg-gray-800 px-1.5 py-0.5 rounded text-gray-500">⌘K</kbd>
-            </button>
-          </div>
-
-          {/* Channels Section */}
-          <div>
-            <div className="px-5 mb-1.5 flex items-center justify-between group cursor-pointer">
-              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider group-hover:text-gray-400 transition-colors">Channels</span>
-              {/* Only admin+ can create channels */}
-              {isAdmin() && (
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowChannelModal(true);
-                  }}
-                  className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-gray-300 transition-all"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-            <div className="px-3 space-y-0.5">
-              {channels.filter(c => !c.projectId && c.type !== 'dm' && c.type !== 'group_dm').map((ch) => (
-                <NavLink
-                  key={ch.channelId}
-                  to={`/w/${slug}/channels/${ch.channelId}`}
-                  className={({ isActive }) => clsx(
-                    "flex items-center px-2 py-1 rounded-md text-[15px] transition-colors",
-                    isActive ? "bg-white/10 text-gray-300 font-medium" : "text-gray-400 hover:bg-gray-800/60 hover:text-gray-200"
-                  )}
-                >
-                  {ch.type === 'private' ? (
-                    <Lock className="w-3.5 h-3.5 mr-2 opacity-60" />
-                  ) : (
-                    <Hash className="w-4 h-4 mr-2 opacity-60" />
-                  )}
-                  <span className="truncate">{ch.name}</span>
-                </NavLink>
-              ))}
-            </div>
-          </div>
-
-          {/* Projects Section */}
-          <div>
-            <div className="px-5 mb-1.5 flex items-center justify-between group cursor-pointer" onClick={() => navigate(`/w/${slug}/projects`)}>
-              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider group-hover:text-gray-400 transition-colors">Projects</span>
-              {/* Only admin+ can create projects */}
-              {isAdmin() && (
-                <button onClick={(e) => { e.stopPropagation(); navigate(`/w/${slug}/projects/new`); }} className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-gray-300 transition-all">
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-            <div className="px-3 space-y-0.5">
-              {projects.map((proj) => (
-                <div key={proj.projectId}>
-                  <NavLink
-                    to={`/w/${slug}/projects/${proj.key}`}
-                    className={({ isActive }) => clsx(
-                      "flex items-center px-2 py-1.5 rounded-md text-[14px] transition-colors",
-                      isActive ? "bg-white/10 text-gray-300 font-medium" : "text-gray-400 hover:bg-gray-800/60 hover:text-gray-200"
-                    )}
-                  >
-                    <FolderKanban className="w-4 h-4 mr-2.5 opacity-60" />
-                    <span className="truncate">{proj.name}</span>
-                  </NavLink>
-                  {/* Nested Project Channels */}
-                  {channels.filter(c => c.projectId === proj.projectId).length > 0 && (
-                    <div className="pl-6 pr-2 py-1 space-y-0.5">
-                      {channels.filter(c => c.projectId === proj.projectId).map((ch) => (
-                        <NavLink
-                          key={ch.channelId}
-                          to={`/w/${slug}/channels/${ch.channelId}`}
-                          className={({ isActive }) => clsx(
-                            "flex items-center px-2 py-1 rounded-md text-[13px] transition-colors",
-                            isActive ? "bg-white/10 text-gray-300 font-medium" : "text-gray-500 hover:bg-gray-800/60 hover:text-gray-300"
-                          )}
-                        >
-                          {ch.type === 'private' ? (
-                            <Lock className="w-3.5 h-3.5 mr-2 opacity-60" />
-                          ) : (
-                            <Hash className="w-3.5 h-3.5 mr-2 opacity-60" />
-                          )}
-                          <span className="truncate">{ch.name}</span>
-                        </NavLink>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Direct Messages Section */}
-          <div>
-            <div className="px-5 mb-1.5 flex items-center justify-between group cursor-pointer">
-              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider group-hover:text-gray-400 transition-colors">Direct Messages</span>
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowDMModal(true);
-                }}
-                className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-gray-300 transition-all"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <div className="px-3 space-y-0.5">
-              {channels.filter(c => c.type === 'dm' || c.type === 'group_dm').length === 0 ? (
-                <p className="text-xs text-gray-600 px-2 py-2 italic">No conversations yet</p>
-              ) : (
-                channels.filter(c => c.type === 'dm' || c.type === 'group_dm').map((ch) => (
-                  <NavLink
-                    key={ch.channelId}
-                    to={`/w/${slug}/channels/${ch.channelId}`}
-                    className={({ isActive }) => clsx(
-                      "flex items-center px-2 py-1 rounded-md text-[15px] transition-colors",
-                      isActive ? "bg-white/10 text-gray-300 font-medium" : "text-gray-400 hover:bg-gray-800/60 hover:text-gray-200"
-                    )}
-                  >
-                    <div className="w-4 h-4 mr-2 rounded-full bg-gradient-to-tr from-gray-700 to-gray-500 flex items-center justify-center text-[8px] text-white font-bold shrink-0">
-                      {ch.name?.charAt(0).toUpperCase() || '?'}
-                    </div>
-                    <span className="truncate">{ch.name}</span>
-                  </NavLink>
-                ))
-              )}
-            </div>
-          </div>
-
-        </div>
-
-        {/* Workspace Settings — only visible to admin/owner */}
-        {isAdmin() && (
-          <div className="p-4 border-t border-gray-800/60" onClick={() => navigate(`/w/${slug}/settings`)}>
-            <div className="flex items-center justify-between cursor-pointer group">
-              <div className="flex items-center space-x-2">
-                <div className="w-7 h-7 rounded bg-gradient-to-tr from-white to-white border border-gray-700"></div>
-                <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">Workspace Settings</span>
-              </div>
-              <Settings className="w-4 h-4 text-gray-500 group-hover:text-gray-300" />
-            </div>
-          </div>
-        )}
-      </aside>
-
-      {/* ─── MAIN CONTENT OUTLET ────────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col min-w-0 bg-gray-950 relative">
-        {/* Top Navbar / Utility Bar */}
-        <header className="h-14 px-6 flex items-center justify-between border-b border-gray-800/60 bg-gray-950 shrink-0">
-          {/* Search */}
-          <div className="flex items-center flex-1">
-             <div className="relative max-w-md w-full cursor-pointer" onClick={() => setShowCommandPalette(true)}>
-               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
-               <input 
-                 type="text" 
-                 placeholder="Search tasks, messages..." 
-                 className="w-full bg-gray-900 border border-gray-800 rounded-lg pl-9 pr-16 py-1.5 text-sm text-gray-400 cursor-pointer focus:outline-none"
-                 readOnly
-               />
-               <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800 text-[10px] text-gray-500 font-mono">
-                 <Command size={10} />
-                 <span>K</span>
-               </div>
-             </div>
-           </div>
-
-          <div className="flex items-center space-x-4">
-            {/* Notifications Bell */}
-            <button onClick={() => navigate(`/w/${slug}/notifications`)} className="text-gray-400 hover:text-white transition-colors relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border border-gray-950"></span>
-            </button>
-
-            {/* User Dropdown */}
-            <div className="relative" ref={dropdownRef}>
-              <button 
-                onClick={() => setShowUserDropdown(!showUserDropdown)}
-                className="flex items-center space-x-2 px-2 py-1 rounded-lg hover:bg-gray-800/50 transition-colors"
-              >
-                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-gray-600 to-gray-500 flex items-center justify-center text-white text-xs font-bold border border-gray-700">
-                  {user?.fullName?.[0]?.toUpperCase() || 'U'}
-                </div>
-                <span className="text-sm font-medium text-gray-300 hidden sm:inline">{user?.fullName?.split(' ')[0]}</span>
-                <ChevronDownIcon className="w-3.5 h-3.5 text-gray-500" />
-              </button>
-
-              {showUserDropdown && (
-                <div className="absolute right-0 top-full mt-2 w-64 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl z-50 overflow-hidden">
-                  <div className="p-4 border-b border-gray-800">
-                    <p className="text-sm font-semibold text-white">{user?.fullName}</p>
-                    <p className="text-xs text-gray-500">{user?.email}</p>
-                    <span className="mt-2 inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-white/10 text-gray-300 border border-white/20">
-                      {myRole}
-                    </span>
-                  </div>
-                  {isOwner() && (
-                    <button 
-                      onClick={() => { setShowUserDropdown(false); navigate(`/w/${slug}/settings`); }}
-                      className="w-full flex items-center px-4 py-3 text-sm text-gray-300 hover:bg-gray-800/60 transition-colors"
-                    >
-                      <Settings className="w-4 h-4 mr-3 text-gray-500" />
-                      Workspace Settings
-                    </button>
-                  )}
-                  <button 
-                    onClick={() => { setShowUserDropdown(false); handleLogout(); }}
-                    className="w-full flex items-center px-4 py-3 text-sm text-red-400 hover:bg-gray-800/60 transition-colors border-t border-gray-800"
-                  >
-                    <LogOut className="w-4 h-4 mr-3" />
-                    Sign Out
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
-
-        {/* Dynamic Nested Content (Kanban, Chat, etc) */}
-        <div className="flex-1 overflow-hidden">
+    <SidebarProvider>
+      {/* First focusable element on the page, so the sidebar's ~25 nav items
+          are skippable. Visually hidden until it takes focus. */}
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
+      <WorkspaceSidebar />
+      <SidebarInset>
+        <WorkspaceTopBar slug={slug} />
+        {/* `<main>` stays the semantic element and the skip-link target —
+            `ScrollArea`'s Root renders a plain div, so it goes inside rather
+            than replacing `<main>`, and does the actual scrolling. */}
+        <main id="main-content" tabIndex={-1} className="flex min-h-0 flex-1 flex-col overflow-y-auto relative">
           <Outlet />
-        </div>
-      </main>
-
-      {/* CREATE CHANNEL MODAL */}
-      {showChannelModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between p-6 border-b border-gray-800">
-              <h3 className="text-xl font-bold text-white">Create Channel</h3>
-              <button onClick={() => setShowChannelModal(false)} className="text-gray-500 hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleCreateChannel} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Channel Name</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">#</span>
-                  <input 
-                    type="text" 
-                    value={newChannelName}
-                    onChange={e => setNewChannelName(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-lg pl-8 pr-4 py-2 text-white focus:outline-none focus:border-white transition-colors font-mono text-sm"
-                    placeholder="general"
-                    required
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Visibility</label>
-                <select 
-                  value={newChannelType}
-                  onChange={e => setNewChannelType(e.target.value)}
-                  className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white transition-colors"
-                >
-                  <option value="public">Public - Anyone in workspace</option>
-                  <option value="private">Private - Invite only</option>
-                </select>
-              </div>
-
-              <div className="flex flex-col space-y-3 pt-2">
-                <label className="flex items-center space-x-3 cursor-pointer group">
-                  <div className="relative flex items-center justify-center">
-                    <input 
-                      type="checkbox" 
-                      checked={isDefaultChannel}
-                      onChange={e => setIsDefaultChannel(e.target.checked)}
-                      className="peer appearance-none w-5 h-5 border border-gray-700 rounded bg-gray-950 checked:bg-emerald-500 checked:border-emerald-500 transition-all"
-                    />
-                    <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium text-gray-200 group-hover:text-white transition-colors">Default Channel</span>
-                    <span className="text-xs text-gray-500">New workspace members are automatically added</span>
-                  </div>
-                </label>
-
-                <label className="flex items-center space-x-3 cursor-pointer group">
-                  <div className="relative flex items-center justify-center">
-                    <input 
-                      type="checkbox" 
-                      checked={isAnnouncementOnly}
-                      onChange={e => setIsAnnouncementOnly(e.target.checked)}
-                      className="peer appearance-none w-5 h-5 border border-gray-700 rounded bg-gray-950 checked:bg-blue-500 checked:border-blue-500 transition-all"
-                    />
-                    <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium text-gray-200 group-hover:text-white transition-colors">Announcement Only</span>
-                    <span className="text-xs text-gray-500">Only admins and the channel creator can post messages</span>
-                  </div>
-                </label>
-              </div>
-
-              <div className="pt-4 flex justify-end space-x-3">
-                <button type="button" onClick={() => setShowChannelModal(false)} className="px-4 py-2 text-gray-400 hover:text-white transition-colors font-medium">Cancel</button>
-                <button type="submit" disabled={isCreatingChannel} className="px-6 py-2 bg-white text-gray-950 hover:bg-gray-200 font-bold rounded-lg transition-colors disabled:opacity-50 flex items-center">
-                  {isCreatingChannel && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Create
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* CREATE DM MODAL */}
-      {showDMModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between p-6 border-b border-gray-800">
-              <h3 className="text-xl font-bold text-white">Start Direct Message</h3>
-              <button onClick={() => setShowDMModal(false)} className="text-gray-500 hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleCreateDM} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Select Teammate</label>
-                <div className="relative">
-                  <select
-                    value={selectedDMMemberId}
-                    onChange={e => setSelectedDMMemberId(e.target.value)}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white transition-colors"
-                    required
-                  >
-                    <option value="" disabled>Select a workspace member</option>
-                    {members.filter(m => m.userId !== user?.userId).map(m => (
-                      <option key={m.userId} value={m.userId}>{m.fullName} ({m.email})</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="pt-4 flex justify-end space-x-3">
-                <button type="button" onClick={() => setShowDMModal(false)} className="px-4 py-2 text-gray-400 hover:text-white transition-colors font-medium">Cancel</button>
-                <button type="submit" disabled={isCreatingChannel} className="px-6 py-2 bg-white text-gray-950 hover:bg-gray-200 font-bold rounded-lg transition-colors disabled:opacity-50 flex items-center">
-                  {isCreatingChannel && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Start Chat
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Command Palette Modal */}
-      <CommandPalette isOpen={showCommandPalette} onClose={() => setShowCommandPalette(false)} />
-
-    </div>
+        </main>
+      </SidebarInset>
+      <KeyboardShortcutsModal />
+    </SidebarProvider>
   );
-};
+}

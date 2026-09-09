@@ -1,73 +1,70 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase.js';
-import { apiFetch } from '../../lib/api.js';
-import { useAuthStore } from '../../store/auth.js';
-import { Loader2 } from 'lucide-react';
 
-export const OAuthCallbackPage = () => {
+import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/store/auth';
+import { AppLoading } from '@/components/layout/AppLoading';
+import { AuthShell } from '@/pages/auth/AuthShell';
+import { AuthErrorAlert } from '@/pages/auth/AuthErrorAlert';
+import { Button } from '@/components/ui/button';
+
+/**
+ * Landing point for the Supabase OAuth redirect.
+ *
+ * supabase-js parses the session out of the URL fragment on load, but that
+ * happens asynchronously — so we ask for the session once and, if it is not
+ * there yet, wait for the `SIGNED_IN` event rather than declaring failure.
+ */
+export function OAuthCallbackPage() {
+  const loginWithOAuth = useAuthStore((s) => s.loginWithOAuth);
   const navigate = useNavigate();
-  const { checkAuth } = useAuthStore();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
-    const handleOAuthRedirect = async () => {
+    let cancelled = false;
+
+    const exchange = async (providerToken: string) => {
       try {
-        // 1. Get the session from Supabase JS client (it auto-parses the URL hash)
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) throw sessionError;
-        if (!session?.access_token) throw new Error('No access token found in session');
-
-        // 2. Exchange the Supabase access_token with our Backend
-        // This will create the user in our custom database and issue an HTTP-only cookie
-        const response = await apiFetch('/auth/oauth/callback', {
-          method: 'POST',
-          body: JSON.stringify({
-            provider: session.user.app_metadata.provider || 'github',
-            providerToken: session.access_token,
-          }),
-        });
-
-        localStorage.setItem('accessToken', response.accessToken);
-
-        // 3. Update Zustand store
-        await checkAuth();
-
-        // 4. Redirect into the app
-        navigate('/workspaces', { replace: true });
-        
-      } catch (err: any) {
-        console.error('OAuth Callback Error:', err);
-        setError(err.message || 'Authentication failed. Please try again.');
+        await loginWithOAuth(providerToken);
+        if (!cancelled) navigate('/workspaces', { replace: true });
+      } catch (err) {
+        if (!cancelled) setError(err);
       }
     };
 
-    handleOAuthRedirect();
-  }, [navigate, checkAuth]);
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.access_token && !cancelled) {
+        void exchange(session.access_token);
+      }
+    });
+
+    void supabase.auth.getSession().then(({ data, error: sessionError }) => {
+      if (cancelled) return;
+      if (sessionError) {
+        setError(sessionError);
+        return;
+      }
+      if (data.session?.access_token) {
+        void exchange(data.session.access_token);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.subscription.unsubscribe();
+    };
+  }, [loginWithOAuth, navigate]);
 
   if (error) {
     return (
-      <div className="flex flex-col h-screen w-screen items-center justify-center bg-gray-950 px-4 text-center">
-        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-6 rounded-xl max-w-md">
-          <h2 className="text-lg font-bold mb-2">Authentication Error</h2>
-          <p className="text-sm mb-6">{error}</p>
-          <button 
-            onClick={() => navigate('/login', { replace: true })}
-            className="px-4 py-2 bg-gray-900 border border-gray-800 text-white rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            Return to Login
-          </button>
-        </div>
-      </div>
+      <AuthShell title="Sign-in could not be completed">
+        <AuthErrorAlert error={error} />
+        <Button className="w-full" onClick={() => navigate('/login', { replace: true })}>
+          Back to sign in
+        </Button>
+      </AuthShell>
     );
   }
 
-  return (
-    <div className="flex flex-col h-screen w-screen items-center justify-center bg-gray-950">
-      <Loader2 className="h-10 w-10 animate-spin text-white mb-4" />
-      <h2 className="text-xl font-bold text-white mb-2">Authenticating</h2>
-      <p className="text-gray-400 text-sm">Securely connecting your account...</p>
-    </div>
-  );
-};
+  return <AppLoading label="Completing sign-in" />;
+}

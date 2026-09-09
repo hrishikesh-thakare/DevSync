@@ -1,17 +1,94 @@
 import { Server as HttpServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { env } from '../config/env.js';
+import { corsOrigin } from '../config/cors.js';
 import jwt from 'jsonwebtoken';
 import { db } from '../config/db.js';
 import { users } from '../db/schema/auth.js';
-import { eq } from 'drizzle-orm';
+import { channels, channelMembers } from '../db/schema/channels.js';
+import { projects, projectMembers } from '../db/schema/projects.js';
+import { workspaceMembers } from '../db/schema/workspaces.js';
+import { and, eq } from 'drizzle-orm';
+import { getActiveCall } from '../modules/channels/activeCalls.js';
+
+/**
+ * Mirrors requireChannelAccess for socket room subscriptions.
+ * A user may join a channel room only if they would also be allowed
+ * to fetch its messages via the REST API.
+ */
+const canAccessChannel = async (userId: string, channelId: string): Promise<boolean> => {
+  try {
+    const [channel] = await db
+      .select({
+        workspaceId: channels.workspaceId,
+        projectId: channels.projectId,
+        type: channels.type,
+      })
+      .from(channels)
+      .where(eq(channels.channelId, channelId))
+      .limit(1);
+
+    if (!channel || !channel.workspaceId) return false;
+
+    const [membership] = await db
+      .select({ role: workspaceMembers.role, state: workspaceMembers.state })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, channel.workspaceId),
+          eq(workspaceMembers.userId, userId)
+        )
+      )
+      .limit(1);
+
+    if (!membership || membership.state !== 'active') return false;
+
+    if (channel.projectId) {
+      // Workspace owners/admins get implicit access to all project channels
+      if (membership.role === 'owner' || membership.role === 'admin') return true;
+
+      const [pMember] = await db
+        .select({ id: projectMembers.id })
+        .from(projectMembers)
+        .where(
+          and(
+            eq(projectMembers.projectId, channel.projectId),
+            eq(projectMembers.userId, userId)
+          )
+        )
+        .limit(1);
+
+      return Boolean(pMember);
+    }
+
+    // Public workspace channels are accessible to all workspace members
+    if (channel.type === 'public') return true;
+
+    // Private channels and DMs require explicit channel membership
+    const [cMember] = await db
+      .select({ id: channelMembers.id })
+      .from(channelMembers)
+      .where(
+        and(
+          eq(channelMembers.channelId, channelId),
+          eq(channelMembers.userId, userId)
+        )
+      )
+      .limit(1);
+
+    return Boolean(cMember);
+  } catch (err) {
+    console.error('canAccessChannel error:', err);
+    return false;
+  }
+};
 
 let io: Server;
 
 export const initSocket = (server: HttpServer) => {
   io = new Server(server, {
     cors: {
-      origin: env.FRONTEND_URL,
+      origin: corsOrigin,
       credentials: true,
       methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     },
@@ -25,7 +102,9 @@ export const initSocket = (server: HttpServer) => {
         return next(new Error('Authentication error: No token provided'));
       }
 
-      const decoded = jwt.verify(token, env.JWT_SECRET) as { userId: string; email: string };
+      // Pinned to the algorithm this token is actually signed with — see the
+      // matching comment in middleware/auth.ts.
+      const decoded = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] }) as { userId: string; email: string };
       
       const [user] = await db
         .select({ userId: users.userId, deletedAt: users.deletedAt })
@@ -52,10 +131,74 @@ export const initSocket = (server: HttpServer) => {
     // Join personal user room (for direct notifications)
     socket.join(`user:${userId}`);
 
+    // Join a room per active workspace membership. These are joined server-side
+    // from the database, never on client request, so a socket can only ever be
+    // in rooms its user actually belongs to. Presence updates are addressed to
+    // these rooms instead of being broadcast to every connected socket.
+    void (async () => {
+      try {
+        const memberships = await db
+          .select({ workspaceId: workspaceMembers.workspaceId })
+          .from(workspaceMembers)
+          .where(and(eq(workspaceMembers.userId, userId), eq(workspaceMembers.state, 'active')));
+
+        for (const m of memberships) {
+          if (m.workspaceId) socket.join(`workspace:${m.workspaceId}`);
+        }
+      } catch (err) {
+        console.error('Failed to join workspace rooms:', err);
+      }
+    })();
+
     // Join workspace/project/channel rooms
-    socket.on('join_room', (roomId: string) => {
+    socket.on('join_room', async (roomId: string) => {
+      if (typeof roomId !== 'string') return;
+
+      if (roomId.startsWith('channel:')) {
+        const channelId = roomId.slice('channel:'.length);
+        const allowed = await canAccessChannel(userId, channelId);
+
+        if (!allowed) {
+          console.log(`Socket ${socket.id} denied join of channel room ${roomId}`);
+          socket.emit('room_join_denied', { roomId });
+          return;
+        }
+      } else if (roomId.startsWith('project:')) {
+        const projectId = roomId.slice('project:'.length);
+        
+        // Simple access check for projects: user must have a role in the project
+        // or be a workspace admin/owner.
+        const [project] = await db.select({ workspaceId: projects.workspaceId }).from(projects).where(eq(projects.projectId, projectId)).limit(1);
+        if (!project) return;
+        
+        const [membership] = await db.select({ role: workspaceMembers.role }).from(workspaceMembers).where(and(eq(workspaceMembers.workspaceId, project.workspaceId!), eq(workspaceMembers.userId, userId), eq(workspaceMembers.state, 'active'))).limit(1);
+        
+        if (!membership) return;
+        
+        if (membership.role !== 'owner' && membership.role !== 'admin') {
+           const [pMember] = await db.select().from(projectMembers).where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId))).limit(1);
+           if (!pMember) {
+              console.log(`Socket ${socket.id} denied join of project room ${roomId}`);
+              socket.emit('room_join_denied', { roomId });
+              return;
+           }
+        }
+      } else {
+        console.log(`Socket ${socket.id} denied join of invalid room ${roomId}`);
+        return;
+      }
+
       socket.join(roomId);
       console.log(`Socket ${socket.id} joined room ${roomId}`);
+
+      // A channel may already have a live Zoom call when this socket joins
+      // its room — reply with the join link so a page opened mid-call shows
+      // "Join call" immediately rather than a stale "Start call".
+      if (roomId.startsWith('channel:')) {
+        const channelId = roomId.slice('channel:'.length);
+        const call = getActiveCall(channelId);
+        socket.emit('call_started', { channelRoomId: roomId, joinUrl: call?.joinUrl ?? null });
+      }
     });
 
     socket.on('leave_room', (roomId: string) => {
@@ -69,6 +212,59 @@ export const initSocket = (server: HttpServer) => {
   });
 
   return io;
+};
+
+/**
+ * Announces a presence/status change to the people who can actually see it.
+ *
+ * This used to be a bare `io.emit`, which reached every connected socket on the
+ * server — so a status message like "at the doctor" was delivered to users who
+ * shared no workspace with its author. Addressing the author's workspace rooms
+ * keeps the update inside the tenancy boundary the rest of the API enforces.
+ *
+ * Also addressed to the author's own `user:{userId}` room (every connection
+ * auto-joins this on connect, regardless of workspace) — `/account` has no
+ * workspace in scope at all, so it is the only room a second tab or device
+ * open on that page can be listening on to hear its own change reflected
+ * back without a manual reload.
+ *
+ * That second room is not just a nice-to-have: `server.to(rooms)` with an
+ * *empty* `rooms` array does not address zero sockets — Socket.io treats no
+ * rooms specified as no filter at all and falls straight back to the exact
+ * global-broadcast behaviour this function's own history says was already
+ * fixed once. A user with zero active workspace memberships (reachable any
+ * time before their first invite is accepted) would leak their presence to
+ * every stranger connected to the server. Confirmed both ways: reverting to
+ * workspace-only rooms let an unrelated second user's socket receive a
+ * presence update that named a third, unconnected account. `user:{userId}`
+ * guarantees `rooms` is never empty, closing that path as a side effect of
+ * fixing the cross-tab sync it was added for.
+ */
+export const broadcastPresence = async (
+  userId: string,
+  presence: string,
+  statusText: string,
+): Promise<void> => {
+  try {
+    const memberships = await db
+      .select({ workspaceId: workspaceMembers.workspaceId })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.userId, userId), eq(workspaceMembers.state, 'active')));
+
+    const payload = { userId, presence, statusText };
+    const server = getIO();
+
+    // One call across every target room, not one call per room: a socket
+    // sitting in more than one of these (the common case — anyone inside a
+    // workspace is in both its `workspace:` room and their own `user:` room)
+    // would otherwise receive the same event once per room it happens to be
+    // in. `.to([...])` targets the union and delivers to each matched socket
+    // exactly once.
+    const rooms = [`user:${userId}`, ...memberships.filter((m) => m.workspaceId).map((m) => `workspace:${m.workspaceId}`)];
+    server.to(rooms).emit('user_presence_updated', payload);
+  } catch (err) {
+    console.error('broadcastPresence error:', err);
+  }
 };
 
 // Helper function to get the io instance from anywhere in the backend

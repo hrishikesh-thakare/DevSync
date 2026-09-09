@@ -1,21 +1,26 @@
 import { Router } from 'express';
 import { requireAuth } from '../../middleware/auth.js';
 import { requireWorkspaceRole } from '../../middleware/roles.js';
-import { uploadFile, getUploadUrl, getDownloadUrl } from './files.controller.js';
+import { validate } from '../../middleware/validate.js';
+import { uploadFileSchema } from './files.schemas.js';
+import { uploadFile, getDownloadUrl, getRawFile, deleteFile } from './files.controller.js';
 
 // Mounted at: /api/workspaces/:slug/files
 const router = Router({ mergeParams: true });
+
+// Raw file streaming (unauthenticated / UUID lookup for browser navigation)
+router.get('/:fileId/raw', getRawFile);
 
 router.use(requireAuth);
 router.use(requireWorkspaceRole(['owner', 'admin', 'member']));
 
 // New: direct server-side upload (base64 in JSON body)
-router.post('/upload', uploadFile);
-
-// Legacy: presigned upload URL
-router.post('/upload-url', getUploadUrl);
+router.post('/upload', validate(uploadFileSchema), uploadFile);
 
 // Download
 router.get('/:fileId/download', getDownloadUrl);
+
+// Delete (generic uploads only — task attachments delete through the task route)
+router.delete('/:fileId', deleteFile);
 
 export default router;

@@ -1,10 +1,34 @@
 import { Request, Response } from 'express';
 import { db } from '../../config/db.js';
-import { workspaces, workspaceMembers } from '../../db/schema/workspaces.js';
+import { workspaces, workspaceMembers, workspaceInvites } from '../../db/schema/workspaces.js';
 import { users } from '../../db/schema/auth.js';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, ne, isNull, asc, desc, inArray } from 'drizzle-orm';
+import { tasks } from '../../db/schema/tasks.js';
+import { projects } from '../../db/schema/projects.js';
 import { logAuditAction } from '../audit/audit.controller.js';
 import { createNotification } from '../notifications/notifications.controller.js';
+import { enqueueJob } from '../../workers/queue.js';
+import { getIO } from '../../sockets/index.js';
+import crypto from 'crypto';
+
+// A socket only joins `workspace:{id}` once, on connect (see `sockets/index.ts`)
+// — membership is re-checked there but nowhere else, so removing someone here
+// does nothing to a socket they already hold open. `user:{userId}` is the one
+// room every one of a user's connections is always in, so it is how to reach
+// "every live connection this specific person has" without an explicit
+// socket-id registry: evict them from the workspace room directly rather than
+// waiting for them to reconnect on their own.
+const evictFromWorkspaceRoom = (userId: string, workspaceId: string): void => {
+  // Best-effort: the membership change is already committed by the time this
+  // runs, so a missing/uninitialized socket server (getIO() throws rather
+  // than returning null) must never turn an already-successful removal into
+  // a 500 for the caller.
+  try {
+    getIO().in(`user:${userId}`).socketsLeave(`workspace:${workspaceId}`);
+  } catch (err) {
+    console.warn('evictFromWorkspaceRoom: could not reach socket server', err);
+  }
+};
 
 // ─── Helper: generate a URL-safe slug from a workspace name ──────────────────
 const generateSlug = (name: string): string => {
@@ -21,17 +45,12 @@ const generateSlug = (name: string): string => {
 // POST /api/workspaces
 export const createWorkspace = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, description, iconUrl } = req.body;
+    const { name, description, iconUrl, slug: customSlug } = req.body;
     const userId = req.user!.userId;
 
-    if (!name || name.trim().length < 2) {
-      res.status(400).json({ error: 'Workspace name is required (min 2 characters).' });
-      return;
-    }
-
-    // Generate a unique slug (append random suffix to avoid collisions)
-    const baseSlug = generateSlug(name);
-    const slug = `${baseSlug}-${Date.now().toString(36)}`;
+    const slug = customSlug && typeof customSlug === 'string' && customSlug.trim().length > 0
+      ? generateSlug(customSlug)
+      : generateSlug(name);
 
     const result = await db.transaction(async (tx) => {
       // 1. Create the workspace
@@ -71,8 +90,14 @@ export const createWorkspace = async (req: Request, res: Response): Promise<void
       message: 'Workspace created successfully',
       workspace: result,
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error('Create workspace error:', err);
+    const cause = err?.cause || err;
+    const errStr = String(cause?.message || err?.message || err);
+    if (cause?.code === '23505' || err?.code === '23505' || errStr.includes('unique constraint') || errStr.includes('duplicate key')) {
+      res.status(409).json({ error: 'Workspace with this slug already exists.' });
+      return;
+    }
     res.status(500).json({ error: 'Server error creating workspace.' });
   }
 };
@@ -117,7 +142,7 @@ export const listWorkspaces = async (req: Request, res: Response): Promise<void>
 // GET /api/workspaces/:workspaceId
 export const getWorkspace = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId } = req.params as Record<string, string>;
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
 
     const [workspace] = await db
       .select()
@@ -143,6 +168,7 @@ export const getWorkspace = async (req: Request, res: Response): Promise<void> =
         email: users.email,
         avatarUrl: users.avatarUrl,
         presence: users.presence,
+        statusText: users.statusText,
       })
       .from(workspaceMembers)
       .innerJoin(users, eq(workspaceMembers.userId, users.userId))
@@ -159,7 +185,19 @@ export const getWorkspace = async (req: Request, res: Response): Promise<void> =
 // GET /api/workspaces/:slug/members
 export const listWorkspaceMembers = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId } = req.params as Record<string, string>;
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
+
+    // Opt-in paging, same shape as tasks.controller.ts's listTasks: the
+    // default stays "everything" so the members page keeps rendering the
+    // full roster in one request, but a hard ceiling stops an unbounded
+    // response on a workspace with a very large membership.
+    const MAX_LIMIT = 2000;
+    const requestedLimit = parseInt(String(req.query.limit ?? ''), 10);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, MAX_LIMIT)
+      : MAX_LIMIT;
+    const requestedOffset = parseInt(String(req.query.offset ?? ''), 10);
+    const offset = Number.isFinite(requestedOffset) && requestedOffset > 0 ? requestedOffset : 0;
 
     const members = await db
       .select({
@@ -176,7 +214,10 @@ export const listWorkspaceMembers = async (req: Request, res: Response): Promise
       })
       .from(workspaceMembers)
       .innerJoin(users, eq(workspaceMembers.userId, users.userId))
-      .where(eq(workspaceMembers.workspaceId, workspaceId));
+      .where(eq(workspaceMembers.workspaceId, workspaceId))
+      .orderBy(asc(workspaceMembers.joinedAt))
+      .limit(limit)
+      .offset(offset);
 
     res.json({ members });
   } catch (err) {
@@ -189,11 +230,16 @@ export const listWorkspaceMembers = async (req: Request, res: Response): Promise
 // PATCH /api/workspaces/:workspaceId
 export const updateWorkspace = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId } = req.params as Record<string, string>;
-    const { name, description, iconUrl } = req.body;
+    const workspaceId = req.params.workspaceId as string;
+    const { name, description, iconUrl, slug } = req.body;
 
     const updateData: Record<string, any> = { updatedAt: new Date() };
-    if (name !== undefined) updateData.name = name.trim();
+    if (name !== undefined) {
+      updateData.name = name.trim();
+    }
+    if (slug !== undefined) {
+      updateData.slug = generateSlug(slug);
+    }
     if (description !== undefined) updateData.description = description;
     if (iconUrl !== undefined) updateData.iconUrl = iconUrl;
 
@@ -244,7 +290,7 @@ export const updateWorkspace = async (req: Request, res: Response): Promise<void
 // DELETE /api/workspaces/:workspaceId
 export const deleteWorkspace = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId } = req.params as Record<string, string>;
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
 
     const result = await db.transaction(async (tx) => {
       const [oldWorkspace] = await tx.select().from(workspaces).where(and(eq(workspaces.workspaceId, workspaceId), isNull(workspaces.deletedAt))).limit(1);
@@ -286,30 +332,61 @@ export const deleteWorkspace = async (req: Request, res: Response): Promise<void
 // POST /api/workspaces/:workspaceId/invite
 export const inviteMember = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId } = req.params as Record<string, string>;
-    const { email, role } = req.body;
+    const workspaceId = req.params.workspaceId as string;
     const inviterId = req.user!.userId;
-
-    if (!email) {
-      res.status(400).json({ error: 'Email is required to invite a member.' });
-      return;
-    }
+    const { email, role } = req.body;
 
     const memberRole = role || 'member';
-    if (!['admin', 'member'].includes(memberRole)) {
-      res.status(400).json({ error: 'Role must be "admin" or "member".' });
-      return;
-    }
 
-    // Find the user by email
+    // Find the user by email — only among live accounts, same as login/register.
     const [targetUser] = await db
       .select({ userId: users.userId, fullName: users.fullName, email: users.email })
       .from(users)
-      .where(eq(users.email, email.toLowerCase().trim()))
+      .where(and(eq(users.email, email.toLowerCase().trim()), isNull(users.deletedAt)))
       .limit(1);
 
+    const [actor] = await db.select({ name: users.fullName }).from(users).where(eq(users.userId, inviterId));
+    const [workspace] = await db.select({ name: workspaces.name }).from(workspaces).where(eq(workspaces.workspaceId, workspaceId));
+
     if (!targetUser) {
-      res.status(404).json({ error: 'No user found with that email. They must register first.' });
+      // User doesn't exist. Create a pending invite and send email.
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // Invite valid for 7 days
+
+      await db.transaction(async (tx) => {
+        // Delete any existing invite for this email in this workspace
+        await tx.delete(workspaceInvites).where(and(eq(workspaceInvites.workspaceId, workspaceId), eq(workspaceInvites.email, email.toLowerCase().trim())));
+        
+        const [invite] = await tx.insert(workspaceInvites).values({
+          workspaceId,
+          email: email.toLowerCase().trim(),
+          role: memberRole,
+          token,
+          invitedBy: inviterId,
+          expiresAt,
+        }).returning({ inviteId: workspaceInvites.inviteId });
+
+        await logAuditAction({
+          actorId: inviterId, action: 'workspace_invite.created', entityType: 'workspace_invite', entityId: invite.inviteId, workspaceId,
+          newValues: { email: email.toLowerCase().trim(), role: memberRole, invited_by: inviterId }, tx
+        });
+      });
+
+      // Queue the email for background delivery — the invite row is already
+      // committed, so SMTP latency/failures never block this response.
+      enqueueJob(
+        'email.send_invite',
+        {
+          toEmail: email.toLowerCase().trim(),
+          workspaceName: workspace?.name || 'Workspace',
+          inviteToken: token,
+          inviterName: actor?.name || 'Someone',
+        },
+        { maxAttempts: 3, backoffMs: 3000 }
+      );
+
+      res.status(201).json({ message: 'Invitation email sent successfully.' });
       return;
     }
 
@@ -365,9 +442,6 @@ export const inviteMember = async (req: Request, res: Response): Promise<void> =
       });
     });
 
-    const [actor] = await db.select({ name: users.fullName }).from(users).where(eq(users.userId, inviterId));
-    const [workspace] = await db.select({ name: workspaces.name }).from(workspaces).where(eq(workspaces.workspaceId, workspaceId));
-
     await createNotification({
       recipientId: targetUser.userId,
       actorId: inviterId,
@@ -389,7 +463,7 @@ export const inviteMember = async (req: Request, res: Response): Promise<void> =
 // POST /api/workspaces/:workspaceId/invites/accept
 export const acceptInvite = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId } = req.params as Record<string, string>;
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
     const currentUserId = req.user!.userId;
 
     const [updated] = await db
@@ -430,25 +504,22 @@ export const acceptInvite = async (req: Request, res: Response): Promise<void> =
 // PATCH /api/workspaces/:workspaceId/members/:userId
 export const updateMemberRole = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId, userId } = req.params as Record<string, string>;
+    const { userId } = req.params;
     const { role } = req.body;
-    const currentUserId = req.user!.userId;
+    const actorId = req.user!.userId;
+    const workspaceId = req.params.workspaceId as string;
 
-    if (!role || !['owner', 'admin', 'member'].includes(role)) {
-      res.status(400).json({ error: 'Role must be "owner", "admin", or "member".' });
-      return;
-    }
+    const targetUserId = req.params.userId as string;
 
-    // Prevent self-demotion
-    if (userId === currentUserId) {
-      res.status(400).json({ error: 'You cannot change your own role.' });
+    if (actorId === targetUserId) {
+      res.status(400).json({ error: 'Cannot change your own role' });
       return;
     }
 
     const result = await db.transaction(async (tx) => {
       const [oldMember] = await tx.select().from(workspaceMembers).where(and(
         eq(workspaceMembers.workspaceId, workspaceId),
-        eq(workspaceMembers.userId, userId),
+        eq(workspaceMembers.userId, targetUserId),
         eq(workspaceMembers.state, 'active')
       )).limit(1);
 
@@ -461,7 +532,7 @@ export const updateMemberRole = async (req: Request, res: Response): Promise<voi
         .returning();
 
       await logAuditAction({
-        actorId: currentUserId, action: 'workspace_member.role_changed', entityType: 'workspace_member', entityId: updated.id, workspaceId,
+        actorId, action: 'workspace_member.role_changed', entityType: 'workspace_member', entityId: updated.id, workspaceId,
         newValues: { role: updated.role, user_id: updated.userId }, oldValues: { role: oldMember.role, user_id: oldMember.userId }, tx
       });
 
@@ -469,7 +540,7 @@ export const updateMemberRole = async (req: Request, res: Response): Promise<voi
       if (role === 'owner') {
         await tx
           .update(workspaces)
-          .set({ ownerId: userId, updatedAt: new Date() })
+          .set({ ownerId: targetUserId, updatedAt: new Date() })
           .where(eq(workspaces.workspaceId, workspaceId));
 
         // Demote current owner to admin
@@ -479,13 +550,13 @@ export const updateMemberRole = async (req: Request, res: Response): Promise<voi
           .where(
             and(
               eq(workspaceMembers.workspaceId, workspaceId),
-              eq(workspaceMembers.userId, currentUserId)
+              eq(workspaceMembers.userId, actorId)
             )
           ).returning();
 
         if (demoted) {
           await logAuditAction({
-            actorId: currentUserId, action: 'workspace_member.role_changed', entityType: 'workspace_member', entityId: demoted.id, workspaceId,
+            actorId, action: 'workspace_member.role_changed', entityType: 'workspace_member', entityId: demoted.id, workspaceId,
             newValues: { role: demoted.role, user_id: demoted.userId }, oldValues: { role: 'owner', user_id: demoted.userId }, tx
           });
         }
@@ -510,7 +581,8 @@ export const updateMemberRole = async (req: Request, res: Response): Promise<voi
 // DELETE /api/workspaces/:workspaceId/members/:userId
 export const removeMember = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId, userId } = req.params as Record<string, string>;
+    const { userId } = req.params as Record<string, string>;
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
     const currentUserId = req.user!.userId;
 
     // Check if trying to remove the owner
@@ -562,9 +634,177 @@ export const removeMember = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
+    evictFromWorkspaceRoom(userId, workspaceId);
+
     res.json({ message: userId === currentUserId ? 'You have left the workspace' : 'Member removed' });
   } catch (err) {
     console.error('Remove member error:', err);
     res.status(500).json({ error: 'Server error removing member.' });
+  }
+};
+
+// ─── LEAVE WORKSPACE (self-service) ──────────────────────────────────────────
+// DELETE /api/workspaces/:slug/members/me
+export const leaveWorkspace = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
+    const userId = req.user!.userId;
+
+    // Owners cannot leave — they must transfer ownership or delete the workspace
+    const [workspace] = await db
+      .select({ ownerId: workspaces.ownerId })
+      .from(workspaces)
+      .where(eq(workspaces.workspaceId, workspaceId))
+      .limit(1);
+
+    if (workspace && workspace.ownerId === userId) {
+      res.status(400).json({ error: 'Owners cannot leave the workspace. Transfer ownership or delete the workspace instead.' });
+      return;
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [oldMember] = await tx
+        .select()
+        .from(workspaceMembers)
+        .where(and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, userId),
+          eq(workspaceMembers.state, 'active')
+        ))
+        .limit(1);
+
+      if (!oldMember) return null;
+
+      const [deactivated] = await tx
+        .update(workspaceMembers)
+        .set({ state: 'deactivated' })
+        .where(eq(workspaceMembers.id, oldMember.id))
+        .returning({ id: workspaceMembers.id, userId: workspaceMembers.userId, role: workspaceMembers.role });
+
+      await logAuditAction({
+        actorId: userId,
+        action: 'workspace_member.left',
+        entityType: 'workspace_member',
+        entityId: deactivated.id,
+        workspaceId,
+        newValues: { state: 'deactivated' },
+        oldValues: { state: 'active' },
+        tx
+      });
+
+      return deactivated;
+    });
+
+    if (!result) {
+      res.status(404).json({ error: 'You are not a member of this workspace.' });
+      return;
+    }
+
+    evictFromWorkspaceRoom(userId, workspaceId);
+
+    res.json({ message: 'You have left the workspace' });
+  } catch (err) {
+    console.error('Leave workspace error:', err);
+    res.status(500).json({ error: 'Server error leaving workspace.' });
+  }
+};
+const TASK_STATUSES = ['todo', 'in_progress', 'in_review', 'done'] as const;
+
+// ─── LIST MY ASSIGNED TASKS ACROSS THE WORKSPACE ─────────────────────────────
+// GET /api/workspaces/:slug/my-tasks?status=open|all|todo|in_progress|in_review|done
+//
+// Defaults to `open` — a cross-project "what do I need to do" list is useless
+// once every task you have ever finished accumulates in it. `all` opts back in.
+export const getMyTasks = async (req: Request, res: Response) => {
+  try {
+    const { slug } = req.params;
+    const { status = 'open' } = req.query as Record<string, string>;
+    const userId = req.user!.userId;
+
+    const [workspace] = await db
+      .select({ workspaceId: workspaces.workspaceId })
+      .from(workspaces)
+      .where(and(eq(workspaces.slug, slug as string), isNull(workspaces.deletedAt)))
+      .limit(1);
+
+    if (!workspace) {
+      res.status(404).json({ error: 'Workspace not found.' });
+      return;
+    }
+
+    const conditions = [
+      eq(projects.workspaceId, workspace.workspaceId),
+      eq(tasks.assigneeId, userId),
+      isNull(tasks.deletedAt),
+    ];
+
+    if (status === 'open') {
+      conditions.push(ne(tasks.status, 'done'));
+    } else if (status !== 'all') {
+      // A comma list ("todo,in_progress") narrows to those columns; anything
+      // outside the known enum is rejected rather than silently ignored.
+      const requested = status.split(',').map((s) => s.trim()).filter(Boolean);
+      const invalid = requested.filter(
+        (s) => !TASK_STATUSES.includes(s as (typeof TASK_STATUSES)[number]),
+      );
+      if (invalid.length > 0) {
+        res.status(400).json({
+          error: `Unknown status: ${invalid.join(', ')}. Expected open, all, or any of ${TASK_STATUSES.join(', ')}.`,
+        });
+        return;
+      }
+      conditions.push(inArray(tasks.status, requested));
+    }
+
+    // Opt-in paging, same shape as tasks.controller.ts's listTasks: default
+    // stays "everything" so My Tasks keeps rendering the full list in one
+    // request, but a hard ceiling stops an unbounded response for someone
+    // assigned a very large number of tasks.
+    const MAX_LIMIT = 2000;
+    const requestedLimit = parseInt(String(req.query.limit ?? ''), 10);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, MAX_LIMIT)
+      : MAX_LIMIT;
+    const requestedOffset = parseInt(String(req.query.offset ?? ''), 10);
+    const offset = Number.isFinite(requestedOffset) && requestedOffset > 0 ? requestedOffset : 0;
+
+    // The assignee is always the caller, but the join keeps the row shape
+    // identical to the board's TaskSummary — the frontend renders both with the
+    // same card component, which reads assigneeName and linkedCommitsCount.
+    const userTasks = await db
+      .select({
+        taskId: tasks.taskId,
+        taskKey: tasks.taskKey,
+        title: tasks.title,
+        status: tasks.status,
+        priority: tasks.priority,
+        issueType: tasks.issueType,
+        rank: tasks.rank,
+        labels: tasks.labels,
+        storyPoints: tasks.storyPoints,
+        sprintId: tasks.sprintId,
+        assigneeId: tasks.assigneeId,
+        assigneeName: users.fullName,
+        assigneeAvatar: users.avatarUrl,
+        reporterId: tasks.reporterId,
+        linkedCommitsCount: tasks.linkedCommitsCount,
+        dueDate: tasks.dueDate,
+        createdAt: tasks.createdAt,
+        projectId: tasks.projectId,
+        projectKey: projects.key,
+        projectName: projects.name,
+      })
+      .from(tasks)
+      .innerJoin(projects, eq(tasks.projectId, projects.projectId))
+      .leftJoin(users, eq(tasks.assigneeId, users.userId))
+      .where(and(...conditions))
+      .orderBy(desc(tasks.updatedAt))
+      .limit(limit)
+      .offset(offset);
+
+    res.json({ tasks: userTasks });
+  } catch (err) {
+    console.error('Get my tasks error:', err);
+    res.status(500).json({ error: 'Server error fetching tasks.' });
   }
 };

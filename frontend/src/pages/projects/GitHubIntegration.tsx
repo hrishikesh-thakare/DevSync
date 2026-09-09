@@ -1,498 +1,934 @@
-import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { GitBranch, GitCommit, CheckCircle2, XCircle, Loader2, RefreshCw, AlertCircle, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
-import { apiFetch } from '../../lib/api.js';
-import { formatDistanceToNow, format } from 'date-fns';
-import clsx from 'clsx';
-import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
-import { useAuthStore } from '../../store/auth.js';
+import { Fragment, useEffect, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { formatDistanceToNow } from 'date-fns';
+import { toast } from 'sonner';
+import {
+  CheckCircle2Icon,
+  CheckIcon,
+  ChevronsUpDownIcon,
+  CircleDashedIcon,
+  CircleSlashIcon,
+  ExternalLinkIcon,
+  GitBranchIcon,
+  GitCommitHorizontalIcon,
+  GitPullRequestIcon,
+  LockIcon,
+  Loader2Icon,
+  RefreshCwIcon,
+  Rows2Icon,
+  Rows3Icon,
+  SparklesIcon,
+  XCircleIcon,
+} from 'lucide-react';
 
+import { EmptyState, ErrorState } from '@/components/layout/PageState';
+import { apiFetch, ApiError } from '@/lib/api';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import type { GithubRepoOption } from '@/types/api';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { PageHeader, PageShell } from '@/components/layout/PageHeader';
+import { useGithubStore, type GithubTab } from '@/store/githubStore';
+import { useMyProjectRole } from '@/store/projectStore';
+import { cn } from '@/lib/utils';
 
-export const GitHubIntegration = () => {
-  const { slug, key } = useParams();
-  const [activeTab, setActiveTab] = useState<'commits' | 'ci'>('commits');
-  
-  const { isAdmin } = useCurrentWorkspaceStore();
-  const currentUser = useAuthStore(state => state.user);
-  const [isProjectAdmin, setIsProjectAdmin] = useState(false);
-  
-  // Connection State
-  const [connection, setConnection] = useState<any>(null);
-  const [isConnLoading, setIsConnLoading] = useState(true);
+const TABS: { value: GithubTab; label: string }[] = [
+  { value: 'commits', label: 'Commits' },
+  { value: 'ci', label: 'CI runs' },
+  { value: 'prs', label: 'Pull requests' },
+  { value: 'issues', label: 'Issues' },
+  { value: 'branches', label: 'Branches' },
+];
 
-  // Data State
-  const [commits, setCommits] = useState<any[]>([]);
-  const [commitsTotal, setCommitsTotal] = useState(0);
-  const [commitsPage, setCommitsPage] = useState(1);
-  const [commitsTotalPages, setCommitsTotalPages] = useState(1);
-  
-  const [ciRuns, setCiRuns] = useState<any[]>([]);
-  const [ciTotal, setCiTotal] = useState(0);
-  const [ciPage, setCiPage] = useState(1);
-  const [ciTotalPages, setCiTotalPages] = useState(1);
+export function GitHubIntegration() {
+  const { slug = '', key = '' } = useParams();
+  const [params, setParams] = useSearchParams();
+  const myRole = useMyProjectRole();
+  const canConnect = myRole === 'project_admin';
+  const canRerun = myRole === 'project_admin' || myRole === 'developer';
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    connection,
+    branchOptions,
+    isLoadingConnection,
+    connectionError,
+    commits,
+    ciRuns,
+    pullRequests,
+    issues,
+    branches,
+    isLoadingTab,
+    tabError,
+    fetchConnection,
+    connect,
+    disconnect,
+    fetchTab,
+    rerun,
+    summarizeCiRun,
+    reset,
+  } = useGithubStore();
 
-  // Filters State
-  const [branchFilter, setBranchFilter] = useState('all');
-  const [branches, setBranches] = useState<string[]>([]);
-  const [commitsLinkedFilter, setCommitsLinkedFilter] = useState('all'); // all, true, false
-  const [ciConclusionFilter, setCiConclusionFilter] = useState('all');
+  // Notification deep links arrive as ?tab=prs|issues|ci|commits, so the tab is
+  // read from the URL rather than held in local state.
+  const tab = (params.get('tab') ?? 'commits') as GithubTab;
+  const [branch, setBranch] = useState('all');
+  const [state, setState] = useState('all');
+  const [dense, setDense] = useState(false);
+  const [summarizingRunId, setSummarizingRunId] = useState<number | null>(null);
 
-
-
-  useEffect(() => {
-    const fetchRole = async () => {
-      try {
-        const data = await apiFetch(`/workspaces/${slug}/projects/${key}/members`);
-        const members = data.members || [];
-        const myMembership = members.find((m: any) => m.userId === currentUser?.userId);
-        setIsProjectAdmin(myMembership?.role === 'project_admin');
-      } catch (err) {
-        console.error('Failed to fetch project members for GitHub integration', err);
-      }
-    };
-    if (slug && key) fetchRole();
-  }, [slug, key, currentUser?.userId]);
-
-  useEffect(() => {
-    const fetchConnection = async () => {
-      try {
-        const data = await apiFetch(`/workspaces/${slug}/projects/${key}/github/connection`);
-        setConnection(data.connection);
-      } catch (err) {
-        console.error('Failed to load GitHub connection', err);
-      } finally {
-        setIsConnLoading(false);
-      }
-    };
-    if (slug && key) fetchConnection();
-  }, [slug, key]);
-
-  const fetchCommits = async (page = commitsPage) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      let url = `/workspaces/${slug}/projects/${key}/github/commits?page=${page}&limit=25`;
-      if (branchFilter !== 'all') url += `&branch=${encodeURIComponent(branchFilter)}`;
-      if (commitsLinkedFilter !== 'all') url += `&linked=${commitsLinkedFilter}`;
-
-      const res = await apiFetch(url);
-      setCommits(res.commits || []);
-      setCommitsTotal(res.totalCount || 0);
-      setCommitsPage(res.page || 1);
-      setCommitsTotalPages(res.totalPages || 1);
-      setBranches(prev => Array.from(new Set([...prev, ...(res.branches || [])])));
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch commits');
-    } finally {
-      setIsLoading(false);
-    }
+  const handleSummarize = (runId: number) => {
+    setSummarizingRunId(runId);
+    void summarizeCiRun(slug, key, runId)
+      .then((summary) => {
+        if (!summary) toast.error('AI summary unavailable right now.');
+      })
+      .catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Could not summarize this run.'))
+      .finally(() => setSummarizingRunId(null));
   };
 
-  const fetchCiRuns = async (page = ciPage) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      let url = `/workspaces/${slug}/projects/${key}/github/ci?page=${page}&limit=25`;
-      if (branchFilter !== 'all') url += `&branch=${encodeURIComponent(branchFilter)}`;
-      if (ciConclusionFilter !== 'all') url += `&conclusion=${encodeURIComponent(ciConclusionFilter)}`;
-
-      const res = await apiFetch(url);
-      setCiRuns(res.runs || []);
-      setCiTotal(res.totalCount || 0);
-      setCiPage(res.page || 1);
-      setCiTotalPages(res.totalPages || 1);
-      setBranches(prev => Array.from(new Set([...prev, ...(res.branches || [])])));
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch CI runs');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  useEffect(() => {
+    if (slug && key) void fetchConnection(slug, key);
+    return () => reset();
+  }, [slug, key, fetchConnection, reset]);
 
   useEffect(() => {
-    if (!slug || !key) return;
-    if (activeTab === 'commits') {
-      fetchCommits(1);
-    } else {
-      fetchCiRuns(1);
-    }
-  }, [slug, key, activeTab, branchFilter, commitsLinkedFilter, ciConclusionFilter]);
+    if (connection) void fetchTab(slug, key, tab, { branch, state });
+  }, [connection, slug, key, tab, branch, state, fetchTab]);
 
-  const handleRefresh = () => {
-    if (activeTab === 'commits') fetchCommits(commitsPage);
-    else fetchCiRuns(ciPage);
-  };
+  if (isLoadingConnection) {
+    return (
+      <PageShell>
+        <Skeleton className="h-9 w-56 rounded-lg" />
+        <Skeleton className="mt-6 h-40 w-full rounded-2xl" />
+      </PageShell>
+    );
+  }
+
+  if (!connection) {
+    return (
+      <PageShell narrow>
+        <PageHeader title="GitHub" description="Link a repository to see commits, CI and pull requests here." />
+        {connectionError ? (
+          <ErrorState message={connectionError} className="mb-4" />
+        ) : null}
+        <ConnectCard slug={slug} projectKey={key} canConnect={canConnect} onConnect={connect} />
+      </PageShell>
+    );
+  }
 
   return (
-    <div className="h-full flex flex-col font-sans bg-gray-950 text-gray-200">
-      
-      {/* Banner */}
-      {!isConnLoading && !connection && (isAdmin() || isProjectAdmin) && (
-        <div className="bg-blue-600 flex items-center justify-between px-6 py-3 text-white">
-          <div className="flex items-center space-x-3">
-            <GitBranch className="w-5 h-5" />
-            <span className="font-semibold text-sm">No GitHub repository connected</span>
-          </div>
-          <Link 
-            to={`/w/${slug}/projects/${key}/settings`} 
-            className="bg-white text-blue-700 px-3 py-1.5 rounded text-sm font-bold hover:bg-gray-100 transition-colors"
-          >
-            Connect a repository in Project Settings
-          </Link>
-        </div>
-      )}
+    <PageShell>
+      <PageHeader
+        title="GitHub"
+        description={
+          <span className="flex flex-wrap items-center gap-2">
+            <a
+              href={`https://github.com/${connection.githubRepoFullName}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-foreground underline underline-offset-4"
+            >
+              {connection.githubRepoFullName}
+            </a>
+            <Badge variant={connection.webhookStatus === 'active' ? 'secondary' : 'outline'}>
+              webhook {connection.webhookStatus}
+            </Badge>
+            {connection.defaultBranch ? (
+              <span className="text-xs">default: {connection.defaultBranch}</span>
+            ) : null}
+          </span>
+        }
+        actions={
+          canConnect ? (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  Disconnect
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Disconnect {connection.githubRepoFullName}?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    The webhook is removed and no new commits or CI runs will be recorded. Existing
+                    history stays.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      void disconnect(slug, key)
+                        .then(() => toast.success('Repository disconnected'))
+                        .catch((err: unknown) =>
+                          toast.error(err instanceof Error ? err.message : 'Could not disconnect.'),
+                        );
+                    }}
+                  >
+                    Disconnect
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : null
+        }
+      />
 
-      {/* Header */}
-      <div className="px-8 pt-8 pb-4 border-b border-gray-800/60 shrink-0">
-        <div className="flex items-start justify-between mb-2">
-          <div>
-            <h2 className="text-2xl font-bold text-white flex items-center mb-1">
-              <GitBranch className="w-6 h-6 mr-3 text-white" />
-              GitHub Integration
-            </h2>
-            <p className="text-sm text-gray-400 mb-6">Track commits, pull requests, and CI/CD pipelines connected to tasks in {key}.</p>
-          </div>
-          <div className="flex items-center space-x-4">
-            {connection && (
-              <a 
-                href={`https://github.com/${connection.githubRepoFullName}`}
-                target="_blank" rel="noopener noreferrer"
-                className="flex items-center text-sm font-semibold text-gray-300 hover:text-white bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-lg transition-colors"
-              >
-                {connection.githubRepoFullName}
-                <ExternalLink className="w-4 h-4 ml-2 text-gray-500" />
-              </a>
-            )}
-            <button 
-              onClick={handleRefresh}
-              disabled={isLoading}
-              className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={clsx("w-5 h-5", isLoading && "animate-spin")} />
-            </button>
-          </div>
-        </div>
-        
-        <div className="flex items-center justify-between">
-          <div className="flex space-x-6">
-            <button 
-              onClick={() => setActiveTab('commits')}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'commits' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
-            >
-              Commits {commitsTotal > 0 && <span className="ml-1.5 bg-gray-800 text-gray-300 py-0.5 px-2 rounded-full text-xs">{commitsTotal}</span>}
-            </button>
-            <button 
-              onClick={() => setActiveTab('ci')}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'ci' ? 'border-white text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
-            >
-              CI Runs {ciTotal > 0 && <span className="ml-1.5 bg-gray-800 text-gray-300 py-0.5 px-2 rounded-full text-xs">{ciTotal}</span>}
-            </button>
-          </div>
+      <Tabs
+        value={tab}
+        onValueChange={(v) => {
+          setBranch('all');
+          setState('all');
+          setParams({ tab: v });
+        }}
+        className="mb-4"
+      >
+        <TabsList>
+          {TABS.map((t) => (
+            <TabsTrigger key={t.value} value={t.value}>
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
-          <div className="flex items-center space-x-3 mb-2">
-            {activeTab === 'commits' ? (
-              <select 
-                value={commitsLinkedFilter}
-                onChange={e => setCommitsLinkedFilter(e.target.value)}
-                className="bg-gray-900 border border-gray-800 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none"
-              >
-                <option value="all">All Commits</option>
-                <option value="true">Linked to Task</option>
-                <option value="false">Unlinked</option>
-              </select>
-            ) : (
-              <select 
-                value={ciConclusionFilter}
-                onChange={e => setCiConclusionFilter(e.target.value)}
-                className="bg-gray-900 border border-gray-800 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none"
-              >
-                <option value="all">All Statuses</option>
-                <option value="success">Passed</option>
-                <option value="failure">Failed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            )}
-            
-            <select 
-              value={branchFilter}
-              onChange={e => setBranchFilter(e.target.value)}
-              className="bg-gray-900 border border-gray-800 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none max-w-[200px]"
-            >
-              <option value="all">All Branches</option>
-              {branches.map(b => (
-                <option key={b} value={b}>{b}</option>
+      {/* Filters relevant to the active tab */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {(tab === 'commits' || tab === 'ci') && branchOptions.length > 0 ? (
+          <Select value={branch} onValueChange={setBranch}>
+            <SelectTrigger className="w-56" aria-label="Filter by branch">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All branches</SelectItem>
+              {branchOptions.map((b) => (
+                <SelectItem key={b} value={b}>
+                  {b}
+                </SelectItem>
               ))}
-            </select>
-          </div>
-        </div>
+            </SelectContent>
+          </Select>
+        ) : null}
+
+        {tab === 'prs' || tab === 'issues' ? (
+          <Select value={state} onValueChange={setState}>
+            <SelectTrigger className="w-44" aria-label="Filter by state">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All states</SelectItem>
+              <SelectItem value="open">Open</SelectItem>
+              <SelectItem value="closed">Closed</SelectItem>
+              {tab === 'prs' ? <SelectItem value="merged">Merged</SelectItem> : null}
+            </SelectContent>
+          </Select>
+        ) : null}
+
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          value={dense ? 'dense' : 'comfortable'}
+          onValueChange={(v) => v && setDense(v === 'dense')}
+          className="ml-auto"
+          aria-label="Row density"
+        >
+          <ToggleGroupItem value="comfortable" aria-label="Comfortable density">
+            <Rows3Icon className="size-4" aria-hidden="true" />
+          </ToggleGroupItem>
+          <ToggleGroupItem value="dense" aria-label="Compact density">
+            <Rows2Icon className="size-4" aria-hidden="true" />
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-8 custom-scrollbar relative">
-        {isLoading && (
-          <div className="absolute inset-0 bg-gray-950/50 backdrop-blur-[1px] z-10 flex items-start justify-center pt-24">
-            <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
-          </div>
-        )}
+      {tabError ? (
+        <ErrorState message={tabError} className="mb-4" />
+      ) : null}
 
-        {error ? (
-          <div className="text-center py-12 border border-dashed border-red-500/30 bg-red-500/5 rounded-xl">
-            <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-3" />
-            <p className="text-red-400">{error}</p>
-          </div>
-        ) : activeTab === 'commits' ? (
-          <div className="space-y-4 max-w-5xl">
-            {commits.length === 0 && !isLoading ? (
-              <div className="text-center py-16 border border-dashed border-gray-800 rounded-xl bg-gray-900/30">
-                <GitCommit className="w-10 h-10 text-gray-700 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-gray-300 mb-1">No commits found</h3>
-                <p className="text-gray-500 mb-4">
-                  {connection ? `Commits will appear here when you push to ${connection.githubRepoFullName}` : 'Connect a repository to see commits.'}
-                </p>
-                <div className="bg-gray-900 inline-block px-4 py-2 rounded-lg text-sm border border-gray-800">
-                  <span className="text-gray-400">💡 Mention task keys like </span>
-                  <span className="font-mono text-gray-300">{key}-12</span>
-                  <span className="text-gray-400"> in commit messages to link them.</span>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="border border-gray-800 rounded-xl overflow-hidden bg-gray-900/30">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-gray-900/80 border-b border-gray-800 text-xs font-semibold text-gray-400 tracking-wider">
-                        <th className="px-4 py-3 w-24">SHA</th>
-                        <th className="px-4 py-3">Message</th>
-                        <th className="px-4 py-3 w-32">Task</th>
-                        <th className="px-4 py-3 w-40">Author</th>
-                        <th className="px-4 py-3 w-40">Branch</th>
-                        <th className="px-4 py-3 w-32">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-800/60">
-                      {commits.map(commit => (
-                        <tr key={commit.id} className="hover:bg-gray-800/30 transition-colors group">
-                          <td className="px-4 py-3">
-                            <a 
-                              href={commit.url} 
-                              target="_blank" 
-                              rel="noreferrer"
-                              className="text-sm font-mono text-blue-400 hover:underline flex items-center"
-                            >
-                              <GitCommit className="w-3.5 h-3.5 mr-1 text-gray-500" />
-                              {commit.commitSha?.substring(0, 7)}
-                            </a>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-sm font-medium text-gray-200 line-clamp-1" title={commit.messageHeadline}>
-                              {commit.messageHeadline}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            {commit.taskId ? (
-                              <Link to={`/w/${slug}/projects/${key}/tasks/${commit.taskKey}`} className="inline-flex bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors">
-                                {commit.taskKey}
-                              </Link>
-                            ) : (
-                              <span className="text-gray-600">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center space-x-2">
-                              {commit.authorAvatar ? (
-                                <img src={commit.authorAvatar} alt="" className="w-5 h-5 rounded-full bg-gray-800" />
-                              ) : (
-                                <div className="w-5 h-5 rounded-full bg-gray-800 flex items-center justify-center text-[9px] font-bold text-gray-400">
-                                  {(commit.authorName || '?').charAt(0).toUpperCase()}
-                                </div>
-                              )}
-                              <span className="text-sm text-gray-400 truncate max-w-[120px]">
-                                {commit.authorName || commit.authorGithubLogin || 'Unknown'}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            {commit.branchName ? (
-                              <span className="font-mono text-xs bg-gray-800/80 text-gray-300 px-1.5 py-0.5 rounded truncate max-w-[140px] inline-block border border-gray-700/50">
-                                {commit.branchName}
-                              </span>
-                            ) : (
-                              <span className="text-gray-600">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-500">
-                            <span title={format(new Date(commit.committedAt), 'PPp')}>
-                              {formatDistanceToNow(new Date(commit.committedAt), { addSuffix: true })}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+      {isLoadingTab ? (
+        <div className="space-y-2">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-14 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="px-0">
+            {tab === 'commits' ? (
+              <RowList
+                empty="No commits recorded yet. Push to the repo and the webhook will fill this in."
+                rows={commits.items.map((c) => ({
+                  id: c.id,
+                  icon: <GitCommitHorizontalIcon className="size-4 text-muted-foreground" aria-hidden="true" />,
+                  title: c.messageHeadline,
+                  mono: c.commitSha.slice(0, 7),
+                  meta: [c.authorGithubLogin ?? c.authorName, c.branchName].filter(Boolean).join(' · '),
+                  when: c.committedAt,
+                  href: c.url,
+                  taskKey: c.taskKey,
+                }))}
+                dense={dense}
+                slug={slug}
+                projectKey={key}
+              />
+            ) : null}
 
-                {commitsTotalPages > 1 && (
-                  <div className="flex items-center justify-between pt-4">
-                    <span className="text-sm text-gray-500">
-                      Showing {(commitsPage - 1) * 25 + 1} to {Math.min(commitsPage * 25, commitsTotal)} of {commitsTotal} commits
-                    </span>
-                    <div className="flex space-x-2">
-                      <button 
-                        onClick={() => fetchCommits(commitsPage - 1)}
-                        disabled={commitsPage === 1 || isLoading}
-                        className="p-1 rounded bg-gray-900 border border-gray-800 text-gray-400 hover:text-white disabled:opacity-50"
-                      >
-                        <ChevronLeft className="w-5 h-5" />
-                      </button>
-                      <button 
-                        onClick={() => fetchCommits(commitsPage + 1)}
-                        disabled={commitsPage === commitsTotalPages || isLoading}
-                        className="p-1 rounded bg-gray-900 border border-gray-800 text-gray-400 hover:text-white disabled:opacity-50"
-                      >
-                        <ChevronRight className="w-5 h-5" />
-                      </button>
+            {tab === 'ci' ? (
+              <RowList
+                empty="No workflow runs recorded yet."
+                dense={dense}
+                rows={ciRuns.items.map((run) => ({
+                  id: run.id,
+                  icon: <CiIcon conclusion={run.conclusion} status={run.status} />,
+                  title: run.workflowName ?? 'Workflow',
+                  mono: '',
+                  meta: [run.headBranch, run.headSha?.slice(0, 7), run.conclusion ?? run.status]
+                    .filter(Boolean)
+                    .join(' · '),
+                  when: run.triggeredAt,
+                  href: run.htmlUrl,
+                  taskKey: null,
+                  action: (
+                    <>
+                      {run.conclusion === 'failure' ? (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={
+                            run.aiFailureSummary
+                              ? `AI summary already generated for ${run.workflowName ?? 'workflow'}`
+                              : `Summarize failure for ${run.workflowName ?? 'workflow'}`
+                          }
+                          disabled={summarizingRunId === run.runId || !!run.aiFailureSummary}
+                          onClick={() => handleSummarize(run.runId)}
+                        >
+                          {summarizingRunId === run.runId ? (
+                            <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <SparklesIcon className="size-4" aria-hidden="true" />
+                          )}
+                        </Button>
+                      ) : null}
+                      {canRerun ? (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Re-run ${run.workflowName ?? 'workflow'}`}
+                          onClick={() => {
+                            void rerun(slug, key, run.runId)
+                              .then(() => toast.success('Re-run triggered on GitHub'))
+                              .catch((err: unknown) =>
+                                toast.error(err instanceof Error ? err.message : 'Could not re-run.'),
+                              );
+                          }}
+                        >
+                          <RefreshCwIcon className="size-4" aria-hidden="true" />
+                        </Button>
+                      ) : null}
+                    </>
+                  ),
+                  footer: run.aiFailureSummary ? (
+                    <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 p-3">
+                      <SparklesIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-foreground">AI likely cause</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{run.aiFailureSummary}</p>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-4 max-w-5xl">
-            {ciRuns.length === 0 && !isLoading ? (
-              <div className="text-center py-16 border border-dashed border-gray-800 rounded-xl bg-gray-900/30">
-                <CheckCircle2 className="w-10 h-10 text-gray-700 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-gray-300 mb-1">No workflow runs yet</h3>
-                <p className="text-gray-500 mb-4">
-                  {connection ? `CI runs will appear here when GitHub Actions workflows run on ${connection.githubRepoFullName}` : 'Connect a repository to see CI runs.'}
-                </p>
-                {connection && (
-                  <div className="text-sm text-gray-400">
-                    Make sure your repository has workflow files in <code className="bg-gray-800 px-1 rounded">.github/workflows/</code>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <>
-                <div className="border border-gray-800 rounded-xl overflow-hidden bg-gray-900/30">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-gray-900/80 border-b border-gray-800 text-xs font-semibold text-gray-400 tracking-wider">
-                        <th className="px-4 py-3">Workflow</th>
-                        <th className="px-4 py-3 w-32">Status</th>
-                        <th className="px-4 py-3 w-40">Branch</th>
-                        <th className="px-4 py-3 w-24">Commit</th>
-                        <th className="px-4 py-3 w-40">Started</th>
-                        <th className="px-4 py-3 w-24 text-right">Link</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-800/60">
-                      {ciRuns.map(run => (
-                        <tr key={run.id} className="hover:bg-gray-800/30 transition-colors group">
-                          <td className="px-4 py-3">
-                            <span className="text-sm font-medium text-gray-200">{run.workflowName || 'Workflow'}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center space-x-1.5">
-                              {run.status === 'in_progress' ? (
-                                <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded flex items-center">
-                                  <Loader2 className="w-3 h-3 mr-1 animate-spin" /> Running
-                                </span>
-                              ) : run.status === 'queued' ? (
-                                <span className="bg-gray-500/10 text-gray-400 border border-gray-500/20 text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded">
-                                  Queued
-                                </span>
-                              ) : run.conclusion === 'success' ? (
-                                <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded flex items-center">
-                                  <CheckCircle2 className="w-3 h-3 mr-1" /> Passed
-                                </span>
-                              ) : run.conclusion === 'failure' ? (
-                                <span className="bg-red-500/10 text-red-400 border border-red-500/20 text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded flex items-center">
-                                  <XCircle className="w-3 h-3 mr-1" /> Failed
-                                </span>
-                              ) : run.conclusion === 'cancelled' ? (
-                                <span className="bg-orange-500/10 text-orange-400 border border-orange-500/20 text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded">
-                                  Cancelled
-                                </span>
-                              ) : (
-                                <span className="bg-gray-500/10 text-gray-400 border border-gray-500/20 text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded">
-                                  Skipped
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            {run.headBranch ? (
-                              <span className="font-mono text-xs bg-gray-800/80 text-gray-300 px-1.5 py-0.5 rounded truncate max-w-[140px] inline-block border border-gray-700/50">
-                                {run.headBranch}
-                              </span>
-                            ) : (
-                              <span className="text-gray-600">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            {run.headSha ? (
-                              <span className="text-sm font-mono text-gray-400 flex items-center">
-                                <GitCommit className="w-3.5 h-3.5 mr-1" />
-                                {run.headSha.substring(0, 7)}
-                              </span>
-                            ) : (
-                              <span className="text-gray-600">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-500">
-                            <span title={format(new Date(run.triggeredAt), 'PPp')}>
-                              {formatDistanceToNow(new Date(run.triggeredAt), { addSuffix: true })}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {run.htmlUrl && (
-                              <a 
-                                href={run.htmlUrl} 
-                                target="_blank" 
-                                rel="noreferrer"
-                                className="inline-flex items-center justify-center p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors"
-                              >
-                                <ExternalLink className="w-4 h-4" />
-                              </a>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {ciTotalPages > 1 && (
-                  <div className="flex items-center justify-between pt-4">
-                    <span className="text-sm text-gray-500">
-                      Showing {(ciPage - 1) * 25 + 1} to {Math.min(ciPage * 25, ciTotal)} of {ciTotal} runs
-                    </span>
-                    <div className="flex space-x-2">
-                      <button 
-                        onClick={() => fetchCiRuns(ciPage - 1)}
-                        disabled={ciPage === 1 || isLoading}
-                        className="p-1 rounded bg-gray-900 border border-gray-800 text-gray-400 hover:text-white disabled:opacity-50"
-                      >
-                        <ChevronLeft className="w-5 h-5" />
-                      </button>
-                      <button 
-                        onClick={() => fetchCiRuns(ciPage + 1)}
-                        disabled={ciPage === ciTotalPages || isLoading}
-                        className="p-1 rounded bg-gray-900 border border-gray-800 text-gray-400 hover:text-white disabled:opacity-50"
-                      >
-                        <ChevronRight className="w-5 h-5" />
-                      </button>
+                  ) : summarizingRunId === run.runId ? (
+                    // A spinner on the button alone is easy to miss — this fills
+                    // the exact spot the real answer is about to land in, so it
+                    // reads as "working on it" instead of leaving the click
+                    // looking like it did nothing.
+                    <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 p-3">
+                      <SparklesIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <Skeleton className="h-3.5 w-28" />
+                        <Skeleton className="h-3.5 w-full max-w-md" />
+                        <Skeleton className="h-3.5 w-2/3 max-w-sm" />
+                      </div>
                     </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
+                  ) : undefined,
+                }))}
+                slug={slug}
+                projectKey={key}
+              />
+            ) : null}
+
+            {tab === 'prs' ? (
+              <RowList
+                empty="No pull requests recorded yet."
+                rows={pullRequests.items.map((pr) => ({
+                  id: pr.id,
+                  icon: <GitPullRequestIcon className="size-4 text-muted-foreground" aria-hidden="true" />,
+                  title: pr.title,
+                  mono: `#${pr.prNumber}`,
+                  meta: [pr.authorGithubLogin, `${pr.headBranch} → ${pr.baseBranch}`]
+                    .filter(Boolean)
+                    .join(' · '),
+                  when: pr.createdAt,
+                  href: pr.htmlUrl,
+                  taskKey: pr.taskKey,
+                  badge: pr.state,
+                }))}
+                dense={dense}
+                slug={slug}
+                projectKey={key}
+              />
+            ) : null}
+
+            {tab === 'issues' ? (
+              <RowList
+                empty="No issues recorded yet."
+                rows={issues.items.map((issue) => ({
+                  id: issue.id,
+                  icon: <CircleDashedIcon className="size-4 text-muted-foreground" aria-hidden="true" />,
+                  title: issue.title,
+                  mono: `#${issue.githubIssueNumber}`,
+                  meta: issue.authorGithubLogin ?? '',
+                  when: issue.createdAt,
+                  href: issue.htmlUrl,
+                  taskKey: issue.taskKey,
+                  badge: issue.state,
+                }))}
+                dense={dense}
+                slug={slug}
+                projectKey={key}
+              />
+            ) : null}
+
+            {tab === 'branches' ? (
+              <RowList
+                empty="No branches recorded yet."
+                rows={branches.map((b) => ({
+                  id: b.id,
+                  icon: <GitBranchIcon className="size-4 text-muted-foreground" aria-hidden="true" />,
+                  title: b.branchName,
+                  mono: '',
+                  meta: b.isDeleted ? 'deleted' : '',
+                  when: b.createdAt,
+                  href: b.htmlUrl,
+                  taskKey: b.taskKey,
+                }))}
+                dense={dense}
+                slug={slug}
+                projectKey={key}
+              />
+            ) : null}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Paging — the branches endpoint returns everything at once. */}
+      {tab !== 'branches' ? (
+        <Pager
+          page={pageFor(tab, { commits, ciRuns, pullRequests, issues }).page}
+          totalPages={pageFor(tab, { commits, ciRuns, pullRequests, issues }).totalPages}
+          totalCount={pageFor(tab, { commits, ciRuns, pullRequests, issues }).totalCount}
+          onPage={(p) => void fetchTab(slug, key, tab, { page: p, branch, state })}
+        />
+      ) : null}
+    </PageShell>
+  );
+}
+
+function pageFor(
+  tab: GithubTab,
+  pages: {
+    commits: { page: number; totalPages: number; totalCount: number };
+    ciRuns: { page: number; totalPages: number; totalCount: number };
+    pullRequests: { page: number; totalPages: number; totalCount: number };
+    issues: { page: number; totalPages: number; totalCount: number };
+  },
+) {
+  if (tab === 'commits') return pages.commits;
+  if (tab === 'ci') return pages.ciRuns;
+  if (tab === 'prs') return pages.pullRequests;
+  return pages.issues;
+}
+
+function Pager({
+  page,
+  totalPages,
+  totalCount,
+  onPage,
+}: {
+  page: number;
+  totalPages: number;
+  totalCount: number;
+  onPage: (page: number) => void;
+}) {
+  if (totalCount === 0) return null;
+  return (
+    <div className="mt-4 flex items-center justify-between">
+      <p className="text-xs text-muted-foreground">
+        Page {page} of {totalPages} · {totalCount} total
+      </p>
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => onPage(page - 1)}>
+          Previous
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={page >= totalPages}
+          onClick={() => onPage(page + 1)}
+        >
+          Next
+        </Button>
       </div>
     </div>
   );
-};
+}
+
+interface Row {
+  id: string;
+  icon: React.ReactNode;
+  title: string;
+  mono: string;
+  meta: string;
+  when: string | null;
+  href: string | null;
+  taskKey: string | null;
+  badge?: string;
+  /** Per-row action, e.g. the CI tab's re-run button. */
+  action?: React.ReactNode;
+  /** Optional full-width content rendered as its own row below, e.g. the CI tab's AI summary. */
+  footer?: React.ReactNode;
+}
+
+/**
+ * Shared table for all five GitHub tabs.
+ *
+ * Previously a `<ul>` of flex rows — real tabular data (icon, key, title,
+ * status, task link, timestamp) with no `<table>` semantics, so a screen
+ * reader had no column meaning to announce. None of these rows are
+ * drag-reorderable, unlike the backlog, so a literal `<table>` is safe here.
+ */
+function RowList({
+  rows,
+  empty,
+  slug,
+  projectKey,
+  dense,
+}: {
+  rows: Row[];
+  empty: string;
+  slug: string;
+  projectKey: string;
+  dense: boolean;
+}) {
+  if (rows.length === 0) return <EmptyRow>{empty}</EmptyRow>;
+
+  const cellPad = dense ? 'py-1.5' : 'py-3';
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-8" />
+          <TableHead>Title</TableHead>
+          <TableHead className="w-24">Task</TableHead>
+          <TableHead className="hidden w-32 sm:table-cell">When</TableHead>
+          <TableHead className="w-10" />
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((row) => (
+          <Fragment key={row.id}>
+          <TableRow>
+            <TableCell className={cellPad}>{row.icon}</TableCell>
+
+            <TableCell className={cn(cellPad, 'max-w-0 whitespace-normal')}>
+              <div className="flex items-center gap-2">
+                {row.mono ? (
+                  <code className="shrink-0 font-mono text-xs text-muted-foreground">
+                    {row.mono}
+                  </code>
+                ) : null}
+                <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                  {row.title}
+                </span>
+                {row.badge ? (
+                  <Badge variant="outline" className="shrink-0">
+                    {row.badge}
+                  </Badge>
+                ) : null}
+              </div>
+              {row.meta ? (
+                <p className="truncate text-xs text-muted-foreground">{row.meta}</p>
+              ) : null}
+            </TableCell>
+
+            <TableCell className={cellPad}>
+              {/* Smart-commit linking is done server-side; surface the result. */}
+              {row.taskKey ? (
+                <Link
+                  to={`/w/${slug}/projects/${projectKey}/tasks/${row.taskKey}`}
+                  className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground hover:text-foreground"
+                >
+                  {row.taskKey}
+                </Link>
+              ) : null}
+            </TableCell>
+
+            <TableCell className={cn(cellPad, 'hidden text-xs text-muted-foreground sm:table-cell')}>
+              {row.when ? formatDistanceToNow(new Date(row.when), { addSuffix: true }) : null}
+            </TableCell>
+
+            <TableCell className={cellPad}>
+              <div className="flex items-center gap-1">
+                {row.action}
+                {row.href ? <ExternalLink href={row.href} /> : null}
+              </div>
+            </TableCell>
+          </TableRow>
+          {row.footer ? (
+            <TableRow>
+              {/*
+                `TableCell` bakes in `first:pl-6` (a pseudo-class, so a plain
+                `pl-*` here wouldn't reliably win on specificity) — this cell
+                is always first-child of its own row, so overriding the same
+                `first:` variant is what actually takes effect. Set to exactly
+                cancel the AI panel's own `p-3`, so its icon lines up with the
+                row's leading icon above it instead of sitting 12px further in.
+              */}
+              <TableCell colSpan={5} className="whitespace-normal pt-0 pb-3 first:pl-3">
+                {row.footer}
+              </TableCell>
+            </TableRow>
+          ) : null}
+          </Fragment>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+/** Compact empty state shared by all five GitHub tabs. */
+function EmptyRow({ children }: { children: string }) {
+  return <EmptyState compact title={children} className="py-10" />;
+}
+
+function ExternalLink({ href }: { href: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="shrink-0 text-muted-foreground hover:text-foreground"
+      aria-label="Open on GitHub"
+    >
+      <ExternalLinkIcon className="size-4" aria-hidden="true" />
+    </a>
+  );
+}
+
+function CiIcon({ conclusion, status }: { conclusion: string | null; status: string | null }) {
+  if (conclusion === 'success') {
+    return <CheckCircle2Icon className="size-4 shrink-0 text-status-done" aria-label="success" />;
+  }
+  if (conclusion === 'failure') {
+    return <XCircleIcon className="size-4 shrink-0 text-priority-critical" aria-label="failure" />;
+  }
+  if (conclusion === 'cancelled' || conclusion === 'skipped') {
+    return <CircleSlashIcon className="size-4 shrink-0 text-muted-foreground" aria-label={conclusion} />;
+  }
+  return (
+    <Loader2Icon
+      className={cn('size-4 shrink-0 text-status-in-review', status === 'in_progress' && 'animate-spin')}
+      aria-label={status ?? 'queued'}
+    />
+  );
+}
+
+function ConnectCard({
+  slug,
+  projectKey,
+  canConnect,
+  onConnect,
+}: {
+  slug: string;
+  projectKey: string;
+  canConnect: boolean;
+  onConnect: (slug: string, key: string, owner: string, name: string) => Promise<void>;
+}) {
+  const [owner, setOwner] = useState('');
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [linkingAccount, setLinkingAccount] = useState(false);
+
+  // `repos === null` covers both "still loading" and "account not linked" —
+  // `notLinked` disambiguates. Manual owner/repo entry only makes sense once
+  // an account is linked (POST /connect 403s without one either way), so
+  // there's no point showing those fields before that.
+  const [repos, setRepos] = useState<GithubRepoOption[] | null>(null);
+  const [loadingRepos, setLoadingRepos] = useState(true);
+  const [notLinked, setNotLinked] = useState(false);
+  const [manualEntry, setManualEntry] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [repoSearch, setRepoSearch] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await apiFetch('/github/user/repos');
+        if (!cancelled) {
+          setRepos(data.repos ?? []);
+          setNotLinked(false);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof ApiError && (err.status === 404 || err.status === 401)) {
+          // Not linked yet, or the stored token was revoked — same UI either way.
+          setNotLinked(true);
+        } else {
+          // A real fetch failure (network, 500). Don't strand the user with no
+          // way to connect at all — fall back to manual entry.
+          setManualEntry(true);
+        }
+        setRepos(null);
+      } finally {
+        if (!cancelled) setLoadingRepos(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!canConnect) {
+    return (
+      <Alert>
+        <AlertTitle>No repository connected</AlertTitle>
+        <AlertDescription>
+          A project admin can connect one from this page.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  const selectRepo = (repo: GithubRepoOption) => {
+    setOwner(repo.owner);
+    setName(repo.name);
+    setPickerOpen(false);
+    setRepoSearch('');
+  };
+
+  const filteredRepos = (repos ?? []).filter((r) =>
+    r.fullName.toLowerCase().includes(repoSearch.trim().toLowerCase()),
+  );
+
+  const submit = async () => {
+    if (!owner.trim() || !name.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onConnect(slug, projectKey, owner.trim(), name.trim());
+      toast.success('Repository connected');
+    } catch (err) {
+      // 403 when the user has not linked their GitHub account, 404 for an
+      // unknown repo, 409 if already connected, 502 if the webhook fails.
+      setError(err instanceof Error ? err.message : 'Could not connect the repository.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Repo connect calls GitHub's API as *this user*, so it needs their GitHub
+  // account linked first (a stored access token). That's a one-time,
+  // per-user step, separate from picking a repo — GET /github/oauth/url
+  // returns the real GitHub consent screen URL, tagged with a `returnTo` so
+  // GithubCallbackPage can land back on this exact tab once linked.
+  const linkGithubAccount = async () => {
+    setLinkingAccount(true);
+    setError(null);
+    try {
+      const returnTo = `${window.location.pathname}${window.location.search}`;
+      const { url } = await apiFetch(`/github/oauth/url?returnTo=${encodeURIComponent(returnTo)}`);
+      window.location.href = url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not start GitHub sign-in.');
+      setLinkingAccount(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Connect a repository</CardTitle>
+        <CardDescription>
+          DevSync registers a webhook to record pushes, workflow runs, pull requests and issues.
+          Smart commit messages like <code className="font-mono">fixes {projectKey}-12</code> move
+          tasks automatically.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {error ? (
+          <ErrorState
+            message={error}
+            description="Connecting requires your GitHub account to be linked to DevSync first."
+          />
+        ) : null}
+
+        {notLinked ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed p-3">
+            <p className="text-sm text-muted-foreground">
+              First time connecting a repository? Link your GitHub account once — DevSync uses it to
+              verify the repo and register the webhook on your behalf.
+            </p>
+            <Button variant="outline" size="sm" onClick={() => void linkGithubAccount()} disabled={linkingAccount}>
+              {linkingAccount ? <Loader2Icon className="size-4 animate-spin" aria-hidden="true" /> : null}
+              Connect GitHub account
+            </Button>
+          </div>
+        ) : loadingRepos ? (
+          <Skeleton className="h-9 w-full max-w-md rounded-lg" />
+        ) : !manualEntry ? (
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-64 flex-1">
+              <label className="mb-1.5 block text-sm text-foreground">Repository</label>
+              <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={pickerOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className={cn('truncate', !owner && !name && 'text-muted-foreground')}>
+                      {owner && name ? `${owner}/${name}` : 'Select a repository…'}
+                    </span>
+                    <ChevronsUpDownIcon className="size-4 shrink-0 opacity-50" aria-hidden="true" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-[--radix-popover-trigger-width] p-0">
+                  <div className="p-1.5">
+                    <Input
+                      autoFocus
+                      value={repoSearch}
+                      onChange={(e) => setRepoSearch(e.target.value)}
+                      placeholder="Search your repositories…"
+                      className="h-8"
+                    />
+                  </div>
+                  {filteredRepos.length === 0 ? (
+                    <p className="px-3 py-4 text-center text-xs text-muted-foreground">
+                      {repos && repos.length === 0
+                        ? "No repositories found on this account."
+                        : "No matches."}
+                    </p>
+                  ) : (
+                    // A plain scrollable div, not `ScrollArea` — that component's
+                    // Viewport is `height: 100%`, which needs a *definite* height
+                    // on its parent to resolve against. `max-h-*` alone only sets
+                    // a ceiling, not a definite height, so the list never actually
+                    // clipped: it rendered full-height, and Radix Popover's
+                    // collision avoidance then shoved the whole thing up to fit
+                    // the viewport, overlapping the trigger button entirely.
+                    <div className="max-h-72 overflow-y-auto p-1">
+                      <ul>
+                        {filteredRepos.map((r) => {
+                          const checked = r.owner === owner && r.name === name;
+                          return (
+                            <li key={r.id}>
+                              <button
+                                type="button"
+                                onClick={() => selectRepo(r)}
+                                aria-pressed={checked}
+                                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
+                              >
+                                {r.private ? (
+                                  <LockIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                                ) : (
+                                  <span className="size-3.5 shrink-0" />
+                                )}
+                                <span className="min-w-0 flex-1 truncate">{r.fullName}</span>
+                                {checked ? <CheckIcon className="size-3.5 shrink-0" aria-hidden="true" /> : null}
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
+            <Button onClick={() => void submit()} disabled={busy || !owner.trim() || !name.trim()}>
+              {busy ? <Loader2Icon className="size-4 animate-spin" aria-hidden="true" /> : null}
+              Connect
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-40 flex-1">
+              <label htmlFor="gh-owner" className="mb-1.5 block text-sm text-foreground">
+                Owner
+              </label>
+              <Input
+                id="gh-owner"
+                value={owner}
+                onChange={(e) => setOwner(e.target.value)}
+                placeholder="octocat"
+              />
+            </div>
+            <div className="min-w-40 flex-1">
+              <label htmlFor="gh-name" className="mb-1.5 block text-sm text-foreground">
+                Repository
+              </label>
+              <Input
+                id="gh-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="hello-world"
+              />
+            </div>
+            <Button onClick={() => void submit()} disabled={busy || !owner.trim() || !name.trim()}>
+              {busy ? <Loader2Icon className="size-4 animate-spin" aria-hidden="true" /> : null}
+              Connect
+            </Button>
+          </div>
+        )}
+
+        {!notLinked && !loadingRepos && repos && repos.length > 0 ? (
+          <button
+            type="button"
+            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            onClick={() => setManualEntry((v) => !v)}
+          >
+            {manualEntry ? 'Pick from your repositories instead' : "Can't find it? Enter owner/repo manually"}
+          </button>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}

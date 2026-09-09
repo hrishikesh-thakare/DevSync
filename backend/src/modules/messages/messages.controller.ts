@@ -7,9 +7,33 @@ import { getIO } from '../../sockets/index.js';
 import { channels, channelMembers, workspaceFiles } from '../../db/schema/channels.js';
 import { supabase } from '../../config/supabase.js';
 import { tasks } from '../../db/schema/tasks.js';
+import { projects } from '../../db/schema/projects.js';
 import { createNotification } from '../notifications/notifications.controller.js';
 import { workspaceMembers } from '../../db/schema/workspaces.js';
 import { logAuditAction } from '../audit/audit.controller.js';
+
+/**
+ * Confirms a message actually belongs to the channel in the URL.
+ *
+ * `requireChannelAccess` runs one router up and authorises the **channel**, not
+ * the message. Every handler below then looked the message up by `messageId`
+ * alone, so any `:messageId` in the system could be paired with a `:channelId`
+ * the caller happened to have access to — enough to read a private thread, pin
+ * or unpin someone else's message, react to it, or (as a workspace admin of any
+ * workspace at all) delete it. Scoping the lookup here closes all five paths.
+ *
+ * Returns null when the message does not exist *or* is not in this channel;
+ * callers answer 404 either way, so the endpoint never confirms that an id
+ * exists somewhere else.
+ */
+const findMessageInChannel = async (messageId: string, channelId: string) => {
+  const [row] = await db
+    .select()
+    .from(messages)
+    .where(and(eq(messages.messageId, messageId), eq(messages.channelId, channelId)))
+    .limit(1);
+  return row ?? null;
+};
 
 // ─── SEND MESSAGE ────────────────────────────────────────────────────────────
 // POST /api/channels/:channelId/messages
@@ -17,7 +41,7 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
   try {
     const { channelId } = req.params as Record<string, string>;
     const userId = req.user!.userId;
-    const { bodyText, bodyBlocks, threadId, isSystem, systemType } = req.body;
+    const { bodyText, bodyBlocks, threadId } = req.body;
 
     if (!bodyText && !bodyBlocks) {
       res.status(400).json({ error: 'Message body cannot be empty.' });
@@ -35,14 +59,25 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    if (channel.isAnnouncementOnly && !isSystem) {
+    if (channel.isAnnouncementOnly) {
       const [member] = await db
         .select({ role: workspaceMembers.role })
         .from(workspaceMembers)
         .where(and(eq(workspaceMembers.workspaceId, channel.workspaceId!), eq(workspaceMembers.userId, userId)));
-      
+
       if (!member || !['owner', 'admin'].includes(member.role)) {
         res.status(403).json({ error: 'Only admins can post in announcement channels.' });
+        return;
+      }
+    }
+
+    // A `threadId` naming a message in some other channel would attach this
+    // reply to that thread and bump its reply_count — visible to readers of a
+    // channel the sender has no access to. The parent has to be local.
+    if (threadId) {
+      const parent = await findMessageInChannel(threadId, channelId);
+      if (!parent) {
+        res.status(404).json({ error: 'Thread not found in this channel.' });
         return;
       }
     }
@@ -57,8 +92,6 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
           bodyText: bodyText || '',
           bodyBlocks: bodyBlocks || null,
           threadId: threadId || null,
-          isSystem: isSystem || false,
-          systemType: systemType || null,
         })
         .returning();
 
@@ -82,8 +115,10 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
 
     const populatedMessage = {
       ...result,
-      authorName: author?.fullName,
-      authorAvatar: author?.avatarUrl,
+      authorName: author?.fullName || null,
+      authorAvatar: author?.avatarUrl || null,
+      replyCount: 0,
+      reactions: [],
     };
 
     // Emit real-time event
@@ -92,7 +127,7 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
 
     // --- NOTIFICATIONS ---
     // 1. dm_received
-    if ((channel.type === 'dm' || channel.type === 'group_dm') && !isSystem) {
+    if (channel.type === 'dm' || channel.type === 'group_dm') {
       const dmParticipants = await db.select({ userId: channelMembers.userId }).from(channelMembers).where(eq(channelMembers.channelId, channelId));
       for (const participant of dmParticipants) {
         if (participant.userId !== userId) {
@@ -110,11 +145,11 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
     }
 
     // 2. task_commented (legacy thread replies)
-    if (threadId && !isSystem) {
+    if (threadId) {
       const [task] = await db.select({ taskId: tasks.taskId, taskKey: tasks.taskKey, assigneeId: tasks.assigneeId, reporterId: tasks.reporterId }).from(tasks).where(eq(tasks.discussionThreadId, threadId));
       if (task) {
         const commenters = await db.selectDistinct({ userId: messages.authorId }).from(messages).where(eq(messages.threadId, threadId));
-        
+
         const recipients = new Set<string>();
         if (task.assigneeId) recipients.add(task.assigneeId);
         if (task.reporterId) recipients.add(task.reporterId);
@@ -137,26 +172,44 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
     }
 
     // 3. channel_mentioned & task_mentioned
-    if (bodyText && !isSystem && channel.type !== 'dm' && channel.type !== 'group_dm') {
-      // User mentions (from Tiptap extension)
+    if (bodyText && channel.type !== 'dm' && channel.type !== 'group_dm') {
+      // User mentions — the chat composer's Mention extension serializes a
+      // picked user to `<span data-type="mention" data-id="...">`.
       let mentionedIds: string[] = [];
-      const spanRegex = /<[^>]+>/g;
-      const tagMatches = [...bodyText.matchAll(spanRegex)];
-      for (const match of tagMatches) {
-        const tag = match[0];
-        if (tag.includes('data-type="mention"')) {
-          const idMatch = tag.match(/data-id="([^"]+)"/);
-          if (idMatch) mentionedIds.push(idMatch[1]);
-        }
+      const mentionSpanRegex = /<span[^>]*data-type="mention"[^>]*data-id="([^"]+)"[^>]*>.*?<\/span>/g;
+      const spanMatches = [...bodyText.matchAll(mentionSpanRegex)];
+      for (const match of spanMatches) {
+        mentionedIds.push(match[1]);
       }
 
-      // Plain Text Fallback
+      // Plain-text fallback, for a name typed by hand rather than picked from
+      // the suggestion popup. Matched against `bodyText` with every resolved
+      // span already stripped out — otherwise the visible "@Name" *inside* a
+      // span this loop already resolved precisely gets reprocessed by the
+      // much fuzzier `ilike` prefix match below, which can resolve to a
+      // different person entirely if two members share a first name.
       const plainRegex = /@([a-zA-Z0-9_-]+)/g;
-      const plainMatches = [...bodyText.matchAll(plainRegex)];
+      const plainMatches = [...bodyText.replace(mentionSpanRegex, '').matchAll(plainRegex)];
       const plainUsernames = [...new Set(plainMatches.map(m => m[1]))];
       for (const username of plainUsernames) {
         if (!['all', 'everyone', 'channel'].includes(username.toLowerCase())) {
-          const [mentionedUser] = await db.select({ id: users.userId }).from(users).where(or(ilike(users.displayName, username), ilike(users.fullName, username + '%'))).limit(1);
+          // Joined to workspace_members so a name only resolves inside this
+          // workspace. Against the whole `users` table this both notified
+          // strangers and answered "does an account with this name exist?" for
+          // anyone willing to type `@` in their own private channel.
+          const [mentionedUser] = await db
+            .select({ id: users.userId })
+            .from(users)
+            .innerJoin(
+              workspaceMembers,
+              and(
+                eq(workspaceMembers.userId, users.userId),
+                eq(workspaceMembers.workspaceId, channel.workspaceId!),
+                eq(workspaceMembers.state, 'active'),
+              ),
+            )
+            .where(or(ilike(users.displayName, username), ilike(users.fullName, username + '%')))
+            .limit(1);
           if (mentionedUser) mentionedIds.push(mentionedUser.id);
         }
       }
@@ -188,12 +241,20 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
       }
 
       // Task mentions
-      const taskMentionRegex = /@([a-z]+-\d+)/gi;
+      const taskMentionRegex = /@([a-z0-9]+-\d+)/gi;
       const taskMatches = [...bodyText.matchAll(taskMentionRegex)];
       if (taskMatches.length > 0) {
         const taskKeys = [...new Set(taskMatches.map(m => m[1]))];
         for (const key of taskKeys) {
-          const [task] = await db.select({ taskId: tasks.taskId, taskKey: tasks.taskKey, assigneeId: tasks.assigneeId, reporterId: tasks.reporterId }).from(tasks).where(eq(tasks.taskKey, key));
+          // Scoped to this channel's workspace. Unscoped, typing `@ACME-7` in
+          // your own channel notified the assignee and reporter of a task in a
+          // completely different workspace — and told them your channel's name
+          // while doing it.
+          const [task] = await db
+            .select({ taskId: tasks.taskId, taskKey: tasks.taskKey, assigneeId: tasks.assigneeId, reporterId: tasks.reporterId })
+            .from(tasks)
+            .innerJoin(projects, eq(tasks.projectId, projects.projectId))
+            .where(and(eq(tasks.taskKey, key), eq(projects.workspaceId, channel.workspaceId!)));
           if (task) {
             const recipients = new Set<string>();
             if (task.assigneeId) recipients.add(task.assigneeId);
@@ -205,8 +266,8 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
                 recipientId,
                 actorId: userId,
                 type: 'task_mentioned',
-                entityType: 'task',
-                entityId: task.taskId,
+                entityType: 'message',
+                entityId: result.messageId,
                 title: `Task ${task.taskKey} was mentioned`,
                 body: `${author?.fullName || 'Someone'} mentioned it in #${channel.name || 'channel'}`,
               });
@@ -228,13 +289,26 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
 export const listMessages = async (req: Request, res: Response): Promise<void> => {
   try {
     const { channelId } = req.params as Record<string, string>;
-    const { limit = 50, cursor } = req.query;
+    const { limit = 50, cursor, q } = req.query;
 
     const parsedLimit = Math.min(parseInt(limit as string, 10) || 50, 100);
+    const searchQuery = typeof q === 'string' ? q.trim() : null;
 
-    // Basic cursor-based pagination (using createdAt) could be added,
-    // but for simplicity we fetch the latest N messages that are NOT in a thread.
-    // Thread replies are fetched separately.
+    // Conditions: always filter by channelId
+    const conditions = [eq(messages.channelId, channelId)];
+
+    if (searchQuery) {
+      // Search mode: search body text, do not restrict to threadId IS NULL (so replies are searchable)
+      const searchCondition = or(
+        sql`body_tsv @@ plainto_tsquery('english', ${searchQuery})`,
+        ilike(messages.bodyText, `%${searchQuery}%`)
+      );
+      if (searchCondition) conditions.push(searchCondition);
+    } else {
+      // Normal mode: only fetch top-level messages (not in a thread)
+      conditions.push(sql`${messages.threadId} IS NULL`);
+    }
+
     const results = await db
       .select({
         messageId: messages.messageId,
@@ -251,21 +325,42 @@ export const listMessages = async (req: Request, res: Response): Promise<void> =
         authorId: users.userId,
         authorName: users.fullName,
         authorAvatar: users.avatarUrl,
+        threadId: messages.threadId,
       })
       .from(messages)
       .leftJoin(users, eq(messages.authorId, users.userId))
-      .where(
-        and(
-          eq(messages.channelId, channelId),
-          sql`${messages.threadId} IS NULL`
-        )
-      )
-
+      .where(and(...conditions))
       .orderBy(desc(messages.createdAt))
       .limit(parsedLimit);
 
+    const messageIds = results.map(r => r.messageId);
+    const reactionsMap: Record<string, any[]> = {};
 
-    res.json({ messages: results.reverse() }); // Reverse so oldest is first for UI display
+    if (messageIds.length > 0) {
+      const { messageReactions } = await import('../../db/schema/channels.js');
+      const allReactions = await db
+        .select({
+          messageId: messageReactions.messageId,
+          userId: messageReactions.userId,
+          emoji: messageReactions.emoji,
+          userName: users.fullName
+        })
+        .from(messageReactions)
+        .leftJoin(users, eq(messageReactions.userId, users.userId))
+        .where(inArray(messageReactions.messageId, messageIds));
+
+      for (const rx of allReactions) {
+        if (!reactionsMap[rx.messageId]) reactionsMap[rx.messageId] = [];
+        reactionsMap[rx.messageId].push(rx);
+      }
+    }
+
+    const enrichedResults = results.map(r => ({
+      ...r,
+      reactions: reactionsMap[r.messageId] || []
+    })).reverse(); // Reverse so oldest is first for UI display
+
+    res.json({ messages: enrichedResults });
   } catch (err) {
     console.error('List messages error:', err);
     res.status(500).json({ error: 'Server error listing messages.' });
@@ -276,7 +371,27 @@ export const listMessages = async (req: Request, res: Response): Promise<void> =
 // GET /api/channels/:channelId/messages/:messageId/thread
 export const getThreadReplies = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { messageId } = req.params as Record<string, string>;
+    const { channelId, messageId } = req.params as Record<string, string>;
+
+    // The thread root has to live in this channel, or any message id in the
+    // system could be read through a channel the caller happens to be in.
+    const root = await findMessageInChannel(messageId, channelId);
+    if (!root) {
+      res.status(404).json({ error: 'Message not found.' });
+      return;
+    }
+
+    // Opt-in paging, same shape as tasks.controller.ts's listTasks: the
+    // default stays "everything" so a thread panel keeps rendering the full
+    // conversation in one request, but a hard ceiling stops an unbounded
+    // response on a thread that has grown very large.
+    const MAX_LIMIT = 2000;
+    const requestedLimit = parseInt(String(req.query.limit ?? ''), 10);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, MAX_LIMIT)
+      : MAX_LIMIT;
+    const requestedOffset = parseInt(String(req.query.offset ?? ''), 10);
+    const offset = Number.isFinite(requestedOffset) && requestedOffset > 0 ? requestedOffset : 0;
 
     const results = await db
       .select({
@@ -294,11 +409,38 @@ export const getThreadReplies = async (req: Request, res: Response): Promise<voi
       .from(messages)
       .leftJoin(users, eq(messages.authorId, users.userId))
       .where(eq(messages.threadId, messageId))
+      .orderBy(asc(messages.createdAt)) // Chronological order for threads
+      .limit(limit)
+      .offset(offset);
 
-      .orderBy(asc(messages.createdAt)); // Chronological order for threads
+    const replyIds = results.map(r => r.messageId);
+    const reactionsMap: Record<string, any[]> = {};
 
+    if (replyIds.length > 0) {
+      const { messageReactions } = await import('../../db/schema/channels.js');
+      const allReactions = await db
+        .select({
+          messageId: messageReactions.messageId,
+          userId: messageReactions.userId,
+          emoji: messageReactions.emoji,
+          userName: users.fullName
+        })
+        .from(messageReactions)
+        .leftJoin(users, eq(messageReactions.userId, users.userId))
+        .where(inArray(messageReactions.messageId, replyIds));
 
-    res.json({ replies: results });
+      for (const rx of allReactions) {
+        if (!reactionsMap[rx.messageId]) reactionsMap[rx.messageId] = [];
+        reactionsMap[rx.messageId].push(rx);
+      }
+    }
+
+    const enrichedResults = results.map(r => ({
+      ...r,
+      reactions: reactionsMap[r.messageId] || []
+    }));
+
+    res.json({ replies: enrichedResults });
   } catch (err) {
     console.error('Get thread error:', err);
     res.status(500).json({ error: 'Server error fetching thread replies.' });
@@ -313,12 +455,8 @@ export const editMessage = async (req: Request, res: Response): Promise<void> =>
     const userId = req.user!.userId;
     const { bodyText, bodyBlocks, isPinned } = req.body;
 
-    // Verify ownership before editing text
-    const [msg] = await db
-      .select({ authorId: messages.authorId, isDeleted: messages.isDeleted, isPinned: messages.isPinned })
-      .from(messages)
-      .where(eq(messages.messageId, messageId))
-      .limit(1);
+    // Verify the message is in this channel, then ownership.
+    const msg = await findMessageInChannel(messageId, channelId);
 
     if (!msg) {
       res.status(404).json({ error: 'Message not found.' });
@@ -331,7 +469,7 @@ export const editMessage = async (req: Request, res: Response): Promise<void> =>
     }
 
     const updateData: Record<string, any> = { updatedAt: new Date() };
-    
+
     // Only author can edit content
     if (bodyText !== undefined || bodyBlocks !== undefined) {
       if (msg.authorId !== userId) {
@@ -391,36 +529,77 @@ export const deleteMessage = async (req: Request, res: Response): Promise<void> 
     const { channelId, messageId } = req.params as Record<string, string>;
     const userId = req.user!.userId;
 
-    // Verify ownership & fetch replyCount
-    const [msg] = await db
-      .select({ authorId: messages.authorId, threadId: messages.threadId, replyCount: messages.replyCount, bodyText: messages.bodyText })
-      .from(messages)
-      .where(eq(messages.messageId, messageId))
-      .limit(1);
+    const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+    if (!isUuid(messageId) || !isUuid(channelId)) {
+      res.status(400).json({ error: 'Invalid message or channel id.' });
+      return;
+    }
+
+    // Verify the message is in this channel, then ownership & fetch replyCount.
+    const msg = await findMessageInChannel(messageId, channelId);
 
     if (!msg) {
       res.status(404).json({ error: 'Message not found.' });
       return;
     }
 
+    const [channel] = await db
+      .select({ workspaceId: channels.workspaceId })
+      .from(channels)
+      .where(eq(channels.channelId, channelId))
+      .limit(1);
+
+    if (!channel?.workspaceId) {
+      res.status(404).json({ error: 'Channel not found.' });
+      return;
+    }
+    const channelWorkspaceId = channel.workspaceId;
+
     let isDeletedByAdmin = false;
     if (msg.authorId !== userId) {
-      const [channel] = await db.select({ workspaceId: channels.workspaceId }).from(channels).where(eq(channels.channelId, channelId)).limit(1);
-      const [member] = await db.select({ role: workspaceMembers.role }).from(workspaceMembers).where(and(eq(workspaceMembers.workspaceId, channel!.workspaceId!), eq(workspaceMembers.userId, userId)));
-      
+      const [member] = await db
+        .select({ role: workspaceMembers.role })
+        .from(workspaceMembers)
+        .where(and(eq(workspaceMembers.workspaceId, channelWorkspaceId), eq(workspaceMembers.userId, userId)));
+
       if (!member || !['owner', 'admin'].includes(member.role)) {
         res.status(403).json({ error: 'You can only delete your own messages.' });
         return;
       }
       isDeletedByAdmin = true;
     }
-    
-    // Extract fileIds from the message body
+
+    // These ids come out of the message itself, which the author wrote. They
+    // are untrusted input, not a server-side association — see the scoping
+    // on the delete below.
+    //
+    // Two formats, because two eras of message wrote attachments
+    // differently: legacy messages baked `[name](file:id)` into `bodyText`
+    // (still possible to encounter on an old row); the composer now sends a
+    // `bodyBlocks` JSON array of `{ type: 'attachment', fileId, ... }`
+    // objects instead (see `chatStore.ts`'s `send`). Only scanning `bodyText`
+    // meant this cleanup silently stopped doing anything the moment the
+    // composer switched formats — every attachment sent since has been
+    // orphaned in storage on delete, not actually removed.
     let filesToDelete: string[] = [];
+    let orphanedStoragePaths: string[] = [];
     if (msg.bodyText) {
       const fileMatches = Array.from(msg.bodyText.matchAll(/\[(.*?)\]\(file:([a-zA-Z0-9-]+)\)/g));
-      filesToDelete = fileMatches.map(m => m[2]);
+      filesToDelete.push(...fileMatches.map((m) => m[2]));
     }
+    if (Array.isArray(msg.bodyBlocks)) {
+      for (const block of msg.bodyBlocks as unknown[]) {
+        if (
+          block &&
+          typeof block === 'object' &&
+          (block as Record<string, unknown>).type === 'attachment' &&
+          typeof (block as Record<string, unknown>).fileId === 'string'
+        ) {
+          filesToDelete.push((block as Record<string, unknown>).fileId as string);
+        }
+      }
+    }
+    filesToDelete = [...new Set(filesToDelete)];
 
     await db.transaction(async (tx) => {
       // If deleting a child reply, decrement parent's replyCount
@@ -436,7 +615,7 @@ export const deleteMessage = async (req: Request, res: Response): Promise<void> 
           .from(messages)
           .where(eq(messages.messageId, msg.threadId));
 
-        if (parent && parent.isDeleted && parent.replyCount <= 0) {
+        if (parent && parent.isDeleted && (parent.replyCount || 0) <= 0) {
           await tx.delete(messages).where(eq(messages.messageId, msg.threadId));
         }
       }
@@ -458,52 +637,140 @@ export const deleteMessage = async (req: Request, res: Response): Promise<void> 
           .delete(messages)
           .where(eq(messages.messageId, messageId));
       }
-      
-      // Handle file deletion
+
+      // A file is only removable here if it lives in this channel's workspace
+      // *and* the message's own author uploaded it. Both predicates are
+      // load-bearing: without them the fileIds above are attacker-chosen, so
+      // anyone could post `[x](file:<victim-uuid>)`, delete their own message,
+      // and destroy another workspace's file row and its stored object.
       if (filesToDelete.length > 0) {
-        const files = await tx.select({ fileId: workspaceFiles.fileId, storagePath: workspaceFiles.storagePath })
-           .from(workspaceFiles)
-           .where(inArray(workspaceFiles.fileId, filesToDelete));
-        
+        const files = await tx
+          .select({ fileId: workspaceFiles.fileId, storagePath: workspaceFiles.storagePath })
+          .from(workspaceFiles)
+          .where(
+            and(
+              inArray(workspaceFiles.fileId, filesToDelete),
+              eq(workspaceFiles.workspaceId, channelWorkspaceId),
+              eq(workspaceFiles.uploaderId, msg.authorId!),
+            ),
+          );
+
         if (files.length > 0) {
-           const storagePaths = files.map(f => f.storagePath);
-           
-           // Delete from DB
-           await tx.delete(workspaceFiles).where(inArray(workspaceFiles.fileId, filesToDelete));
-           
-           // Delete from Supabase
-           const { error: storageError } = await supabase.storage.from('workspace-files').remove(storagePaths);
-           if (storageError) {
-              console.error("Failed to delete files from Supabase", storageError);
-           }
+          await tx.delete(workspaceFiles).where(
+            inArray(
+              workspaceFiles.fileId,
+              files.map((f) => f.fileId),
+            ),
+          );
+          // Deleting from storage is irreversible, so it waits until the
+          // transaction has actually committed. Doing it inline meant a
+          // rollback restored the row and left the object already gone.
+          orphanedStoragePaths = files.map((f) => f.storagePath);
         }
       }
 
       if (isDeletedByAdmin) {
-
-
-
-        const [channel] = await tx.select({ workspaceId: channels.workspaceId }).from(channels).where(eq(channels.channelId, channelId)).limit(1);
         await logAuditAction({
           actorId: userId,
           action: 'message.deleted_by_admin',
           entityType: 'channel',
           entityId: channelId,
-          workspaceId: channel?.workspaceId ?? undefined,
+          workspaceId: channelWorkspaceId,
           newValues: { message_id: messageId, original_author: msg.authorId },
           tx
         });
       }
     });
 
+    if (orphanedStoragePaths.length > 0) {
+      const { error: storageError } = await supabase.storage
+        .from('workspace-files')
+        .remove(orphanedStoragePaths);
+      if (storageError) {
+        console.error('Failed to delete files from Supabase', storageError);
+      }
+    }
+
     // Emit real-time event
     const io = getIO();
     io.to(`channel:${channelId}`).emit('message_deleted', { messageId, threadId: msg.threadId });
-
 
     res.json({ message: 'Message deleted' });
   } catch (err) {
     console.error('Delete message error:', err);
     res.status(500).json({ error: 'Server error deleting message.' });
+  }
+};
+
+// ─── ADD REACTION ────────────────────────────────────────────────────────────
+// POST /api/channels/:channelId/messages/:messageId/reactions
+export const addReaction = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { channelId, messageId } = req.params as Record<string, string>;
+    const userId = req.user!.userId;
+    const { emoji } = req.body;
+
+    if (!emoji) {
+      res.status(400).json({ error: 'Emoji is required.' });
+      return;
+    }
+
+    // Without this, a reaction could be written onto any message in any
+    // workspace — the insert only ever referenced the message id.
+    const target = await findMessageInChannel(messageId, channelId);
+    if (!target) {
+      res.status(404).json({ error: 'Message not found.' });
+      return;
+    }
+
+    const { messageReactions } = await import('../../db/schema/channels.js');
+
+    await db
+      .insert(messageReactions)
+      .values({ messageId, userId, emoji })
+      .onConflictDoNothing(); // If already reacted, do nothing
+
+    const [userRecord] = await db.select({ fullName: users.fullName }).from(users).where(eq(users.userId, userId)).limit(1);
+
+    const io = getIO();
+    io.to(`channel:${channelId}`).emit('message_reaction_added', { messageId, userId, emoji, userName: userRecord?.fullName || 'User' });
+
+    res.json({ message: 'Reaction added' });
+  } catch (err) {
+    console.error('Add reaction error:', err);
+    res.status(500).json({ error: 'Server error adding reaction.' });
+  }
+};
+
+// ─── REMOVE REACTION ─────────────────────────────────────────────────────────
+// DELETE /api/channels/:channelId/messages/:messageId/reactions/:emoji
+export const removeReaction = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { channelId, messageId, emoji } = req.params as Record<string, string>;
+    const userId = req.user!.userId;
+
+    const target = await findMessageInChannel(messageId, channelId);
+    if (!target) {
+      res.status(404).json({ error: 'Message not found.' });
+      return;
+    }
+
+    const { messageReactions } = await import('../../db/schema/channels.js');
+
+    await db
+      .delete(messageReactions)
+      .where(and(
+        eq(messageReactions.messageId, messageId),
+        eq(messageReactions.userId, userId),
+        eq(messageReactions.emoji, emoji)
+      ));
+
+    const io = getIO();
+    io.to(`channel:${channelId}`).emit('message_reaction_removed', { messageId, userId, emoji });
+
+    res.json({ message: 'Reaction removed' });
+  } catch (err) {
+    console.error('Remove reaction error:', err);
+    res.status(500).json({ error: 'Server error removing reaction.' });
   }
 };

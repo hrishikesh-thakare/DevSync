@@ -1,377 +1,500 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useBoardStore } from '../../store/boardStore.js';
-import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
-import { useAuthStore } from '../../store/auth.js';
-import { apiFetch } from '../../lib/api.js';
-import { Search, Loader2, MoreHorizontal, CheckSquare, Zap, BookOpen, Bug, Layers, ArrowUpDown, Calendar, Plus } from 'lucide-react';
-import clsx from 'clsx';
-import { format } from 'date-fns';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { toast } from 'sonner';
+import { GripVerticalIcon, ListTodoIcon, PlusIcon } from 'lucide-react';
 
-const ISSUE_TYPES = [
-  { value: 'epic', icon: Zap, color: 'text-purple-400' },
-  { value: 'story', icon: BookOpen, color: 'text-blue-400' },
-  { value: 'task', icon: CheckSquare, color: 'text-gray-300' },
-  { value: 'bug', icon: Bug, color: 'text-red-400' },
-  { value: 'subtask', icon: Layers, color: 'text-gray-500' },
-];
+import { EmptyState, ErrorState } from '@/components/layout/PageState';
+import { MemberAvatar } from '@/components/MemberAvatar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { CreateTaskDialog } from '@/pages/projects/board/CreateTaskDialog';
+import { useTasksQuery, useMoveTaskMutation, useBulkUpdateTasksMutation, byRank, EMPTY_TASKS } from '@/queries/tasks';
+import { useSprintStore } from '@/store/sprintStore';
+import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
+import { useLabelStore } from '@/store/labelStore';
+import { ISSUE_TYPE_META, ISSUE_TYPE_ORDER, PRIORITY_META, PRIORITY_ORDER, STATUS_META } from '@/lib/taskMeta';
+import { cn } from '@/lib/utils';
+import type { TaskSummary } from '@/types/api';
 
-const IssueTypeIcon = ({ type }: { type: string }) => {
-  const found = ISSUE_TYPES.find(t => t.value === type);
-  if (!found) {
-    return (
-      <span title={type} className="flex items-center justify-center">
-        <CheckSquare className="w-4 h-4 text-gray-500" />
-      </span>
-    );
-  }
-  const Icon = found.icon;
-  return (
-    <span title={type} className="flex items-center justify-center">
-      <Icon className={clsx("w-4 h-4", found.color)} />
-    </span>
-  );
-};
+const ANY = '__any__';
+const UNASSIGN = '__unassign__';
 
-export const BacklogPage = () => {
-  const { slug, key } = useParams();
+/**
+ * The backlog is every task not attached to a sprint, ordered by rank.
+ * Reordering uses the same `/reorder` endpoint the board does, keeping status
+ * unchanged and only moving the fractional index. It drives dnd-kit directly
+ * rather than through the reui Kanban — this is a single sortable list, not a
+ * board, and `verticalListSortingStrategy` is the right primitive for it.
+ */
+export function BacklogPage() {
+  const { slug = '', key = '' } = useParams();
   const navigate = useNavigate();
-  const { tasks, members, isLoading, fetchTasks, fetchMembers } = useBoardStore();
-  const { isAdmin } = useCurrentWorkspaceStore();
-  const currentUser = useAuthStore(state => state.user);
+  const { data: tasks = EMPTY_TASKS, isPending: isLoading, error, refetch } = useTasksQuery(slug, key);
+  const { mutateAsync: moveTask } = useMoveTaskMutation(slug, key);
+  const { mutateAsync: bulkUpdate } = useBulkUpdateTasksMutation(slug, key);
+  const { sprints, fetchSprints, addTask } = useSprintStore();
+  const members = useProjectStore((s) => s.members);
+  const { labels, fetchLabels } = useLabelStore();
+  const myRole = useMyProjectRole();
+  const canEdit = myRole === 'project_admin' || myRole === 'developer';
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showOnlyBacklog, setShowOnlyBacklog] = useState(true);
-  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
-  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc'|'desc' }>({ key: 'taskKey', direction: 'desc' });
-
-  const [sprints, setSprints] = useState<any[]>([]);
-  const [bulkAction, setBulkAction] = useState('');
-  const [bulkValue, setBulkValue] = useState('');
-  const [isApplyingBulk, setIsApplyingBulk] = useState(false);
-
-  const myMembership = members.find(m => m.userId === currentUser?.userId);
-  const canEditTask = isAdmin() || (myMembership && myMembership.role !== 'viewer');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [assigning, setAssigning] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [assignee, setAssignee] = useState(ANY);
+  const [priority, setPriority] = useState(ANY);
+  const [issueType, setIssueType] = useState(ANY);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     if (slug && key) {
-      fetchTasks(slug, key);
-      fetchMembers(slug, key);
-      apiFetch(`/workspaces/${slug}/projects/${key}/sprints`)
-        .then(data => setSprints(data.sprints || []))
-        .catch(err => console.error('Failed to load sprints', err));
+      void fetchSprints(slug, key);
+      void fetchLabels(slug, key);
     }
-  }, [slug, key, fetchTasks, fetchMembers]);
+  }, [slug, key, fetchSprints, fetchLabels]);
 
-  const toggleSelectAll = () => {
-    if (!canEditTask) return;
-    if (selectedTasks.size === filteredTasks.length) {
-      setSelectedTasks(new Set());
-    } else {
-      setSelectedTasks(new Set(filteredTasks.map(t => t.taskId)));
-    }
-  };
+  const backlog = useMemo(() => tasks.filter((t) => !t.sprintId).sort(byRank), [tasks]);
 
-  const toggleSelect = (e: React.ChangeEvent<HTMLInputElement>, taskId: string) => {
-    e.stopPropagation();
-    if (!canEditTask) return;
-    const newSet = new Set(selectedTasks);
-    if (newSet.has(taskId)) newSet.delete(taskId);
-    else newSet.add(taskId);
-    setSelectedTasks(newSet);
-  };
+  const hasFilters = assignee !== ANY || priority !== ANY || issueType !== ANY || search.trim() !== '';
 
-  const handleSort = (key: string) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
-  };
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return backlog.filter(
+      (t) =>
+        (assignee === ANY || (assignee === 'unassigned' ? !t.assigneeId : t.assigneeId === assignee)) &&
+        (priority === ANY || t.priority === priority) &&
+        (issueType === ANY || t.issueType === issueType) &&
+        (!q || t.title.toLowerCase().includes(q) || t.taskKey.toLowerCase().includes(q)),
+    );
+  }, [backlog, assignee, priority, issueType, search]);
 
-  const handleBulkApply = async () => {
-    if (!bulkAction || !bulkValue || selectedTasks.size === 0 || !slug || !key) return;
-    setIsApplyingBulk(true);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const onDragEnd = async (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+
+    const moving = visible.find((t) => t.taskId === active.id);
+    if (!moving) return;
+
+    // Neighbours come from the currently visible (filtered) list, not the
+    // full backlog — the drop target the user actually saw and dropped onto.
+    const without = visible.filter((t) => t.taskId !== active.id);
+    const overIndex = without.findIndex((t) => t.taskId === over.id);
+    if (overIndex === -1) return;
+
+    const after = overIndex > 0 ? without[overIndex - 1] : null;
+    const before = without[overIndex];
+
+    // Same tied-rank guard as the board: tasks that were never reordered share
+    // a default rank, and the server needs a strictly increasing pair. Passing
+    // `null` asks it to append after the tied run instead.
+    const beforeId = after && before && (after.rank ?? '') >= (before.rank ?? '') ? null : (before?.taskId ?? null);
+
     try {
-      const promises = Array.from(selectedTasks).map(taskId => {
-        const task = filteredTasks.find(t => t.taskId === taskId);
-        if (!task) return Promise.resolve();
-        
-        let body: any = {};
-        if (bulkAction === 'sprint') body.sprintId = bulkValue === 'backlog' ? null : bulkValue;
-        else if (bulkAction === 'status') body.status = bulkValue;
-        else if (bulkAction === 'priority') body.priority = bulkValue;
-
-        return apiFetch(`/workspaces/${slug}/projects/${key}/tasks/${task.taskKey}`, {
-          method: 'PATCH',
-          body: JSON.stringify(body)
-        });
-      });
-
-      await Promise.all(promises);
-      setSelectedTasks(new Set());
-      setBulkAction('');
-      setBulkValue('');
-      fetchTasks(slug, key);
+      await moveTask({ taskId: moving.taskId, status: moving.status, afterTaskId: after?.taskId ?? null, beforeTaskId: beforeId });
     } catch (err) {
-      alert('Failed to apply bulk action');
-    } finally {
-      setIsApplyingBulk(false);
+      toast.error(err instanceof Error ? err.message : 'Could not reorder.');
     }
   };
 
-  // Filter & Sort
-  let filteredTasks = tasks;
-  if (searchQuery) {
-    const q = searchQuery.toLowerCase();
-    filteredTasks = filteredTasks.filter(t => t.title.toLowerCase().includes(q) || t.taskKey.toLowerCase().includes(q));
-  }
-  if (showOnlyBacklog) {
-    filteredTasks = filteredTasks.filter(t => !t.sprintId); // Backlog means it is not assigned to any sprint
+  const toggle = (taskId: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  };
+
+  const assignToSprint = async (sprintId: string) => {
+    setAssigning(true);
+    const ids = [...selected];
+    let ok = 0;
+    try {
+      for (const taskId of ids) {
+        await addTask(slug, key, sprintId, taskId);
+        ok += 1;
+      }
+      toast.success(`${ok} task${ok === 1 ? '' : 's'} added to the sprint`);
+      setSelected(new Set());
+      await refetch();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? `${err.message} (${ok} of ${ids.length} moved)` : 'Could not assign.',
+      );
+      await refetch();
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  // Assign-to-member and add-label share this shape with `assignToSprint`
+  // above — loop the single-task PATCH, tolerate partial failure, report the
+  // count — but go through the reusable mutation since neither one needs the
+  // sprint-specific "add task to sprint" endpoint.
+  const runBulk = async (successVerb: string, patch: (t: TaskSummary) => Record<string, unknown>) => {
+    const selectedTasks = visible.filter((t) => selected.has(t.taskId));
+    if (selectedTasks.length === 0) return;
+    setAssigning(true);
+    try {
+      const { ok, failed, total } = await bulkUpdate({ tasks: selectedTasks, patch });
+      if (failed === 0) toast.success(`${successVerb} ${ok} task${ok === 1 ? '' : 's'}`);
+      else toast.error(`${successVerb}: only ${ok} of ${total} succeeded`);
+      setSelected(new Set());
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const openSprints = sprints.filter((s) => s.status !== 'closed');
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto w-full max-w-5xl p-6">
+        <Skeleton className="mb-4 h-9 w-64 rounded-lg" />
+        <Skeleton className="h-96 w-full rounded-2xl" />
+      </div>
+    );
   }
 
-  filteredTasks.sort((a: any, b: any) => {
-    let aVal = a[sortConfig.key];
-    let bVal = b[sortConfig.key];
-    if (sortConfig.key === 'taskKey') {
-      // Parse numeric part for proper sorting
-      aVal = parseInt(a.taskKey.split('-')[1]) || 0;
-      bVal = parseInt(b.taskKey.split('-')[1]) || 0;
-    }
-    if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-    if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-    return 0;
-  });
+  if (error) {
+    return (
+      <div className="mx-auto w-full max-w-5xl p-6">
+        <ErrorState message={error instanceof Error ? error.message : 'Could not load tasks.'} />
+      </div>
+    );
+  }
 
   return (
-    <div className="h-full flex flex-col p-6 font-sans">
-      
-      {/* Controls Bar */}
-      <div className="flex items-center justify-between mb-6 shrink-0">
-        <div className="flex items-center space-x-4">
-          <div className="relative w-72">
-            <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input 
-              type="text" 
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search backlog..." 
-              className="w-full bg-gray-900 border border-gray-800 rounded-lg pl-9 pr-4 py-2 text-sm text-gray-200 focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/50 transition-all"
-            />
-          </div>
-          
-          <button 
-            onClick={() => setShowOnlyBacklog(!showOnlyBacklog)}
-            className={clsx(
-              "px-3 py-2 text-sm font-medium rounded-lg border transition-colors",
-              showOnlyBacklog ? "bg-white/10 border-white/20 text-white" : "bg-gray-900 border-gray-800 text-gray-400 hover:text-gray-200"
-            )}
+    <div className="mx-auto w-full max-w-5xl p-6">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <h1 className="text-lg font-medium text-foreground">Backlog</h1>
+        <span className="text-xs text-muted-foreground">
+          {visible.length === backlog.length
+            ? `${backlog.length} task${backlog.length === 1 ? '' : 's'} without a sprint`
+            : `${visible.length} of ${backlog.length} tasks`}
+        </span>
+
+        {canEdit ? (
+          <Button className="ml-auto" onClick={() => setCreateOpen(true)}>
+            <PlusIcon className="size-4" aria-hidden="true" />
+            Create task
+          </Button>
+        ) : null}
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search title or key"
+          aria-label="Search backlog"
+          className="w-52"
+        />
+
+        <Select value={assignee} onValueChange={setAssignee}>
+          <SelectTrigger className="w-48" aria-label="Filter by assignee">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ANY}>All assignees</SelectItem>
+            <SelectItem value="unassigned">Unassigned</SelectItem>
+            {members.map((m) => (
+              <SelectItem key={m.userId} value={m.userId}>
+                {m.displayName || m.fullName}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={priority} onValueChange={setPriority}>
+          <SelectTrigger className="w-40" aria-label="Filter by priority">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ANY}>All priorities</SelectItem>
+            {PRIORITY_ORDER.map((p) => (
+              <SelectItem key={p} value={p}>
+                {PRIORITY_META[p].label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={issueType} onValueChange={setIssueType}>
+          <SelectTrigger className="w-40" aria-label="Filter by type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ANY}>All types</SelectItem>
+            {ISSUE_TYPE_ORDER.map((t) => (
+              <SelectItem key={t} value={t}>
+                {ISSUE_TYPE_META[t].label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {hasFilters ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setAssignee(ANY);
+              setPriority(ANY);
+              setIssueType(ANY);
+              setSearch('');
+            }}
           >
-            Backlog Only
-          </button>
-        </div>
-
-        <div className="flex items-center space-x-3">
-          {selectedTasks.size > 0 && (
-            <div className="flex items-center bg-gray-800 rounded-lg border border-gray-700 px-3 py-1.5 animate-in fade-in slide-in-from-right-4">
-              <span className="text-sm font-semibold text-white mr-3">{selectedTasks.size} selected</span>
-              <select 
-                value={bulkAction} 
-                onChange={e => { setBulkAction(e.target.value); setBulkValue(''); }} 
-                className="bg-gray-900 text-sm text-gray-300 border border-gray-700 rounded px-2 py-1 focus:outline-none mr-2"
-              >
-                <option value="">Select Action...</option>
-                <option value="status">Change Status</option>
-                <option value="priority">Change Priority</option>
-                <option value="sprint">Assign Sprint</option>
-              </select>
-              
-              {bulkAction === 'sprint' && (
-                <select value={bulkValue} onChange={e => setBulkValue(e.target.value)} className="bg-gray-900 text-sm text-gray-300 border border-gray-700 rounded px-2 py-1 focus:outline-none mr-2">
-                  <option value="">Select Sprint...</option>
-                  <option value="backlog">Backlog (Remove Sprint)</option>
-                  {sprints.map((s: any) => <option key={s.sprintId} value={s.sprintId}>{s.name}</option>)}
-                </select>
-              )}
-              {bulkAction === 'status' && (
-                <select value={bulkValue} onChange={e => setBulkValue(e.target.value)} className="bg-gray-900 text-sm text-gray-300 border border-gray-700 rounded px-2 py-1 focus:outline-none mr-2">
-                  <option value="">Select Status...</option>
-                  <option value="TODO">To Do</option>
-                  <option value="IN_PROGRESS">In Progress</option>
-                  <option value="IN_REVIEW">In Review</option>
-                  <option value="DONE">Done</option>
-                </select>
-              )}
-              {bulkAction === 'priority' && (
-                <select value={bulkValue} onChange={e => setBulkValue(e.target.value)} className="bg-gray-900 text-sm text-gray-300 border border-gray-700 rounded px-2 py-1 focus:outline-none mr-2">
-                  <option value="">Select Priority...</option>
-                  <option value="critical">Critical</option>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
-                </select>
-              )}
-
-              <button 
-                onClick={handleBulkApply} 
-                disabled={isApplyingBulk || !bulkAction || !bulkValue} 
-                className="text-xs bg-white text-gray-900 font-bold px-3 py-1 rounded disabled:opacity-50"
-              >
-                {isApplyingBulk ? <Loader2 className="w-3 h-3 animate-spin text-gray-900" /> : 'Apply'}
-              </button>
-            </div>
-          )}
-
-          {canEditTask && (
-            <button className="flex items-center px-3 py-2 bg-white hover:bg-gray-200 text-gray-950 text-sm font-semibold rounded-lg transition-colors">
-              <Plus className="w-4 h-4 mr-1.5" />
-              Create Task
-            </button>
-          )}
-        </div>
+            Clear filters
+          </Button>
+        ) : null}
       </div>
 
-      {/* Table Container */}
-      <div className="flex-1 bg-gray-900/50 border border-gray-800 rounded-xl overflow-hidden flex flex-col">
-        {/* Table Header */}
-        <div className="grid grid-cols-12 gap-4 px-6 py-3 border-b border-gray-800 bg-gray-900/80 text-xs font-semibold text-gray-500 uppercase tracking-wider shrink-0 items-center">
-          <div className="col-span-2 flex items-center space-x-3">
-            {canEditTask && (
-              <input 
-                type="checkbox" 
-                checked={selectedTasks.size > 0 && selectedTasks.size === filteredTasks.length}
-                onChange={toggleSelectAll}
-                className="w-4 h-4 rounded border-gray-700 bg-gray-800 focus:ring-0 cursor-pointer" 
-              />
-            )}
-            <button onClick={() => handleSort('taskKey')} className="flex items-center hover:text-gray-300">
-              Key <ArrowUpDown className="w-3 h-3 ml-1" />
-            </button>
-          </div>
-          <div className="col-span-4">
-            <button onClick={() => handleSort('title')} className="flex items-center hover:text-gray-300">
-              Summary <ArrowUpDown className="w-3 h-3 ml-1" />
-            </button>
-          </div>
-          <div className="col-span-2">
-            <button onClick={() => handleSort('status')} className="flex items-center hover:text-gray-300">
-              Status <ArrowUpDown className="w-3 h-3 ml-1" />
-            </button>
-          </div>
-          <div className="col-span-1">Priority</div>
-          <div className="col-span-1">Due Date</div>
-          <div className="col-span-1">Assignee</div>
-          <div className="col-span-1 text-right">Actions</div>
-        </div>
+      {selected.size > 0 && canEdit ? (
+        <Card className="mb-4">
+          <CardContent className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-foreground">
+              {selected.size} selected
+            </span>
+            <Select disabled={assigning || openSprints.length === 0} onValueChange={(v) => void assignToSprint(v)}>
+              <SelectTrigger className="w-56" aria-label="Add selected tasks to sprint">
+                <SelectValue
+                  placeholder={openSprints.length ? 'Add to sprint…' : 'No open sprint available'}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {openSprints.map((s) => (
+                  <SelectItem key={s.sprintId} value={s.sprintId}>
+                    {s.name} ({s.status})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-        {/* Table Body */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar relative">
-          {isLoading ? (
-            <div className="absolute inset-0 flex justify-center items-center">
-              <Loader2 className="w-8 h-8 animate-spin text-white" />
-            </div>
-          ) : filteredTasks.length === 0 ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 bg-gray-900/30 border border-dashed border-gray-800/50 m-6 rounded-xl">
-              <p>No tasks found.</p>
-            </div>
-          ) : (
-            filteredTasks.map((task) => (
-              <div 
-                key={task.taskId} 
-                onClick={() => navigate(`/w/${slug}/projects/${key}/tasks/${task.taskKey}`)}
-                className={clsx(
-                  "grid grid-cols-12 gap-4 px-6 py-3 border-b border-gray-800/60 hover:bg-gray-800/60 cursor-pointer transition-colors items-center group",
-                  selectedTasks.has(task.taskId) && "bg-white/5 border-white/10"
-                )}
-              >
-                {/* Checkbox & Key */}
-                <div className="col-span-2 flex items-center space-x-3">
-                  {canEditTask && (
-                    <input 
-                      type="checkbox" 
-                      checked={selectedTasks.has(task.taskId)}
-                      onChange={(e) => toggleSelect(e, task.taskId)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="w-4 h-4 rounded border-gray-700 bg-gray-800 focus:ring-0 cursor-pointer" 
-                    />
-                  )}
-                  <div className="flex items-center space-x-2">
-                    <IssueTypeIcon type={(task as any).type || 'task'} />
-                    <span className="text-sm font-mono text-gray-500 group-hover:text-gray-300 transition-colors">
-                      {task.taskKey}
-                    </span>
-                  </div>
-                </div>
-                
-                {/* Title */}
-                <div className="col-span-4 text-sm font-medium text-gray-200 truncate pr-4">
-                  {task.title}
-                </div>
+            <Select
+              disabled={assigning}
+              onValueChange={(v) => void runBulk('Assigned', () => ({ assigneeId: v === UNASSIGN ? null : v }))}
+            >
+              <SelectTrigger className="w-48" aria-label="Bulk assign">
+                <SelectValue placeholder="Assign to…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={UNASSIGN}>Unassigned</SelectItem>
+                {members.map((m) => (
+                  <SelectItem key={m.userId} value={m.userId}>
+                    {m.displayName || m.fullName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-                {/* Status */}
-                <div className="col-span-2">
-                  <span className={clsx(
-                    "text-[10px] font-bold px-2.5 py-1 rounded-sm uppercase tracking-wide",
-                    task.status === 'TODO' ? "bg-gray-800 text-gray-400" :
-                    task.status === 'IN_PROGRESS' ? "bg-blue-500/20 text-blue-400 border border-blue-500/20" :
-                    task.status === 'IN_REVIEW' ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/20" :
-                    "bg-emerald-500/20 text-emerald-400 border border-emerald-500/20"
-                  )}>
-                    {task.status.replace('_', ' ')}
-                  </span>
-                </div>
+            <Select
+              disabled={assigning || labels.length === 0}
+              onValueChange={(v) =>
+                void runBulk('Labelled', (t) => ({ labels: Array.from(new Set([...(t.labels ?? []), v])) }))
+              }
+            >
+              <SelectTrigger className="w-48" aria-label="Bulk add label">
+                <SelectValue placeholder={labels.length ? 'Add label…' : 'No labels yet'} />
+              </SelectTrigger>
+              <SelectContent>
+                {labels.map((l) => (
+                  <SelectItem key={l.labelId} value={l.name}>
+                    {l.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-                {/* Priority */}
-                <div className="col-span-1">
-                  <span className={clsx(
-                    "flex items-center text-xs font-semibold capitalize",
-                    task.priority === 'critical' ? 'text-red-400' :
-                    task.priority === 'high' ? 'text-orange-400' :
-                    task.priority === 'medium' ? 'text-yellow-400' : 'text-gray-400'
-                  )}>
-                    <span className={clsx("w-2 h-2 rounded-full mr-1.5", 
-                      task.priority === 'critical' ? 'bg-red-500' :
-                      task.priority === 'high' ? 'bg-orange-500' :
-                      task.priority === 'medium' ? 'bg-yellow-500' : 'bg-gray-500'
-                    )}></span>
-                    {task.priority || 'medium'}
-                  </span>
-                </div>
+            <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setSelected(new Set())}>
+              Clear selection
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
-                {/* Due Date */}
-                <div className="col-span-1 text-xs text-gray-500 flex items-center">
-                  {(task as any).dueDate ? (
-                    <>
-                      <Calendar className="w-3.5 h-3.5 mr-1" />
-                      {format(new Date((task as any).dueDate), 'MMM d')}
-                    </>
-                  ) : '—'}
-                </div>
+      {backlog.length === 0 ? (
+        <EmptyState
+          icon={<ListTodoIcon aria-hidden="true" />}
+          title="Backlog is empty"
+          description="Tasks land here until they are added to a sprint."
+          action={
+            canEdit ? (
+              <Button onClick={() => setCreateOpen(true)}>
+                <PlusIcon className="size-4" aria-hidden="true" />
+                Create task
+              </Button>
+            ) : null
+          }
+        />
+      ) : visible.length === 0 ? (
+        <EmptyState
+          icon={<ListTodoIcon aria-hidden="true" />}
+          title="No tasks match these filters"
+          description="Try clearing a filter or searching for something else."
+        />
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={visible.map((t) => t.taskId)} strategy={verticalListSortingStrategy}>
+            <ul className="space-y-1">
+              {visible.slice(0, 200).map((task) => (
+                <BacklogRow
+                  key={task.taskId}
+                  task={task}
+                  canEdit={canEdit}
+                  selected={selected.has(task.taskId)}
+                  onToggle={() => toggle(task.taskId)}
+                  onOpen={() => navigate(`/w/${slug}/projects/${key}/tasks/${task.taskKey}`)}
+                />
+              ))}
+            </ul>
+          </SortableContext>
+          {visible.length > 200 ? (
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              {visible.length - 200} more not shown
+            </p>
+          ) : null}
+        </DndContext>
+      )}
 
-                {/* Assignee */}
-                <div className="col-span-1 flex items-center">
-                  {task.assigneeId ? (
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-gray-600 to-gray-500 flex items-center justify-center text-[10px] font-bold text-white shadow-sm border border-gray-900" title="Assigned">
-                      U
-                    </div>
-                  ) : (
-                    <div className="w-6 h-6 rounded-full border border-dashed border-gray-700 flex items-center justify-center text-gray-600" title="Unassigned">
-                      ?
-                    </div>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="col-span-1 flex justify-end">
-                  <button onClick={(e) => { e.stopPropagation(); /* would open menu */ }} className="p-1.5 text-gray-500 hover:text-white hover:bg-gray-700 rounded transition-colors opacity-0 group-hover:opacity-100">
-                    <MoreHorizontal className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+      {createOpen ? (
+        <CreateTaskDialog
+          slug={slug}
+          projectKey={key}
+          open
+          status="todo"
+          onOpenChange={(next) => !next && setCreateOpen(false)}
+        />
+      ) : null}
     </div>
   );
-};
+}
+
+function BacklogRow({
+  task,
+  canEdit,
+  selected,
+  onToggle,
+  onOpen,
+}: {
+  task: TaskSummary;
+  canEdit: boolean;
+  selected: boolean;
+  onToggle: () => void;
+  onOpen: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: task.taskId,
+    disabled: !canEdit,
+  });
+
+  const priority = PRIORITY_META[task.priority];
+  const type = ISSUE_TYPE_META[task.issueType];
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      className={cn(
+        'flex items-center gap-3 rounded-lg bg-card px-3 py-2 ring-1 ring-foreground/5',
+        isDragging && 'opacity-40',
+      )}
+    >
+      {canEdit ? (
+        <>
+          <button
+            type="button"
+            className="cursor-grab text-muted-foreground active:cursor-grabbing"
+            aria-label={`Reorder ${task.taskKey}`}
+            {...attributes}
+            {...listeners}
+          >
+            <GripVerticalIcon className="size-4" aria-hidden="true" />
+          </button>
+          <Checkbox
+            checked={selected}
+            onCheckedChange={onToggle}
+            aria-label={`Select ${task.taskKey}`}
+          />
+        </>
+      ) : null}
+
+      <span className="shrink-0 font-mono text-xs text-muted-foreground">{task.taskKey}</span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            <span aria-hidden="true">{type?.glyph}</span>
+            <span className="sr-only">{type?.label}</span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{type?.label}</TooltipContent>
+      </Tooltip>
+
+      <button
+        type="button"
+        onClick={onOpen}
+        className="min-w-0 flex-1 truncate text-left text-sm text-foreground hover:underline"
+      >
+        {task.title}
+      </button>
+
+      <Badge variant="outline" className="shrink-0">
+        {STATUS_META[task.status].label}
+      </Badge>
+
+      <span className={cn('hidden shrink-0 text-xs sm:inline', priority?.text)}>{priority?.label}</span>
+
+      {task.storyPoints != null ? (
+        <span className="shrink-0 rounded bg-muted px-1.5 text-xs text-muted-foreground">
+          {task.storyPoints}
+        </span>
+      ) : null}
+
+      {task.assigneeId ? (
+        <MemberAvatar
+          size="sm"
+          className="shrink-0"
+          member={{
+            userId: task.assigneeId,
+            fullName: task.assigneeName,
+            avatarUrl: task.assigneeAvatar,
+          }}
+        />
+      ) : null}
+    </li>
+  );
+}

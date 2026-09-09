@@ -3,7 +3,7 @@ import { db } from '../config/db.js';
 import { workspaces } from '../db/schema/workspaces.js';
 import { projects } from '../db/schema/projects.js';
 import { tasks } from '../db/schema/tasks.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull, asc } from 'drizzle-orm';
 
 /**
  * Resolves a workspace slug (e.g., 'acme-corp') to a workspace UUID.
@@ -11,10 +11,13 @@ import { eq, and } from 'drizzle-orm';
  */
 export const resolveSlug = async (req: Request, res: Response, next: NextFunction, slug: string): Promise<void> => {
   try {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(slug);
+    const condition = isUuid ? eq(workspaces.workspaceId, slug) : eq(workspaces.slug, slug);
+
     const [ws] = await db
       .select({ id: workspaces.workspaceId })
       .from(workspaces)
-      .where(eq(workspaces.slug, slug))
+      .where(and(condition, isNull(workspaces.deletedAt)))
       .limit(1);
 
     if (!ws) {
@@ -24,6 +27,7 @@ export const resolveSlug = async (req: Request, res: Response, next: NextFunctio
 
     // Mutate req.params to include the resolved UUID
     req.params.workspaceId = ws.id;
+    res.locals.workspaceId = ws.id;
     next();
   } catch (err) {
     console.error('resolveSlug error:', err);
@@ -38,9 +42,23 @@ export const resolveSlug = async (req: Request, res: Response, next: NextFunctio
  */
 export const resolveProjectKey = async (req: Request, res: Response, next: NextFunction, key: string): Promise<void> => {
   try {
-    const workspaceId = req.params.workspaceId as string | undefined; // Assuming resolveSlug ran first
+    let workspaceId = req.params.workspaceId as string | undefined; // Assuming resolveSlug ran first
 
-    const conditions = [eq(projects.key, key.toUpperCase())];
+    // Nested routers rebuild req.params per layer, so the workspaceId injected by
+    // resolveSlug on an outer layer may be missing here. Self-resolve from the slug.
+    if (!workspaceId && req.params.slug) {
+      const [ws] = await db
+        .select({ id: workspaces.workspaceId })
+        .from(workspaces)
+        .where(and(eq(workspaces.slug, req.params.slug as string), isNull(workspaces.deletedAt)))
+        .limit(1);
+      if (ws) {
+        workspaceId = ws.id;
+        req.params.workspaceId = ws.id;
+      }
+    }
+
+    const conditions = [eq(projects.key, key.toUpperCase()), isNull(projects.deletedAt)];
     if (workspaceId) {
       conditions.push(eq(projects.workspaceId, workspaceId));
     }
@@ -49,6 +67,7 @@ export const resolveProjectKey = async (req: Request, res: Response, next: NextF
       .select({ id: projects.projectId })
       .from(projects)
       .where(and(...conditions))
+      .orderBy(asc(projects.createdAt))
       .limit(1);
 
     if (!proj) {
@@ -71,7 +90,7 @@ export const resolveTaskKey = async (req: Request, res: Response, next: NextFunc
   try {
     const projectId = req.params.projectId as string | undefined; // Assuming resolveProjectKey ran first
 
-    const conditions = [];
+    const conditions: any[] = [isNull(tasks.deletedAt)];
     if (projectId) {
       conditions.push(eq(tasks.projectId, projectId));
     }
@@ -88,6 +107,7 @@ export const resolveTaskKey = async (req: Request, res: Response, next: NextFunc
       .select({ id: tasks.taskId })
       .from(tasks)
       .where(and(...conditions))
+      .orderBy(asc(tasks.createdAt))
       .limit(1);
 
     if (!task) {

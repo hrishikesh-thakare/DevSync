@@ -9,11 +9,20 @@ import {
   timestamp,
   jsonb,
   unique,
+  index,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { users } from './auth.js';
 import { workspaces } from './workspaces.js';
 import { projects } from './projects.js';
+import { tasks } from './tasks.js';
+import { customType } from 'drizzle-orm/pg-core';
+
+const tsvector = customType<{ data: string }>({
+  dataType() {
+    return 'tsvector';
+  },
+});
 
 // ─── channels ────────────────────────────────────────────────────────────────
 export const channels = pgTable('channels', {
@@ -54,7 +63,7 @@ export const messages = pgTable('messages', {
   systemType: varchar('system_type', { length: 30 }),
   bodyText:   text('body_text').notNull().default(''),
   bodyBlocks: jsonb('body_blocks'),
-  // body_tsv: TSVECTOR — added via migration SQL
+  bodyTsv:    tsvector('body_tsv'),
   threadId:   uuid('thread_id'), // self-ref FK to messages, added in migration
   replyCount: integer('reply_count').default(0),
   isEdited:   boolean('is_edited').default(false),
@@ -69,13 +78,16 @@ export const workspaceFiles = pgTable('workspace_files', {
   fileId:      uuid('file_id').primaryKey().defaultRandom(),
   workspaceId: uuid('workspace_id').references(() => workspaces.workspaceId, { onDelete: 'cascade' }),
   uploaderId:  uuid('uploader_id').references(() => users.userId, { onDelete: 'set null' }),
+  taskId:      uuid('task_id').references(() => tasks.taskId, { onDelete: 'cascade' }), // NULL = chat attachment, set = task attachment
   filename:    varchar('filename', { length: 255 }).notNull(),
   storagePath: text('storage_path').notNull(), // Supabase Storage bucket path
   mimetype:    varchar('mimetype', { length: 100 }),
   sizeBytes:   bigint('size_bytes', { mode: 'number' }),
   filetype:    varchar('filetype', { length: 20 }), // image|pdf|code|video|audio|other
   createdAt:   timestamp('created_at', { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+  index('workspace_files_task_id_idx').on(table.taskId),
+]);
 
 // ─── Relations ───────────────────────────────────────────────────────────────
 export const channelsRelations = relations(channels, ({ one, many }) => ({
@@ -96,9 +108,27 @@ export const messagesRelations = relations(messages, ({ one, many }) => ({
   author:  one(users, { fields: [messages.authorId], references: [users.userId] }),
   parent:  one(messages, { fields: [messages.threadId], references: [messages.messageId], relationName: 'thread' }),
   replies: many(messages, { relationName: 'thread' }),
+  reactions: many(messageReactions),
 }));
 
 export const workspaceFilesRelations = relations(workspaceFiles, ({ one }) => ({
   workspace: one(workspaces, { fields: [workspaceFiles.workspaceId], references: [workspaces.workspaceId] }),
   uploader:  one(users, { fields: [workspaceFiles.uploaderId], references: [users.userId] }),
+  task:      one(tasks, { fields: [workspaceFiles.taskId], references: [tasks.taskId] }),
+}));
+
+// ─── message_reactions ───────────────────────────────────────────────────────
+export const messageReactions = pgTable('message_reactions', {
+  reactionId: uuid('reaction_id').primaryKey().defaultRandom(),
+  messageId:  uuid('message_id').references(() => messages.messageId, { onDelete: 'cascade' }).notNull(),
+  userId:     uuid('user_id').references(() => users.userId, { onDelete: 'cascade' }).notNull(),
+  emoji:      varchar('emoji', { length: 20 }).notNull(), // e.g. "👍", "smile"
+  createdAt:  timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  unique('message_reactions_unique').on(table.messageId, table.userId, table.emoji),
+]);
+
+export const messageReactionsRelations = relations(messageReactions, ({ one }) => ({
+  message: one(messages, { fields: [messageReactions.messageId], references: [messages.messageId] }),
+  user:    one(users, { fields: [messageReactions.userId], references: [users.userId] }),
 }));

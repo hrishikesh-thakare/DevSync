@@ -5,8 +5,11 @@ import {
   text,
   integer,
   bigint,
+  boolean,
   timestamp,
   unique,
+  uniqueIndex,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { users } from './auth.js';
@@ -61,7 +64,77 @@ export const githubCiStatus = pgTable('github_ci_status', {
   triggeredAt:  timestamp('triggered_at', { withTimezone: true }).notNull(),
   completedAt:  timestamp('completed_at', { withTimezone: true }),
   createdAt:    timestamp('created_at', { withTimezone: true }).defaultNow(),
-});
+  // AI-written "likely cause" for a failed run. Generated automatically the
+  // moment the webhook reports a failure (also reachable via the Summarize
+  // button as a manual fallback) and cached here so it's computed once per
+  // run, never re-spent. Null until generated, and stays null forever if
+  // GEMINI_API_KEY is unset — see services/ai.service.ts.
+  aiFailureSummary: text('ai_failure_summary'),
+}, (table) => [
+  // The webhook handler treats this pair as a key — select, then update or
+  // insert. GitHub sends three events per run (queued/in_progress/completed),
+  // so without the constraint two concurrent deliveries could both miss the
+  // select and both insert.
+  uniqueIndex('github_ci_status_project_run_unique').on(table.projectId, table.runId),
+]);
+
+// ─── github_issues ───────────────────────────────────────────────────────────
+export const githubIssues = pgTable('github_issues', {
+  id:                 uuid('id').primaryKey().defaultRandom(),
+  projectId:          uuid('project_id').references(() => projects.projectId, { onDelete: 'cascade' }),
+  taskId:             uuid('task_id').references(() => tasks.taskId, { onDelete: 'set null' }),
+  githubIssueNumber:  integer('github_issue_number').notNull(),
+  githubIssueId:      bigint('github_issue_id', { mode: 'number' }),
+  title:              varchar('title', { length: 500 }).notNull(),
+  body:               text('body'),
+  state:              varchar('state', { length: 20 }).default('open'),  // open|closed
+  htmlUrl:            text('html_url'),
+  authorGithubLogin:  varchar('author_github_login', { length: 100 }),
+  authorUserId:       uuid('author_user_id').references(() => users.userId, { onDelete: 'set null' }),
+  labels:             jsonb('labels').default([]),
+  closedAt:           timestamp('closed_at', { withTimezone: true }),
+  createdAt:          timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt:          timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  unique('github_issues_project_number_unique').on(table.projectId, table.githubIssueNumber),
+]);
+
+// ─── github_pull_requests ────────────────────────────────────────────────────
+export const githubPullRequests = pgTable('github_pull_requests', {
+  id:                 uuid('id').primaryKey().defaultRandom(),
+  projectId:          uuid('project_id').references(() => projects.projectId, { onDelete: 'cascade' }),
+  taskId:             uuid('task_id').references(() => tasks.taskId, { onDelete: 'set null' }),
+  prNumber:           integer('pr_number').notNull(),
+  githubPrId:         bigint('github_pr_id', { mode: 'number' }),
+  title:              varchar('title', { length: 500 }).notNull(),
+  body:               text('body'),
+  state:              varchar('state', { length: 20 }).default('open'),  // open|closed|merged
+  htmlUrl:            text('html_url'),
+  headBranch:         varchar('head_branch', { length: 200 }),
+  baseBranch:         varchar('base_branch', { length: 200 }),
+  authorGithubLogin:  varchar('author_github_login', { length: 100 }),
+  authorUserId:       uuid('author_user_id').references(() => users.userId, { onDelete: 'set null' }),
+  mergedAt:           timestamp('merged_at', { withTimezone: true }),
+  closedAt:           timestamp('closed_at', { withTimezone: true }),
+  createdAt:          timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt:          timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  unique('github_prs_project_number_unique').on(table.projectId, table.prNumber),
+]);
+
+// ─── github_branches ─────────────────────────────────────────────────────────
+export const githubBranches = pgTable('github_branches', {
+  id:               uuid('id').primaryKey().defaultRandom(),
+  projectId:        uuid('project_id').references(() => projects.projectId, { onDelete: 'cascade' }),
+  taskId:           uuid('task_id').references(() => tasks.taskId, { onDelete: 'set null' }),
+  branchName:       varchar('branch_name', { length: 200 }).notNull(),
+  isDeleted:        boolean('is_deleted').default(false),
+  createdByUserId:  uuid('created_by_user_id').references(() => users.userId, { onDelete: 'set null' }),
+  htmlUrl:          text('html_url'),
+  createdAt:        timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  unique('github_branches_project_name_unique').on(table.projectId, table.branchName),
+]);
 
 // ─── Relations ───────────────────────────────────────────────────────────────
 export const githubConnectionsRelations = relations(githubConnections, ({ one }) => ({
@@ -77,4 +150,22 @@ export const githubCommitsRelations = relations(githubCommits, ({ one }) => ({
 
 export const githubCiStatusRelations = relations(githubCiStatus, ({ one }) => ({
   project: one(projects, { fields: [githubCiStatus.projectId], references: [projects.projectId] }),
+}));
+
+export const githubIssuesRelations = relations(githubIssues, ({ one }) => ({
+  project:    one(projects, { fields: [githubIssues.projectId], references: [projects.projectId] }),
+  task:       one(tasks, { fields: [githubIssues.taskId], references: [tasks.taskId] }),
+  authorUser: one(users, { fields: [githubIssues.authorUserId], references: [users.userId] }),
+}));
+
+export const githubPullRequestsRelations = relations(githubPullRequests, ({ one }) => ({
+  project:    one(projects, { fields: [githubPullRequests.projectId], references: [projects.projectId] }),
+  task:       one(tasks, { fields: [githubPullRequests.taskId], references: [tasks.taskId] }),
+  authorUser: one(users, { fields: [githubPullRequests.authorUserId], references: [users.userId] }),
+}));
+
+export const githubBranchesRelations = relations(githubBranches, ({ one }) => ({
+  project:       one(projects, { fields: [githubBranches.projectId], references: [projects.projectId] }),
+  task:          one(tasks, { fields: [githubBranches.taskId], references: [tasks.taskId] }),
+  createdByUser: one(users, { fields: [githubBranches.createdByUserId], references: [users.userId] }),
 }));

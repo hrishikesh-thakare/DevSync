@@ -1,560 +1,987 @@
-import { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { useChatStore, Message } from '../../store/chatStore.js';
+import { createElement, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { format, isSameDay } from 'date-fns';
+import { toast } from 'sonner';
+import {
+  ChevronDownIcon,
+  HashIcon,
+  Loader2Icon,
+  MessageSquareIcon,
+  PhoneIcon,
+  PhoneOffIcon,
+  PlayIcon,
+  SmilePlusIcon,
+  XIcon,
+} from 'lucide-react';
 
-import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
-import { useAuthStore } from '../../store/auth.js';
-import { useTaskStore } from '../../store/useTaskStore.js';
-import { TiptapEditor } from '../../components/chat/TiptapEditor.js';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button-group';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState, ErrorState, MessageSkeleton } from '@/components/layout/PageState';
+import { Separator } from '@/components/ui/separator';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { LinkPreview } from '@/components/LinkPreview';
+import { MessageComposer } from '@/components/chat/MessageComposer';
+import { ChannelSettingsSheet } from '@/pages/channels/ChannelSettingsSheet';
+import { useChatStore } from '@/store/chatStore';
+import { useAuthStore } from '@/store/auth';
+import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
+import { socketClient } from '@/lib/socket';
+import { apiFetch } from '@/lib/api';
+import type { MentionItem } from '@/components/editor/mentionSuggestion';
+import { initialsOf } from '@/lib/initials';
+import { firstUrlIn } from '@/lib/messageLinks';
+import { renderMarkdownMessage } from '@/lib/renderMarkdownMessage';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
+import type { ChatMessage } from '@/types/api';
+import { Bubble, BubbleContent } from '@/components/ui/bubble';
+import {
+  Attachment,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentMedia,
+  AttachmentTitle,
+  AttachmentTrigger,
+  AttachmentGroup
+} from '@/components/ui/attachment';
+import { attachmentIcon, downloadAttachment, getFileVariant } from '@/lib/files';
 
-import { renderMessageContent } from '../../components/chat/renderMessageContent.js';
+const QUICK_REACTIONS = ['👍', '🎉', '👀', '✅', '❤️', '🚀'];
 
-import { Hash, Lock, Users, Loader2, Smile, MessageSquare, X, Edit2 } from 'lucide-react';
-import { format } from 'date-fns';
-import { apiFetch } from '../../lib/api.js';
-import { socketClient } from '../../lib/socket.js';
+export function ChannelPage() {
+  const { slug = '', channelId = '' } = useParams();
+  const {
+    channel,
+    members,
+    messages,
+    threadRoot,
+    threadReplies,
+    isLoading,
+    isThreadLoading,
+    error,
+    openChannel,
+    send,
+    remove,
+    react,
+    openThread,
+    closeThread,
+    onNewMessage,
+    onMessageUpdated,
+    onMessageDeleted,
+    onReactionAdded,
+    onReactionRemoved,
+    reset,
+  } = useChatStore();
 
+  const me = useAuthStore((s) => s.user);
 
-function FileImagePreview({ slug, fileId, fileName }: { slug: string; fileId: string; fileName: string }) {
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  // A dm/group_dm has no name — its identity is its participants, not a
+  // settable string (see `Channel.name`'s doc comment). `members` is already
+  // fetched for every channel (it backs the member list elsewhere), so the
+  // real names are one filter away rather than a placeholder like "Direct
+  // message" everywhere a real channel would show `#general`.
+  const isDirect = channel?.type === 'dm' || channel?.type === 'group_dm';
+  const directLabel = isDirect
+    ? members.filter((m) => m.userId !== me?.userId).map((m) => m.displayName || m.fullName).join(', ') ||
+      'Direct message'
+    : null;
+
+  // Resolved client-side from the sidebar's already-fetched project list —
+  // no extra request. `null` for a channel with no linked project (or a DM),
+  // which just means the composer's mention picker only ever offers people.
+  const workspaceMembers = useCurrentWorkspaceStore((s) => s.members);
+  const projects = useCurrentWorkspaceStore((s) => s.projects);
+  const projectKey = channel?.projectId
+    ? (projects.find((p) => p.projectId === channel.projectId)?.key ?? null)
+    : null;
+
+  // Backs the composer's `@` mention popup — user results are filtered
+  // client-side from `workspaceMembers`, task
+  // results are a live search scoped to the channel's linked project, if it
+  // has one. Fails soft to user-only results: a member without project
+  // access, or a network hiccup, shouldn't block mentioning a person.
+  const getMentionItems = async (query: string, signal: AbortSignal): Promise<MentionItem[]> => {
+    const q = query.trim().toLowerCase();
+    const userItems: MentionItem[] = workspaceMembers
+      // Not yourself — you don't @-mention the person typing.
+      .filter((m) => m.userId !== me?.userId)
+      .filter((m) => !q || m.fullName.toLowerCase().includes(q) || (m.displayName ?? '').toLowerCase().includes(q))
+      .map((m) => ({ kind: 'user', id: m.userId, label: m.displayName || m.fullName, avatarUrl: m.avatarUrl }));
+
+    if (!projectKey) return userItems;
+
+    try {
+      const data = await apiFetch(
+        `/workspaces/${slug}/projects/${projectKey}/tasks?${q ? `search=${encodeURIComponent(q)}&` : ''}limit=20`,
+        { signal },
+      );
+      const taskItems: MentionItem[] = (data.tasks ?? []).map(
+        (t: { taskId: string; taskKey: string; title: string }) => ({
+          kind: 'task' as const,
+          id: t.taskId,
+          taskKey: t.taskKey,
+          title: t.title,
+        }),
+      );
+      return [...userItems, ...taskItems];
+    } catch {
+      return userItems;
+    }
+  };
+
+  const [sending, setSending] = useState(false);
+  // The Zoom join link for this channel's live call, if any — `null` means
+  // no call is running, so the header button reads "Start call". There is
+  // no embed and no participant count: once someone clicks through, they've
+  // left this page for Zoom's, which the backend has no visibility into.
+  const [callUrl, setCallUrl] = useState<string | null>(null);
+  const [startingCall, setStartingCall] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    let isMounted = true;
-    apiFetch(`/workspaces/${slug}/files/${fileId}/download`)
-      .then((res) => {
-        if (isMounted && res.downloadUrl) setImageUrl(res.downloadUrl);
-      })
-      .catch((err) => console.error('Failed to load image preview', err))
-      .finally(() => {
-        if (isMounted) setLoading(false);
-      });
-    return () => { isMounted = false; };
-  }, [slug, fileId]);
+    if (slug && channelId) void openChannel(slug, channelId);
+    return () => reset();
+  }, [slug, channelId, openChannel, reset]);
 
-  if (loading) {
+  // Join the channel room and subscribe. The server only accepts room ids of
+  // the form `channel:<uuid>` and answers a refusal with `room_join_denied`.
+  useEffect(() => {
+    if (!channelId) return;
+    const socket = socketClient.getSocket();
+    const room = `channel:${channelId}`;
+
+    // The server replies to `join_room` with the call's current state (if
+    // any) addressed only to this socket, and to a fresh `POST .../call`
+    // from anyone with a room-wide broadcast — same event name either way,
+    // so one listener covers both. `channelRoomId` is checked because this
+    // socket may be joined to other channel rooms too (a background DM tab).
+    const onCallStarted = (payload: { channelRoomId: string; joinUrl: string | null }) => {
+      if (payload.channelRoomId === room) setCallUrl(payload.joinUrl);
+    };
+
+    // `joinRoom` returns its own release function and replays the join on
+    // every reconnect — a bare `emit` here was lost the moment the socket
+    // dropped, since this effect does not re-run on reconnect.
+    const releaseRoom = socketClient.joinRoom(room);
+    socket.on('new_message', onNewMessage);
+    socket.on('message_updated', onMessageUpdated);
+    socket.on('message_deleted', onMessageDeleted);
+    socket.on('message_reaction_added', onReactionAdded);
+    socket.on('message_reaction_removed', onReactionRemoved);
+    socket.on('call_started', onCallStarted);
+
+    return () => {
+      releaseRoom();
+      socket.off('new_message', onNewMessage);
+      socket.off('message_updated', onMessageUpdated);
+      socket.off('message_deleted', onMessageDeleted);
+      socket.off('message_reaction_added', onReactionAdded);
+      socket.off('message_reaction_removed', onReactionRemoved);
+      socket.off('call_started', onCallStarted);
+      setCallUrl(null);
+    };
+  }, [channelId, onNewMessage, onMessageUpdated, onMessageDeleted, onReactionAdded, onReactionRemoved]);
+
+  // Opens the shared Zoom link in a new tab — minting one first via the
+  // backend if this is the first person in the channel to click it this
+  // "session" (the backend reuses the existing meeting for everyone after).
+  const handleCall = async () => {
+    if (callUrl) {
+      window.open(callUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    setStartingCall(true);
+    try {
+      const { joinUrl } = await apiFetch(`/workspaces/${slug}/channels/${channelId}/call`, { method: 'POST' });
+      setCallUrl(joinUrl);
+      window.open(joinUrl, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not start the call.');
+    } finally {
+      setStartingCall(false);
+    }
+  };
+
+  // Force-ends the Zoom meeting for everyone, not just this tab — there's no
+  // "leave" concept here (closing the Zoom tab already does that); this is
+  // specifically for closing out a call nobody's using any more so the next
+  // click starts a fresh one instead of rejoining a stale meeting.
+  const handleEndCall = async () => {
+    const previousUrl = callUrl;
+    setCallUrl(null); // optimistic — the DELETE below can't really fail in a way worth reverting for
+    try {
+      await apiFetch(`/workspaces/${slug}/channels/${channelId}/call`, { method: 'DELETE' });
+    } catch (err) {
+      setCallUrl(previousUrl);
+      toast.error(err instanceof Error ? err.message : 'Could not end the call.');
+    }
+  };
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: 'end' });
+  }, [messages.length]);
+
+  useEffect(() => {
+    const el = bottomRef.current;
+    if (!el) return;
+    const content = el.parentElement;
+    if (!content) return;
+    const viewport = content.closest('[data-radix-scroll-area-viewport]');
+    if (!viewport) return;
+
+    let prevHeight = viewport.scrollHeight;
+    const observer = new ResizeObserver(() => {
+      const currentHeight = viewport.scrollHeight;
+      const heightDiff = currentHeight - prevHeight;
+      prevHeight = currentHeight;
+
+      if (heightDiff > 0) {
+        // If the user was already near the bottom before this height increase
+        // (e.g. an image just loaded asynchronously), keep them at the bottom.
+        const distanceToBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+        if (distanceToBottom <= heightDiff + 10) {
+          el.scrollIntoView({ block: 'end' });
+        }
+      }
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+
+  // `bodyText` is markdown from the composer (`RichTextEditor`'s wire format
+  // — see that component's doc comment), trimmed there before this is ever
+  // called; the composer itself already gates on the editor's own `isEmpty`
+  // before calling `onSend`, so a call reaching here with no attachments
+  // always has real content. Returns whether it succeeded — MessageComposer
+  // only clears the draft it just sent on `true`.
+  const submit = async (
+    body: string,
+    attachments: AttachmentPayload[],
+    threadId: string | null,
+  ): Promise<boolean> => {
+    if (!body && attachments.length === 0) return false;
+    setSending(true);
+    try {
+      await send(slug, channelId, body, threadId, attachments);
+      return true;
+    } catch (err) {
+      // 403 in an announcement-only channel when the sender is not an admin.
+      toast.error(err instanceof Error ? err.message : 'Could not send the message.');
+      return false;
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const toggleReaction = async (message: ChatMessage, emoji: string) => {
+    const mine = message.reactions.some((r) => r.userId === me?.userId && r.emoji === emoji);
+    try {
+      await react(slug, channelId, message.messageId, emoji, !mine);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not react.');
+    }
+  };
+
+  if (isLoading) {
     return (
-      <div className="w-48 h-32 bg-gray-800/60 animate-pulse rounded-lg flex items-center justify-center border border-gray-700/50">
-        <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
+      <div className="p-6">
+        <MessageSkeleton />
       </div>
     );
   }
 
-  if (!imageUrl) return null;
+  if (error || !channel) {
+    return (
+      <div className="p-6">
+        <ErrorState message={error ?? 'Channel not found.'} />
+      </div>
+    );
+  }
 
   return (
-    <a
-      href={imageUrl}
-      target="_blank"
-      rel="noreferrer"
-      className="block my-1.5 overflow-hidden rounded-xl border border-gray-700/60 bg-gray-900 max-w-sm group transition-transform hover:scale-[1.01]"
-    >
-      <img
-        src={imageUrl}
-        alt={fileName}
-        className="max-h-64 max-w-full object-cover rounded-xl"
-        loading="lazy"
-      />
-    </a>
+    <div className="absolute inset-0 flex bg-background">
+      {/* Main conversation.
+          `min-h-0` is what actually makes the message list scroll internally
+          instead of the whole column growing past the viewport — a flex
+          item's default min-height is `auto` ("never shrink below content
+          size"), so without this a `flex-1 overflow-y-auto` child can never
+          activate its own scrollbar. Without it the page itself scrolled
+          instead, taking the composer down with it — not "sticky", the
+          opposite of sticky. */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-6">
+          {isDirect ? (
+            <MessageSquareIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+          ) : (
+            <HashIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+          )}
+          <h1 className="font-medium text-foreground">{isDirect ? directLabel : channel.name}</h1>
+          {channel.isAnnouncementOnly ? <Badge variant="outline">announcements</Badge> : null}
+          {channel.description ? (
+            <p className="ml-2 hidden min-w-0 truncate text-sm text-muted-foreground sm:block">
+              {channel.description}
+            </p>
+          ) : null}
+          {callUrl ? (
+            // Split button: the main half still does the obvious thing on a
+            // plain click (join); ending the call for everyone is one level
+            // deeper, in the chevron's menu, since it's the more disruptive
+            // of the two actions and shouldn't share a hit target with it.
+            <ButtonGroup className="ml-auto">
+              <Button variant="secondary" size="sm" className="gap-1.5" onClick={() => void handleCall()}>
+                <PhoneIcon className="size-3.5" aria-hidden="true" />
+                Join call
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="secondary" size="sm" aria-label="Call options">
+                    <ChevronDownIcon className="size-3.5" aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem variant="destructive" onSelect={() => void handleEndCall()}>
+                    <PhoneOffIcon className="size-3.5" aria-hidden="true" />
+                    End call for everyone
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </ButtonGroup>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-auto gap-1.5"
+              disabled={startingCall}
+              onClick={() => void handleCall()}
+            >
+              {startingCall ? (
+                <Loader2Icon className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <PhoneIcon className="size-3.5" aria-hidden="true" />
+              )}
+              Start call
+            </Button>
+          )}
+          <ChannelSettingsSheet slug={slug} channel={channel} />
+        </header>
+
+        {/* `min-h-0` on the ScrollArea itself, not just its ancestors: a flex
+            item's default min-height is `auto` ("never shrink below content
+            size"), and Radix's ScrollAreaPrimitive.Root doesn't override it —
+            without this, `flex-1` alone still lets it grow to fit every
+            message rather than clamp to the available space, so `<main>`'s
+            own overflow-y-auto ends up scrolling everything (header
+            included) instead of this list scrolling internally. */}
+        <ScrollArea className="min-h-0 flex-1">
+          {/* `pb-8` rather than `py-4` symmetrically: reactions render in
+              normal flow now (see MessageRow below), but the last message's
+              content can still sit close to this edge — kept for breathing
+              room. */}
+          <div className="flex flex-col justify-end min-h-full px-6 pt-4 pb-8">
+            {messages.length === 0 ? (
+              <EmptyState
+                compact
+                icon={<MessageSquareIcon />}
+                title="No messages yet"
+                description="Start the conversation — everyone in this channel will see it."
+              />
+            ) : (
+              <ul className="space-y-1">
+                {messages.map((message, i) => (
+                  <MessageRow
+                    slug={slug}
+                    key={message.messageId}
+                    message={message}
+                    previous={messages[i - 1]}
+                    currentUserId={me?.userId}
+                    onReply={() => void openThread(slug, channelId, message)}
+                    onReact={(emoji) => void toggleReaction(message, emoji)}
+                    onDelete={() => {
+                      void remove(slug, channelId, message.messageId).catch((err: unknown) =>
+                        toast.error(err instanceof Error ? err.message : 'Could not delete.'),
+                      );
+                    }}
+                  />
+                ))}
+              </ul>
+            )}
+            <div ref={bottomRef} />
+          </div>
+        </ScrollArea>
+
+        {/* Explicit `sticky` on top of the `min-h-0` fix above, belt-and-
+            braces: once the message list is correctly height-capped this is
+            already pinned by ordinary flex layout, but sticky costs nothing
+            extra and holds even if some future change reintroduces page-level
+            scrolling here. */}
+        {/* No bar/border/background of its own any more — the composer
+            (`RichTextEditor`) is its own floating, elevated, heavily rounded
+            card now, so this just needs to be a plain sticky spacer that lets
+            the message area's background show through around it. */}
+        <div className="sticky bottom-0 z-10">
+          <MessageComposer
+            slug={slug}
+            disabled={sending}
+            placeholder={isDirect ? `Message ${directLabel}` : `Message #${channel.name}`}
+            onSend={(bodyText, attachments) => submit(bodyText, attachments, null)}
+            getMentionItems={getMentionItems}
+          />
+        </div>
+      </div>
+
+      {/* Thread panel */}
+      {threadRoot ? (
+        <aside className="flex min-h-0 w-96 min-w-0 shrink-0 flex-col border-l bg-background">
+          <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+            <MessageSquareIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+            <h2 className="font-medium text-foreground">Thread</h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="ml-auto"
+              aria-label="Close thread"
+              onClick={closeThread}
+            >
+              <XIcon className="size-4" aria-hidden="true" />
+            </Button>
+          </header>
+
+          {/* `min-h-0` on the ScrollArea itself, not just its ancestors: a flex
+            item's default min-height is `auto` ("never shrink below content
+            size"), and Radix's ScrollAreaPrimitive.Root doesn't override it —
+            without this, `flex-1` alone still lets it grow to fit every
+            message rather than clamp to the available space, so `<main>`'s
+            own overflow-y-auto ends up scrolling everything (header
+            included) instead of this list scrolling internally. */}
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="flex flex-col justify-end min-h-full px-4 pt-3 pb-8">
+              <MessageRow
+                slug={slug}
+                message={threadRoot}
+                currentUserId={me?.userId}
+                onReact={(emoji) => void toggleReaction(threadRoot, emoji)}
+              />
+              <Separator className="my-3" />
+
+              {isThreadLoading ? (
+                <Skeleton className="h-16 w-full rounded-lg" />
+              ) : threadReplies.length === 0 ? (
+                <EmptyState compact title="No replies yet" description="Reply to start the thread." />
+              ) : (
+                <ul className="space-y-1">
+                  {threadReplies.map((reply, i) => (
+                    <MessageRow
+                      slug={slug}
+                      key={reply.messageId}
+                      message={reply}
+                      previous={i > 0 ? threadReplies[i - 1] : undefined}
+                      currentUserId={me?.userId}
+                      onReact={(emoji) => void toggleReaction(reply, emoji)}
+                      onDelete={() => {
+                        void remove(slug, channelId, reply.messageId).catch((err: unknown) =>
+                          toast.error(err instanceof Error ? err.message : 'Could not delete.'),
+                        );
+                      }}
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
+          </ScrollArea>
+
+          {/* No bar/border/background of its own any more — the composer
+            (`RichTextEditor`) is its own floating, elevated, heavily rounded
+            card now, so this just needs to be a plain sticky spacer that lets
+            the message area's background show through around it. */}
+        <div className="sticky bottom-0 z-10">
+            <MessageComposer
+              slug={slug}
+              disabled={sending}
+              placeholder="Reply in thread"
+              onSend={(bodyText, attachments) => submit(bodyText, attachments, threadRoot.messageId)}
+              getMentionItems={getMentionItems}
+            />
+          </div>
+        </aside>
+      ) : null}
+    </div>
   );
 }
 
-export const ChannelPage = () => {
-  const { slug, channelId } = useParams();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const taskKeyQuery = searchParams.get('task');
+export interface AttachmentPayload {
+  name: string;
+  /**
+   * Stable reference to the uploaded file — the message stores this, and
+   * the URL is resolved fresh (short-lived, revocable) each time the
+   * message renders. This is what every new attachment carries.
+   */
+  fileId?: string;
+  /**
+   * A URL baked directly into the message at send time. This is the OLD
+   * format (see git history around the file-serving JWT fix) — a signed
+   * URL good for ten years, stored verbatim. Kept only so messages sent
+   * before that fix still render; nothing writes this field anymore.
+   */
+  url?: string;
+  sizeBytes: number;
+  mimetype: string;
+}
 
-  const initialChatContent = taskKeyQuery
-    ? `<p><span class="text-blue-400 bg-blue-500/10 px-1 rounded font-medium">@${taskKeyQuery}</span> </p>`
-    : '';
-
-
-  const { user } = useAuthStore();
-  const { channels, memberCount, isAdmin, fetchWorkspaceData, myRole } = useCurrentWorkspaceStore();
-  const { messages, isLoading, joinChannel, leaveChannel, sendMessage, removeMessage } = useChatStore();
-
-  
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const threadScrollRef = useRef<HTMLDivElement>(null);
-  
-  const currentChannel = channels.find(c => c.channelId === channelId);
-
-  // Thread State
-  const [activeThreadMessageId, setActiveThreadMessageId] = useState<string | null>(null);
-  const [threadReplies, setThreadReplies] = useState<Message[]>([]);
-  const [isThreadLoading, setIsThreadLoading] = useState(false);
-  const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
-  const [threadsCache, setThreadsCache] = useState<Record<string, Message[]>>({});
-
-  const [canChat, setCanChat] = useState(true);
+/**
+ * Renders one chat attachment. New-format blocks (`fileId`, no `url`) fetch a
+ * fresh, short-lived download URL on mount rather than trusting anything
+ * baked into the message — a leaked chat link now expires like any other
+ * signed URL instead of working for ten years. Old messages (`url` already
+ * set, sent before this fix) just use that URL directly; there's nothing to
+ * re-resolve for them, and no way to retroactively shorten a URL that's
+ * already been handed out.
+ */
+function ChatAttachmentBlock({
+  slug,
+  block,
+}: {
+  slug: string;
+  block: AttachmentPayload & { type: string };
+}) {
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(block.url ?? null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    const checkPermissions = async () => {
-      if (!currentChannel) return;
-
-      if (currentChannel.projectId) {
-        try {
-          const project = useCurrentWorkspaceStore.getState().projects.find(p => p.projectId === currentChannel.projectId);
-          if (!project) throw new Error('Project not found in store');
-          
-          interface ProjectMember {
-            userId: string;
-            role: string;
-          }
-          const data = await apiFetch(`/workspaces/${slug}/projects/${project.key}/members`);
-          const members: ProjectMember[] = data.members || [];
-          const myMembership = members.find((m) => m.userId === user?.userId);
-
-          
-          if (isAdmin()) {
-            setCanChat(true);
-          } else {
-            setCanChat(myMembership?.role !== 'viewer');
-          }
-        } catch (err) {
-          console.error(err);
-          setCanChat(false);
-        }
-      } else {
-        // All workspace roles ('owner', 'admin', 'member') can chat in workspace channels
-        // EXCEPT if it is announcement only
-        if (currentChannel?.isAnnouncementOnly) {
-          setCanChat(myRole === 'owner' || myRole === 'admin');
-        } else {
-          setCanChat(true);
-        }
-      }
+    if (block.url || !block.fileId) return;
+    let cancelled = false;
+    apiFetch(`/workspaces/${slug}/files/${block.fileId}/download`)
+      .then((data) => {
+        if (!cancelled) setResolvedUrl(data.downloadUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
     };
-    checkPermissions();
-  }, [currentChannel, slug, user?.userId, isAdmin, myRole]);
+  }, [slug, block.fileId, block.url]);
 
+  const variant = getFileVariant(block.mimetype, block.name);
 
-  const [prevChannelId, setPrevChannelId] = useState(channelId);
-  if (channelId !== prevChannelId) {
-    setPrevChannelId(channelId);
-    setActiveThreadMessageId(null);
+  // Audio has nothing to enlarge — it stays inline with its native control
+  // bar, same card shell as everything else. No filename/size caption: a
+  // voice note doesn't carry a name worth reading, same reasoning as
+  // WhatsApp/Slack voice messages — that caption only earns its keep on the
+  // chip below, where the name (a real document/code filename) is the point.
+  if (resolvedUrl && variant === 'audio') {
+    return (
+      <Attachment orientation="vertical" className="w-72! overflow-hidden">
+        <div className="w-full p-2">
+          <audio controls src={resolvedUrl} className="w-full" />
+        </div>
+      </Attachment>
+    );
   }
 
-  useEffect(() => {
-    if (slug && channelId) {
-      joinChannel(slug, channelId);
-      if (currentChannel?.projectId) {
-        const project = useCurrentWorkspaceStore.getState().projects.find(p => p.projectId === currentChannel.projectId);
-        if (project?.key) {
-          useTaskStore.getState().fetchTasks(project.key);
-        }
-      } else {
-        // Workspace wide channels have no project tasks
-        useTaskStore.setState({ tasks: [] });
-      }
-    }
-    return () => leaveChannel();
-  }, [slug, channelId, currentChannel, joinChannel, leaveChannel]);
-
-
-  useEffect(() => {
-    const socket = socketClient.getSocket();
-    const handleMessageDeleted = ({ messageId }: { messageId: string }) => {
-      setThreadReplies((prev) => prev.filter((m) => m.messageId !== messageId));
-      setThreadsCache((prev) => {
-        const updated = { ...prev };
-        for (const parentId in updated) {
-          updated[parentId] = updated[parentId].filter((m) => m.messageId !== messageId);
-        }
-        return updated;
-      });
-    };
-
-    socket.on('message_deleted', handleMessageDeleted);
-    return () => {
-      socket.off('message_deleted', handleMessageDeleted);
-    };
-  }, []);
-
-
-
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
-
-  // Auto-scroll thread
-  useEffect(() => {
-    if (threadScrollRef.current) {
-      threadScrollRef.current.scrollTop = threadScrollRef.current.scrollHeight;
-    }
-  }, [threadReplies]);
-
-  const toggleThreadInline = async (messageId: string) => {
-    const newSet = new Set(expandedThreads);
-    if (newSet.has(messageId)) {
-      newSet.delete(messageId);
-      setExpandedThreads(newSet);
-    } else {
-      newSet.add(messageId);
-      setExpandedThreads(newSet);
-      if (!threadsCache[messageId]) {
-        try {
-          const data = await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages/${messageId}/thread`);
-          setThreadsCache(prev => ({ ...prev, [messageId]: data.replies || [] }));
-        } catch (err) {
-          console.error(err);
-        }
-      }
-    }
-  };
-
-  const loadThread = async (messageId: string) => {
-    setActiveThreadMessageId(messageId);
-    setIsThreadLoading(true);
-    try {
-      const data = await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages/${messageId}/thread`);
-      setThreadReplies(data.replies || []);
-    } catch (err) {
-      console.error(err);
-      alert(err instanceof Error ? err.message : 'Failed to load thread');
-    } finally {
-      setIsThreadLoading(false);
-    }
-  };
-
-
-  const handleSendMain = async (content: string) => {
-    if (slug && channelId) {
-      await sendMessage(slug, channelId, content);
-    }
-  };
-
-  const handleSendThread = async (content: string) => {
-    if (slug && channelId && activeThreadMessageId) {
-      try {
-        const data = await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages`, {
-          method: 'POST',
-          body: JSON.stringify({ bodyText: content, threadId: activeThreadMessageId }),
-        });
-        setThreadReplies([...threadReplies, data.data]);
-      } catch (err) {
-        alert(err instanceof Error ? err.message : 'Failed to send reply');
-      }
-    }
-  };
-
-  const deleteMessage = async (msgId: string) => {
-    if (!confirm('Delete message?')) return;
-    try {
-      const targetMsg = messages.find(m => m.messageId === msgId) || threadReplies.find(m => m.messageId === msgId);
-      const threadId = targetMsg?.threadId || null;
-
-
-      await apiFetch(`/workspaces/${slug}/channels/${channelId}/messages/${msgId}`, { method: 'DELETE' });
-      removeMessage(msgId, threadId);
-      setThreadReplies((prev) => prev.filter((m) => m.messageId !== msgId));
-      setThreadsCache((prev) => {
-        const updated = { ...prev };
-        for (const parentId in updated) {
-          updated[parentId] = updated[parentId].filter((m) => m.messageId !== msgId);
-        }
-        return updated;
-      });
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete message');
-    }
-  };
-
-
-
-
-  const handleDeleteChannel = async () => {
-    if (!confirm('Are you sure you want to delete this channel?')) return;
-    try {
-      await apiFetch(`/workspaces/${slug}/channels/${channelId}`, { method: 'DELETE' });
-      fetchWorkspaceData(slug as string);
-      navigate(`/w/${slug}`);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete channel');
-    }
-  };
-
-
-  const handleUpdateChannelName = async () => {
-    if (!currentChannel) return;
-    const newName = prompt('Enter new channel name:', currentChannel.name);
-    if (!newName || newName === currentChannel.name) return;
-    
-    try {
-      await apiFetch(`/workspaces/${slug}/channels/${channelId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ name: newName })
-      });
-      fetchWorkspaceData(slug as string);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update channel name');
-    }
-  };
-
-  const renderMessage = (msg: Message, isThreadContext = false) => {
-    const isMe = ('authorId' in msg ? (msg as { authorId?: string }).authorId : undefined) === user?.userId || msg.senderId === user?.userId;
-
-
-    // Basic logic for headers (simplified for thread)
-    const showHeader = true;
-
-    // Render raw HTML — convert file markers and task mentions into styled anchors/spans
-    const htmlContent = renderMessageContent(msg.bodyText || '');
-
-    // Extract any file attachments in the message to display image previews
-    const fileMatches = Array.from((msg.bodyText || '').matchAll(/\[(.*?)\]\(file:([a-zA-Z0-9-]+)\)/g)) as RegExpMatchArray[];
-
+  // Video and images open a fullscreen viewer on click, WhatsApp-style — the
+  // inline card is a preview, not the actual player. A `<video controls>`
+  // inline would fight a whole-card click handler (every scrub/pause would
+  // also trigger it), so the inline preview is a muted, controls-less frame
+  // with a Play badge; the real player — controls, unmuted, autoplay — only
+  // exists inside the dialog. `AttachmentTrigger` is the same overlay-button
+  // this component already uses for the pdf/download case, just wired to a
+  // dialog instead of a link, so it's fully keyboard/focus accessible.
+  if (resolvedUrl && (variant === 'video' || variant === 'image')) {
     return (
-      <div key={msg.messageId} className={`group flex items-start py-1 hover:bg-gray-900/40 rounded-lg transition-colors relative ${isThreadContext ? '' : '-mx-4 px-4'}`}>
-        <div className="w-10 flex-shrink-0 flex justify-center">
-          {showHeader && (
-            <div className="w-9 h-9 rounded-md bg-gradient-to-br from-gray-700 to-gray-500 flex items-center justify-center text-white font-bold shadow-md border border-gray-800">
-              {msg.authorName?.[0]?.toUpperCase() || 'U'}
-            </div>
+      <Attachment orientation="vertical" className="w-72! overflow-hidden">
+        <div className="relative w-full bg-black">
+          {variant === 'video' ? (
+            <>
+              <video src={resolvedUrl} preload="metadata" muted playsInline className="max-h-80 w-full object-contain" />
+              <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="flex size-12 items-center justify-center rounded-full bg-black/60 text-white">
+                  <PlayIcon className="size-6 translate-x-0.5" />
+                </span>
+              </span>
+            </>
+          ) : (
+            <img src={resolvedUrl} alt="" className="max-h-80 w-full object-cover" />
           )}
         </div>
+        <Dialog>
+          <DialogTrigger asChild>
+            <AttachmentTrigger aria-label={variant === 'video' ? `Play ${block.name}` : `View ${block.name}`} />
+          </DialogTrigger>
+          <DialogContent
+            // The close button sits over the video's own native controls
+            // (which already include play/pause/fullscreen and their own
+            // exit-fullscreen affordance) — dropped for video specifically.
+            // Esc and clicking the backdrop still close the dialog either
+            // way. Images keep it since there's no native chrome to clash with.
+            showCloseButton={variant !== 'video'}
+            className="flex w-fit max-w-[95vw] items-center justify-center border-none bg-transparent p-0 shadow-none ring-0"
+          >
+            <DialogTitle className="sr-only">{block.name}</DialogTitle>
+            {variant === 'video' ? (
+              <video src={resolvedUrl} controls autoPlay className="max-h-[88vh] max-w-[90vw] rounded-lg" />
+            ) : (
+              <img src={resolvedUrl} alt="" className="max-h-[88vh] max-w-[90vw] rounded-lg object-contain" />
+            )}
+          </DialogContent>
+        </Dialog>
+      </Attachment>
+    );
+  }
 
-        <div className="ml-3 flex-1 min-w-0">
-          {showHeader && (
-            <div className="flex items-baseline space-x-2 mb-0.5">
-              <span className="font-semibold text-gray-100">{msg.authorName || 'Unknown User'}</span>
-              <span className="text-xs text-gray-500">{msg.createdAt ? format(new Date(msg.createdAt), 'h:mm a') : ''}</span>
-            </div>
-          )}
-          
-          <div 
-            className="text-gray-300 text-[15px] leading-relaxed prose prose-invert max-w-none prose-p:my-0 prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-800 prose-code:before:content-none prose-code:after:content-none"
-            dangerouslySetInnerHTML={{ __html: htmlContent }}
-            onClick={async (e) => {
-              const target = e.target as HTMLElement;
-              const fileLink = target.closest('[data-file-id]');
-              if (fileLink) {
-                e.preventDefault();
-                const fileId = fileLink.getAttribute('data-file-id');
-                try {
-                  const res = await apiFetch(`/workspaces/${slug}/files/${fileId}/download`);
-                  if (res.downloadUrl) window.open(res.downloadUrl, '_blank');
-                } catch (err) {
-                  console.error('Failed to get download URL', err);
-                }
-                return;
-              }
-
-              const taskLink = target.closest('[data-task-key]');
-              if (taskLink) {
-                e.preventDefault();
-                let taskKey = taskLink.getAttribute('data-task-key');
-                if (taskKey) {
-                  taskKey = taskKey.replace(/^@/, '');
-                  const projectKey = taskKey.split('-')[0];
-                  navigate(`/w/${slug}/projects/${projectKey}/tasks/${taskKey}`);
-                }
-              }
+  // Not yet resolved, failed, or a non-inline type (pdf/code/other) — the
+  // compact chip, same shape it's always been.
+  return (
+    <Attachment orientation="horizontal">
+      <AttachmentMedia variant={variant}>
+        {/* `createElement`, not a `const Icon = attachmentIcon(...)` local
+            rendered as `<Icon/>` — that shape reads as "a component created
+            during render" to the react-compiler lint rule, even though
+            `attachmentIcon` only ever returns one of three fixed,
+            module-level icon components. This sidesteps the false positive
+            without disabling the rule. */}
+        {createElement(attachmentIcon(block.mimetype))}
+      </AttachmentMedia>
+      <AttachmentContent>
+        <AttachmentTitle>{block.name}</AttachmentTitle>
+        <AttachmentDescription>
+          {failed ? 'Could not load this file' : `${Math.round(block.sizeBytes / 1024)} KB`}
+        </AttachmentDescription>
+      </AttachmentContent>
+      {resolvedUrl && (
+        <AttachmentTrigger asChild aria-label={`Open ${block.name}`}>
+          <a
+            href={resolvedUrl}
+            target={variant === 'pdf' ? '_blank' : undefined}
+            rel="noopener noreferrer"
+            onClick={(e) => {
+              // PDF opens normally — the server answers it `inline` and the
+              // tab renders a real PDF viewer. Everything else here (code,
+              // archives, office docs) the server forces to `attachment`, so
+              // a `target="_blank"` link just leaves an empty tab behind
+              // once the download starts. Download directly instead.
+              if (variant === 'pdf') return;
+              e.preventDefault();
+              downloadAttachment(resolvedUrl, block.name);
             }}
           />
+        </AttachmentTrigger>
+      )}
+    </Attachment>
+  );
+}
 
-          {/* Render Image Previews for Image Files */}
-          {fileMatches.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {fileMatches.map((match) => {
-                const fileName = match[1];
-                const fileId = match[2];
-                const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(fileName);
-                if (!isImage) return null;
-                return (
-                  <FileImagePreview key={fileId} slug={slug!} fileId={fileId} fileName={fileName} />
-                );
-              })}
-            </div>
-          )}
+const OTHER_USER_VARIANTS = ["blue", "green", "amber", "purple", "pink", "teal"] as const;
 
-          {!isThreadContext && (msg.replyCount ?? msg.threadCount ?? 0) > 0 && (
-            <div className="mt-2 flex items-center gap-3">
-              <button 
-                onClick={() => toggleThreadInline(msg.messageId)}
-                className="flex items-center text-sm font-medium text-blue-400 hover:text-blue-300 px-1 py-0.5 rounded transition-colors"
-              >
-                <span className="font-mono font-bold mr-1.5 text-lg leading-none">{expandedThreads.has(msg.messageId) ? '[-]' : '[+]'}</span>
-                {msg.replyCount ?? msg.threadCount} {(msg.replyCount ?? msg.threadCount) === 1 ? 'reply' : 'replies'} inline
-              </button>
+function getBubbleVariant(isMine: boolean, authorId: string | null) {
+  if (isMine) return "default";
+  if (!authorId) return "secondary";
+  let hash = 0;
+  for (let i = 0; i < authorId.length; i++) {
+    hash = authorId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % OTHER_USER_VARIANTS.length;
+  return OTHER_USER_VARIANTS[index];
+}
 
-              <button 
-                onClick={() => loadThread(msg.messageId)}
-                className="flex items-center text-sm font-medium text-gray-400 hover:text-gray-300 bg-gray-800/50 hover:bg-gray-800 px-2 py-1 rounded transition-colors"
-              >
-                <MessageSquare className="w-4 h-4 mr-1.5" />
-                Sidebar
-              </button>
-            </div>
-          )}
+function MessageRow({
+  slug,
+  message,
+  previous,
+  currentUserId,
+  compact,
+  onReply,
+  onReact,
+  onDelete,
+}: {
+  slug: string;
+  message: ChatMessage;
+  previous?: ChatMessage;
+  currentUserId?: string;
+  compact?: boolean;
+  onReply?: () => void;
+  onReact: (emoji: string) => void;
+  onDelete?: () => void;
+}) {
+  const navigate = useNavigate();
 
-          {/* Inline Nested Replies */}
-          {!isThreadContext && expandedThreads.has(msg.messageId) && threadsCache[msg.messageId] && (
-            <div className="mt-3 ml-2 pl-4 border-l-2 border-gray-800 space-y-2">
-              {threadsCache[msg.messageId].map((reply: Message) => (
-                <div key={reply.messageId} className="relative">
-                  {renderMessage(reply, true)}
-                </div>
-              ))}
+  // Group consecutive messages from the same author within the same day.
+  const grouped =
+    !compact &&
+    previous &&
+    previous.authorId === message.authorId &&
+    !previous.isSystem &&
+    !message.isSystem &&
+    isSameDay(new Date(previous.createdAt), new Date(message.createdAt));
 
-            </div>
-          )}
-        </div>
+  const showDate =
+    !compact &&
+    (!previous || !isSameDay(new Date(previous.createdAt), new Date(message.createdAt)));
 
-        <div className="opacity-0 group-hover:opacity-100 flex items-center space-x-1 bg-gray-900 border border-gray-800 rounded-md p-1 shadow-sm absolute right-6 -mt-3 transition-opacity">
-          <button className="p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-800 rounded"><Smile className="w-4 h-4" /></button>
-          {!isThreadContext && (
-            <button 
-              onClick={() => loadThread(msg.messageId)}
-              className="p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-800 rounded" 
-              title="Reply in thread"
-            >
-              <MessageSquare className="w-4 h-4" />
-            </button>
-          )}
-          {(isMe || isAdmin()) && (
-            <button onClick={() => deleteMessage(msg.messageId)} className="p-1.5 text-red-400 hover:text-red-300 hover:bg-gray-800 rounded" title="Delete Message">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  };
+  const linkedUrl = useMemo(() => firstUrlIn(message.bodyText ?? ''), [message.bodyText]);
+  // `bodyText` is markdown (`**bold**` syntax) — the composer is a rich-text
+  // editor (`RichTextEditor`, Tiptap), but its wire format is still markdown,
+  // not HTML, so this render path is unchanged: converted to HTML and
+  // sanitized in one step; see `e2e/tests/channels/messages.spec.ts`'s "XSS
+  // sanitization" suite for exactly what has to survive that inert.
+  const safeBodyHtml = useMemo(() => renderMarkdownMessage(message.bodyText ?? '', slug), [message.bodyText, slug]);
 
-  const parentMessage = messages.find(m => m.messageId === activeThreadMessageId);
+  // Collapse the flat reaction rows into counts per emoji.
+  const reactions = useMemo(() => {
+    const byEmoji = new Map<string, { count: number; mine: boolean; who: string[] }>();
+    for (const r of message.reactions ?? []) {
+      const entry = byEmoji.get(r.emoji) ?? { count: 0, mine: false, who: [] };
+      entry.count += 1;
+      if (r.userId === currentUserId) entry.mine = true;
+      if (r.userName) entry.who.push(r.userName);
+      byEmoji.set(r.emoji, entry);
+    }
+    return [...byEmoji.entries()];
+  }, [message.reactions, currentUserId]);
+
+  const isMine = message.authorId === currentUserId;
+  const isOptimistic = message.messageId.startsWith('optimistic-');
 
   return (
-    <div className="flex h-full bg-gray-950 font-sans overflow-hidden">
-      
-      {/* Main Channel Area */}
-      <div className="flex flex-col flex-1 min-w-0">
-        {/* Top Header */}
-        <div className="h-14 border-b border-gray-800/60 bg-gray-950/80 backdrop-blur px-6 flex items-center justify-between shrink-0">
-          <div className="flex items-center">
-            {currentChannel?.type === 'private' ? (
-              <Lock className="w-5 h-5 text-gray-500 mr-2" />
-            ) : (
-              <Hash className="w-5 h-5 text-gray-500 mr-2" />
-            )}
-            <h2 className="font-bold text-gray-100 mr-2">{currentChannel?.name || 'Loading...'}</h2>
-            {isAdmin() && (
-              <button 
-                onClick={handleUpdateChannelName}
-                className="text-gray-500 hover:text-gray-300 transition-colors"
-                title="Edit Channel Name"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-          <div className="flex items-center space-x-4">
-            {isAdmin() && (
-              <button 
-                onClick={handleDeleteChannel}
-                className="text-red-500 hover:text-red-400 text-sm font-medium transition-colors"
-                title="Delete Channel"
-              >
-                Delete Channel
-              </button>
-            )}
-            <div className="flex items-center text-gray-400 hover:text-gray-200 cursor-pointer transition-colors">
-              <Users className="w-4 h-4 mr-1.5" />
-              <span className="text-sm font-medium">{memberCount}</span>
-            </div>
-          </div>
+    <>
+      {showDate ? (
+        <li className="my-4 flex justify-center">
+          <span className="rounded-full bg-muted/80 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm">
+            {format(new Date(message.createdAt), 'd MMMM yyyy')}
+          </span>
+        </li>
+      ) : null}
+
+      <li id={message.messageId} className={cn('group flex gap-3 rounded-lg px-2 py-1 hover:bg-accent/40', grouped && '-mt-1', isMine && 'flex-row-reverse', isOptimistic && 'opacity-60')}>
+        <div className="w-7 shrink-0">
+          {!grouped ? (
+             <Avatar className="size-7">
+              {message.authorAvatar ? <AvatarImage src={message.authorAvatar} alt="" /> : null}
+              <AvatarFallback className="text-[10px]">
+                {initialsOf(message.authorName ?? 'System')}
+              </AvatarFallback>
+            </Avatar>
+          ) : null}
         </div>
 
-        {/* Messages Area */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6 space-y-6 custom-scrollbar">
-          {isLoading ? (
-            <div className="flex justify-center items-center h-full">
-              <Loader2 className="w-8 h-8 animate-spin text-white" />
-            </div>
-          ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-500">
-              <div className="w-16 h-16 bg-gray-900 rounded-2xl flex items-center justify-center mb-4 border border-gray-800">
-                {currentChannel?.type === 'private' ? <Lock className="w-8 h-8" /> : <Hash className="w-8 h-8" />}
+        <div className={cn("min-w-0 flex-1 flex flex-col", isMine ? "items-end" : "items-start")}>
+          {!grouped ? (
+            <p className={cn("flex items-baseline gap-2", isMine && "flex-row-reverse")}>
+              <span className="text-sm font-medium text-foreground">
+                {message.authorName ?? 'System'}
+              </span>
+              {message.isSystem ? <Badge variant="outline">system</Badge> : null}
+              <span className="text-xs text-muted-foreground">
+                {isOptimistic ? 'Sending...' : format(new Date(message.createdAt), 'HH:mm')}
+              </span>
+            </p>
+          ) : null}
+
+          <Bubble variant={getBubbleVariant(isMine, message.authorId)} align={isMine ? 'end' : 'start'} className="mt-1">
+            {message.bodyText && (
+              <BubbleContent>
+                {/* A separate inner element, not dangerouslySetInnerHTML on
+                    BubbleContent itself — React forbids mixing that prop with
+                    ordinary children, and the "(edited)" marker needs to stay
+                    a normal sibling node. We previously used whitespace-pre-wrap
+                    here, but marked's output already contains <p> and <br> tags
+                    for line breaks, and preserving raw \n caused huge gaps. */}
+                <div
+                  className={cn(
+                    // `overflow-wrap:anywhere` is the actual fix, same
+                    // reasoning as `RichTextEditor.tsx`'s `EDITOR_CONTENT_CLASS`:
+                    // a message with no spaces at all (a wall of the same
+                    // character, a long hash/URL) has no break opportunity,
+                    // so its intrinsic width just keeps growing — `max-w-[80%]`
+                    // on `Bubble` doesn't stop that, a max-width only caps a
+                    // box that's *able* to shrink. That growth was pushing the
+                    // whole page into horizontal scroll on every load of any
+                    // channel containing such a message, not just while
+                    // composing one.
+                    "rich-message-content min-w-0 overflow-x-hidden",
+                    '[&_p]:m-0 [&_p]:[overflow-wrap:anywhere] [&_p+p]:mt-2',
+                    '[&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5',
+                    '[&_blockquote]:my-1 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/50 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground',
+                    '[&_code]:rounded [&_code]:bg-black/10 dark:[&_code]:bg-white/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[0.85em]',
+                    '[&_pre]:my-1 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-black/10 dark:[&_pre]:bg-white/10 [&_pre]:p-2',
+                    '[&_pre_code]:bg-transparent [&_pre_code]:p-0',
+                    // Plain markdown links (`[text](url)`) — a plain
+                    // underline, no fill. Kept as the fallback style; the two
+                    // mention rules below are more specific selectors and win
+                    // for their own elements.
+                    '[&_a]:underline [&_a]:underline-offset-2',
+                    // User mention (`span[data-type="mention"]`, from the
+                    // composer's Mention extension — see that file's comment
+                    // for why this exact markup survives sanitization): a
+                    // filled, bold "pill". Background is a `currentColor` mix
+                    // rather than a fixed `bg-primary` — confirmed live that a
+                    // fixed primary tint is invisible on an own-message
+                    // bubble, which is *already* `bg-primary
+                    // text-primary-foreground` (`bubble.tsx`'s `default`
+                    // variant): primary-on-primary. Deriving from
+                    // `currentColor` means the chip always contrasts against
+                    // whatever text color the surrounding bubble variant set,
+                    // own message or not.
+                    '[&_span[data-type="mention"]]:rounded [&_span[data-type="mention"]]:px-1 [&_span[data-type="mention"]]:py-0.5 [&_span[data-type="mention"]]:font-semibold [&_span[data-type="mention"]]:bg-[color-mix(in_srgb,currentColor_18%,transparent)]',
+                    // Task mention (`a[data-type="task-mention"]`, linkified
+                    // by `renderMarkdownMessage.ts`): a lighter, monospace,
+                    // dot-underlined "code link" — visually distinct from the
+                    // bold user-mention pill at a glance, same
+                    // `currentColor`-derived background for the same
+                    // contrast-safety reason. The line itself still comes
+                    // from the generic `[&_a]:underline` rule above (same
+                    // specificity, same value — nothing to override); this
+                    // only needs to swap its *style* to dotted. First attempt
+                    // tried to set the line via an arbitrary property
+                    // alongside `no-underline` on the same element —
+                    // confirmed live that `no-underline` always won
+                    // regardless of source order, so the line silently never
+                    // rendered. `decoration-dotted` is the real Tailwind
+                    // utility for this and doesn't have that conflict.
+                    '[&_a[data-type="task-mention"]]:rounded [&_a[data-type="task-mention"]]:px-1 [&_a[data-type="task-mention"]]:py-0.5 [&_a[data-type="task-mention"]]:font-mono [&_a[data-type="task-mention"]]:text-[0.85em] [&_a[data-type="task-mention"]]:decoration-dotted [&_a[data-type="task-mention"]]:underline-offset-2 [&_a[data-type="task-mention"]]:bg-[color-mix(in_srgb,currentColor_10%,transparent)]',
+                  )}
+                  onClick={(e) => {
+                    // `dangerouslySetInnerHTML` content isn't real React
+                    // children, so a real `<Link>` can't live inside it — the
+                    // anchor `renderMarkdownMessage.ts` builds is a plain
+                    // `<a href>`, which would otherwise cause a full page
+                    // reload. Intercept just the task-mention kind here and
+                    // route it through the SPA instead.
+                    const link = (e.target as HTMLElement).closest('a[data-type="task-mention"]');
+                    if (link instanceof HTMLAnchorElement) {
+                      e.preventDefault();
+                      navigate(link.getAttribute('href') || '');
+                    }
+                  }}
+                  dangerouslySetInnerHTML={{ __html: safeBodyHtml }}
+                />
+                {message.isEdited ? (
+                  <span className="ml-1 text-xs opacity-70">(edited)</span>
+                ) : null}
+              </BubbleContent>
+            )}
+
+            {/* Only the first link is unfurled: the endpoint fetches the target
+                page server-side with a 5s timeout, so one request per message
+                is the sensible ceiling. */}
+            {linkedUrl ? <LinkPreview slug={slug} url={linkedUrl} /> : null}
+
+            {Array.isArray(message.bodyBlocks) && message.bodyBlocks.length > 0 && (
+              <div className="mt-2 px-1">
+                {/* `items-start`: the group's own default is `stretch`,
+                    which pads a small horizontal file card up to match a
+                    tall image card in the same row (empty space around a
+                    centered icon) — only images are meant to be big. */}
+                <AttachmentGroup className="items-start">
+                  {message.bodyBlocks.map((b: unknown, idx) => {
+                    const block = b as AttachmentPayload & { type: string };
+                    if (block.type !== 'attachment') return null;
+                    return <ChatAttachmentBlock key={idx} slug={slug} block={block} />;
+                  })}
+                </AttachmentGroup>
               </div>
-              <h3 className="text-xl font-bold text-gray-300 mb-2">Welcome to #{currentChannel?.name}</h3>
-              <p className="text-sm">This is the beginning of this channel's history.</p>
-            </div>
-          ) : (
-            messages.map((msg) => renderMessage(msg, false))
-          )}
-        </div>
+            )}
 
-        {/* Input Area */}
-        <div className="px-6 pb-6 pt-2 shrink-0">
-          {canChat ? (
-            <TiptapEditor 
-              onSubmit={handleSendMain} 
-              placeholder={`Message #${currentChannel?.name || 'channel'}`} 
-              initialContent={initialChatContent}
-            />
-          ) : (
-            <div 
-              title={currentChannel?.isAnnouncementOnly ? "Only admins can post here" : "You are a viewer and cannot send messages in this channel"}
-              className="text-gray-500 text-sm text-center p-3 bg-gray-900/50 rounded-lg border border-gray-800 cursor-not-allowed"
+            {reactions.length > 0 ? (
+              // A normal-flow row, not the absolutely-positioned
+              // `BubbleReactions` overlay: `position: absolute` needs a
+              // reliably-positioned ancestor, and on grouped consecutive
+              // messages (author+day repeated, `-mt-1` applied to tighten
+              // spacing) the pill could end up resolving against the wrong
+              // one — visually a reaction pill floating disconnected from
+              // any bubble, which is what got reported. Normal flow can't
+              // do that: it renders exactly where it sits in the DOM,
+              // directly under the message it belongs to.
+              <div className={cn("mt-1.5 flex flex-wrap items-center gap-1", isMine && "justify-end")}>
+                {reactions.map(([emoji, info]) => (
+                  <TooltipProvider key={emoji}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => onReact(emoji)}
+                          className={cn(
+                            'flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-xs shadow-sm transition-colors hover:bg-muted',
+                            info.mine ? 'border-primary/50 text-primary font-medium' : 'text-muted-foreground',
+                          )}
+                        >
+                          <span>{emoji}</span>
+                          <span>{info.count}</span>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>{info.who.join(', ')}</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ))}
+              </div>
+            ) : null}
+          </Bubble>
+
+          {!compact && message.replyCount > 0 && onReply ? (
+            <button
+              type="button"
+              onClick={onReply}
+              className={cn("mt-1 text-xs text-primary hover:underline", isMine && "self-end")}
             >
-              {currentChannel?.isAnnouncementOnly ? "Only admins can post here" : "You are a viewer and cannot send messages in this channel."}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Thread Panel */}
-      {activeThreadMessageId && (
-        <div className="w-96 border-l border-gray-800/60 bg-gray-900/50 flex flex-col shrink-0">
-          <div className="h-14 border-b border-gray-800/60 flex items-center justify-between px-4 shrink-0">
-            <div className="flex items-center">
-              <h3 className="font-bold text-gray-100">Thread</h3>
-              <span className="text-gray-500 text-sm ml-2">#{currentChannel?.name}</span>
-            </div>
-            <button onClick={() => setActiveThreadMessageId(null)} className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
-              <X className="w-5 h-5" />
+              {message.replyCount} {message.replyCount === 1 ? 'reply' : 'replies'}
             </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col">
-            {/* Original Message */}
-            {parentMessage && (
-              <div className="p-4 border-b border-gray-800/60 bg-gray-950/50">
-                {renderMessage(parentMessage, true)}
-              </div>
-            )}
-            
-            {/* Replies */}
-            <div ref={threadScrollRef} className="flex-1 p-4 space-y-6">
-              {isThreadLoading ? (
-                <div className="flex justify-center py-4"><Loader2 className="w-6 h-6 animate-spin text-gray-500" /></div>
-              ) : threadReplies.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm">
-                  <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                  No replies yet. Start the conversation!
-                </div>
-              ) : (
-                threadReplies.map((reply) => renderMessage(reply, true))
-              )}
-            </div>
-          </div>
-
-          {/* Thread Input Area */}
-          <div className="p-4 bg-gray-950/80 border-t border-gray-800/60 shrink-0">
-            {canChat ? (
-              <TiptapEditor onSubmit={handleSendThread} placeholder="Reply to thread..." />
-            ) : (
-              <div className="text-gray-500 text-xs text-center p-2 bg-gray-900/50 rounded border border-gray-800">
-                Read-only
-              </div>
-            )}
-          </div>
+          ) : null}
         </div>
-      )}
-    </div>
+
+        {/* Row actions, revealed on hover/focus */}
+        {!isOptimistic && (
+          <div className={cn("flex shrink-0 items-start gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100", isMine && "flex-row-reverse")}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-xs" aria-label="Add reaction">
+                  <SmilePlusIcon className="size-3.5" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="flex w-fit gap-1 p-1">
+                {QUICK_REACTIONS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className="rounded p-1 text-base hover:bg-accent"
+                    onClick={() => onReact(emoji)}
+                    aria-label={`React with ${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {onReply && !compact ? (
+              <Button variant="ghost" size="icon-xs" aria-label="Reply in thread" onClick={onReply}>
+                <MessageSquareIcon className="size-3.5" aria-hidden="true" />
+              </Button>
+            ) : null}
+
+            {isMine && onDelete ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-xs" aria-label="Message actions">
+                    <span aria-hidden="true">⋯</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={onDelete}>Delete message</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </div>
+        )}
+      </li>
+    </>
   );
-};
+}

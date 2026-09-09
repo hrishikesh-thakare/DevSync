@@ -1,63 +1,77 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { apiFetch } from '../../lib/api.js';
-import { supabase } from '../../lib/supabase.js';
-import { Loader2 } from 'lucide-react';
 
-export const GithubCallbackPage = () => {
+import { apiFetch } from '@/lib/api';
+import { AppLoading } from '@/components/layout/AppLoading';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
+/**
+ * Landing point for GitHub's OAuth redirect after a user links their GitHub
+ * account (triggered from GitHubIntegration.tsx's "Connect GitHub account").
+ * This is a project-integration concern, not a DevSync login — the user is
+ * already authenticated; this page just exchanges the `code` GitHub handed
+ * back for a real access token (server-side, via /github/oauth/exchange) and
+ * returns to wherever the flow started.
+ */
+export function GithubCallbackPage() {
+  const [params] = useSearchParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const [error, setError] = useState<string | null>(null);
+  const [exchangeError, setExchangeError] = useState<string | null>(null);
+  const ranRef = useRef(false);
+
+  // Computed synchronously from the URL, not via state — GitHub's own error
+  // params and a missing code/state need no async work to detect.
+  const githubError = params.get('error');
+  const code = params.get('code');
+  const state = params.get('state');
+  const upfrontError = githubError
+    ? params.get('error_description') ||
+      (githubError === 'access_denied'
+        ? 'You declined the GitHub authorization request.'
+        : 'GitHub sign-in was cancelled.')
+    : !code || !state
+      ? 'Missing authorization code from GitHub. Please try connecting again.'
+      : null;
 
   useEffect(() => {
-    const exchangeCode = async () => {
+    // StrictMode double-invokes effects in dev; the code GitHub issued is
+    // single-use, so a second exchange attempt would just fail confusingly.
+    if (ranRef.current || upfrontError || !code || !state) return;
+    ranRef.current = true;
+
+    void (async () => {
       try {
-        // Wait for Supabase to parse hash and establish session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) throw sessionError;
-        if (!session?.provider_token) {
-          throw new Error('No GitHub provider token found in Supabase session.');
-        }
-
-        await apiFetch('/github/oauth/exchange', {
+        const data = await apiFetch('/github/oauth/exchange', {
           method: 'POST',
-          body: JSON.stringify({ providerToken: session.provider_token }),
+          body: JSON.stringify({ code, state }),
         });
-
-        const returnTo = searchParams.get('returnTo') || '/workspaces';
-        navigate(returnTo, { replace: true });
-      } catch (err: any) {
-        console.error('GitHub OAuth Exchange Error:', err);
-        setError(err.message || 'Failed to connect GitHub account.');
+        navigate(data.returnTo || '/workspaces', { replace: true });
+      } catch (err) {
+        setExchangeError(err instanceof Error ? err.message : 'Could not finish linking your GitHub account.');
       }
-    };
+    })();
+  }, [upfrontError, code, state, navigate]);
 
-    exchangeCode();
-  }, [searchParams, navigate]);
+  const error = upfrontError || exchangeError;
 
   if (error) {
     return (
-      <div className="flex flex-col h-screen w-screen items-center justify-center bg-gray-950 px-4 text-center">
-        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-6 rounded-xl max-w-md">
-          <h2 className="text-lg font-bold mb-2">GitHub Connection Error</h2>
-          <p className="text-sm mb-6">{error}</p>
-          <button 
-            onClick={() => navigate('/workspaces', { replace: true })}
-            className="px-4 py-2 bg-gray-900 border border-gray-800 text-white rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            Return to Dashboard
-          </button>
-        </div>
+      <div className="flex min-h-svh items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>GitHub sign-in could not be completed</CardTitle>
+            <CardDescription>{error}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button className="w-full" onClick={() => navigate('/workspaces', { replace: true })}>
+              Back to DevSync
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
-  return (
-    <div className="flex flex-col h-screen w-screen items-center justify-center bg-gray-950">
-      <Loader2 className="h-10 w-10 animate-spin text-white mb-4" />
-      <h2 className="text-xl font-bold text-white mb-2">Connecting GitHub</h2>
-      <p className="text-gray-400 text-sm">Please wait while we securely link your account...</p>
-    </div>
-  );
-};
+  return <AppLoading label="Linking your GitHub account" />;
+}

@@ -36,7 +36,11 @@ export const requireAuth = async (
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, env.JWT_SECRET) as JWTPayload;
+    // Every token this app issues is signed HS256 (jsonwebtoken's default).
+    // Pinning it here means a token whose header claims a different
+    // algorithm is rejected outright, rather than `verify` picking whatever
+    // algorithm the token itself names.
+    const decoded = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] }) as JWTPayload;
 
     // Fetch user from DB to verify they still exist and are active (not deleted)
     const [user] = await db

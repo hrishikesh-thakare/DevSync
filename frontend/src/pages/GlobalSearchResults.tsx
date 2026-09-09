@@ -1,646 +1,246 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, FileText, Hash, X, ChevronLeft, ChevronRight, Clock, AlertCircle } from 'lucide-react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { apiFetch } from '../lib/api.js';
-import { useCurrentWorkspaceStore } from '../store/currentWorkspace.js';
-import { formatDistanceToNow, format } from 'date-fns';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { formatDistanceToNow } from 'date-fns';
+import { HashIcon, SearchIcon } from 'lucide-react';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface TaskResult {
+import { ErrorState } from '@/components/layout/PageState';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
+import { PageHeader, PageShell } from '@/components/layout/PageHeader';
+import { apiFetch } from '@/lib/api';
+import { renderSnippet } from '@/lib/highlight';
+import { STATUS_META, PRIORITY_META } from '@/lib/taskMeta';
+import { cn } from '@/lib/utils';
+
+interface TaskHit {
   type: 'task';
   taskId: string;
   taskKey: string;
   title: string;
-  status: string;
-  priority: string;
-  issueType: string;
+  status: keyof typeof STATUS_META;
+  priority: keyof typeof PRIORITY_META;
   createdAt: string;
   projectName: string;
   projectKey: string;
-  assigneeId: string | null;
   assigneeName: string | null;
-  assigneeAvatar: string | null;
   snippet: string | null;
 }
 
-interface MessageResult {
+interface MessageHit {
   type: 'message';
   messageId: string;
   channelId: string;
   bodyText: string;
   createdAt: string;
-  authorId: string;
   authorName: string | null;
-  authorAvatar: string | null;
   channelName: string | null;
   snippet: string | null;
 }
 
-type FilterType = 'all' | 'tasks' | 'messages';
+export function GlobalSearchResults() {
+  const { slug = '' } = useParams();
+  const [params, setParams] = useSearchParams();
+  const query = params.get('q') ?? '';
+  const type = (params.get('type') ?? 'all') as 'all' | 'tasks' | 'messages';
 
-const STATUS_OPTIONS = [
-  { value: '', label: 'All Statuses' },
-  { value: 'todo', label: 'Todo' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'in_review', label: 'In Review' },
-  { value: 'done', label: 'Done' },
-];
-
-const PRIORITY_OPTIONS = [
-  { value: '', label: 'All Priorities' },
-  { value: 'critical', label: 'Critical' },
-  { value: 'high', label: 'High' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'low', label: 'Low' },
-];
-
-const STATUS_COLORS: Record<string, string> = {
-  todo: 'bg-gray-700 text-gray-300',
-  in_progress: 'bg-white/15 text-white border border-white/30',
-  in_review: 'bg-white/10 text-gray-300 border border-white/20',
-  done: 'bg-white/20 text-white border border-white',
-};
-
-const PRIORITY_INDICATORS: Record<string, string> = {
-  critical: 'bg-white text-black',
-  high: 'bg-white/40 text-white',
-  medium: 'bg-white/20 text-gray-300',
-  low: 'bg-white/10 text-gray-500',
-};
-
-const RECENT_SEARCHES_KEY = 'devsync_recent_searches';
-
-function getRecentSearches(): string[] {
-  try {
-    const stored = localStorage.getItem(RECENT_SEARCHES_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
-function addRecentSearch(query: string) {
-  const recent = getRecentSearches().filter(s => s !== query);
-  recent.unshift(query);
-  localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recent.slice(0, 5)));
-}
-
-const ITEMS_PER_PAGE = 25;
-
-// ─── Component ────────────────────────────────────────────────────────────────
-export const GlobalSearchResults = () => {
-  const { slug } = useParams();
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  const initialQuery = searchParams.get('q') || '';
-  const [query, setQuery] = useState(initialQuery);
-  const [debouncedQuery, setDebouncedQuery] = useState(initialQuery);
-
-  // Results
-  const [tasks, setTasks] = useState<TaskResult[]>([]);
-  const [messages, setMessages] = useState<MessageResult[]>([]);
-  const [taskCount, setTaskCount] = useState(0);
-  const [messageCount, setMessageCount] = useState(0);
+  const [input, setInput] = useState(query);
+  const [tasks, setTasks] = useState<TaskHit[]>([]);
+  const [messages, setMessages] = useState<MessageHit[]>([]);
+  // The API caps each type at 25 rows per page but also returns the true totals.
+  // Counting the returned arrays instead silently under-reports any result set
+  // larger than one page.
+  const [counts, setCounts] = useState({ tasks: 0, messages: 0 });
   const [isLoading, setIsLoading] = useState(false);
-  const [showSkeleton, setShowSkeleton] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Filters
-  const [filterType, setFilterType] = useState<FilterType>('all');
-  const [filterProjectId, setFilterProjectId] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterAssigneeId, setFilterAssigneeId] = useState('');
-  const [filterPriority, setFilterPriority] = useState('');
-  const [filterChannelId, setFilterChannelId] = useState('');
-  const [filterDateFrom, setFilterDateFrom] = useState('');
-  const [filterDateTo, setFilterDateTo] = useState('');
-  const [page, setPage] = useState(0);
-
-  // Data from workspace store for filter dropdowns
-  const { projects, channels, members } = useCurrentWorkspaceStore();
-
-  // All tab expansion
-  const [showAllTasks, setShowAllTasks] = useState(false);
-  const [showAllMessages, setShowAllMessages] = useState(false);
-
-  // Skeleton delay timer ref
-  const skeletonTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Debounce query
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedQuery(query);
-      if (query) {
-        setSearchParams({ q: query });
-      } else {
-        setSearchParams({});
+  const run = useCallback(
+    async (q: string, kind: string) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const data = await apiFetch(
+          `/workspaces/${slug}/search?q=${encodeURIComponent(q.trim())}&type=${kind}`,
+        );
+        setTasks(data.tasks ?? []);
+        setMessages(data.messages ?? []);
+        setCounts({
+          tasks: data.taskCount ?? (data.tasks ?? []).length,
+          messages: data.messageCount ?? (data.messages ?? []).length,
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Search failed.');
+        setTasks([]);
+        setMessages([]);
+        setCounts({ tasks: 0, messages: 0 });
+      } finally {
+        setIsLoading(false);
       }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [query, setSearchParams]);
-
-  // Fetch results
-  const fetchResults = useCallback(async () => {
-    if (!debouncedQuery.trim() || debouncedQuery.trim().length < 2 || !slug) {
-      setTasks([]);
-      setMessages([]);
-      setTaskCount(0);
-      setMessageCount(0);
-      return;
-    }
-
-    setIsLoading(true);
-    setShowSkeleton(false);
-    // Show skeleton only after 200ms delay
-    skeletonTimerRef.current = setTimeout(() => setShowSkeleton(true), 200);
-
-    try {
-      const params = new URLSearchParams({ q: debouncedQuery.trim() });
-      if (filterType !== 'all') params.set('type', filterType);
-      params.set('limit', String(ITEMS_PER_PAGE));
-      params.set('offset', String(page * ITEMS_PER_PAGE));
-
-      // Task filters
-      if (filterProjectId) params.set('projectId', filterProjectId);
-      if (filterStatus) params.set('status', filterStatus);
-      if (filterAssigneeId) params.set('assigneeId', filterAssigneeId);
-      if (filterPriority) params.set('priority', filterPriority);
-
-      // Message filters
-      if (filterChannelId) params.set('channelId', filterChannelId);
-      if (filterDateFrom) params.set('dateFrom', filterDateFrom);
-      if (filterDateTo) params.set('dateTo', filterDateTo);
-
-      const data = await apiFetch(`/workspaces/${slug}/search?${params.toString()}`);
-
-      setTasks((data.tasks || []).map((t: any) => ({ ...t, type: 'task' })));
-      setMessages((data.messages || []).map((m: any) => ({ ...m, type: 'message' })));
-      setTaskCount(data.taskCount || 0);
-      setMessageCount(data.messageCount || 0);
-
-      // Save recent search
-      addRecentSearch(debouncedQuery.trim());
-    } catch (err) {
-      console.error('Search failed', err);
-    } finally {
-      clearTimeout(skeletonTimerRef.current);
-      setIsLoading(false);
-      setShowSkeleton(false);
-    }
-  }, [debouncedQuery, slug, filterType, page, filterProjectId, filterStatus, filterAssigneeId, filterPriority, filterChannelId, filterDateFrom, filterDateTo]);
+    },
+    [slug],
+  );
 
   useEffect(() => {
-    fetchResults();
-  }, [fetchResults]);
+    // The endpoint rejects anything under two characters with a 400, so short
+    // queries never go out; the empty state for them is derived during render.
+    if (query.trim().length < 2) return;
+    // Fetching when the URL query changes is the "synchronise with an external
+    // system" case the rule exists to permit. It still fires because the
+    // request flips loading state on its first tick, before any await.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void run(query, type);
+  }, [query, type, run]);
 
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(0);
-    setShowAllTasks(false);
-    setShowAllMessages(false);
-  }, [filterType, filterProjectId, filterStatus, filterAssigneeId, filterPriority, filterChannelId, filterDateFrom, filterDateTo]);
-
-  const clearAllFilters = () => {
-    setFilterProjectId('');
-    setFilterStatus('');
-    setFilterAssigneeId('');
-    setFilterPriority('');
-    setFilterChannelId('');
-    setFilterDateFrom('');
-    setFilterDateTo('');
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setParams({ q: input, type });
   };
 
-  const hasActiveFilters = filterProjectId || filterStatus || filterAssigneeId || filterPriority || filterChannelId || filterDateFrom || filterDateTo;
+  const total = counts.tasks + counts.messages;
 
-  const totalCount = taskCount + messageCount;
-  const totalPages = filterType === 'all' ? 1 : Math.ceil((filterType === 'tasks' ? taskCount : messageCount) / ITEMS_PER_PAGE);
-
-  // ─── Render Helpers ─────────────────────────────────────────────────────
-  const renderTaskCard = (task: TaskResult) => (
-    <div
-      key={task.taskId}
-      onClick={() => navigate(`/w/${slug}/projects/${task.projectKey}/tasks/${task.taskKey}`)}
-      className="group flex items-start p-4 bg-gray-900/50 border border-gray-800/60 rounded-xl hover:bg-gray-800/50 hover:border-gray-700/60 cursor-pointer transition-all duration-200"
-    >
-      {/* Task Key Badge */}
-      <div className="mr-4 shrink-0 mt-0.5">
-        <span className="inline-flex items-center px-2 py-1 text-[11px] font-mono font-bold text-gray-300 bg-gray-800 border border-gray-700 rounded-md">
-          {task.taskKey}
-        </span>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-3 mb-1.5">
-          <h4 className="text-[15px] font-semibold text-gray-200 group-hover:text-white transition-colors truncate">
-            {task.title}
-          </h4>
-          {task.status && (
-            <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${STATUS_COLORS[task.status] || 'bg-gray-800 text-gray-400'}`}>
-              {task.status.replace('_', ' ')}
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <span className="font-medium text-gray-400">{task.projectName}</span>
-          {task.assigneeName && (
-            <>
-              <span className="text-gray-700">·</span>
-              <span>assigned to <span className="text-gray-400">{task.assigneeName}</span></span>
-            </>
-          )}
-          <span className="text-gray-700">·</span>
-          <span>{task.createdAt ? format(new Date(task.createdAt), 'MMM d, yyyy') : ''}</span>
-          {task.priority && (
-            <>
-              <span className="text-gray-700">·</span>
-              <span className={`inline-block w-2 h-2 rounded-full ${PRIORITY_INDICATORS[task.priority] || ''}`} title={task.priority} />
-              <span className="capitalize">{task.priority}</span>
-            </>
-          )}
-        </div>
-
-        {/* Snippet */}
-        {task.snippet && (
-          <p
-            className="mt-2 text-sm text-gray-500 line-clamp-2 leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: task.snippet }}
-          />
-        )}
-      </div>
-    </div>
-  );
-
-  const renderMessageCard = (msg: MessageResult) => (
-    <div
-      key={msg.messageId}
-      onClick={() => navigate(`/w/${slug}/channels/${msg.channelId}`)}
-      className="group flex items-start p-4 bg-gray-900/50 border border-gray-800/60 rounded-xl hover:bg-gray-800/50 hover:border-gray-700/60 cursor-pointer transition-all duration-200"
-    >
-      {/* Avatar */}
-      <div className="mr-4 shrink-0 mt-0.5">
-        {msg.authorAvatar ? (
-          <img src={msg.authorAvatar} alt={msg.authorName || ''} className="w-9 h-9 rounded-full border border-gray-700" />
-        ) : (
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-white text-xs font-bold border border-gray-700">
-            {msg.authorName?.[0]?.toUpperCase() || '?'}
-          </div>
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-sm font-semibold text-gray-300">{msg.authorName || 'Unknown'}</span>
-          <span className="text-xs text-gray-600">in</span>
-          <span className="text-xs text-gray-400 flex items-center">
-            <Hash className="w-3 h-3 mr-0.5 opacity-60" />
-            {msg.channelName || 'unknown'}
-          </span>
-          <span className="text-gray-700">·</span>
-          <span className="text-xs text-gray-600">
-            {msg.createdAt ? formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true }) : ''}
-          </span>
-        </div>
-
-        <p
-          className="text-sm text-gray-400 line-clamp-2 leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: `"${msg.snippet || msg.bodyText?.substring(0, 150) || ''}"` }}
-        />
-      </div>
-    </div>
-  );
-
-  const renderSkeleton = (count: number) => (
-    <div className="space-y-3">
-      {Array.from({ length: count }, (_, i) => (
-        <div key={i} className="flex items-start p-4 bg-gray-900/40 border border-gray-800/60 rounded-xl animate-pulse">
-          <div className="w-16 h-7 rounded-md bg-gray-800 mr-4 shrink-0" />
-          <div className="flex-1 space-y-2.5">
-            <div className="h-4 bg-gray-800 rounded w-2/3" />
-            <div className="h-3 bg-gray-800 rounded w-1/2" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-
-  const recentSearches = getRecentSearches();
-
-  // ─── Render ─────────────────────────────────────────────────────────────
   return (
-    <div className="h-full flex flex-col font-sans bg-gray-950 text-gray-200">
+    <PageShell>
+      <PageHeader title="Search" description="Full-text search across tasks and messages." />
 
-      {/* ── Header with Search Input ─────────────────────────────────────── */}
-      <div className="px-8 pt-8 pb-5 border-b border-gray-800/60 bg-gray-950 shrink-0">
-        <div className="max-w-4xl">
-          <div className="relative">
-            <Search className="w-5 h-5 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search tasks, messages..."
-              className="w-full bg-gray-900 border border-gray-800 rounded-xl pl-12 pr-4 py-3.5 text-gray-100 focus:outline-none focus:border-gray-600 focus:ring-1 focus:ring-gray-600 text-lg transition-all"
-              autoFocus
-            />
-          </div>
-
-          {/* Results count */}
-          {debouncedQuery && !isLoading && (
-            <p className="mt-3 text-sm text-gray-500">
-              <span className="text-gray-300 font-semibold">{totalCount}</span> results for "<span className="text-gray-300">{debouncedQuery}</span>"
-            </p>
-          )}
+      <form onSubmit={submit} className="mb-4 flex gap-2" role="search">
+        <div className="relative flex-1">
+          <SearchIcon
+            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Search tasks and messages…"
+            aria-label="Search query"
+            className="pl-8"
+          />
         </div>
-      </div>
+        <Button type="submit">Search</Button>
+      </form>
 
-      {/* ── Filter Bar ───────────────────────────────────────────────────── */}
-      {debouncedQuery && (
-        <div className="px-8 py-3 border-b border-gray-800/40 bg-gray-950/80 shrink-0">
-          <div className="max-w-4xl flex flex-wrap items-center gap-2">
-            {/* Type Tabs */}
-            <div className="flex items-center bg-gray-900 rounded-lg border border-gray-800 p-0.5 mr-2">
-              {([
-                { key: 'all', label: 'All' },
-                { key: 'tasks', label: `Tasks${taskCount ? ` (${taskCount})` : ''}` },
-                { key: 'messages', label: `Messages${messageCount ? ` (${messageCount})` : ''}` },
-              ] as const).map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => setFilterType(tab.key)}
-                  className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                    filterType === tab.key
-                      ? 'bg-white/10 text-white shadow-sm'
-                      : 'text-gray-500 hover:text-gray-300'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+      <Tabs value={type} onValueChange={(v) => setParams({ q: query, type: v })} className="mb-4">
+        <TabsList>
+          <TabsTrigger value="all">All</TabsTrigger>
+          <TabsTrigger value="tasks">Tasks</TabsTrigger>
+          <TabsTrigger value="messages">Messages</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
-            {/* Task Filters (shown when Tasks tab or All tab) */}
-            {(filterType === 'tasks' || filterType === 'all') && (
-              <>
-                <select
-                  value={filterProjectId}
-                  onChange={e => setFilterProjectId(e.target.value)}
-                  className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-gray-600 transition-colors cursor-pointer"
-                >
-                  <option value="">All Projects</option>
-                  {projects.map(p => (
-                    <option key={p.projectId} value={p.projectId}>{p.name} ({p.key})</option>
-                  ))}
-                </select>
+      {error ? (
+        <ErrorState message={error} className="mb-4" />
+      ) : null}
 
-                <select
-                  value={filterStatus}
-                  onChange={e => setFilterStatus(e.target.value)}
-                  className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-gray-600 transition-colors cursor-pointer"
-                >
-                  {STATUS_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
+      {isLoading ? (
+        <div className="space-y-2">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : query.trim().length < 2 ? (
+        <Empty className="rounded-2xl border">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <SearchIcon aria-hidden="true" />
+            </EmptyMedia>
+            <EmptyTitle>Search this workspace</EmptyTitle>
+            <EmptyDescription>Type at least two characters to begin.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : total === 0 ? (
+        <Empty className="rounded-2xl border">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <SearchIcon aria-hidden="true" />
+            </EmptyMedia>
+            <EmptyTitle>No matches for “{query}”</EmptyTitle>
+            <EmptyDescription>Try a different word, or search a broader type.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <div className="space-y-6">
+          {tasks.length > 0 ? (
+            <section>
+              <h2 className="mb-2 text-sm font-medium text-muted-foreground">
+                Tasks ({counts.tasks})
+              </h2>
+              <Card>
+                <CardContent className="px-0">
+                  <ul className="divide-y">
+                    {tasks.map((t) => (
+                      <li key={t.taskId}>
+                        <Link
+                          to={`/w/${slug}/projects/${t.projectKey}/tasks/${t.taskKey}`}
+                          className="block px-4 py-3 transition-colors hover:bg-accent/50"
+                        >
+                          <p className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono text-xs text-muted-foreground">{t.taskKey}</span>
+                            <span className="text-sm text-foreground">{t.title}</span>
+                          </p>
+                          {t.snippet ? (
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {renderSnippet(t.snippet)}
+                            </p>
+                          ) : null}
+                          <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            <Badge variant="outline">{t.projectName}</Badge>
+                            <Badge variant="outline">{STATUS_META[t.status]?.label ?? t.status}</Badge>
+                            <span className={cn(PRIORITY_META[t.priority]?.text)}>
+                              {PRIORITY_META[t.priority]?.label}
+                            </span>
+                            {t.assigneeName ? <span>· {t.assigneeName}</span> : null}
+                          </p>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            </section>
+          ) : null}
 
-                <select
-                  value={filterAssigneeId}
-                  onChange={e => setFilterAssigneeId(e.target.value)}
-                  className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-gray-600 transition-colors cursor-pointer"
-                >
-                  <option value="">All Assignees</option>
-                  {members.map((m: any) => (
-                    <option key={m.userId} value={m.userId}>{m.fullName}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={filterPriority}
-                  onChange={e => setFilterPriority(e.target.value)}
-                  className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-gray-600 transition-colors cursor-pointer"
-                >
-                  {PRIORITY_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </>
-            )}
-
-            {/* Message Filters (shown when Messages tab) */}
-            {filterType === 'messages' && (
-              <>
-                <select
-                  value={filterChannelId}
-                  onChange={e => setFilterChannelId(e.target.value)}
-                  className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-gray-600 transition-colors cursor-pointer"
-                >
-                  <option value="">All Channels</option>
-                  {channels.filter(c => c.type !== 'dm' && c.type !== 'group_dm').map(c => (
-                    <option key={c.channelId} value={c.channelId}>#{c.name}</option>
-                  ))}
-                </select>
-
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="date"
-                    value={filterDateFrom}
-                    onChange={e => setFilterDateFrom(e.target.value)}
-                    className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-gray-600 transition-colors cursor-pointer"
-                    placeholder="From"
-                  />
-                  <span className="text-gray-600 text-xs">—</span>
-                  <input
-                    type="date"
-                    value={filterDateTo}
-                    onChange={e => setFilterDateTo(e.target.value)}
-                    className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-gray-600 transition-colors cursor-pointer"
-                    placeholder="To"
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Clear filters */}
-            {hasActiveFilters && (
-              <button
-                onClick={clearAllFilters}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors"
-              >
-                <X className="w-3 h-3" />
-                Clear filters
-              </button>
-            )}
-          </div>
+          {messages.length > 0 ? (
+            <section>
+              <h2 className="mb-2 text-sm font-medium text-muted-foreground">
+                Messages ({counts.messages})
+              </h2>
+              <Card>
+                <CardContent className="px-0">
+                  <ul className="divide-y">
+                    {messages.map((m) => (
+                      <li key={m.messageId}>
+                        <Link
+                          to={`/w/${slug}/channels/${m.channelId}?messageId=${m.messageId}`}
+                          className="block px-4 py-3 transition-colors hover:bg-accent/50"
+                        >
+                          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <HashIcon className="size-3.5" aria-hidden="true" />
+                            {m.channelName ?? 'channel'} · {m.authorName ?? 'Unknown'} ·{' '}
+                            {formatDistanceToNow(new Date(m.createdAt), { addSuffix: true })}
+                          </p>
+                          <p className="mt-1 text-sm text-foreground">
+                            {m.snippet ? renderSnippet(m.snippet) : m.bodyText}
+                          </p>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            </section>
+          ) : null}
         </div>
       )}
-
-      {/* ── Results Area ─────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-        <div className="max-w-4xl">
-
-          {/* Loading state with delayed skeleton */}
-          {isLoading && showSkeleton && renderSkeleton(4)}
-
-          {/* No query state */}
-          {!debouncedQuery && !isLoading && (
-            <div className="flex flex-col items-center justify-center py-20">
-              {recentSearches.length > 0 ? (
-                <div className="w-full max-w-md">
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-4">Recent Searches</p>
-                  <div className="space-y-1">
-                    {recentSearches.map((term, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setQuery(term)}
-                        className="w-full flex items-center px-4 py-3 rounded-xl text-sm text-gray-300 bg-gray-900/40 border border-gray-800/60 hover:bg-gray-800/50 hover:border-gray-700/60 transition-all group"
-                      >
-                        <Clock className="w-4 h-4 text-gray-600 mr-3 shrink-0" />
-                        <span className="truncate">{term}</span>
-                        <Search className="w-3.5 h-3.5 text-gray-700 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center">
-                  <Search className="w-12 h-12 text-gray-800 mx-auto mb-4" />
-                  <p className="text-gray-500 text-lg">Search across your workspace</p>
-                  <p className="text-gray-600 text-sm mt-1">Find tasks, messages, and more</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Empty state */}
-          {debouncedQuery && !isLoading && totalCount === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center mb-5">
-                <AlertCircle className="w-7 h-7 text-gray-600" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-300 mb-2">No results for "{debouncedQuery}"</h3>
-              <div className="space-y-1.5 text-sm text-gray-500 mt-2">
-                <p>• Check your spelling</p>
-                <p>• Try fewer or different keywords</p>
-                <p>• Search is scoped to projects and channels you have access to</p>
-              </div>
-            </div>
-          )}
-
-          {/* Results — All Tab */}
-          {debouncedQuery && !isLoading && filterType === 'all' && totalCount > 0 && (
-            <div className="space-y-8">
-              {/* Tasks Section */}
-              {tasks.length > 0 && (
-                <div>
-                  <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <FileText className="w-3.5 h-3.5" />
-                    Tasks
-                    <span className="text-gray-600 font-normal">({taskCount})</span>
-                  </h3>
-                  <div className="space-y-2.5">
-                    {(showAllTasks ? tasks : tasks.slice(0, 5)).map(renderTaskCard)}
-                  </div>
-                  {taskCount > 5 && !showAllTasks && (
-                    <button
-                      onClick={() => { setFilterType('tasks'); setPage(0); }}
-                      className="mt-3 text-sm text-gray-400 hover:text-gray-200 transition-colors flex items-center gap-1"
-                    >
-                      Show all {taskCount} tasks
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Messages Section */}
-              {messages.length > 0 && (
-                <div>
-                  <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <Hash className="w-3.5 h-3.5" />
-                    Messages
-                    <span className="text-gray-600 font-normal">({messageCount})</span>
-                  </h3>
-                  <div className="space-y-2.5">
-                    {(showAllMessages ? messages : messages.slice(0, 5)).map(renderMessageCard)}
-                  </div>
-                  {messageCount > 5 && !showAllMessages && (
-                    <button
-                      onClick={() => { setFilterType('messages'); setPage(0); }}
-                      className="mt-3 text-sm text-gray-400 hover:text-gray-200 transition-colors flex items-center gap-1"
-                    >
-                      Show all {messageCount} messages
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Results — Tasks Tab (paginated) */}
-          {debouncedQuery && !isLoading && filterType === 'tasks' && (
-            <div>
-              <div className="space-y-2.5">
-                {tasks.map(renderTaskCard)}
-              </div>
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-800/60">
-                  <button
-                    onClick={() => setPage(p => Math.max(0, p - 1))}
-                    disabled={page === 0}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronLeft className="w-4 h-4" /> Previous
-                  </button>
-                  <span className="text-xs text-gray-500">
-                    Page {page + 1} of {totalPages}
-                  </span>
-                  <button
-                    onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                    disabled={page >= totalPages - 1}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Next <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Results — Messages Tab (paginated) */}
-          {debouncedQuery && !isLoading && filterType === 'messages' && (
-            <div>
-              <div className="space-y-2.5">
-                {messages.map(renderMessageCard)}
-              </div>
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-800/60">
-                  <button
-                    onClick={() => setPage(p => Math.max(0, p - 1))}
-                    disabled={page === 0}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronLeft className="w-4 h-4" /> Previous
-                  </button>
-                  <span className="text-xs text-gray-500">
-                    Page {page + 1} of {totalPages}
-                  </span>
-                  <button
-                    onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                    disabled={page >= totalPages - 1}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Next <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-        </div>
-      </div>
-    </div>
+    </PageShell>
   );
-};
+}

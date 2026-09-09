@@ -1,0 +1,2 @@
+ALTER TABLE "refresh_tokens" ADD COLUMN "family_id" uuid DEFAULT gen_random_uuid() NOT NULL;--> statement-breakpoint
+CREATE INDEX "idx_refresh_tokens_family" ON "refresh_tokens" USING btree ("family_id");

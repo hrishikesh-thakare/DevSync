@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="DevSync">
+  <!--
+    DevSync mark: three ascending board columns, the tallest doubling as a
+    chat bubble — the product's thesis (the work and the talk about the work in
+    one place) in one silhouette.
+
+    Drawn on a 24-unit grid rather than traced from the raster so it stays crisp
+    at 16px, carries no generator watermark, and holds exact geometry.
+
+    A filled tile rather than a bare glyph: browser tabs are light or dark
+    depending on the user's theme, and #9F1239 on its own disappears against a
+    dark tab. The tile guarantees contrast either way.
+  -->
+  <rect width="24" height="24" rx="5.4" fill="#9F1239"/>
+  <g fill="#FFFFFF">
+    <rect x="4.6" y="13.4" width="4.1" height="6.4" rx="1.1"/>
+    <rect x="9.9" y="9.4" width="4.1" height="10.4" rx="1.1"/>
+    <rect x="15.2" y="4.2" width="4.2" height="10.6" rx="1.2"/>
+    <path d="M16.1 13.2v6.1l3.1-6.1z"/>
+  </g>
+</svg>

@@ -3,7 +3,7 @@ import { db } from '../../config/db.js';
 import { projects, projectMembers } from '../../db/schema/projects.js';
 import { workspaceMembers } from '../../db/schema/workspaces.js';
 import { users } from '../../db/schema/auth.js';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { getIO } from '../../sockets/index.js';
 import { logAuditAction } from '../audit/audit.controller.js';
 import { createNotification } from '../notifications/notifications.controller.js';
@@ -16,22 +16,15 @@ export const createProject = async (req: Request, res: Response): Promise<void> 
     const { name, key, description, iconUrl } = req.body;
     const userId = req.user!.userId;
 
-    if (!name || !key) {
-      res.status(400).json({ error: 'Project name and key are required.' });
-      return;
-    }
+    const projectKey = key; // Zod handles upper case and constraints
 
-    const projectKey = key.toUpperCase().trim().slice(0, 10);
-    if (!/^[A-Z][A-Z0-9]{1,9}$/.test(projectKey)) {
-      res.status(400).json({ error: 'Key must start with a letter, contain only A-Z and 0-9, and be 2-10 characters.' });
-      return;
-    }
-
-    // Check for duplicate key in this workspace
+    // Check for duplicate key in this workspace — only among live projects,
+    // same reasoning as the `register` email check: without the `deletedAt`
+    // filter a deleted project's key would be unusable forever.
     const [existing] = await db
       .select({ projectId: projects.projectId })
       .from(projects)
-      .where(and(eq(projects.workspaceId, workspaceId), eq(projects.key, projectKey)))
+      .where(and(eq(projects.workspaceId, workspaceId), eq(projects.key, projectKey), isNull(projects.deletedAt)))
       .limit(1);
 
     if (existing) {
@@ -104,7 +97,7 @@ export const listProjects = async (req: Request, res: Response): Promise<void> =
       })
       .from(projects)
       .leftJoin(users, eq(projects.leadUserId, users.userId))
-      .where(and(eq(projects.workspaceId, workspaceId), eq(projects.status, 'active')));
+      .where(and(eq(projects.workspaceId, workspaceId), eq(projects.status, 'active'), isNull(projects.deletedAt)));
 
     // If the user is just a regular workspace member, they can only see projects they are explicitly added to.
     if (workspaceRole === 'member') {
@@ -125,8 +118,8 @@ export const listProjects = async (req: Request, res: Response): Promise<void> =
         .from(projects)
         .leftJoin(users, eq(projects.leadUserId, users.userId))
         .innerJoin(projectMembers, and(eq(projects.projectId, projectMembers.projectId), eq(projectMembers.userId, userId)))
-        .where(and(eq(projects.workspaceId, workspaceId), eq(projects.status, 'active')));
-        
+        .where(and(eq(projects.workspaceId, workspaceId), eq(projects.status, 'active'), isNull(projects.deletedAt)));
+
       res.json({ projects: results });
       return;
     }
@@ -145,8 +138,26 @@ export const getProject = async (req: Request, res: Response): Promise<void> => 
   try {
     const { projectId } = req.params as Record<string, string>;
 
+    // Explicitly projected, never `select()`. An unprojected select here shipped
+    // `github_webhook_secret` — the encrypted HMAC secret used to verify inbound
+    // GitHub webhooks — to every project member on the wire. Nothing rendered
+    // it, so it was invisible, but it had no business leaving the server.
     const [project] = await db
-      .select()
+      .select({
+        projectId: projects.projectId,
+        workspaceId: projects.workspaceId,
+        name: projects.name,
+        key: projects.key,
+        description: projects.description,
+        iconUrl: projects.iconUrl,
+        leadUserId: projects.leadUserId,
+        githubRepoOwner: projects.githubRepoOwner,
+        githubRepoName: projects.githubRepoName,
+        issueCounter: projects.issueCounter,
+        status: projects.status,
+        createdAt: projects.createdAt,
+        updatedAt: projects.updatedAt,
+      })
       .from(projects)
       .where(eq(projects.projectId, projectId))
       .limit(1);
@@ -184,19 +195,12 @@ export const getProject = async (req: Request, res: Response): Promise<void> => 
 export const updateProject = async (req: Request, res: Response): Promise<void> => {
   try {
     const { projectId } = req.params as Record<string, string>;
-    const { name, description, iconUrl, status } = req.body;
+    const { name, description, iconUrl } = req.body;
 
     const updateData: Record<string, any> = { updatedAt: new Date() };
     if (name !== undefined) updateData.name = name.trim();
     if (description !== undefined) updateData.description = description;
     if (iconUrl !== undefined) updateData.iconUrl = iconUrl;
-    if (status !== undefined) {
-      if (!['active', 'archived'].includes(status)) {
-        res.status(400).json({ error: 'Status must be "active" or "archived".' });
-        return;
-      }
-      updateData.status = status;
-    }
 
     const result = await db.transaction(async (tx) => {
       const [oldProject] = await tx.select().from(projects).where(eq(projects.projectId, projectId)).limit(1);
@@ -227,14 +231,6 @@ export const updateProject = async (req: Request, res: Response): Promise<void> 
         await logAuditAction({ actorId, action: 'project.lead_changed', entityType: eType, entityId: eId, workspaceId, newValues: { lead_user_id: updated.leadUserId }, oldValues: { lead_user_id: oldProject.leadUserId }, tx });
       }
 
-      if (oldProject.status !== updated.status) {
-        if (updated.status === 'archived') {
-          await logAuditAction({ actorId, action: 'project.archived', entityType: eType, entityId: eId, workspaceId, newValues: { status: 'archived' }, oldValues: { status: 'active' }, tx });
-        } else {
-          await logAuditAction({ actorId, action: 'project.unarchived', entityType: eType, entityId: eId, workspaceId, newValues: { status: 'active' }, oldValues: { status: 'archived' }, tx });
-        }
-      }
-
       return updated;
     });
 
@@ -258,16 +254,7 @@ export const addProjectMember = async (req: Request, res: Response): Promise<voi
     const { userId: targetUserId, role } = req.body;
     const addedBy = req.user!.userId;
 
-    if (!targetUserId) {
-      res.status(400).json({ error: 'userId is required.' });
-      return;
-    }
-
     const memberRole = role || 'developer';
-    if (!['project_admin', 'developer', 'viewer'].includes(memberRole)) {
-      res.status(400).json({ error: 'Role must be "project_admin", "developer", or "viewer".' });
-      return;
-    }
 
     // Verify the target user is a member of the workspace
     const [wsMember] = await db
@@ -446,11 +433,6 @@ export const updateProjectMemberRole = async (req: Request, res: Response): Prom
     const { projectId, userId } = req.params as Record<string, string>;
     const { role } = req.body;
 
-    if (!role || !['project_admin', 'developer', 'viewer'].includes(role)) {
-      res.status(400).json({ error: 'Role must be "project_admin", "developer", or "viewer".' });
-      return;
-    }
-
     // Check if trying to demote the last project admin
     if (role !== 'project_admin') {
       const [targetMember] = await db
@@ -553,5 +535,104 @@ export const archiveProject = async (req: Request, res: Response): Promise<void>
   } catch (err) {
     console.error('Archive project error:', err);
     res.status(500).json({ error: 'Server error archiving project.' });
+  }
+};
+
+// ─── UNARCHIVE PROJECT ────────────────────────────────────────────────────────
+// PATCH /api/workspaces/:workspaceId/projects/:key/unarchive
+//
+// The symmetric counterpart to `archiveProject`, added when `status` was
+// removed from `updateProjectSchema` — restoring a project needs a path of
+// its own now, gated the same project_admin-only way archiving already was.
+export const unarchiveProject = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+
+    const result = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(projects)
+        .set({ status: 'active', updatedAt: new Date() })
+        .where(eq(projects.projectId, projectId))
+        .returning();
+
+      if (updated) {
+        await logAuditAction({
+          actorId: req.user!.userId,
+          action: 'project.unarchived',
+          entityType: 'project',
+          entityId: projectId,
+          workspaceId: updated.workspaceId ?? undefined,
+          newValues: { status: 'active' },
+          oldValues: { status: 'archived' },
+          tx
+        });
+      }
+      return updated;
+    });
+
+    if (!result) {
+      res.status(404).json({ error: 'Project not found.' });
+      return;
+    }
+
+    res.json({ message: 'Project restored', project: result });
+  } catch (err) {
+    console.error('Unarchive project error:', err);
+    res.status(500).json({ error: 'Server error restoring project.' });
+  }
+};
+
+// ─── DELETE PROJECT ──────────────────────────────────────────────────────────
+// DELETE /api/workspaces/:workspaceId/projects/:key
+//
+// Soft-delete, same shape as `deleteWorkspace`: stamp `deletedAt` rather than
+// removing the row. Tasks, sprints, channels and labels that point at this
+// project are left exactly where they are — they simply become unreachable,
+// because `resolveProjectKey` (every `:key`-scoped route) and `listProjects`
+// both filter on `deletedAt IS NULL` now. That mirrors how a soft-deleted
+// workspace already leaves its projects in place without this module having
+// to know about it; nothing here has to cascade a delete through five child
+// tables to get the same effect.
+export const deleteProject = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+
+    const result = await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ workspaceId: projects.workspaceId, name: projects.name, key: projects.key })
+        .from(projects)
+        .where(and(eq(projects.projectId, projectId), isNull(projects.deletedAt)))
+        .limit(1);
+
+      if (!existing) return null;
+
+      await tx
+        .update(projects)
+        .set({ deletedAt: new Date(), updatedAt: new Date() })
+        .where(eq(projects.projectId, projectId));
+
+      await logAuditAction({
+        actorId: req.user!.userId,
+        action: 'project.deleted',
+        entityType: 'project',
+        entityId: projectId,
+        workspaceId: existing.workspaceId ?? undefined,
+        newValues: null,
+        oldValues: { name: existing.name, key: existing.key },
+        tx,
+      });
+
+      return existing;
+    });
+
+    if (!result) {
+      res.status(404).json({ error: 'Project not found.' });
+      return;
+    }
+
+    res.json({ message: 'Project deleted' });
+  } catch (err) {
+    console.error('Delete project error:', err);
+    res.status(500).json({ error: 'Server error deleting project.' });
   }
 };

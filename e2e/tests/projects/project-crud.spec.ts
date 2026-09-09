@@ -1,0 +1,245 @@
+/**
+ * Project CRUD Tests
+ */
+import { test, expect } from '../../fixtures/test-fixtures.js';
+import { TEST_WORKSPACE, TEST_PROJECT, TEST_USERS, ROUTES } from '../../helpers/constants.js';
+import { apiLogin, apiRequest, getAuthToken } from '../../helpers/api-helpers.js';
+
+const SLUG = TEST_WORKSPACE.slug;
+const KEY = TEST_PROJECT.key;
+
+test.describe('Project CRUD', () => {
+  test('can view project list', async ({ ownerPage }) => {
+    await ownerPage.goto(ROUTES.projects(SLUG));
+    await ownerPage.waitForLoadState('networkidle');
+
+    // Should see the test project
+    await expect(
+      ownerPage.locator(`text=${TEST_PROJECT.name}`).first()
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('can create project via API and read it back', async () => {
+    const accessToken = getAuthToken('owner');
+    const uniqueKey = `T${Date.now().toString().slice(-4)}`;
+    const { status, data } = await apiRequest(
+      `/workspaces/${SLUG}/projects`,
+      accessToken,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `CRUD Test Project ${uniqueKey}`,
+          key: uniqueKey,
+        }),
+      }
+    );
+    expect(status).toBe(201);
+    expect(data.project.key).toBe(uniqueKey);
+    expect(data.project.projectId).toBeTruthy();
+
+    const fetched = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, accessToken);
+    expect(fetched.status).toBe(200);
+    expect(fetched.data.project.name).toBe(`CRUD Test Project ${uniqueKey}`);
+  });
+
+  test('duplicate project key is rejected with 409', async () => {
+    const accessToken = getAuthToken('owner');
+    const { status, data } = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Duplicate Key', key: KEY }),
+    });
+    expect(status).toBe(409);
+    expect(data.error).toContain('already exists');
+  });
+
+  test('can get project details via API', async () => {
+    const accessToken = getAuthToken('owner');
+    const { status, data } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}`,
+      accessToken
+    );
+    expect(status).toBe(200);
+    expect(data.project.key).toBe(KEY);
+  });
+
+  test('can update project description via API', async () => {
+    const accessToken = getAuthToken('owner');
+    const newDescription = `Updated by E2E test ${Date.now()}`;
+    const { status } = await apiRequest(
+      `/workspaces/${SLUG}/projects/${KEY}`,
+      accessToken,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ description: newDescription }),
+      }
+    );
+    expect(status).toBe(200);
+
+    const fetched = await apiRequest(`/workspaces/${SLUG}/projects/${KEY}`, accessToken);
+    expect(fetched.data.project.description).toBe(newDescription);
+  });
+  test('archive project succeeds via API', async () => {
+    const accessToken = getAuthToken('owner');
+    
+    // Create a disposable project to archive
+    const uniqueKey = `A${Date.now().toString().slice(-4)}`;
+    const { data: newProj, status: createStatus } = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken, {
+      method: 'POST', body: JSON.stringify({ name: 'To Archive', key: uniqueKey })
+    });
+    expect(createStatus).toBe(201);
+
+    const { status, data } = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}/archive`, accessToken, { method: 'PATCH' });
+    expect(status).toBe(200);
+    expect(data.project.status).toBe('archived');
+
+    const fetched = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, accessToken);
+    expect(fetched.data.project.status).toBe('archived');
+  });
+
+  test('unarchive project succeeds via API and restores it to the project list', async () => {
+    const accessToken = getAuthToken('owner');
+    const uniqueKey = `U${Date.now().toString().slice(-4)}`;
+    const { status: createStatus } = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken, {
+      method: 'POST', body: JSON.stringify({ name: 'To Unarchive', key: uniqueKey }),
+    });
+    expect(createStatus).toBe(201);
+
+    await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}/archive`, accessToken, { method: 'PATCH' });
+
+    const { status, data } = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}/unarchive`, accessToken, { method: 'PATCH' });
+    expect(status).toBe(200);
+    expect(data.project.status).toBe('active');
+
+    const list = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken);
+    expect(list.data.projects.some((p: any) => p.key === uniqueKey)).toBe(true);
+  });
+
+  test('a developer cannot archive or unarchive a project through either endpoint', async () => {
+    // Regression guard: updateProjectSchema used to accept a `status` field
+    // on a route reachable by 'developer' (requireProjectRole(['project_admin',
+    // 'developer'])), letting a developer archive/unarchive through the
+    // generic update endpoint despite /archive and /unarchive both being
+    // project_admin-only. `status` no longer exists on that schema at all.
+    const owner = await apiLogin(TEST_USERS.owner.email);
+    const dev = await apiLogin(TEST_USERS.developer.email);
+    const uniqueKey = `D${Date.now().toString().slice(-4)}`;
+    const { status: createStatus } = await apiRequest(`/workspaces/${SLUG}/projects`, owner.accessToken, {
+      method: 'POST', body: JSON.stringify({ name: 'Developer Bypass Test', key: uniqueKey }),
+    });
+    expect(createStatus).toBe(201);
+    const addMember = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}/members`, owner.accessToken, {
+      method: 'POST', body: JSON.stringify({ userId: dev.user.userId, role: 'developer' }),
+    });
+    expect(addMember.status).toBe(201);
+
+    const viaUpdate = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, dev.accessToken, {
+      method: 'PATCH', body: JSON.stringify({ status: 'archived' }),
+    });
+    expect(viaUpdate.status).toBe(400);
+
+    const viaArchive = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}/archive`, dev.accessToken, { method: 'PATCH' });
+    expect(viaArchive.status).toBe(403);
+
+    const viaUnarchive = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}/unarchive`, dev.accessToken, { method: 'PATCH' });
+    expect(viaUnarchive.status).toBe(403);
+
+    const fetched = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, owner.accessToken);
+    expect(fetched.data.project.status).toBe('active');
+  });
+
+  test('delete project via API is a real (soft) delete, and frees its key', async () => {
+    const accessToken = getAuthToken('owner');
+    const uniqueKey = `D${Date.now().toString().slice(-4)}`;
+
+    const created = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'To Delete', key: uniqueKey }),
+    });
+    expect(created.status).toBe(201);
+
+    const { status: deleteStatus } = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, accessToken, {
+      method: 'DELETE',
+    });
+    expect(deleteStatus).toBe(200);
+
+    // Gone from the API entirely — not archived, not listed, not fetchable
+    // by key. `resolveProjectKey` filters `deletedAt`, the same choke point
+    // every `:key`-scoped route (tasks, sprints, labels, github, members,
+    // settings) goes through.
+    const afterDelete = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, accessToken);
+    expect(afterDelete.status).toBe(404);
+
+    const list = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken);
+    expect(list.data.projects.some((p: any) => p.key === uniqueKey)).toBe(false);
+
+    // The key is free again — a plain unique constraint would keep it dead
+    // forever; the partial index (`WHERE deleted_at IS NULL`) does not.
+    const recreated = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Reusing the key', key: uniqueKey }),
+    });
+    expect(recreated.status).toBe(201);
+    await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, accessToken, { method: 'DELETE' });
+  });
+
+  test('deleting a project requires project_admin and 404s for an unknown key', async () => {
+    const ownerToken = getAuthToken('owner');
+    const devToken = getAuthToken('developer');
+    const uniqueKey = `R${Date.now().toString().slice(-4)}`;
+
+    await apiRequest(`/workspaces/${SLUG}/projects`, ownerToken, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'RBAC Delete Check', key: uniqueKey }),
+    });
+
+    const { status: devStatus } = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, devToken, {
+      method: 'DELETE',
+    });
+    expect(devStatus).toBe(403);
+
+    const { status: unknownStatus } = await apiRequest(`/workspaces/${SLUG}/projects/NOPE${Date.now()}`, ownerToken, {
+      method: 'DELETE',
+    });
+    expect(unknownStatus).toBe(404);
+
+    await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, ownerToken, { method: 'DELETE' });
+  });
+
+  test('can view project board (UI)', async ({ ownerPage }) => {
+    await ownerPage.goto(ROUTES.projectBoard(SLUG, KEY));
+    await ownerPage.waitForLoadState('networkidle');
+
+    // Board should display Kanban columns
+    const statusText = ownerPage.locator('text=/Todo|In Progress|In Review|Done/i');
+    await expect(statusText.first()).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('delete project via the settings page requires typing the key first (UI)', async ({ ownerPage }) => {
+    const accessToken = getAuthToken('owner');
+    const uniqueKey = `U${Date.now().toString().slice(-4)}`;
+    const { status: createStatus } = await apiRequest(`/workspaces/${SLUG}/projects`, accessToken, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'To Delete via UI', key: uniqueKey }),
+    });
+    expect(createStatus).toBe(201);
+
+    await ownerPage.goto(ROUTES.projectSettings(SLUG, uniqueKey));
+    await ownerPage.getByRole('button', { name: 'Delete project' }).click();
+
+    const confirmButton = ownerPage.getByRole('button', { name: 'Delete permanently' });
+    await expect(confirmButton).toBeDisabled();
+
+    await ownerPage.getByLabel(`Type ${uniqueKey} to confirm`).fill('wrong key entirely');
+    await expect(confirmButton).toBeDisabled();
+
+    await ownerPage.getByLabel(`Type ${uniqueKey} to confirm`).fill(uniqueKey);
+    await expect(confirmButton).toBeEnabled();
+    await confirmButton.click();
+
+    await expect(ownerPage.getByText(`${uniqueKey} deleted`)).toBeVisible({ timeout: 10_000 });
+    await expect(ownerPage).toHaveURL(new RegExp(`/w/${SLUG}/projects$`));
+
+    const { status } = await apiRequest(`/workspaces/${SLUG}/projects/${uniqueKey}`, accessToken);
+    expect(status).toBe(404);
+  });
+});

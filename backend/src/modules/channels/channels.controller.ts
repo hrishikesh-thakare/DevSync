@@ -1,11 +1,15 @@
 import { Request, Response } from 'express';
+import { randomUUID } from 'node:crypto';
 import { db } from '../../config/db.js';
 import { channels, channelMembers } from '../../db/schema/channels.js';
 import { workspaceMembers } from '../../db/schema/workspaces.js';
 import { projectMembers } from '../../db/schema/projects.js';
 import { users } from '../../db/schema/auth.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or, isNull, isNotNull, inArray, asc, sql } from 'drizzle-orm';
 import { logAuditAction } from '../audit/audit.controller.js';
+import { getIO } from '../../sockets/index.js';
+import { createZoomMeeting, endZoomMeeting } from '../../lib/zoom.js';
+import { getActiveCall, setActiveCall, clearActiveCall } from './activeCalls.js';
 
 // ─── Helper: generate slug from channel name ────────────────────────────────
 const channelSlug = (name: string): string =>
@@ -15,22 +19,73 @@ const channelSlug = (name: string): string =>
 // POST /api/workspaces/:workspaceId/channels
 export const createChannel = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId } = req.params as Record<string, string>;
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
     const userId = req.user!.userId;
     const { name, description, type, projectId, isAnnouncementOnly, isDefault, memberIds } = req.body;
 
-    if (!name) {
-      res.status(400).json({ error: 'Channel name is required.' });
-      return;
-    }
-
+    const channelName = name ? name.trim() : null;
     const channelType = type || 'public';
-    if (!['public', 'private', 'dm', 'group_dm'].includes(channelType)) {
-      res.status(400).json({ error: 'Type must be "public", "private", "dm", or "group_dm".' });
+    // `(workspaceId, slug)` is unique (see `channels.ts`'s schema comment).
+    // Every unnamed channel used to get the literal empty string here, which
+    // means the *second* one ever created in a workspace collided on that
+    // constraint — confirmed directly: creating a DM 500'd with a duplicate-
+    // key violation the moment one unnamed channel already existed. DMs are
+    // never looked up by slug (only by `channelId`), so a random one costs
+    // nothing and can never collide with a real name or with each other.
+    const slug = channelName ? channelSlug(channelName) : `_${randomUUID()}`;
+    const isDirect = channelType === 'dm' || channelType === 'group_dm';
+
+    // The route only requires being a workspace member at all (any role can
+    // start a conversation, same as Teams/Slack DMs) — public/private
+    // channels are still admin/owner-only, same as before, checked here
+    // rather than in the route since it depends on the request body.
+    if (!isDirect && req.workspaceRole !== 'owner' && req.workspaceRole !== 'admin') {
+      res.status(403).json({ error: 'Only a workspace owner or admin can create a channel.' });
       return;
     }
 
-    const slug = channelSlug(name);
+    if (isDirect && (!Array.isArray(memberIds) || memberIds.length === 0)) {
+      res.status(400).json({ error: 'A direct message needs at least one other member.' });
+      return;
+    }
+
+    // The full member set, deduped — this is what identifies a DM, not its
+    // (client-supplied, usually absent) name. Two people who already have a
+    // DM clicking "message" again must land back in the same channel, not
+    // spawn a duplicate every time.
+    const memberSet = isDirect
+      ? Array.from(new Set<string>([userId, ...(memberIds as string[]).filter((id) => id !== userId)]))
+      : null;
+
+    if (memberSet) {
+      const [existing] = await db
+        .select({ channelId: channelMembers.channelId })
+        .from(channelMembers)
+        .innerJoin(channels, eq(channels.channelId, channelMembers.channelId))
+        .where(and(eq(channels.workspaceId, workspaceId), eq(channels.type, channelType)))
+        .groupBy(channelMembers.channelId)
+        .having(
+          // `inArray()`, not a raw `= any(${memberSet})` — the same "doubled
+          // parens" pitfall `labels.controller.ts` already hit: Drizzle's
+          // `sql` template serializes an interpolated JS array as a row
+          // expression, `($3, $4)`, not a real Postgres array, so
+          // `any(($3, $4))` is invalid SQL (confirmed directly against a
+          // running query, not assumed). `inArray()` is Drizzle's own
+          // dedicated helper for exactly this and generates a correct
+          // `IN ($3, $4)`, already proven against a uuid column elsewhere in
+          // this codebase (`messages.controller.ts`'s file-cleanup query).
+          sql`count(*) filter (where ${inArray(channelMembers.userId, memberSet)}) = ${memberSet.length} and count(*) = ${memberSet.length}`,
+        );
+
+      // `channelMembers.channelId` is nullable at the type level (the FK
+      // itself has no `.notNull()`), even though this join guarantees a real
+      // value at runtime — narrow explicitly rather than asserting past it.
+      if (existing?.channelId) {
+        const [channel] = await db.select().from(channels).where(eq(channels.channelId, existing.channelId)).limit(1);
+        res.status(200).json({ message: 'Channel already exists', channel });
+        return;
+      }
+    }
 
     const result = await db.transaction(async (tx) => {
       const [channel] = await tx
@@ -38,7 +93,7 @@ export const createChannel = async (req: Request, res: Response): Promise<void> 
         .values({
           workspaceId,
           projectId: projectId || null,
-          name: name.trim(),
+          name: channelName,
           slug,
           description: description || null,
           type: channelType,
@@ -48,16 +103,14 @@ export const createChannel = async (req: Request, res: Response): Promise<void> 
         })
         .returning();
 
-      // Add creator as first member
-      const newMembers = [{ channelId: channel.channelId, userId }];
-      
-      if (Array.isArray(memberIds)) {
-        for (const mId of memberIds) {
-          if (mId !== userId) {
-            newMembers.push({ channelId: channel.channelId, userId: mId });
-          }
-        }
-      }
+      // For a dm/group_dm, `memberSet` (creator + everyone named, deduped) is
+      // the membership, full stop — that set *is* the channel's identity, per
+      // the existing-channel lookup above. Otherwise, same as before: the
+      // creator plus whichever `memberIds` were also given.
+      const memberIdsToAdd = memberSet
+        ? memberSet
+        : [userId, ...(Array.isArray(memberIds) ? memberIds.filter((mId: string) => mId !== userId) : [])];
+      const newMembers = memberIdsToAdd.map((mId) => ({ channelId: channel.channelId, userId: mId }));
 
       await tx.insert(channelMembers).values(newMembers);
 
@@ -75,8 +128,13 @@ export const createChannel = async (req: Request, res: Response): Promise<void> 
     });
 
     res.status(201).json({ message: 'Channel created', channel: result });
-  } catch (err) {
+  } catch (err: any) {
     console.error('Create channel error:', err);
+    const errStr = String(err?.message || err);
+    if (err?.code === '23505' || err?.cause?.code === '23505' || errStr.includes('unique constraint') || errStr.includes('duplicate key')) {
+      res.status(409).json({ error: 'Channel with this name already exists.' });
+      return;
+    }
     res.status(500).json({ error: 'Server error creating channel.' });
   }
 };
@@ -85,42 +143,120 @@ export const createChannel = async (req: Request, res: Response): Promise<void> 
 // GET /api/workspaces/:workspaceId/channels
 export const listChannels = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId } = req.params as Record<string, string>;
+    const workspaceId = req.params.workspaceId || res.locals.workspaceId;
     const userId = req.user!.userId;
     const workspaceRole = req.workspaceRole; // from middleware
+    const isWorkspaceAdmin = workspaceRole === 'owner' || workspaceRole === 'admin';
 
-    const allChannels = await db
-      .select()
-      .from(channels)
-      .where(and(eq(channels.workspaceId, workspaceId), eq(channels.isArchived, false)));
+    // Opt-in paging, same shape as tasks.controller.ts's listTasks — a hard
+    // ceiling on top of the default "everything". This used to fetch every
+    // channel in the workspace and filter visibility in memory; a LIMIT
+    // applied to that raw, unfiltered query would silently drop channels the
+    // caller can see (or even truncate before reaching ones they can), so
+    // the visibility check moved into the query itself first.
+    const MAX_LIMIT = 2000;
+    const requestedLimit = parseInt(String(req.query.limit ?? ''), 10);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, MAX_LIMIT)
+      : MAX_LIMIT;
+    const requestedOffset = parseInt(String(req.query.offset ?? ''), 10);
+    const offset = Number.isFinite(requestedOffset) && requestedOffset > 0 ? requestedOffset : 0;
 
-    // Fetch user's project memberships
+    // These two are naturally bounded by the caller's own memberships, not
+    // the workspace's total size, so they were never the risk this paging
+    // closes — kept as-is, just used to build the visibility condition below
+    // instead of an in-memory filter.
     const userProjects = await db
       .select({ projectId: projectMembers.projectId })
       .from(projectMembers)
       .where(eq(projectMembers.userId, userId));
-    const userProjectIds = new Set(userProjects.map(p => p.projectId));
+    const userProjectIds = userProjects.map(p => p.projectId).filter((id): id is string => id !== null);
 
-    // Fetch user's private channel memberships
     const userChannels = await db
       .select({ channelId: channelMembers.channelId })
       .from(channelMembers)
       .where(eq(channelMembers.userId, userId));
-    const userChannelIds = new Set(userChannels.map(c => c.channelId));
+    const userChannelIds = userChannels.map(c => c.channelId).filter((id): id is string => id !== null);
 
-    const visibleChannels = allChannels.filter(c => {
-      if (c.projectId) {
-        // Project-scoped channel
-        if (workspaceRole === 'owner' || workspaceRole === 'admin') return true;
-        return userProjectIds.has(c.projectId);
-      } else {
-        // Workspace-scoped channel
-        if (c.type === 'public') return true;
-        return userChannelIds.has(c.channelId);
+    // Mirrors the original in-memory filter's branching exactly: a
+    // project-scoped channel's visibility never depends on its `type`
+    // (only project membership, or workspace owner/admin), and a
+    // workspace-scoped channel's visibility never depends on project
+    // membership (only its `type` or explicit channel membership). The
+    // admin "see everything" shortcut is withheld from dm/group_dm
+    // specifically — same reasoning as `requireChannelAccess`'s fix: a DM is
+    // private to its participants, full stop, and listing *which* DMs exist
+    // (who's talking to whom) is exactly the kind of leak that reasoning
+    // covers, not just reading their contents.
+    const visibilityCondition = or(
+      and(isNull(channels.projectId), eq(channels.type, 'public')),
+      and(
+        isNull(channels.projectId),
+        inArray(channels.type, ['dm', 'group_dm']),
+        userChannelIds.length > 0 ? inArray(channels.channelId, userChannelIds) : sql`false`,
+      ),
+      and(
+        isWorkspaceAdmin
+          ? sql`true`
+          : and(
+              isNull(channels.projectId),
+              userChannelIds.length > 0 ? inArray(channels.channelId, userChannelIds) : sql`false`,
+            ),
+        sql`${channels.type} not in ('dm', 'group_dm')`,
+      ),
+      and(
+        isNotNull(channels.projectId),
+        isWorkspaceAdmin
+          ? sql`true`
+          : userProjectIds.length > 0
+            ? inArray(channels.projectId, userProjectIds)
+            : sql`false`,
+      ),
+    );
+
+    const visibleChannels = await db
+      .select()
+      .from(channels)
+      .where(and(eq(channels.workspaceId, workspaceId), eq(channels.isArchived, false), visibilityCondition))
+      .orderBy(asc(channels.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    // DMs and group DMs have no name — the frontend needs to know *who* a
+    // conversation is with to show anything meaningful in a channel list
+    // (sidebar, "Direct Messages" section). One extra query for the whole
+    // page of results rather than one per DM.
+    const directChannelIds = visibleChannels.filter((c) => c.type === 'dm' || c.type === 'group_dm').map((c) => c.channelId);
+    let participantsByChannel = new Map<string, { userId: string; fullName: string; displayName: string | null; avatarUrl: string | null }[]>();
+    if (directChannelIds.length > 0) {
+      const rows = await db
+        .select({
+          channelId: channelMembers.channelId,
+          userId: users.userId,
+          fullName: users.fullName,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+        })
+        .from(channelMembers)
+        .innerJoin(users, eq(users.userId, channelMembers.userId))
+        .where(and(inArray(channelMembers.channelId, directChannelIds), sql`${channelMembers.userId} != ${userId}`));
+
+      participantsByChannel = new Map();
+      for (const row of rows) {
+        if (!row.channelId) continue;
+        const list = participantsByChannel.get(row.channelId) ?? [];
+        list.push({ userId: row.userId, fullName: row.fullName, displayName: row.displayName, avatarUrl: row.avatarUrl });
+        participantsByChannel.set(row.channelId, list);
       }
-    });
+    }
 
-    res.json({ channels: visibleChannels });
+    const result = visibleChannels.map((c) =>
+      c.type === 'dm' || c.type === 'group_dm'
+        ? { ...c, otherParticipants: participantsByChannel.get(c.channelId) ?? [] }
+        : c,
+    );
+
+    res.json({ channels: result });
   } catch (err) {
     console.error('List channels error:', err);
     res.status(500).json({ error: 'Server error listing channels.' });
@@ -200,7 +336,7 @@ export const joinChannel = async (req: Request, res: Response): Promise<void> =>
     });
 
     res.status(201).json({ message: 'Joined channel' });
-  } catch (err) {
+  } catch (err: any) {
     console.error('Join channel error:', err);
     res.status(500).json({ error: 'Server error joining channel.' });
   }
@@ -381,4 +517,80 @@ export const updateChannel = async (req: Request, res: Response): Promise<void> 
     console.error('Update channel error:', err);
     res.status(500).json({ error: 'Server error updating channel.' });
   }
+};
+
+// ─── CALLS (Zoom link-out) ───────────────────────────────────────────────────
+// A "Start call" mints a Zoom meeting the first time; everyone after reuses
+// the same link (`getActiveCall`) until it ages out — see activeCalls.ts.
+// There's no embed and no live participant count: once someone clicks
+// through, they've left DevSync's page for Zoom's, which this backend has
+// no visibility into.
+
+// GET /api/workspaces/:workspaceId/channels/:channelId/call
+export const getCall = async (req: Request, res: Response): Promise<void> => {
+  const { channelId } = req.params as Record<string, string>;
+  const call = getActiveCall(channelId);
+  res.json({ joinUrl: call?.joinUrl ?? null });
+};
+
+// POST /api/workspaces/:workspaceId/channels/:channelId/call
+export const startCall = async (req: Request, res: Response): Promise<void> => {
+  const { channelId } = req.params as Record<string, string>;
+
+  const existing = getActiveCall(channelId);
+  if (existing) {
+    res.status(200).json({ joinUrl: existing.joinUrl });
+    return;
+  }
+
+  try {
+    const [channel] = await db
+      .select({ name: channels.name })
+      .from(channels)
+      .where(eq(channels.channelId, channelId))
+      .limit(1);
+
+    const { joinUrl, meetingId } = await createZoomMeeting(`DevSync — #${channel?.name ?? 'channel'}`);
+    setActiveCall(channelId, { joinUrl, meetingId, createdAt: Date.now() });
+
+    // Any tab already open on this channel updates its "Start call" button
+    // to "Join call" immediately, without polling.
+    getIO().to(`channel:${channelId}`).emit('call_started', {
+      channelRoomId: `channel:${channelId}`,
+      joinUrl,
+    });
+
+    res.status(201).json({ joinUrl });
+  } catch (err) {
+    console.error('Start call error:', err);
+    res.status(502).json({ error: 'Could not start the call. Check the Zoom integration is configured.' });
+  }
+};
+
+// DELETE /api/workspaces/:workspaceId/channels/:channelId/call
+export const endCall = async (req: Request, res: Response): Promise<void> => {
+  const { channelId } = req.params as Record<string, string>;
+
+  const call = getActiveCall(channelId);
+  // Cleared and broadcast first, regardless of whether the Zoom API call
+  // below succeeds: DevSync's own "is a call live" state shouldn't stay
+  // stuck just because Zoom's side had a transient error, and every open
+  // tab reverting to "Start call" is the visible part of this action.
+  clearActiveCall(channelId);
+  getIO().to(`channel:${channelId}`).emit('call_started', {
+    channelRoomId: `channel:${channelId}`,
+    joinUrl: null,
+  });
+
+  if (call) {
+    try {
+      await endZoomMeeting(call.meetingId);
+    } catch (err) {
+      // Non-fatal: most commonly the meeting already ended itself because
+      // everyone had already left. DevSync's own state is already cleared.
+      console.error('End Zoom meeting error (non-fatal):', err);
+    }
+  }
+
+  res.status(200).json({ ended: true });
 };

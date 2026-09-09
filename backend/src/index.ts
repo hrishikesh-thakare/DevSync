@@ -3,28 +3,81 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
-import { env } from './config/env.js';
+import { env, assertEnv } from './config/env.js';
+import { corsOrigin, allowedOrigins } from './config/cors.js';
+import { globalLimiter } from './middleware/rateLimit.js';
+
+// Refuse to boot on a configuration that cannot work, before anything opens a
+// port or a connection. See config/env.ts for the rules.
+assertEnv();
 
 const app = express();
+
+// Trust the configured number of reverse proxies so req.ip reflects the real
+// client IP (X-Forwarded-For) instead of the proxy's internal address. Rate
+// limiters and audit-log IPs depend on this; without it, every user behind a
+// proxy shares one bucket and a single burst can lock out everyone.
+app.set('trust proxy', env.TRUST_PROXY_HOPS);
 
 // ─── Global Middleware ───────────────────────────────────────────────────────
 app.use(helmet());
 app.use(cors({
-  origin: env.FRONTEND_URL,
+  origin: corsOrigin,
   credentials: true,
 }));
-app.use(morgan('dev'));
+// `dev` is colorized and unparseable; `combined` is the standard Apache format
+// every log aggregator already understands.
+app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+app.use(globalLimiter);
 // ─── Webhooks (Must be before express.json) ────────────────────────────────
 import { githubWebhookRouter } from './modules/github/github.routes.js';
 app.use('/api/webhooks/github', githubWebhookRouter);
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true }));
+// 1mb everywhere by default. The 50mb ceiling exists only for the endpoints
+// that carry a base64-encoded file in the JSON body; applying it globally meant
+// every route on the API would buffer a 50mb payload before rejecting it.
+app.use(/^\/api\/(workspaces\/[^/]+\/(files\/upload|projects\/[^/]+\/tasks\/[^/]+\/attachments)|auth\/avatar)$/, express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
 
 // ─── Health Check ────────────────────────────────────────────────────────────
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+//
+// This is what a load balancer polls to decide whether to send traffic here, so
+// it has to answer the question that actually matters: can this instance serve
+// a request? A process that is up but cannot reach Postgres serves nothing but
+// 500s, and a health check that only proves Express is listening would keep it
+// in rotation indefinitely.
+import { sql } from 'drizzle-orm';
+import { db as healthDb } from './config/db.js';
+
+const pingDatabase = () => healthDb.execute(sql`select 1`);
+
+app.get('/api/health', async (_req, res) => {
+  const startedAt = Date.now();
+  try {
+    await pingDatabase();
+    res.json({
+      status: 'ok',
+      database: 'ok',
+      latencyMs: Date.now() - startedAt,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('Health check failed:', err);
+    res.status(503).json({
+      status: 'degraded',
+      database: 'unreachable',
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+// A liveness probe, for platforms that want one separate from readiness: it
+// answers whether the process should be restarted, not whether it should get
+// traffic, so it must not depend on the database.
+app.get('/api/health/live', (_req, res) => {
+  res.json({ status: 'ok', uptimeSeconds: Math.round(process.uptime()) });
 });
 
 import { resolveSlug, resolveProjectKey, resolveTaskKey } from './middleware/slugs.js';
@@ -38,12 +91,6 @@ app.param('taskKey', resolveTaskKey);
 import authRoutes from './modules/auth/auth.routes.js';
 app.use('/api/auth', authRoutes);
 
-import { storageRoutes } from './modules/storage/storage.routes.js';
-app.use('/api/storage', storageRoutes);
-
-import workspacesRoutes from './modules/workspaces/workspaces.routes.js';
-app.use('/api/workspaces', workspacesRoutes);
-
 import projectsRoutes from './modules/projects/projects.routes.js';
 app.use('/api/workspaces/:slug/projects', projectsRoutes);
 
@@ -53,14 +100,19 @@ app.use('/api/workspaces/:slug/projects/:key/tasks', tasksRoutes);
 import sprintsRoutes from './modules/sprints/sprints.routes.js';
 app.use('/api/workspaces/:slug/projects/:key/sprints', sprintsRoutes);
 
+import labelsRoutes from './modules/labels/labels.routes.js';
+app.use('/api/workspaces/:slug/projects/:key/labels', labelsRoutes);
+
 import channelsRoutes from './modules/channels/channels.routes.js';
 app.use('/api/workspaces/:slug/channels', channelsRoutes);
 
 import filesRoutes from './modules/files/files.routes.js';
 app.use('/api/workspaces/:slug/files', filesRoutes);
 
-import messagesRoutes from './modules/messages/messages.routes.js';
-app.use('/api/workspaces/:slug/channels/:channelId/messages', messagesRoutes);
+import workspacesRoutes from './modules/workspaces/workspaces.routes.js';
+app.use('/api/workspaces', workspacesRoutes);
+
+// Messages routes moved to channels.routes.ts
 
 import { githubConfigRouter, githubTaskRouter, githubUserRouter } from './modules/github/github.routes.js';
 app.use('/api/workspaces/:slug/projects/:key/github', githubConfigRouter);
@@ -70,14 +122,125 @@ app.use('/api/github', githubUserRouter);
 import searchRoutes from './modules/search/search.routes.js';
 app.use('/api/workspaces/:slug/search', searchRoutes);
 
+import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
+app.use('/api/workspaces/:slug/dashboard', dashboardRoutes);
+
+import analyticsRoutes from './modules/analytics/analytics.routes.js';
+app.use('/api/workspaces/:slug/analytics', analyticsRoutes);
+
 import notificationsRoutes from './modules/notifications/notifications.routes.js';
 app.use('/api/notifications', notificationsRoutes);
 
 import auditRoutes from './modules/audit/audit.routes.js';
 app.use('/api/audit', auditRoutes);
 
+// Test-only surface (never mounted in production) — see
+// internal-test.routes.ts for why it exists.
+import { internalTestRouter } from './modules/internal-test/internal-test.routes.js';
+if (env.NODE_ENV !== 'production') {
+  app.use('/api/workspaces/:slug/projects/:key/internal-test', internalTestRouter);
+}
+
+// ─── 404 + Error handling (must be registered after every route) ─────────────
+//
+// Without these, Express's built-in handlers answer with an HTML page. In
+// development that page embeds the stack trace *and absolute filesystem paths*
+// (`D:\Final-Yr-Project\DevSync\backend\node_modules\...`), and in every
+// environment it breaks clients that expect JSON.
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Not found.' });
+});
+
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  // A malformed JSON body surfaces here as a SyntaxError from body-parser.
+  const status = typeof err?.status === 'number' ? err.status : 500;
+
+  if (status >= 500) {
+    console.error('Unhandled error:', err);
+  }
+
+  res.status(status).json({
+    error:
+      status === 400 && err instanceof SyntaxError
+        ? 'Malformed JSON body.'
+        : status < 500
+          ? err?.message || 'Request could not be processed.'
+          : 'Internal server error.',
+  });
+});
+
 import { createServer } from 'http';
-import { initSocket } from './sockets/index.js';
+import { initSocket, getIO } from './sockets/index.js';
+import { registerWorkers, shutdownQueue, stopWorkers } from './workers/index.js';
+import { queryClient } from './config/db.js';
+
+// ─── Graceful Shutdown ────────────────────────────────────────────────────────
+let isShuttingDown = false;
+
+const shutdown = async (signal: string) => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`\n🛑 ${signal} received, starting graceful shutdown...`);
+
+  // Stop accepting new connections
+  httpServer.close(() => {
+    console.log('✅ HTTP server closed');
+  });
+
+  // Close Socket.io connections
+  try {
+    const io = getIO();
+    io.close(() => {
+      console.log('✅ Socket.io closed');
+    });
+  } catch {
+    // Socket.io may not be initialized
+  }
+
+  // Drain background job queue and stop periodic sweeps. Awaited: the point
+  // is to let queued emails and webhook events finish, and the previous
+  // fire-and-forget call logged success without waiting for any of it.
+  await shutdownQueue();
+  stopWorkers();
+  console.log('✅ Job queue drained');
+
+  // Close database connection
+  try {
+    await queryClient.end({ timeout: 5 });
+    console.log('✅ Database connection closed');
+  } catch (err) {
+    console.error('❌ Database close error:', err);
+  }
+
+  // Force exit after timeout
+  setTimeout(() => {
+    console.error('⏱️  Shutdown timeout, forcing exit');
+    process.exit(1);
+  }, 10_000).unref();
+
+  // Exit cleanly once all handles are closed
+  process.on('exit', () => {
+    console.log('👋 Graceful shutdown complete');
+  });
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+// A rejected promise with no catch would otherwise terminate the process in
+// modern Node — one failing background job taking the whole API down. Route
+// errors never reach here; the Express error handler above catches those.
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled promise rejection:', reason);
+});
+
+// An uncaught exception leaves application state unknowable, so the only safe
+// response is to drain and exit — a process manager (or `npm run dev`) restarts
+// from a clean slate. Logging and carrying on would risk serving corrupt data.
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception — shutting down:', err);
+  void shutdown('uncaughtException').finally(() => process.exit(1));
+});
 
 // ─── Start Server ────────────────────────────────────────────────────────────
 const httpServer = createServer(app);
@@ -85,9 +248,54 @@ const httpServer = createServer(app);
 // Initialize Socket.io
 initSocket(httpServer);
 
-httpServer.listen(env.PORT, () => {
-  console.log(`🚀 DevSync backend running on http://localhost:${env.PORT}`);
-  console.log(`   Environment: ${env.NODE_ENV}`);
+// Register background job workers (email delivery, GitHub webhook events)
+registerWorkers();
+
+/**
+ * This process holds real state that no other instance can see: the rate-limit
+ * counters, the in-memory job queue, the live-call registry, and the Socket.io
+ * room membership that delivers every chat message. Run two of these behind one
+ * load balancer and each of those silently half-works — messages reach the half
+ * of your users who happen to share an instance with the sender, rate limits
+ * become N× the configured value, and queued invite emails vanish when the
+ * instance that holds them restarts.
+ *
+ * Making that safe means Redis: `@socket.io/redis-adapter`, `rate-limit-redis`,
+ * and BullMQ in place of `workers/queue.ts`. Until then the deployment must run
+ * exactly one instance, and that is a constraint worth stating out loud at boot
+ * rather than leaving in a document nobody reads during an incident.
+ */
+const warnIfHorizontallyScaled = () => {
+  const declared = parseInt(process.env.WEB_CONCURRENCY || process.env.INSTANCE_COUNT || '1', 10);
+  if (env.NODE_ENV === 'production' && declared > 1) {
+    console.warn(
+      `\n⚠️  ${declared} instances declared, but this build keeps rate limits, the job queue,\n` +
+        `   live calls and Socket.io rooms in process memory. Chat delivery and rate limiting\n` +
+        `   will be incorrect across instances. Run one instance, or move that state to Redis.\n`
+    );
+  }
+};
+
+const start = async () => {
+  // Opt-in, because a release that migrates from every booting instance races
+  // with itself the moment there is more than one. Prefer a release command.
+  if (process.env.RUN_MIGRATIONS_ON_BOOT === 'true') {
+    const { runMigrations } = await import('./db/migrate.js');
+    await runMigrations();
+  }
+
+  warnIfHorizontallyScaled();
+
+  httpServer.listen(env.PORT, () => {
+    console.log(`🚀 DevSync backend running on port ${env.PORT}`);
+    console.log(`   Environment:     ${env.NODE_ENV}`);
+    console.log(`   Allowed origins: ${allowedOrigins.join(', ')}`);
+  });
+};
+
+start().catch((err) => {
+  console.error('❌ Failed to start:', err);
+  process.exit(1);
 });
 
 export default app;

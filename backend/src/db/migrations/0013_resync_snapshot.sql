@@ -1,0 +1,34 @@
+-- DevSync: snapshot resync. Intentionally does nothing to the schema.
+--
+-- The problem it closes
+-- ---------------------
+-- Migrations 0009–0012 were hand-written and appended to `_journal.json`
+-- without a matching `meta/NNNN_snapshot.json`. drizzle-kit generates a new
+-- migration by diffing the TypeScript schema against the *latest snapshot* —
+-- which was still 0008 — so it could not see that 0012 had ever run. Every
+-- future `drizzle-kit generate` would re-emit 0012's table, column, keys and
+-- indexes as though they were new work.
+--
+-- The fix is the file next to this one: `meta/0013_snapshot.json`, generated
+-- from the current schema, which finally describes the database as it actually
+-- is. From here `generate` diffs against reality again.
+--
+-- Why there is no SQL
+-- -------------------
+-- Everything the regenerated snapshot describes is already created by 0012,
+-- which sits earlier in the journal and therefore runs first on a fresh
+-- database — and 0012 is itself written with IF NOT EXISTS guards, so it is
+-- safe on an existing one. Re-stating its DDL here would be worse than
+-- redundant: 0012 declares its foreign keys inline in CREATE TABLE, so
+-- Postgres names them `task_status_transitions_task_id_fkey`, while a
+-- drizzle-generated migration names the same constraints
+-- `task_status_transitions_task_id_tasks_task_id_fk`. A name-based guard would
+-- find no match and add a second, duplicate constraint enforcing the identical
+-- rule on every write.
+--
+-- Note also what the snapshot still cannot describe: 0010's tsvector generated
+-- columns, GIN indexes and circular foreign keys have no declarative form in
+-- Drizzle. They are absent from the schema and from the snapshot, and must
+-- stay hand-written. Do not "fix" a future generate that omits them.
+
+SELECT 1;

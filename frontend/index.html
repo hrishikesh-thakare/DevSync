@@ -1,14 +1,21 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<!--
+  `class="dark"` is deliberate. index.css bakes the dark palette straight onto
+  :root with `color-scheme: dark` and defines no light block, so the app is
+  dark-only by design — but `@custom-variant dark (&:is(.dark *))` means every
+  `dark:` utility in the shadcn components only applies under a `.dark`
+  ancestor. Without this class those variants never matched, so components
+  silently rendered their *light* branch (avatar `mix-blend-darken`, lighter
+  ring opacities, destructive backgrounds) on top of dark variables. Adding the
+  class changes no custom property; it just selects the branch that was always
+  intended.
+-->
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/devsync-icon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="DevSync — AI-Integrated Developer Collaboration Platform. Unify project management, team chat, GitHub tracking, and AI-powered insights in one workspace." />
-    <title>DevSync — Developer Collaboration Platform</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <title>DevSync</title>
   </head>
   <body>
     <div id="root"></div>

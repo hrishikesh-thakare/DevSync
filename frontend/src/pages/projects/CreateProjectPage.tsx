@@ -1,103 +1,191 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useCurrentWorkspaceStore } from '../../store/currentWorkspace.js';
-import { FolderKanban, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useForm, useWatch } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Loader2Icon, LockIcon } from 'lucide-react';
+import { toast } from 'sonner';
 
-export const CreateProjectPage = () => {
-  const { slug } = useParams();
+import { EmptyState, ErrorState } from '@/components/layout/PageState';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { PageHeader, PageShell } from '@/components/layout/PageHeader';
+import { useProjectStore } from '@/store/projectStore';
+import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
+
+/**
+ * Mirrors `createProjectSchema` (backend/src/modules/projects/projects.schemas.ts).
+ * That schema is `.strict()` and accepts only name, key, description and iconUrl
+ * — there is no `leadUserId`, so the lead cannot be assigned at creation time
+ * (nor by `updateProjectSchema`). The screen inventory in docs/navigation-flow.md
+ * lists a Lead User field; the API does not support one today.
+ */
+const schema = z.object({
+  name: z.string().trim().min(1, 'Project name is required'),
+  key: z
+    .string()
+    .trim()
+    .min(1, 'Project key is required')
+    .max(10, 'Keys are at most 10 characters')
+    .regex(/^[A-Za-z][A-Za-z0-9]*$/, 'Start with a letter, then letters and numbers only'),
+  description: z.string().trim().optional(),
+});
+
+type Values = z.infer<typeof schema>;
+
+/** "Frontend App" becomes "FRON" — a sensible starting key the user can edit. */
+function suggestKey(name: string) {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '';
+  const raw =
+    words.length === 1
+      ? words[0].slice(0, 4)
+      : words.map((w) => w[0]).join('').slice(0, 4);
+  return raw.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+}
+
+export function CreateProjectPage() {
+  const { slug = '' } = useParams();
   const navigate = useNavigate();
-  const { createProject } = useCurrentWorkspaceStore();
-  
-  const [name, setName] = useState('');
-  const [key, setKey] = useState('');
-  const [description, setDescription] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const createProject = useProjectStore((s) => s.createProject);
+  // Subscribe to the role *value*, not the `isAdmin` helper: that function's
+  // reference never changes, so selecting it means this component never
+  // re-renders when the workspace payload arrives and would be stuck on the
+  // pre-load default of 'member'.
+  const workspaceRole = useCurrentWorkspaceStore((s) => s.myRole);
+  const workspaceLoading = useCurrentWorkspaceStore((s) => s.isLoading);
+  const canCreate = workspaceRole === 'owner' || workspaceRole === 'admin';
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [keyTouched, setKeyTouched] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!slug || !name || !key) return;
-    
-    setIsLoading(true);
+  const form = useForm<Values>({
+    resolver: zodResolver(schema),
+    defaultValues: { name: '', key: '', description: '' },
+  });
+
+  const { isSubmitting, errors } = form.formState;
+  const nameValue = useWatch({ control: form.control, name: 'name' });
+  const keyValue = useWatch({ control: form.control, name: 'key' });
+  const effectiveKey = keyTouched ? keyValue || '' : suggestKey(nameValue || '');
+
+  const onSubmit = async (values: Values) => {
+    setSubmitError(null);
+    const key = (keyTouched ? values.key : suggestKey(values.name)).toUpperCase();
     try {
-      await createProject(slug, name, key, description);
-      navigate(`/w/${slug}/projects/${key}`);
+      const project = await createProject(slug, { ...values, key });
+      toast.success(`${project.key} created`);
+      navigate(`/w/${slug}/projects/${project.key}`);
     } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoading(false);
+      // 409 when the key is already used in this workspace.
+      setSubmitError(err instanceof Error ? err.message : 'Could not create the project.');
     }
   };
 
+  // Never rule on permissions before the role is known, or a direct visit to
+  // this URL flashes a denial at someone who is actually allowed.
+  if (workspaceLoading) {
+    return (
+      <PageShell narrow>
+        <Skeleton className="h-8 w-48 rounded-lg" />
+        <Skeleton className="mt-6 h-72 w-full rounded-2xl" />
+      </PageShell>
+    );
+  }
+
+  if (!canCreate) {
+    return (
+      <PageShell narrow>
+        {/* A permission boundary, not a failure — same treatment as the
+            workspace settings page. */}
+        <EmptyState
+          icon={<LockIcon />}
+          title="You do not have permission to create projects"
+          description="Only workspace owners and admins can create projects. Ask an admin to create one for you."
+        />
+      </PageShell>
+    );
+  }
+
   return (
-    <div className="h-full flex flex-col justify-center items-center bg-gray-950 p-6 font-sans">
-      <div className="w-full max-w-lg bg-gray-900/50 border border-gray-800 rounded-2xl p-8 shadow-2xl">
-        <div className="flex justify-center mb-6">
-          <div className="w-16 h-16 bg-white/10 border border-white/20 rounded-2xl flex items-center justify-center">
-            <FolderKanban className="w-8 h-8 text-gray-300" />
-          </div>
-        </div>
-        
-        <h1 className="text-2xl font-bold text-center text-white mb-2">Create a New Project</h1>
-        <p className="text-center text-gray-400 mb-8 text-sm">Start tracking tasks, sprints, and CI/CD pipelines.</p>
+    <PageShell narrow>
+      <PageHeader
+        title="New project"
+        description="The key prefixes every issue in this project and cannot be changed later."
+      />
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Project Name</label>
-            <input 
-              type="text" 
-              required
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                if (!key) setKey(e.target.value.substring(0, 3).toUpperCase());
-              }}
-              placeholder="e.g. Mobile App V2"
-              className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/50"
-            />
-          </div>
+      {submitError ? (
+        <ErrorState message={submitError} className="mb-6" />
+      ) : null}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Project Key</label>
-            <input 
-              type="text" 
-              required
-              value={key}
-              onChange={(e) => setKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-              placeholder="e.g. MOB"
-              className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-3 text-white font-mono focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/50 uppercase"
-            />
-            <p className="text-xs text-gray-500 mt-1.5">Used as a prefix for task IDs (e.g. MOB-1). Immutable after creation.</p>
-          </div>
+      <Card>
+        <CardContent>
+          <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
+            <FieldGroup>
+              <Field data-invalid={!!errors.name}>
+                <FieldLabel htmlFor="p-name">Name</FieldLabel>
+                <Input
+                  id="p-name"
+                  type="text"
+                  placeholder="Frontend App"
+                  aria-invalid={!!errors.name}
+                  {...form.register('name')}
+                />
+                <FieldError errors={[errors.name]} />
+              </Field>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Description (Optional)</label>
-            <textarea 
-              rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What is this project about?"
-              className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/50"
-            />
-          </div>
+              <Field data-invalid={!!errors.key}>
+                <FieldLabel htmlFor="p-key">Key</FieldLabel>
+                <Input
+                  id="p-key"
+                  type="text"
+                  maxLength={10}
+                  placeholder={suggestKey(nameValue || '') || 'FRON'}
+                  className="font-mono uppercase"
+                  aria-invalid={!!errors.key}
+                  {...form.register('key', {
+                    onChange: () => setKeyTouched(true),
+                  })}
+                />
+                {errors.key ? (
+                  <FieldError errors={[errors.key]} />
+                ) : (
+                  <FieldDescription>
+                    {effectiveKey
+                      ? `Issues will be numbered ${effectiveKey.toUpperCase()}-1, ${effectiveKey.toUpperCase()}-2, and so on.`
+                      : 'Derived from the name if left blank. Permanent once set.'}
+                  </FieldDescription>
+                )}
+              </Field>
 
-          <div className="pt-4 flex items-center justify-end space-x-4">
-            <button 
-              type="button"
-              onClick={() => navigate(-1)}
-              className="px-5 py-2.5 text-gray-400 hover:text-white transition-colors text-sm font-medium"
-            >
-              Cancel
-            </button>
-            <button 
-              type="submit"
-              disabled={isLoading || !name || !key}
-              className="flex items-center px-6 py-2.5 bg-gray-400 hover:bg-white disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-colors"
-            >
-              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Create Project'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+              <Field>
+                <FieldLabel htmlFor="p-description">Description</FieldLabel>
+                <Textarea
+                  id="p-description"
+                  rows={3}
+                  placeholder="Optional — what this project covers."
+                  {...form.register('description')}
+                />
+              </Field>
+
+              <div className="flex items-center gap-2">
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
+                  ) : null}
+                  Create project
+                </Button>
+                <Button asChild type="button" variant="ghost">
+                  <Link to={`/w/${slug}/projects`}>Cancel</Link>
+                </Button>
+              </div>
+            </FieldGroup>
+          </form>
+        </CardContent>
+      </Card>
+    </PageShell>
   );
-};
+}

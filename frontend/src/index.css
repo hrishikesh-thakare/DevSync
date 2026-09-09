@@ -1,349 +1,223 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
 
-/* ===== DESIGN SYSTEM — Monochrome Black & White ===== */
-@theme {
-  --color-bg-primary: #000000;
-  --color-bg-secondary: #0a0a0a;
-  --color-bg-tertiary: #141414;
-  --color-bg-elevated: #1a1a1a;
-  --color-bg-hover: #262626;
+@custom-variant dark (&:is(.dark *));
 
-  --color-border-default: rgba(255, 255, 255, 0.1);
-  --color-border-strong: rgba(255, 255, 255, 0.2);
-  --color-border-glow: rgba(255, 255, 255, 0.3);
-
-  --color-text-primary: #ffffff;
-  --color-text-secondary: #a0a0a0;
-  --color-text-muted: #666666;
-  --color-text-inverse: #000000;
-
-  --color-accent-purple: #ffffff;
-  --color-accent-violet: #efefef;
-  --color-accent-indigo: #dfdfdf;
-  --color-accent-blue: #cfcfcf;
-  --color-accent-fuchsia: #bfbfbf;
-
-  --color-success: #ffffff;
-  --color-warning: #a0a0a0;
-  --color-danger: #666666;
-  --color-info: #dddddd;
-
-  --color-glass-bg: rgba(0, 0, 0, 0.6);
-  --color-glass-bg-strong: rgba(0, 0, 0, 0.85);
-  --color-glass-border: rgba(255, 255, 255, 0.1);
-  --color-glass-highlight: rgba(255, 255, 255, 0.05);
-
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+@theme inline {
+    --font-heading: var(--font-sans);
+    --font-sans: 'Inter Variable', sans-serif;
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+    --color-invert-foreground: var(--invert-foreground);
+    --color-invert: var(--invert);
+    --color-warning-foreground: var(--warning-foreground);
+    --color-warning: var(--warning);
+    --color-info-foreground: var(--info-foreground);
+    --color-info: var(--info);
+    --color-success-foreground: var(--success-foreground);
+    --color-success: var(--success);
+    --color-destructive-foreground: var(--destructive-foreground);
 }
 
-/* ===== BASE STYLES ===== */
+:root {
+    color-scheme: dark;
+    --background: oklch(0.141 0.005 285.823);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.21 0.006 285.885);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.21 0.006 285.885);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.455 0.188 13.697);
+    --primary-foreground: oklch(0.969 0.015 12.422);
+    --secondary: oklch(0.274 0.006 286.033);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.274 0.006 286.033);
+    --muted-foreground: oklch(0.705 0.015 286.067);
+    --accent: oklch(0.274 0.006 286.033);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.552 0.016 285.938);
+    --chart-1: oklch(0.81 0.117 11.638);
+    --chart-2: oklch(0.645 0.246 16.439);
+    --chart-3: oklch(0.586 0.253 17.585);
+    --chart-4: oklch(0.514 0.222 16.935);
+    --chart-5: oklch(0.455 0.188 13.697);
+    --radius: 0.45rem;
+    --sidebar: oklch(0.21 0.006 285.885);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.645 0.246 16.439);
+    --sidebar-primary-foreground: oklch(0.969 0.015 12.422);
+    --sidebar-accent: oklch(0.274 0.006 286.033);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.552 0.016 285.938);
+    --destructive-foreground: var(--color-red-800);
+    --success: var(--color-emerald-500);
+    --success-foreground: var(--color-emerald-900);
+    --info: var(--color-violet-500);
+    --info-foreground: var(--color-violet-900);
+    --warning: var(--color-yellow-500);
+    --warning-foreground: var(--color-yellow-900);
+    --invert: var(--color-zinc-900);
+    --invert-foreground: var(--color-zinc-50);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    }
+  body {
+    @apply bg-background text-foreground;
+    }
+  html {
+    @apply font-sans;
+    }
+}
+
+/* ─── DevSync domain tokens ───────────────────────────────────────────────────
+   Task status and priority need hues the base palette does not carry: every
+   --chart-* sits in the rose family (hue 11–17), so it cannot separate four
+   priorities. Added as their own block, in the same oklch idiom, leaving the
+   shadcn tokens above untouched. */
+:root {
+    --status-todo: oklch(0.705 0.015 286.067);
+    --status-in-progress: oklch(0.68 0.14 250);
+    --status-in-review: oklch(0.78 0.14 80);
+    --status-done: oklch(0.72 0.15 155);
+
+    --priority-critical: oklch(0.68 0.19 22);
+    --priority-high: oklch(0.75 0.15 60);
+    --priority-medium: oklch(0.68 0.12 250);
+    --priority-low: oklch(0.62 0.02 286);
+}
+
+@theme inline {
+    --color-status-todo: var(--status-todo);
+    --color-status-in-progress: var(--status-in-progress);
+    --color-status-in-review: var(--status-in-review);
+    --color-status-done: var(--status-done);
+
+    --color-priority-critical: var(--priority-critical);
+    --color-priority-high: var(--priority-high);
+    --color-priority-medium: var(--priority-medium);
+    --color-priority-low: var(--priority-low);
+}
+
+/* ─── Reduced motion ──────────────────────────────────────────────────────────
+   The app ships ~34 animate-spin, ~13 animate-in and ~11 animate-out utilities
+   plus dnd-kit transforms, and had no escape hatch at all. Honour the OS
+   setting rather than forcing vestibular-sensitive users through it.
+
+   Motion is reduced to a near-instant tick rather than 0s: some libraries
+   (Radix included) wait on transitionend/animationend to unmount, and a true
+   zero duration can mean that event never fires. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ─── Skip link ───────────────────────────────────────────────────────────────
+   The workspace sidebar can carry ~25 nav items, every one of which a keyboard
+   user previously had to tab through before reaching page content. */
+.skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+}
+
+.skip-link:focus {
+    left: 0.5rem;
+    top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius);
+    background: var(--popover);
+    color: var(--popover-foreground);
+    outline: 2px solid var(--ring);
+}
+
+.dark {
+    --destructive-foreground: var(--color-red-600);
+    --success: var(--color-emerald-500);
+    --success-foreground: var(--color-emerald-600);
+    --info: var(--color-violet-500);
+    --info-foreground: var(--color-violet-600);
+    --warning: var(--color-yellow-500);
+    --warning-foreground: var(--color-yellow-600);
+    --invert: var(--color-zinc-700);
+    --invert-foreground: var(--color-zinc-50);
+}
+
+/* Vercel-style minimal scrollbars */
+::-webkit-scrollbar {
+    width: 14px;
+    height: 14px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background-clip: padding-box;
+    border: 4px solid transparent;
+    border-radius: 9999px;
+    background-color: var(--border);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted-foreground);
+}
+
+/* Firefox */
 * {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
 }
 
-*::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-*::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-}
-
-*::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.4);
-}
-
-html, body, #root {
-  height: 100%;
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  font-family: var(--font-sans);
-  background-color: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  color-scheme: dark;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* Make date picker calendar icons interactive and explicitly visible */
-::-webkit-calendar-picker-indicator {
-  cursor: pointer;
-  opacity: 0.8;
-  transition: opacity 0.2s;
-}
-
-::-webkit-calendar-picker-indicator:hover {
-  opacity: 1;
-}
-
-/* ===== MONOCHROME UTILITIES ===== */
-.glass-card {
-  background: rgba(10, 10, 10, 0.5);
-  backdrop-filter: blur(28px) saturate(1);
-  -webkit-backdrop-filter: blur(28px) saturate(1);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
-}
-
-.glass-card-strong {
-  background: rgba(15, 15, 15, 0.7);
-  backdrop-filter: blur(32px) saturate(1);
-  -webkit-backdrop-filter: blur(32px) saturate(1);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
-}
-
-.glass-sidebar {
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(32px) saturate(1);
-  -webkit-backdrop-filter: blur(32px) saturate(1);
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.glass-topbar {
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(24px) saturate(1);
-  -webkit-backdrop-filter: blur(24px) saturate(1);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.glass-input {
-  background: rgba(20, 20, 20, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  color: var(--color-text-primary);
-  transition: all 0.2s ease;
-}
-
-.glass-input-focus {
-  border-color: rgba(255, 255, 255, 0.4);
-  outline: none;
-}
-
-.glass-modal {
-  background: rgba(10, 10, 10, 0.95);
-  backdrop-filter: blur(30px);
-  -webkit-backdrop-filter: blur(30px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 16px;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8);
-}
-
-.glass-badge {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-}
-
-.gradient-text {
-  color: #ffffff;
-}
-
-.gradient-text-warm {
-  color: #eeeeee;
-}
-
-.gradient-border {
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.gradient-btn {
-  background: #ffffff;
-  color: #000000;
-  border: 1px solid #ffffff;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.gradient-btn-hover {
-  background: #e0e0e0;
-  color: #000000;
-  transform: translateY(-1px);
-}
-
-.glow-purple {
-  box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
-}
-
-.glow-purple-lg {
-  box-shadow: 0 0 40px rgba(255, 255, 255, 0.15);
-}
-
-/* ===== ANIMATIONS ===== */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes slideInRight {
-  from { opacity: 0; transform: translateX(20px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes slideInLeft {
-  from { opacity: 0; transform: translateX(-20px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-4px); }
-}
-
-.animate-fadeIn {
-  animation: fadeIn 0.3s ease-out forwards;
-}
-
-.animate-slideInRight {
-  animation: slideInRight 0.3s ease-out forwards;
-}
-
-.animate-slideInLeft {
-  animation: slideInLeft 0.3s ease-out forwards;
-}
-
-.animate-slideUp {
-  animation: slideUp 0.4s ease-out forwards;
-}
-
-.animate-scaleIn {
-  animation: scaleIn 0.2s ease-out forwards;
-}
-
-.animate-float {
-  animation: float 3s ease-in-out infinite;
-}
-
-/* ===== AUTH PAGE BACKGROUND ===== */
-.auth-bg {
-  background: #000000;
-  position: relative;
-  overflow: hidden;
-}
-
-.auth-bg::before {
-  content: '';
-  position: absolute;
-  top: -20%;
-  left: -20%;
-  width: 80%;
-  height: 80%;
-  background: rgba(255, 255, 255, 0.03);
-  clip-path: polygon(20% 0%, 100% 0%, 80% 100%, 0% 100%);
-  transform: rotate(-15deg);
-}
-
-.auth-bg::after {
-  content: '';
-  position: absolute;
-  bottom: -30%;
-  right: -10%;
-  width: 70%;
-  height: 70%;
-  background: rgba(255, 255, 255, 0.02);
-  clip-path: polygon(30% 0%, 100% 20%, 100% 100%, 0% 80%);
-  transform: rotate(10deg);
-}
-
-/* ===== SEARCH HIGHLIGHT (ts_headline <mark>) ===== */
-mark {
-  background: rgba(255, 255, 255, 0.15);
-  color: #ffffff;
-  border-radius: 2px;
-  padding: 0 2px;
-  font-weight: 600;
-}
-
-/* ===== KANBAN DRAG STYLES ===== */
-.kanban-dragging {
-  opacity: 0.5;
-  transform: scale(1.02);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
-  z-index: 999;
-}
-
-.kanban-over {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px dashed rgba(255, 255, 255, 0.2);
-}
-
-/* ===== STATUS COLORS (Monochrome) ===== */
-.status-backlog {
-  background: rgba(40, 40, 40, 0.8);
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.status-todo {
-  background: rgba(60, 60, 60, 0.8);
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-}
-
-.status-in-progress {
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-.status-in-review {
-  background: rgba(255, 255, 255, 0.05);
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.status-done {
-  background: rgba(255, 255, 255, 0.15);
-  color: #ffffff;
-  border: 1px solid #ffffff;
-}
-
-/* ===== PRIORITY BADGES (Monochrome) ===== */
-.priority-p0 {
-  background: #ffffff;
-  color: #000000;
-  border: 1px solid #ffffff;
-}
-
-.priority-p1 {
-  background: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-}
-
-.priority-p2 {
-  background: rgba(255, 255, 255, 0.1);
-  color: #aaaaaa;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.priority-p3 {
-  background: rgba(255, 255, 255, 0.05);
-  color: #666666;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}

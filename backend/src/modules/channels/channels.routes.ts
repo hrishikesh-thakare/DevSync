@@ -10,7 +10,16 @@ import {
   archiveChannel,
   deleteChannel,
   updateChannel,
+  getCall,
+  startCall,
+  endCall,
 } from './channels.controller.js';
+
+import messagesRoutes from '../messages/messages.routes.js';
+
+import { requireChannelAccess } from '../../middleware/channelAccess.js';
+import { validate } from '../../middleware/validate.js';
+import { createChannelSchema, updateChannelSchema } from './channels.schemas.js';
 
 // Mounted at /api/workspaces/:workspaceId/channels
 const router = Router({ mergeParams: true });
@@ -20,13 +29,25 @@ router.use(requireAuth);
 router.use(requireWorkspaceRole(['owner', 'admin', 'member']));
 
 // ─── Channel Management ──────────────────────────────────────────────────────
-router.post('/', requireWorkspaceRole(['owner', 'admin']), createChannel);
+// Any workspace member may hit this — a DM/group DM is member-initiated, the
+// same way Teams/Slack works. `createChannel` itself still enforces
+// owner/admin-only for public/private channels; that check depends on the
+// request body's `type`, which is why it isn't a second route-level gate here.
+router.post('/', validate(createChannelSchema), createChannel);
 router.get('/', listChannels);
-router.get('/:channelId', getChannel);
-router.post('/:channelId/join', joinChannel);
-router.delete('/:channelId/leave', leaveChannel);
-router.patch('/:channelId/archive', requireWorkspaceRole(['owner', 'admin']), archiveChannel);
-router.patch('/:channelId', requireWorkspaceRole(['owner', 'admin']), updateChannel);
-router.delete('/:channelId', requireWorkspaceRole(['owner', 'admin']), deleteChannel);
+router.get('/:channelId', requireChannelAccess, getChannel);
+router.post('/:channelId/join', requireChannelAccess, joinChannel);
+router.delete('/:channelId/leave', requireChannelAccess, leaveChannel);
+router.patch('/:channelId/archive', requireWorkspaceRole(['owner', 'admin']), requireChannelAccess, archiveChannel);
+router.patch('/:channelId', requireWorkspaceRole(['owner', 'admin']), requireChannelAccess, validate(updateChannelSchema), updateChannel);
+router.delete('/:channelId', requireWorkspaceRole(['owner', 'admin']), requireChannelAccess, deleteChannel);
+
+// ─── Calls (Zoom link-out) ───────────────────────────────────────────────────
+router.get('/:channelId/call', requireChannelAccess, getCall);
+router.post('/:channelId/call', requireChannelAccess, startCall);
+router.delete('/:channelId/call', requireChannelAccess, endCall);
+
+// ─── Messages (Nested) ───────────────────────────────────────────────────────
+router.use('/:channelId/messages', requireChannelAccess, messagesRoutes);
 
 export default router;

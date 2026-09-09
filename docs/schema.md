@@ -49,7 +49,7 @@ erDiagram
 | Column | Type | Constraints | Description |
 |---|---|---|---|
 | `user_id` | `uuid` | PK, default random | Unique identifier |
-| `email` | `varchar(255)` | UNIQUE, NOT NULL | Login email |
+| `email` | `varchar(255)` | NOT NULL, **partial** unique (see below) | Login email |
 | `full_name` | `varchar(255)` | NOT NULL | Display name |
 | `display_name` | `varchar(80)` | nullable | Short name override |
 | `avatar_url` | `text` | nullable | Profile picture URL |
@@ -63,6 +63,19 @@ erDiagram
 | `updated_at` | `timestamptz` | default now | Last profile update |
 | `deleted_at` | `timestamptz` | nullable | Soft delete (null = active) |
 
+**Partial unique indexes** (migration `0014`): `users_email_active_unique` and
+`users_github_id_active_unique` apply **only where `deleted_at IS NULL`**.
+
+This is load-bearing, not a detail. Account deletion is a *soft* delete, so a
+plain unique index would permanently burn the address — a user who deleted their
+account could never sign up again. Scoping uniqueness to live rows lets a
+re-registered email coexist with its soft-deleted predecessor.
+
+The consequence is that **every lookup by email or `github_id` must filter
+`deleted_at IS NULL`**. Without it a `LIMIT 1` can return the dead row and reject
+a perfectly valid account — exactly the bug where `register` said "already
+exists" while `login` said "invalid email or password" for the same address.
+
 ---
 
 ## Table: `refresh_tokens`
@@ -75,9 +88,19 @@ erDiagram
 | `user_id` | `uuid` | FK → `users.user_id` ON DELETE CASCADE | Token owner |
 | `token_hash` | `varchar(64)` | UNIQUE, NOT NULL | SHA-256 hash of the refresh token |
 | `device_info` | `jsonb` | nullable | Browser/device metadata |
+| `family_id` | `uuid` | default random, indexed | Rotation-chain identifier (migration `0016`) |
 | `issued_at` | `timestamptz` | default now | Token issue time |
 | `expires_at` | `timestamptz` | NOT NULL | Expiration time |
 | `revoked_at` | `timestamptz` | nullable | Set when token is revoked (logout) |
+
+**Why `family_id` exists — refresh-token reuse detection.** Every rotation issued
+from the same original login shares one `family_id`. `/auth/refresh` revokes the
+token it consumes, so a legitimate client never presents the same token twice.
+If an already-revoked token *is* presented again, that means either it was
+replayed off the wire or someone else holds a copy — and there is no way to tell
+the victim from the thief. The handler therefore revokes **every token in the
+family**, forcing a fresh login, rather than guessing. This is asserted by the
+e2e test "reusing an already-rotated refresh token revokes its whole family".
 
 ---
 
@@ -181,7 +204,7 @@ erDiagram
 | `assignee_id` | `uuid` | FK → `users` ON DELETE SET NULL | Assigned developer |
 | `due_date` | `timestamp` | nullable | Task deadline |
 | `labels` | `jsonb` | default `[]` | Flat array: `["frontend", "bug"]` |
-| `rank` | `varchar(255)` | nullable | LexoRank string for drag-drop ordering |
+| `rank` | `varchar(255)` | nullable | Fractional-index sort key for drag-drop ordering. A move generates a key *between* the two neighbours (`fractional-indexing` package), so one row is rewritten rather than the column renumbered. Sometimes loosely called LexoRank after the Jira algorithm of the same shape. |
 | `ai_duration_estimate` | `numeric(6,2)` | nullable | AI-estimated hours |
 | `linked_commits_count` | `integer` | default `0` | Count of linked GitHub commits |
 | `discussion_thread_id` | `uuid` | FK → `messages` (added in migration) | Task discussion thread |
@@ -212,13 +235,18 @@ erDiagram
 | `closed_by` | `uuid` | FK → `users` ON DELETE SET NULL | Who closed the sprint |
 | `velocity_issues` | `integer` | nullable | Number of issues completed (set on close) |
 | `sequence_number` | `integer` | NOT NULL | Sprint order within project |
-| `ai_summary` | `jsonb` | nullable | AI-generated sprint summary |
-| `ai_contribution_report` | `jsonb` | nullable | AI-generated per-member contribution |
+| `ai_summary` | `jsonb` | nullable | AI-generated sprint retrospective (team-level only) |
 | `summary_message_id` | `uuid` | FK → `messages` (added in migration) | Summary posted to channel |
 | `created_at` | `timestamptz` | default now | Creation date |
 | `updated_at` | `timestamptz` | default now | Last update |
 
 **Unique Constraint:** `(project_id, sequence_number)` — sprint numbers are unique per project.
+
+> **`ai_contribution_report` was dropped in migration `0018`.** It held an
+> AI-written per-person judgement of each assignee's contribution, posted publicly
+> on sprint close. It was removed as an anti-pattern — see the note in
+> [backend-architecture.md](./backend-architecture.md#-ai--background-work). If you
+> see it referenced anywhere, that reference is stale.
 
 ---
 
@@ -286,7 +314,7 @@ erDiagram
 | `author_id` | `uuid` | FK → `users` ON DELETE SET NULL | Message author |
 | `is_system` | `boolean` | default `false` | System-generated message |
 | `system_type` | `varchar(30)` | nullable | e.g., `member_joined`, `sprint_started` |
-| `body_text` | `text` | NOT NULL, default `''` | Message content (HTML from Tiptap editor) |
+| `body_text` | `text` | NOT NULL, default `''` | Message content (HTML from Rich Text Editor) |
 | `body_blocks` | `jsonb` | nullable | Structured block content |
 | `thread_id` | `uuid` | self-referencing FK | Parent message (for threaded replies) |
 | `reply_count` | `integer` | default `0` | Number of thread replies |
@@ -360,6 +388,15 @@ erDiagram
 
 **Unique Constraint:** `(repo_full_name, commit_sha)` — no duplicate commits.
 
+> ⚠️ **This uniqueness is global, not per project — so one repo cannot be
+> connected to two projects.** The constraint does not include `project_id`, so
+> the first project to ingest a given commit owns it permanently. If a second
+> project connects the same repo, its ingest hits `ON CONFLICT DO NOTHING` and
+> writes **nothing**, with no error surfaced anywhere. The symptom is a project
+> whose commit list is mysteriously incomplete or empty while the webhook
+> reports success. If two projects genuinely need to track one repo, this
+> constraint has to change to include `project_id` first.
+
 ---
 
 ## Table: `github_ci_status`
@@ -379,7 +416,91 @@ erDiagram
 | `html_url` | `text` | nullable | Link to run on GitHub |
 | `triggered_at` | `timestamptz` | NOT NULL | When the workflow was triggered |
 | `completed_at` | `timestamptz` | nullable | When the workflow finished |
+| `ai_failure_summary` | `text` | nullable | Cached Gemini explanation of a failed run (migration `0019`) |
 | `created_at` | `timestamptz` | default now | Record creation date |
+
+**Unique Constraint:** `(project_id, run_id)` — added in migration `0014`, so a
+redelivered webhook cannot duplicate a run.
+
+> **Rows here only exist if the repo actually has workflows.** GitHub Actions
+> runs cannot be created or backdated through any API — they exist only when a
+> workflow genuinely executes. A repo with no `.github/workflows/` file will show
+> an empty CI tab, and that is correct rather than a sync failure. (Pushing a
+> workflow file also requires a token with the `workflow` scope; without it the
+> push is rejected with an error that does not mention the token.)
+
+---
+
+## Table: `github_issues`
+**File:** `schema/github.ts`  
+**Purpose:** Syncs GitHub Issues associated with a project.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | `uuid` | PK, default random | Row identifier |
+| `project_id` | `uuid` | FK → `projects` ON DELETE CASCADE | Parent project |
+| `task_id` | `uuid` | FK → `tasks` ON DELETE SET NULL, nullable | Linked task |
+| `github_issue_number` | `integer` | NOT NULL | GitHub issue number |
+| `github_issue_id` | `bigint` | nullable | GitHub internal issue ID |
+| `title` | `varchar(500)` | NOT NULL | Issue title |
+| `body` | `text` | nullable | Issue body |
+| `state` | `varchar(20)` | default `'open'` | `open` \| `closed` |
+| `html_url` | `text` | nullable | Link to issue on GitHub |
+| `author_github_login` | `varchar(100)` | nullable | GitHub username |
+| `author_user_id` | `uuid` | FK → `users` ON DELETE SET NULL, nullable | Mapped DevSync user |
+| `labels` | `jsonb` | default `[]` | Issue labels |
+| `closed_at` | `timestamptz` | nullable | When issue was closed |
+| `created_at` | `timestamptz` | default now | Record creation date |
+| `updated_at` | `timestamptz` | default now | Record update date |
+
+**Unique Constraint:** `(project_id, github_issue_number)`
+
+---
+
+## Table: `github_pull_requests`
+**File:** `schema/github.ts`  
+**Purpose:** Syncs GitHub Pull Requests associated with a project.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | `uuid` | PK, default random | Row identifier |
+| `project_id` | `uuid` | FK → `projects` ON DELETE CASCADE | Parent project |
+| `task_id` | `uuid` | FK → `tasks` ON DELETE SET NULL, nullable | Linked task |
+| `pr_number` | `integer` | NOT NULL | GitHub PR number |
+| `github_pr_id` | `bigint` | nullable | GitHub internal PR ID |
+| `title` | `varchar(500)` | NOT NULL | PR title |
+| `body` | `text` | nullable | PR body |
+| `state` | `varchar(20)` | default `'open'` | `open` \| `closed` \| `merged` |
+| `html_url` | `text` | nullable | Link to PR on GitHub |
+| `head_branch` | `varchar(200)` | nullable | Branch being merged from |
+| `base_branch` | `varchar(200)` | nullable | Branch being merged into |
+| `author_github_login` | `varchar(100)` | nullable | GitHub username |
+| `author_user_id` | `uuid` | FK → `users` ON DELETE SET NULL, nullable | Mapped DevSync user |
+| `merged_at` | `timestamptz` | nullable | When PR was merged |
+| `closed_at` | `timestamptz` | nullable | When PR was closed |
+| `created_at` | `timestamptz` | default now | Record creation date |
+| `updated_at` | `timestamptz` | default now | Record update date |
+
+**Unique Constraint:** `(project_id, pr_number)`
+
+---
+
+## Table: `github_branches`
+**File:** `schema/github.ts`  
+**Purpose:** Tracks GitHub branches associated with a project.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | `uuid` | PK, default random | Row identifier |
+| `project_id` | `uuid` | FK → `projects` ON DELETE CASCADE | Parent project |
+| `task_id` | `uuid` | FK → `tasks` ON DELETE SET NULL, nullable | Linked task |
+| `branch_name` | `varchar(200)` | NOT NULL | Name of the branch |
+| `is_deleted` | `boolean` | default `false` | Whether branch was deleted |
+| `created_by_user_id` | `uuid` | FK → `users` ON DELETE SET NULL, nullable | Who created it |
+| `html_url` | `text` | nullable | Link to branch on GitHub |
+| `created_at` | `timestamptz` | default now | Record creation date |
+
+**Unique Constraint:** `(project_id, branch_name)`
 
 ---
 
@@ -418,3 +539,83 @@ erDiagram
 | `old_values` | `jsonb` | nullable | Previous state (for updates) |
 | `new_values` | `jsonb` | nullable | New state (for creates/updates) |
 | `created_at` | `timestamptz` | default now | Timestamp of the action |
+---
+
+## Table: \uth_tokens\
+**File:** \schema/auth.ts\  
+**Purpose:** One-time use tokens for email verification and password resets.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| \	oken_id\ | \uuid\ | PK, default random | Unique identifier |
+| \user_id\ | \uuid\ | FK ? \users.user_id\ ON DELETE CASCADE | Token owner |
+| \	ype\ | \archar(30)\ | NOT NULL | \password_reset\ \| \email_verify\ |
+| \	oken_hash\ | \archar(64)\ | UNIQUE, NOT NULL | SHA-256 hash of the token |
+| \expires_at\ | \	imestamptz\ | NOT NULL | Expiration time |
+| \used_at\ | \	imestamptz\ | nullable | Set when token is consumed |
+| \created_at\ | \	imestamptz\ | default now | Token issue time |
+
+---
+
+## Table: \message_reactions\
+**File:** \schema/channels.ts\  
+**Purpose:** Emoji reactions to messages in channels.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| \eaction_id\ | \uuid\ | PK, default random | Unique identifier |
+| \message_id\ | \uuid\ | FK ? \messages.message_id\ ON DELETE CASCADE | Message being reacted to |
+| \user_id\ | \uuid\ | FK ? \users.user_id\ ON DELETE CASCADE | User who reacted |
+| \emoji\ | \archar(20)\ | NOT NULL | Emoji identifier (e.g. "??") |
+| \created_at\ | \	imestamptz\ | default now | When reaction was added |
+*(Unique constraint on message_id, user_id, emoji)*
+
+---
+
+## Table: \project_labels\
+**File:** \schema/labels.ts\  
+**Purpose:** Source of truth for label names and colors in a project.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| \label_id\ | \uuid\ | PK, default random | Unique identifier |
+| \project_id\ | \uuid\ | FK ? \projects.project_id\ ON DELETE CASCADE | Project the label belongs to |
+| \
+ame\ | \archar(50)\ | NOT NULL | Display name |
+| \color\ | \archar(7)\ | default '#64748b' | Hex color code |
+| \created_at\ | \	imestamptz\ | default now | Creation time |
+| \updated_at\ | \	imestamptz\ | default now | Last update |
+*(Unique index on project_id and lower(name))*
+
+---
+
+## Table: \	ask_status_transitions\
+**File:** \schema/tasks.ts\  
+**Purpose:** Immutable ledger of task status changes for workflow analytics (cumulative flow, cycle time).
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| \id\ | \uuid\ | PK, default random | Unique identifier |
+| \	ask_id\ | \uuid\ | FK ? \	asks.task_id\ ON DELETE CASCADE | Task that changed |
+| \project_id\ | \uuid\ | FK ? \projects.project_id\ ON DELETE CASCADE | Project context |
+| \rom_status\ | \archar(30)\ | nullable | Previous status (null on creation) |
+| \	o_status\ | \archar(30)\ | NOT NULL | New status |
+| \ctor_id\ | \uuid\ | FK ? \users.user_id\ ON DELETE SET NULL | User who made the change |
+| \changed_at\ | \	imestamptz\ | default now | When the transition happened |
+
+---
+
+## Table: \workspace_invites\
+**File:** \schema/workspaces.ts\  
+**Purpose:** Pending invitations to join a workspace via email link.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| \invite_id\ | \uuid\ | PK, default random | Unique identifier |
+| \workspace_id\ | \uuid\ | FK ? \workspaces.workspace_id\ ON DELETE CASCADE | Workspace being invited to |
+| \email\ | \archar(255)\ | NOT NULL | Invited user's email |
+| \ole\ | \archar(20)\ | NOT NULL | Role to grant on accept |
+| \	oken\ | \archar(100)\ | UNIQUE, NOT NULL | Secure join token |
+| \invited_by\ | \uuid\ | FK ? \users.user_id\ ON DELETE SET NULL | User who sent the invite |
+| \created_at\ | \	imestamptz\ | default now | When the invite was sent |
+| \expires_at\ | \	imestamptz\ | NOT NULL | When the invite expires |

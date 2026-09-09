@@ -7,12 +7,16 @@ import {
   getProject,
   updateProject,
   archiveProject,
+  unarchiveProject,
+  deleteProject,
   listProjectMembers,
   addProjectMember,
   updateProjectMemberRole,
   removeProjectMember,
 } from './projects.controller.js';
 import { resolveProjectKey } from '../../middleware/slugs.js';
+import { validate } from '../../middleware/validate.js';
+import { createProjectSchema, updateProjectSchema, addProjectMemberSchema, updateProjectMemberRoleSchema } from './projects.schemas.js';
 
 // Mounted at /api/workspaces/:slug/projects
 const router = Router({ mergeParams: true });
@@ -25,16 +29,18 @@ router.use(requireAuth);
 router.use(requireWorkspaceRole(['owner', 'admin', 'member']));
 
 // ─── Project CRUD ────────────────────────────────────────────────────────────
-router.post('/', requireWorkspaceRole(['owner', 'admin']), createProject);
+router.post('/', requireWorkspaceRole(['owner', 'admin']), validate(createProjectSchema), createProject);
 router.get('/', listProjects);
 router.get('/:key', requireProjectRole(['project_admin', 'developer', 'viewer']), getProject);
-router.patch('/:key', requireProjectRole(['project_admin', 'developer']), updateProject);
+router.patch('/:key', requireProjectRole(['project_admin', 'developer']), validate(updateProjectSchema), updateProject);
 router.patch('/:key/archive', requireProjectRole(['project_admin']), archiveProject);
+router.patch('/:key/unarchive', requireProjectRole(['project_admin']), unarchiveProject);
+router.delete('/:key', requireProjectRole(['project_admin']), deleteProject);
 
 // ─── Project Member Management ───────────────────────────────────────────────
 router.get('/:key/members', requireProjectRole(['project_admin', 'developer', 'viewer']), listProjectMembers);
-router.post('/:key/members', requireProjectRole(['project_admin']), addProjectMember);
-router.put('/:key/members/:userId', requireProjectRole(['project_admin']), updateProjectMemberRole);
+router.post('/:key/members', requireProjectRole(['project_admin']), validate(addProjectMemberSchema), addProjectMember);
+router.put('/:key/members/:userId', requireProjectRole(['project_admin']), validate(updateProjectMemberRoleSchema), updateProjectMemberRole);
 router.delete('/:key/members/:userId', requireProjectRole(['project_admin']), removeProjectMember);
 
 export default router;

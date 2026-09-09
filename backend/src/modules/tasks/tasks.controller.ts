@@ -4,28 +4,93 @@ import { tasks } from '../../db/schema/tasks.js';
 import { projects, projectMembers } from '../../db/schema/projects.js';
 import { sprints } from '../../db/schema/sprints.js';
 import { users } from '../../db/schema/auth.js';
-import { messages } from '../../db/schema/channels.js';
+import { messages, channels, workspaceFiles } from '../../db/schema/channels.js';
 import { eq, and, isNull, asc, desc, sql, or, ilike } from 'drizzle-orm';
 import { logAuditAction } from '../audit/audit.controller.js';
+import { recordStatusTransition, completedAtFor, DONE_STATUS } from './task-transitions.js';
 import { createNotification } from '../notifications/notifications.controller.js';
+import { getIO } from '../../sockets/index.js';
+import { createFileRecord, FileValidationError, purgeFileRecord } from '../files/files.controller.js';
+import { estimateTaskDuration } from '../../services/ai.service.js';
+import { ensureProjectLabels } from '../labels/labels.controller.js';
+import { env } from '../../config/env.js';
 
-// ─── Lexorank helpers ────────────────────────────────────────────────────────
-// Simplified mid-string calculation for board ordering
-const midRank = (a: string, b: string): string => {
-  const pad = Math.max(a.length, b.length);
-  const aa = a.padEnd(pad, 'a');
-  const bb = b.padEnd(pad, 'z');
-  let result = '';
-  for (let i = 0; i < pad; i++) {
-    const mid = Math.floor((aa.charCodeAt(i) + bb.charCodeAt(i)) / 2);
-    result += String.fromCharCode(mid);
+import { generateKeyBetween } from 'fractional-indexing';
+
+// ─── HELPER: Broadcast to Project Channels ───────────────────────────────────
+// Writes the system message inside the caller's transaction but does NOT emit
+// — emitting here would fire before the transaction is known to commit, so a
+// later rollback would leave clients holding a message that never happened.
+// Callers emit the returned list themselves, after `db.transaction` resolves.
+const broadcastToProjectChannels = async (tx: any, projectId: string, bodyText: string): Promise<Array<{ channelId: string; message: any }>> => {
+  // Find all channels linked to this project
+  const projectChannels = await tx.select({ channelId: channels.channelId }).from(channels).where(eq(channels.projectId, projectId));
+  if (projectChannels.length === 0) return [];
+
+  const now = new Date();
+  const broadcasts: Array<{ channelId: string; message: any }> = [];
+
+  for (const { channelId } of projectChannels) {
+    // Insert system message
+    const [msg] = await tx.insert(messages).values({
+      channelId,
+      isSystem: true,
+      systemType: 'project_update',
+      bodyText,
+      createdAt: now,
+      updatedAt: now,
+    }).returning();
+
+    // Create a hydrated message object similar to what the frontend expects
+    const populatedMessage = {
+      messageId: msg.messageId,
+      channelId: msg.channelId,
+      authorId: msg.authorId,
+      authorName: 'DevSync Bot',
+      authorAvatar: null,
+      isSystem: msg.isSystem,
+      systemType: msg.systemType,
+      bodyText: msg.bodyText,
+      threadId: msg.threadId,
+      replyCount: msg.replyCount,
+      isEdited: msg.isEdited,
+      createdAt: msg.createdAt,
+      updatedAt: msg.updatedAt,
+    };
+    broadcasts.push({ channelId, message: populatedMessage });
   }
-  if (result === aa) result += 'n'; // midpoint between identical strings
-  return result;
+  return broadcasts;
 };
 
-const RANK_FIRST = 'aaaaaa';
-const RANK_GAP = 'n';
+// Emit a batch of channel broadcasts. Call only after the transaction that
+// produced them has committed.
+const emitBroadcasts = (broadcasts: Array<{ channelId: string; message: any }>): void => {
+  const io = getIO();
+  if (!io) return;
+  for (const { channelId, message } of broadcasts) {
+    io.to(`channel:${channelId}`).emit('new_message', message);
+  }
+};
+
+// ─── HELPER: Validate Task Relations ─────────────────────────────────────────
+const validateTaskRelations = async (tx: any, projectId: string, relations: { assigneeId?: string | null, parentTaskId?: string | null, epicId?: string | null, sprintId?: string | null }) => {
+  if (relations.assigneeId) {
+    const [member] = await tx.select().from(projectMembers).where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, relations.assigneeId))).limit(1);
+    if (!member) throw new Error('INVALID_ASSIGNEE');
+  }
+  if (relations.parentTaskId) {
+    const [parent] = await tx.select().from(tasks).where(and(eq(tasks.taskId, relations.parentTaskId), eq(tasks.projectId, projectId))).limit(1);
+    if (!parent) throw new Error('INVALID_PARENT_TASK');
+  }
+  if (relations.epicId) {
+    const [epic] = await tx.select().from(tasks).where(and(eq(tasks.taskId, relations.epicId), eq(tasks.projectId, projectId), eq(tasks.issueType, 'epic'))).limit(1);
+    if (!epic) throw new Error('INVALID_EPIC');
+  }
+  if (relations.sprintId) {
+    const [sprint] = await tx.select().from(sprints).where(and(eq(sprints.sprintId, relations.sprintId), eq(sprints.projectId, projectId))).limit(1);
+    if (!sprint) throw new Error('INVALID_SPRINT');
+  }
+};
 
 // ─── CREATE TASK ─────────────────────────────────────────────────────────────
 // POST /api/projects/:projectId/tasks
@@ -36,15 +101,10 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
     const {
       title, description, descriptionText, issueType,
       status, priority, assigneeId, dueDate, labels,
-      parentTaskId, epicId, sprintId,
+      parentTaskId, epicId, sprintId, storyPoints,
     } = req.body;
 
-    if (!title || title.trim().length < 1) {
-      res.status(400).json({ error: 'Task title is required.' });
-      return;
-    }
-
-    const result = await db.transaction(async (tx) => {
+    const txResult = await db.transaction(async (tx) => {
       // 1. Atomically increment the project's issue counter to generate task key
       const [project] = await tx
         .update(projects)
@@ -55,6 +115,11 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
       if (!project) {
         throw new Error('PROJECT_NOT_FOUND');
       }
+
+      await validateTaskRelations(tx, projectId, { assigneeId, parentTaskId, epicId, sprintId });
+
+      // Register + normalize labels (case-insensitive reconciliation)
+      const canonicalLabels = await ensureProjectLabels(tx, projectId, labels || []);
 
       const taskKey = `${project.key}-${project.issueCounter}`;
 
@@ -75,9 +140,9 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
 
       let rank: string;
       if (!lastTask || !lastTask.rank) {
-        rank = RANK_FIRST;
+        rank = generateKeyBetween(null, null);
       } else {
-        rank = lastTask.rank + RANK_GAP;
+        rank = generateKeyBetween(lastTask.rank, null);
       }
 
       // 3. Create the root message for the task's discussion thread
@@ -116,12 +181,16 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
           reporterId: userId,
           assigneeId: assigneeId || null,
           dueDate: dueDate ? new Date(dueDate) : null,
-          labels: labels || [],
+          labels: canonicalLabels,
           rank,
           parentTaskId: parentTaskId || null,
           epicId: epicId || null,
           sprintId: sprintId || null,
+          storyPoints: storyPoints ?? null,
           discussionThreadId: rootMessage.messageId,
+          // A task can be filed already finished (an imported or retroactive
+          // item); it should count toward throughput from the moment it exists.
+          completedAt: targetStatus === DONE_STATUS ? new Date() : null,
         })
         .returning();
 
@@ -136,8 +205,25 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
         tx
       });
 
-      return task;
+      // Opening row, so a task's history starts at the status it was created
+      // in rather than at whatever its first later move happened to be.
+      await recordStatusTransition(tx, {
+        taskId: task.taskId,
+        projectId: task.projectId,
+        fromStatus: null,
+        toStatus: task.status ?? 'todo',
+        actorId: userId,
+        changedAt: task.createdAt ?? undefined,
+      });
+
+      // 7. Broadcast to project channels
+      const broadcasts = await broadcastToProjectChannels(tx, projectId, `✅ **${creator?.fullName || 'User'}** created task @${task.taskKey}: ${task.title}`);
+
+      return { task, broadcasts };
     });
+
+    const { task: result, broadcasts } = txResult;
+    emitBroadcasts(broadcasts);
 
     if (result.assigneeId && result.assigneeId !== userId) {
       const [actor] = await db.select({ name: users.fullName }).from(users).where(eq(users.userId, userId));
@@ -156,14 +242,37 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
       await notifyTaskMentions(result.descriptionText, userId, result.taskId, result.taskKey, projectId);
     }
 
+    // ─── AI Duration Estimate (fire-and-forget, never blocks creation) ───
+    estimateTaskDuration({
+      taskKey: result.taskKey,
+      title: result.title,
+      issueType: result.issueType,
+      descriptionText: result.descriptionText,
+    })
+      .then(hours => {
+        if (hours !== null) {
+          return db
+            .update(tasks)
+            .set({ aiDurationEstimate: hours.toString() })
+            .where(eq(tasks.taskId, result.taskId));
+        }
+        return undefined;
+      })
+      .catch(err => console.warn('AI duration estimate failed:', err));
+
     res.status(201).json({ message: 'Task created', task: result });
   } catch (err: any) {
-    if (err.message === 'PROJECT_NOT_FOUND') {
-      res.status(404).json({ error: 'Project not found.' });
-      return;
-    }
+    if (err.message === 'PROJECT_NOT_FOUND') { res.status(404).json({ error: 'Project not found.' }); return; }
+    if (err.message === 'INVALID_ASSIGNEE') { res.status(400).json({ error: 'Assignee is not a member of this project.' }); return; }
+    if (err.message === 'INVALID_PARENT_TASK') { res.status(400).json({ error: 'Parent task does not exist in this project.' }); return; }
+    if (err.message === 'INVALID_EPIC') { res.status(400).json({ error: 'Epic does not exist in this project or is not an epic.' }); return; }
+    if (err.message === 'INVALID_SPRINT') { res.status(400).json({ error: 'Sprint does not exist in this project.' }); return; }
+
     console.error('Create task error:', err);
-    res.status(500).json({ error: 'Server error creating task.' });
+    res.status(500).json({ 
+      error: 'Server error creating task.',
+      details: env.NODE_ENV !== 'production' ? (err instanceof Error ? err.message : String(err)) : undefined
+    });
   }
 };
 
@@ -171,8 +280,19 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
 // GET /api/projects/:projectId/tasks
 export const listTasks = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { projectId } = req.params as Record<string, string>;
+    const projectId = req.params.projectId || res.locals.projectId;
     const { status, assigneeId, sprintId, issueType, search } = req.query;
+
+    // Opt-in paging. The default is deliberately "everything" so the board and
+    // backlog, which need the full ordered set to render columns, keep working;
+    // the hard ceiling only stops a caller asking for an absurd page size.
+    const MAX_LIMIT = 2000;
+    const requestedLimit = parseInt(String(req.query.limit ?? ''), 10);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, MAX_LIMIT)
+      : MAX_LIMIT;
+    const requestedOffset = parseInt(String(req.query.offset ?? ''), 10);
+    const offset = Number.isFinite(requestedOffset) && requestedOffset > 0 ? requestedOffset : 0;
 
     let conditions = [eq(tasks.projectId, projectId), isNull(tasks.deletedAt)];
 
@@ -196,7 +316,11 @@ export const listTasks = async (req: Request, res: Response): Promise<void> => {
     if (search && typeof search === 'string') {
       const searchCondition = or(
         ilike(tasks.title, `%${search}%`),
-        ilike(tasks.descriptionText, `%${search}%`)
+        ilike(tasks.descriptionText, `%${search}%`),
+        // Also matches by key (e.g. "DS-12") — the mention-suggestion picker
+        // in the chat composer is the main caller that benefits from this;
+        // title/description alone miss an exact key search entirely.
+        ilike(tasks.taskKey, `%${search}%`)
       );
       whereClause = and(whereClause, searchCondition);
     }
@@ -212,6 +336,7 @@ export const listTasks = async (req: Request, res: Response): Promise<void> => {
         rank: tasks.rank,
         dueDate: tasks.dueDate,
         labels: tasks.labels,
+        storyPoints: tasks.storyPoints,
         sprintId: tasks.sprintId,
         assigneeId: tasks.assigneeId,
         assigneeName: users.fullName,
@@ -219,13 +344,26 @@ export const listTasks = async (req: Request, res: Response): Promise<void> => {
         reporterId: tasks.reporterId,
         linkedCommitsCount: tasks.linkedCommitsCount,
         createdAt: tasks.createdAt,
+        parentTaskId: tasks.parentTaskId,
+        epicId: tasks.epicId,
       })
       .from(tasks)
       .leftJoin(users, eq(tasks.assigneeId, users.userId))
       .where(whereClause)
-      .orderBy(asc(tasks.rank));
+      .orderBy(asc(tasks.rank))
+      .limit(limit)
+      .offset(offset);
 
-    res.json({ tasks: results });
+    // `totalCount` is always reported so a caller can tell a full page from a
+    // truncated one. Omitting `limit` still returns everything, which keeps the
+    // existing board and backlog working unchanged — the parameter is there so
+    // they can adopt paging without a breaking contract change.
+    const [{ count: totalCount }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tasks)
+      .where(whereClause);
+
+    res.json({ tasks: results, totalCount, limit, offset });
   } catch (err) {
     console.error('List tasks error:', err);
     res.status(500).json({ error: 'Server error listing tasks.' });
@@ -264,7 +402,7 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
     const {
       title, description, descriptionText, issueType,
       status, priority, assigneeId, dueDate, labels,
-      parentTaskId, epicId, sprintId,
+      parentTaskId, epicId, sprintId, storyPoints,
     } = req.body;
 
     const [oldTask] = await db.select().from(tasks).where(eq(tasks.taskId, taskId)).limit(1);
@@ -283,8 +421,23 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
     if (parentTaskId !== undefined) updateData.parentTaskId = parentTaskId || null;
     if (epicId !== undefined) updateData.epicId = epicId || null;
     if (sprintId !== undefined) updateData.sprintId = sprintId || null;
+    if (storyPoints !== undefined) updateData.storyPoints = storyPoints ?? null;
 
-    const result = await db.transaction(async (tx) => {
+    // Crossing the done boundary stamps or clears the completion date. Left
+    // alone otherwise — `updatedAt` moves on every edit and cannot stand in.
+    if (status !== undefined && oldTask && status !== oldTask.status) {
+      const completedAt = completedAtFor(oldTask.status, status, updateData.updatedAt);
+      if (completedAt !== undefined) updateData.completedAt = completedAt;
+    }
+
+    const txResult = await db.transaction(async (tx) => {
+      await validateTaskRelations(tx, oldTask.projectId as string, { assigneeId, parentTaskId, epicId, sprintId });
+
+      // Register + normalize labels (case-insensitive reconciliation)
+      if (labels !== undefined) {
+        updateData.labels = await ensureProjectLabels(tx, oldTask.projectId as string, labels);
+      }
+
       const [updated] = await tx
         .update(tasks)
         .set(updateData)
@@ -317,6 +470,14 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
           await logAuditAction({
             actorId, action: 'task.status_changed', entityType: eType, entityId: eId, workspaceId,
             newValues: { status: updated.status }, oldValues: { status: oldTask.status }, tx
+          });
+          await recordStatusTransition(tx, {
+            taskId: eId,
+            projectId: updated.projectId,
+            fromStatus: oldTask.status,
+            toStatus: updated.status!,
+            actorId,
+            changedAt: updated.updatedAt ?? undefined,
           });
         }
         if (oldTask.priority !== updated.priority) {
@@ -416,14 +577,63 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
             oldValues: { epic_id: oldTask.epicId, epic_key: oldEpicKey }, tx
           });
         }
+      if (oldTask.storyPoints !== updated.storyPoints) {
+          await logAuditAction({
+            actorId, action: updated.storyPoints != null ? 'task.story_points_changed' : 'task.story_points_removed',
+            entityType: eType, entityId: eId, workspaceId,
+            newValues: { story_points: updated.storyPoints }, oldValues: { story_points: oldTask.storyPoints }, tx
+          });
+        }
       }
 
-      return updated;
+      // --- BROADCAST TO CHANNELS ---
+      let broadcastMessage = '';
+      let broadcasts: Array<{ channelId: string; message: any }> = [];
+      if (oldTask) {
+        const actorId = req.user!.userId;
+        const [actor] = await tx.select({ fullName: users.fullName }).from(users).where(eq(users.userId, actorId));
+        const actorName = actor?.fullName || 'User';
+
+        if (oldTask.status !== updated.status) {
+          broadcastMessage = `🔄 **${actorName}** moved @${updated.taskKey} to ${updated.status}`;
+          // Also add a system message to the task thread
+          await tx.insert(messages).values({
+            authorId: actorId,
+            isSystem: true,
+            systemType: 'task_status_changed',
+            bodyText: `${actorName} changed status to ${updated.status}`,
+            threadId: updated.discussionThreadId,
+          });
+        } else if (oldTask.assigneeId !== updated.assigneeId) {
+          if (updated.assigneeId) {
+            const [assignee] = await tx.select({ fullName: users.fullName }).from(users).where(eq(users.userId, updated.assigneeId));
+            broadcastMessage = `👤 **${actorName}** assigned @${updated.taskKey} to ${assignee?.fullName || 'Someone'}`;
+          } else {
+            broadcastMessage = `👤 **${actorName}** unassigned @${updated.taskKey}`;
+          }
+        }
+
+        if (broadcastMessage && updated.projectId) {
+          broadcasts = await broadcastToProjectChannels(tx, updated.projectId, broadcastMessage);
+        }
+      }
+
+      return { updated, broadcasts };
     });
 
-    if (!result) {
+    if (!txResult) {
       res.status(404).json({ error: 'Task not found.' });
       return;
+    }
+
+    // Emit only now that the transaction has actually committed — a rollback
+    // above this point never reaches here, so clients never see a change
+    // that got undone.
+    const { updated: result, broadcasts } = txResult;
+    emitBroadcasts(broadcasts);
+    const io = getIO();
+    if (io && result.projectId) {
+      io.to(`project:${result.projectId}`).emit('task_updated', result);
     }
 
     // --- NOTIFICATIONS ---
@@ -439,7 +649,7 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
             type: 'task_assigned',
             entityType: 'task',
             entityId: result.taskId,
-            title: `You were assigned ${result.taskKey}`,
+            title: `You were assigned @${result.taskKey}`,
             body: `${actor?.name || 'Someone'} assigned you to '${result.title}'`,
           });
         }
@@ -451,7 +661,7 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
             type: 'task_unassigned',
             entityType: 'task',
             entityId: result.taskId,
-            title: `You were unassigned from ${result.taskKey}`,
+            title: `You were unassigned from @${result.taskKey}`,
             body: `${actor?.name || 'Someone'} removed you from '${result.title}'`,
           });
         }
@@ -470,7 +680,7 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
               type: 'task_status_changed',
               entityType: 'task',
               entityId: result.taskId,
-              title: `${result.taskKey} moved to ${formatStatus(result.status as string)}`,
+              title: `@${result.taskKey} moved to ${formatStatus(result.status as string)}`,
               body: `${actor?.name || 'Someone'} changed '${result.title}' from ${formatStatus(oldTask.status as string)} to ${formatStatus(result.status as string)}`,
             });
           }
@@ -488,7 +698,12 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
     }
 
     res.json({ message: 'Task updated', task: result });
-  } catch (err) {
+  } catch (err: any) {
+    if (err.message === 'INVALID_ASSIGNEE') { res.status(400).json({ error: 'Assignee is not a member of this project.' }); return; }
+    if (err.message === 'INVALID_PARENT_TASK') { res.status(400).json({ error: 'Parent task does not exist in this project.' }); return; }
+    if (err.message === 'INVALID_EPIC') { res.status(400).json({ error: 'Epic does not exist in this project or is not an epic.' }); return; }
+    if (err.message === 'INVALID_SPRINT') { res.status(400).json({ error: 'Sprint does not exist in this project.' }); return; }
+
     console.error('Update task error:', err);
     res.status(500).json({ error: 'Server error updating task.' });
   }
@@ -523,15 +738,20 @@ export const reorderTask = async (req: Request, res: Response): Promise<void> =>
       if (before?.rank) beforeRank = before.rank;
     }
 
+    // Generate new rank using fractional-indexing (true LexoRank).
+    // `afterRank` is the task above, `beforeRank` the task below.
+    //
+    // generateKeyBetween throws unless afterRank < beforeRank, and tasks that
+    // were created but never reordered all share the same default rank — so
+    // tied neighbours are the common case, not an edge case. Clients guard for
+    // this too, but the server refuses to 500 on a drag it can resolve itself:
+    // a tie means "append after the tied run", which is what dropping onto a
+    // block of identical ranks visually means anyway.
     let newRank: string;
-    if (afterRank && beforeRank) {
-      newRank = midRank(afterRank, beforeRank);
-    } else if (afterRank) {
-      newRank = afterRank + RANK_GAP;
-    } else if (beforeRank) {
-      newRank = midRank(RANK_FIRST, beforeRank);
-    } else {
-      newRank = RANK_FIRST;
+    try {
+      newRank = generateKeyBetween(afterRank || null, beforeRank || null);
+    } catch {
+      newRank = generateKeyBetween(afterRank || null, null);
     }
 
     const updateData: Record<string, any> = { rank: newRank, updatedAt: new Date() };
@@ -539,6 +759,13 @@ export const reorderTask = async (req: Request, res: Response): Promise<void> =>
 
     const result = await db.transaction(async (tx) => {
       const [oldTask] = await tx.select().from(tasks).where(eq(tasks.taskId, taskId)).limit(1);
+
+      // Dragging a card into or out of the Done column is a completion event
+      // just as much as editing the field is.
+      if (oldTask && status && status !== oldTask.status) {
+        const completedAt = completedAtFor(oldTask.status, status, updateData.updatedAt);
+        if (completedAt !== undefined) updateData.completedAt = completedAt;
+      }
 
       const [updated] = await tx
         .update(tasks)
@@ -574,6 +801,17 @@ export const reorderTask = async (req: Request, res: Response): Promise<void> =>
           oldValues: { status: oldTask.status },
           tx
         });
+        // Feeds the cycle-time and throughput figures on AnalyticsPage — a
+        // drag is a status change like any other and has to be recorded here,
+        // not just audited.
+        await recordStatusTransition(tx, {
+          taskId: updated.taskId,
+          projectId: updated.projectId,
+          fromStatus: oldTask.status,
+          toStatus: updated.status!,
+          actorId: req.user!.userId,
+          changedAt: updateData.updatedAt,
+        });
       }
 
       return {
@@ -591,12 +829,20 @@ export const reorderTask = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
+    // Emit only after the transaction has committed, not from inside it —
+    // otherwise a rollback could still have shown clients a move that never
+    // actually happened.
+    const io = getIO();
+    if (io && result.updated.projectId) {
+      io.to(`project:${result.updated.projectId}`).emit('task_updated', result.updated);
+    }
+
     // --- NOTIFICATIONS ---
     const actorId = req.user!.userId;
     if (result.oldStatus !== result.updated.status) {
       const [actor] = await db.select({ name: users.fullName }).from(users).where(eq(users.userId, actorId));
       const formatStatus = (s: string) => s.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
-      
+
       const notifyStatus = async (recipient: string | null) => {
         if (recipient && recipient !== actorId) {
           await createNotification({
@@ -605,7 +851,7 @@ export const reorderTask = async (req: Request, res: Response): Promise<void> =>
             type: 'task_status_changed',
             entityType: 'task',
             entityId: result.updated.taskId,
-            title: `${result.taskKey} moved to ${formatStatus(result.updated.status as string)}`,
+            title: `@${result.taskKey} moved to ${formatStatus(result.updated.status as string)}`,
             body: `${actor?.name || 'Someone'} changed '${result.title}' from ${formatStatus(result.oldStatus as string)} to ${formatStatus(result.updated.status as string)}`,
           });
         }
@@ -663,7 +909,7 @@ export const deleteTask = async (req: Request, res: Response): Promise<void> => 
     res.json({ message: 'Task deleted' });
   } catch (err) {
     console.error('Delete task error:', err);
-    res.status(500).json({ error: 'Server error deleting task.', details: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined });
+    res.status(500).json({ error: 'Server error deleting task.' });
   }
 };
 
@@ -675,11 +921,23 @@ export const getTaskComments = async (req: Request, res: Response): Promise<void
 
     // Fetch the task to get its discussionThreadId
     const [task] = await db.select({ discussionThreadId: tasks.discussionThreadId }).from(tasks).where(eq(tasks.taskId, taskId));
-    
+
     if (!task || !task.discussionThreadId) {
       res.json({ comments: [] });
       return;
     }
+
+    // Opt-in paging, same shape as listTasks: default stays "everything" so
+    // the task detail panel keeps rendering the full comment thread in one
+    // request, but a hard ceiling stops an unbounded response on a task
+    // that has accumulated a very long discussion.
+    const MAX_LIMIT = 2000;
+    const requestedLimit = parseInt(String(req.query.limit ?? ''), 10);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, MAX_LIMIT)
+      : MAX_LIMIT;
+    const requestedOffset = parseInt(String(req.query.offset ?? ''), 10);
+    const offset = Number.isFinite(requestedOffset) && requestedOffset > 0 ? requestedOffset : 0;
 
     const comments = await db
       .select({
@@ -695,7 +953,9 @@ export const getTaskComments = async (req: Request, res: Response): Promise<void
       .from(messages)
       .leftJoin(users, eq(users.userId, messages.authorId))
       .where(eq(messages.threadId, task.discussionThreadId))
-      .orderBy(asc(messages.createdAt));
+      .orderBy(asc(messages.createdAt))
+      .limit(limit)
+      .offset(offset);
 
     res.json({ comments });
   } catch (err) {
@@ -782,9 +1042,16 @@ const notifyTaskMentions = async (text: string, actorId: string, taskId: string,
       mentionedIds.push(...(allProjectMembers.map(m => m.userId).filter(Boolean) as string[]));
       continue;
     }
+    // Only people on this project can be mentioned on its tasks. Unscoped,
+    // this resolved against every user in the product — a cross-tenant
+    // notification and a name-existence oracle in one query.
     const [mentionedUser] = await db
       .select({ id: users.userId })
       .from(users)
+      .innerJoin(
+        projectMembers,
+        and(eq(projectMembers.userId, users.userId), eq(projectMembers.projectId, projectId)),
+      )
       .where(or(ilike(users.displayName, username), ilike(users.fullName, username + '%')))
       .limit(1);
     if (mentionedUser) mentionedIds.push(mentionedUser.id);
@@ -809,5 +1076,120 @@ const notifyTaskMentions = async (text: string, actorId: string, taskId: string,
         body: `'${(text || '').replace(/<[^>]*>?/gm, '').substring(0, 100)}...'`,
       });
     }
+  }
+};
+
+// ─── TASK ATTACHMENTS ────────────────────────────────────────────────────────
+
+// GET /api/workspaces/:slug/projects/:key/tasks/:taskKey/attachments
+export const listTaskAttachments = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const taskId = res.locals.taskId as string;
+
+    const attachments = await db
+      .select({
+        fileId: workspaceFiles.fileId,
+        filename: workspaceFiles.filename,
+        mimetype: workspaceFiles.mimetype,
+        sizeBytes: workspaceFiles.sizeBytes,
+        filetype: workspaceFiles.filetype,
+        createdAt: workspaceFiles.createdAt,
+        uploaderId: workspaceFiles.uploaderId,
+        uploaderName: users.fullName,
+        uploaderAvatar: users.avatarUrl,
+      })
+      .from(workspaceFiles)
+      .leftJoin(users, eq(workspaceFiles.uploaderId, users.userId))
+      .where(eq(workspaceFiles.taskId, taskId))
+      .orderBy(desc(workspaceFiles.createdAt));
+
+    res.json({ attachments });
+  } catch (err) {
+    console.error('List task attachments error:', err);
+    res.status(500).json({ error: 'Server error listing task attachments.' });
+  }
+};
+
+// POST /api/workspaces/:slug/projects/:key/tasks/:taskKey/attachments
+export const addTaskAttachment = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const taskId = res.locals.taskId as string;
+    const workspaceId = (req.params.workspaceId || res.locals.workspaceId) as string;
+    const userId = req.user!.userId;
+    const { filename, mimetype, sizeBytes, filetype, fileBase64 } = req.body;
+
+    if (!filename || !fileBase64) {
+      res.status(400).json({ error: 'filename and fileBase64 are required.' });
+      return;
+    }
+
+    const fileRecord = await createFileRecord({
+      workspaceId,
+      userId,
+      filename,
+      mimetype,
+      sizeBytes,
+      filetype,
+      fileBase64,
+      taskId,
+    });
+
+    await logAuditAction({
+      actorId: userId,
+      action: 'task.attachment_added',
+      entityType: 'task',
+      entityId: taskId,
+      workspaceId,
+      newValues: { file_id: fileRecord.fileId, filename: fileRecord.filename },
+    });
+
+    res.status(201).json({ attachment: fileRecord });
+  } catch (err) {
+    // A rejected upload is the caller's fault, not the server's.
+    if (err instanceof FileValidationError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    console.error('Add task attachment error:', err);
+    res.status(500).json({ error: 'Server error adding task attachment.' });
+  }
+};
+
+// DELETE /api/workspaces/:slug/projects/:key/tasks/:taskKey/attachments/:fileId
+export const deleteTaskAttachment = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const taskId = res.locals.taskId as string;
+    const { fileId } = req.params as Record<string, string>;
+    const userId = req.user!.userId;
+    const workspaceId = (req.params.workspaceId || res.locals.workspaceId) as string;
+
+    const [fileRecord] = await db
+      .select()
+      .from(workspaceFiles)
+      .where(and(eq(workspaceFiles.fileId, fileId), eq(workspaceFiles.taskId, taskId)))
+      .limit(1);
+
+    if (!fileRecord) {
+      res.status(404).json({ error: 'Attachment not found.' });
+      return;
+    }
+
+    // Storage cleanup + DB row, same helper the generic file-delete route
+    // and account-deletion avatar cleanup use.
+    await purgeFileRecord(fileRecord);
+
+    await logAuditAction({
+      actorId: userId,
+      action: 'task.attachment_removed',
+      entityType: 'task',
+      entityId: taskId,
+      workspaceId,
+      oldValues: { file_id: fileRecord.fileId, filename: fileRecord.filename },
+    });
+
+    res.json({ message: 'Attachment removed' });
+  } catch (err) {
+    console.error('Delete task attachment error:', err);
+    res.status(500).json({ error: 'Server error removing task attachment.' });
   }
 };

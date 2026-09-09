@@ -1,49 +1,20 @@
-import React, { useEffect } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
-import { useAuthStore } from '../../store/auth.js';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { useAuthStore } from '@/store/auth';
 
-export const AuthGuard = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isInitializing, checkAuth } = useAuthStore();
+/**
+ * Gate for routes that require a session. Assumes `AuthBootstrap` has already
+ * resolved `isInitializing`, so it never renders a loading state of its own.
+ *
+ * The attempted location is stashed on navigation state so the login page can
+ * return the user where they were headed.
+ */
+export function AuthGuard() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const location = useLocation();
 
-  useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
-
-  if (isInitializing) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-gray-950">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-white border-t-transparent"></div>
-      </div>
-    );
-  }
-
   if (!isAuthenticated) {
-    // Save the attempted URL for redirecting after login
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  return <>{children}</>;
-};
-
-export const GuestGuard = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isInitializing, checkAuth } = useAuthStore();
-
-  useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
-
-  if (isInitializing) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-gray-950">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-white border-t-transparent"></div>
-      </div>
-    );
-  }
-
-  if (isAuthenticated) {
-    return <Navigate to="/workspaces" replace />;
-  }
-
-  return <>{children}</>;
-};
+  return <Outlet />;
+}

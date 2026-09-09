@@ -1,0 +1,80 @@
+name: CI
+
+# Static gates: these catch what the e2e suite structurally cannot.
+#
+# The e2e workflow runs both apps with `npm run dev` — tsx watch and the Vite
+# dev server — so it never once invokes `tsc` or `vite build`. A production
+# build that does not compile used to sail through CI green and only fail at
+# deploy time. These jobs run in about a minute and gate that.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  backend:
+    name: Backend — typecheck, unit tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Verify migrations reached dist
+        # The migrator resolves this folder at runtime; tsc does not copy .sql,
+        # so the build depends on scripts/copy-migrations.mjs having run.
+        run: test -f dist/db/migrations/meta/_journal.json
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+  frontend:
+    name: Frontend — typecheck, lint, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci --legacy-peer-deps
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck and production build
+        # `npm run build` is `tsc -b && vite build`, so this covers both.
+        run: npm run build
+        env:
+          VITE_API_URL: http://localhost:3001/api
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=high

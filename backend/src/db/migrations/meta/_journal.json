@@ -15,6 +15,132 @@
       "when": 1782218751326,
       "tag": "0001_happy_lockheed",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786986528932,
+      "tag": "0002_swift_roland_deschain",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787060951753,
+      "tag": "0003_left_gunslinger",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787062375124,
+      "tag": "0004_graceful_stryfe",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787063635989,
+      "tag": "0005_glossy_skreet",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787064016291,
+      "tag": "0006_wealthy_typhoid_mary",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787654400000,
+      "tag": "0007_missing_reactions_invites",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787125288422,
+      "tag": "0008_previous_magma",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787125288423,
+      "tag": "0009_missing_user_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787125288424,
+      "tag": "0010_custom_pg_features",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787125288425,
+      "tag": "0011_github_issues_prs_branches",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787125288426,
+      "tag": "0012_analytics_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788272747942,
+      "tag": "0013_resync_snapshot",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788521070710,
+      "tag": "0014_integrity_and_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1788521220712,
+      "tag": "0015_resync_snapshot",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1788617116546,
+      "tag": "0016_refresh_token_family",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788619428954,
+      "tag": "0017_project_soft_delete",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788706133429,
+      "tag": "0018_breezy_albert_cleary",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788786354223,
+      "tag": "0019_minor_king_bedlam",
+      "breakpoints": true
     }
   ]
 }

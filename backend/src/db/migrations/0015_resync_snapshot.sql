@@ -1,0 +1,22 @@
+-- DevSync: snapshot resync for 0014. Intentionally does nothing to the schema.
+--
+-- Same situation as 0013, one migration later. 0014 was hand-written (it needed
+-- a DELETE to dedupe existing github_ci_status rows before the unique index
+-- could be created, which `drizzle-kit generate` cannot produce) and applied
+-- directly, with no `meta/0014_snapshot.json` beside it. So `drizzle-kit
+-- generate` diffed the updated schema.ts against the stale 0013 snapshot and
+-- proposed re-creating everything 0014 already did: the same DROP CONSTRAINT /
+-- CREATE INDEX / DROP COLUMN statements, a second time, against a database
+-- that already has them.
+--
+-- The fix is the file next to this one, `meta/0015_snapshot.json` — generated
+-- from the current schema, so it finally describes the database as it is
+-- after 0014. From here `generate` diffs against reality again.
+--
+-- Why there is no SQL: everything this snapshot describes was already created
+-- by 0014, which sits earlier in the journal and runs first on a fresh
+-- database, and is itself guarded with IF EXISTS/IF NOT EXISTS so replaying it
+-- again is harmless. Re-stating its DDL here would just run the same
+-- statements twice.
+
+SELECT 1;

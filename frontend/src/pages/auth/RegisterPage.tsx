@@ -1,175 +1,148 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuthStore } from '../../store/auth.js';
-import { Mail, Lock, User, ArrowRight, Loader2 } from 'lucide-react';
-import { supabase } from '../../lib/supabase.js';
+import { useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Loader2Icon, MailOpenIcon } from 'lucide-react';
 
-export const RegisterPage = () => {
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Separator } from '@/components/ui/separator';
+import { PASSWORD_ERROR, PASSWORD_REGEX, PASSWORD_RULE } from '@/lib/password';
+import { useAuthStore } from '@/store/auth';
+import { AuthShell } from '@/pages/auth/AuthShell';
+import { AuthErrorAlert } from '@/pages/auth/AuthErrorAlert';
+import { OAuthButtons } from '@/pages/auth/OAuthButtons';
+
+/**
+ * Mirrors `registerSchema` in backend/src/modules/auth/auth.schemas.ts — same
+ * password regex, so the client never accepts something the server will reject.
+ * That schema is `.strict()`, so send exactly these keys and nothing more;
+ * `inviteToken` is added only when the URL actually carries one.
+ */
+const registerSchema = z.object({
+  fullName: z.string().trim().min(1, 'Full name is required'),
+  email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
+  password: z.string().regex(PASSWORD_REGEX, PASSWORD_ERROR),
+});
+
+type RegisterValues = z.infer<typeof registerSchema>;
+
+export function RegisterPage() {
+  const registerUser = useAuthStore((s) => s.register);
   const navigate = useNavigate();
-  const { register } = useAuthStore();
+  const [params] = useSearchParams();
+  const [submitError, setSubmitError] = useState<unknown>(null);
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  // Invite emails link here, not to `/invite/:token` — `sendInviteEmail` builds
+  // `${FRONTEND_URL}/register?inviteToken=…`. The server redeems the token as
+  // part of creating the account, and rejects it if the email typed below is
+  // not the address that was invited.
+  const inviteToken = params.get('inviteToken');
 
-  const handleOAuth = async (provider: 'google' | 'github') => {
+  const form = useForm<RegisterValues>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: { fullName: '', email: '', password: '' },
+  });
+
+  const { isSubmitting, errors } = form.formState;
+
+  const onSubmit = async (values: RegisterValues) => {
+    setSubmitError(null);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-      if (error) throw error;
-    } catch (err) {
-      console.error(`${provider} login failed:`, err);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setIsLoading(true);
-
-    try {
-      await register({ email, password, fullName });
+      await registerUser(inviteToken ? { ...values, inviteToken } : values);
       navigate('/workspaces', { replace: true });
-    } catch (err: any) {
-      setError(err.message || 'Failed to create account');
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      setSubmitError(err);
     }
   };
 
   return (
-    <div className="auth-bg min-h-screen flex items-center justify-center p-4">
-      <div className="auth-shape-1"></div>
-      <div className="auth-shape-2"></div>
-
-      <div className="glass-card-strong max-w-md w-full p-8 animate-fadeIn glow-purple relative z-10">
-        <div className="mb-10 text-center">
-          <h1 className="text-4xl font-bold gradient-text mb-2">Join DevSync</h1>
-          <p className="text-text-secondary text-sm">Create your developer account</p>
-        </div>
-
-        {error && (
-          <div className="mb-6 rounded-lg bg-red-500/10 border border-red-500/20 p-4 text-sm text-red-400 text-center">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">
-              Full Name
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <User className="h-5 w-5 text-text-secondary" />
-              </div>
-              <input
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 bg-bg-primary/50 border border-border-light rounded-xl text-text-primary placeholder-text-secondary focus:outline-none focus:ring-1 focus:ring-primary-500 transition-all duration-200"
-                placeholder="John Doe"
-                required
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">
-              Email Address
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Mail className="h-5 w-5 text-text-secondary" />
-              </div>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 bg-bg-primary/50 border border-border-light rounded-xl text-text-primary placeholder-text-secondary focus:outline-none focus:ring-1 focus:ring-primary-500 transition-all duration-200"
-                placeholder="you@company.com"
-                required
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">
-              Password
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Lock className="h-5 w-5 text-text-secondary" />
-              </div>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 bg-bg-primary/50 border border-border-light rounded-xl text-text-primary placeholder-text-secondary focus:outline-none focus:ring-1 focus:ring-primary-500 transition-all duration-200"
-                placeholder="••••••••"
-                required
-                minLength={6}
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="gradient-btn w-full py-3 flex justify-center items-center mt-8 disabled:opacity-70"
-          >
-            {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin text-bg-primary" />
-            ) : (
-              <>
-                Create Account
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </>
-            )}
-          </button>
-        </form>
-
-        <div className="mt-8">
-          {/* <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border-light"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-transparent text-text-secondary">Or continue with</span>
-            </div>
-          </div> */}
-
-          <div className="mt-6 space-y-4">
-            <button
-              type="button"
-              onClick={() => handleOAuth('github')}
-              className="glass-card w-full py-3 hover:bg-bg-hover transition-colors font-medium text-text-primary"
-            >
-              Continue with GitHub
-            </button>
-            <button
-              type="button"
-              onClick={() => handleOAuth('google')}
-              className="glass-card w-full py-3 hover:bg-bg-hover transition-colors font-medium text-text-primary"
-            >
-              Continue with Google
-            </button>
-          </div>
-        </div>
-
-        <p className="mt-8 text-center text-sm text-text-secondary">
+    <AuthShell
+      title="Create your DevSync account"
+      description="One account for your workspaces, projects, and channels."
+      footer={
+        <>
           Already have an account?{' '}
-          <Link to="/login" className="font-medium text-primary-400 hover:text-primary-300 transition-colors">
-            Sign in instead
+          <Link to="/login" className="text-foreground underline underline-offset-4">
+            Sign in
           </Link>
-        </p>
+        </>
+      }
+    >
+      {inviteToken ? (
+        <Alert>
+          <MailOpenIcon />
+          <AlertTitle>You&apos;re joining by invitation</AlertTitle>
+          <AlertDescription>
+            Sign up with the email address the invite was sent to — the workspace is added to your
+            account automatically.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <OAuthButtons disabled={isSubmitting} />
+
+      <div className="flex items-center gap-3">
+        <Separator className="flex-1" />
+        <span className="text-xs text-muted-foreground">or</span>
+        <Separator className="flex-1" />
       </div>
-    </div>
+
+      {submitError ? <AuthErrorAlert error={submitError} /> : null}
+
+      <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
+        <FieldGroup>
+          <Field data-invalid={!!errors.fullName}>
+            <FieldLabel htmlFor="fullName">Full name</FieldLabel>
+            <Input
+              id="fullName"
+              type="text"
+              autoComplete="name"
+              placeholder="Ada Lovelace"
+              aria-invalid={!!errors.fullName}
+              {...form.register('fullName')}
+            />
+            <FieldError errors={[errors.fullName]} />
+          </Field>
+
+          <Field data-invalid={!!errors.email}>
+            <FieldLabel htmlFor="email">Email</FieldLabel>
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@company.com"
+              aria-invalid={!!errors.email}
+              {...form.register('email')}
+            />
+            <FieldError errors={[errors.email]} />
+          </Field>
+
+          <Field data-invalid={!!errors.password}>
+            <FieldLabel htmlFor="password">Password</FieldLabel>
+            <Input
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              aria-invalid={!!errors.password}
+              {...form.register('password')}
+            />
+            {errors.password ? (
+              <FieldError errors={[errors.password]} />
+            ) : (
+              <FieldDescription>{PASSWORD_RULE}</FieldDescription>
+            )}
+          </Field>
+
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? <Loader2Icon className="size-4 animate-spin" aria-hidden="true" /> : null}
+            Create account
+          </Button>
+        </FieldGroup>
+      </form>
+    </AuthShell>
   );
-};
+}

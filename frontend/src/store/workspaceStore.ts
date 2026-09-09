@@ -1,64 +1,66 @@
-import { create } from 'zustand';
-import { apiFetch } from '../lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiFetch } from '@/lib/api';
+import type { WorkspaceSummary } from '@/types/api';
 
-export interface Workspace {
-  workspaceId: string;
+export type { WorkspaceSummary } from '@/types/api';
+
+export interface CreateWorkspaceInput {
   name: string;
-  slug: string;
-  createdAt: string;
-  role: 'owner' | 'admin' | 'member';
+  slug?: string;
+  description?: string;
 }
 
-interface WorkspaceState {
-  workspaces: Workspace[];
-  currentWorkspace: Workspace | null;
-  isLoading: boolean;
-  fetchWorkspaces: () => Promise<void>;
-  createWorkspace: (name: string, slug: string) => Promise<Workspace>;
-  setCurrentWorkspace: (workspace: Workspace) => void;
-}
+export const workspaceKeys = {
+  all: ['workspaces'] as const,
+};
 
-export const useWorkspaceStore = create<WorkspaceState>((set) => ({
-  workspaces: [],
-  currentWorkspace: null,
-  isLoading: false,
-
-  fetchWorkspaces: async () => {
-    set({ isLoading: true });
-    try {
+export function useWorkspaces() {
+  return useQuery({
+    queryKey: workspaceKeys.all,
+    queryFn: async () => {
       const data = await apiFetch('/workspaces');
-      const workspaces = data.workspaces || [];
-      
-      set({ workspaces, isLoading: false });
-      
-      // Select the first one if there is no current workspace and workspaces exist
-      if (workspaces.length > 0) {
-        set((state) => {
-          if (!state.currentWorkspace) {
-            return { currentWorkspace: workspaces[0] };
-          }
-          return {};
-        });
-      }
-    } catch (err) {
-      console.error('Failed to fetch workspaces:', err);
-      set({ isLoading: false });
-    }
-  },
+      return (data.workspaces ?? []) as WorkspaceSummary[];
+    },
+  });
+}
 
-  createWorkspace: async (name, slug) => {
-    const data = await apiFetch('/workspaces', {
-      method: 'POST',
-      body: JSON.stringify({ name, slug }),
-    });
-    set((state) => ({
-      workspaces: [...state.workspaces, { ...data.workspace, role: 'owner' }],
-      currentWorkspace: data.workspace,
-    }));
-    return data.workspace;
-  },
+export function useCreateWorkspace() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateWorkspaceInput) => {
+      const body: CreateWorkspaceInput = { name: input.name };
+      if (input.slug) body.slug = input.slug;
+      if (input.description) body.description = input.description;
 
-  setCurrentWorkspace: (workspace) => {
-    set({ currentWorkspace: workspace });
-  },
-}));
+      const data = await apiFetch('/workspaces', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+
+      const created: WorkspaceSummary = {
+        ...data.workspace,
+        role: 'owner',
+        state: 'active',
+        joinedAt: data.workspace.createdAt,
+      };
+      return created;
+    },
+    onSuccess: (created) => {
+      queryClient.setQueryData<WorkspaceSummary[]>(workspaceKeys.all, (old) => {
+        return old ? [...old, created] : [created];
+      });
+    },
+  });
+}
+
+export function useAcceptInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (slug: string) => {
+      await apiFetch(`/workspaces/${slug}/invites/accept`, { method: 'POST' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: workspaceKeys.all });
+    },
+  });
+}

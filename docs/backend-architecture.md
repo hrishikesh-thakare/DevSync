@@ -26,23 +26,30 @@ backend/src/
 │   ├── roles.ts           # RBAC guards (requireWorkspaceRole, requireProjectRole)
 │   └── slugs.ts           # URL param resolvers (slug→workspaceId, key→projectId, taskKey→taskId)
 ├── modules/               # Feature modules (routes + controllers)
+│   ├── analytics/
+│   ├── audit/
 │   ├── auth/
-│   ├── workspaces/
-│   ├── projects/
-│   ├── tasks/
-│   ├── sprints/
 │   ├── channels/
-│   ├── messages/
+│   ├── dashboard/
 │   ├── files/
 │   ├── github/
+│   ├── labels/
+│   ├── messages/
 │   ├── notifications/
+│   ├── projects/
 │   ├── search/
-│   ├── audit/
-│   ├── ai/                # 🔮 Future: AI-powered features
-│   └── storage/           # Supabase Storage helper routes
+│   ├── sprints/
+│   ├── tasks/
+│   └── workspaces/
+├── services/              # AI and third-party API clients
+│   └── ai.service.ts      # Gemini client (sprint reports, duration estimates)
 ├── sockets/
 │   └── index.ts           # Socket.io server init + JWT auth middleware
-├── workers/               # 🔮 Future: BullMQ background job processors
+├── workers/
+│   ├── queue.ts            # In-process job queue (concurrency, retry, backoff)
+│   ├── email.jobs.ts       # email.send_invite worker
+│   ├── github.jobs.ts      # github.webhook_event worker
+│   └── index.ts            # registerWorkers() — wired into index.ts on boot
 └── index.ts               # Express app entry point + route mounting
 ```
 
@@ -158,6 +165,7 @@ POST /api/workspaces/:slug/projects/:key/tasks
 | POST | `/invite` | ✅ | W: owner/admin | Invite a user by email |
 | POST | `/invites/accept` | ✅ | — | Accept workspace invite |
 | PATCH | `/members/:userId` | ✅ | W: owner | Change a member's workspace role |
+| DELETE | `/members/me` | ✅ | W: any | Self-service leave workspace (owner blocked) |
 | DELETE | `/members/:userId` | ✅ | W: owner/admin | Remove a member from workspace |
 
 ---
@@ -169,7 +177,8 @@ POST /api/workspaces/:slug/projects/:key/tasks
 | GET | `/` | ✅ | W: any | List all projects in workspace |
 | GET | `/:key` | ✅ | P: any | Get project details |
 | PATCH | `/:key` | ✅ | P: admin/dev | Update project name, description, lead |
-| PATCH | `/:key/archive` | ✅ | P: admin | Archive/unarchive project |
+| PATCH | `/:key/archive` | ✅ | P: admin | Archive project |
+| DELETE | `/:key` | ✅ | P: admin | Soft-delete project (`deleted_at`); frees its key for reuse in this workspace |
 
 ### Project Members — `/api/workspaces/:slug/projects/:key`
 | Method | Path | Auth | Role | Description |
@@ -188,7 +197,7 @@ POST /api/workspaces/:slug/projects/:key/tasks
 | GET | `/` | ✅ | P: any | List tasks (filterable by status, assignee, sprint, priority) |
 | GET | `/:taskKey` | ✅ | P: any | Get single task by key (e.g., FE-3) |
 | PATCH | `/:taskKey` | ✅ | P: admin/dev | Update task fields |
-| PATCH | `/:taskKey/reorder` | ✅ | P: admin/dev | Update LexoRank for drag-drop |
+| PATCH | `/:taskKey/reorder` | ✅ | P: admin/dev | Recompute the fractional-index `rank` for drag-drop |
 | DELETE | `/:taskKey` | ✅ | P: admin | Soft-delete task |
 
 ### Task Comments — `/api/workspaces/:slug/projects/:key/tasks/:taskKey`
@@ -261,13 +270,21 @@ POST /api/workspaces/:slug/projects/:key/tasks
 |---|---|---|---|---|
 | POST | `/:projectId` | ❌ | HMAC | Receive push and workflow events from GitHub |
 
+### GitHub User Routes — `/api/github`
+| Method | Path | Auth | Role | Description |
+|---|---|---|---|---|
+| GET | `/oauth/url` | ✅ | — | Get the GitHub OAuth authorize URL |
+| POST | `/oauth/exchange` | ✅ | — | Exchange an OAuth code for an encrypted, stored access token |
+| GET | `/user/repos` | ✅ | — | List the caller's own GitHub repositories |
+
 ---
 
 ### File Routes — `/api/workspaces/:slug/files`
 | Method | Path | Auth | Role | Description |
 |---|---|---|---|---|
-| POST | `/upload-url` | ✅ | W: any | Get presigned upload URL for Supabase Storage |
-| GET | `/:fileId/download` | ✅ | W: any | Get presigned download URL |
+| GET | `/:fileId/raw` | Signed URL token | — | Stream file content; MIME allowlisted, forced `attachment` unless the type is inline-safe |
+| POST | `/upload` | ✅ | W: any | Direct server-side upload (base64 body), MIME + size validated against the decoded buffer |
+| GET | `/:fileId/download` | ✅ | W: any | Get a scoped download URL |
 
 ---
 
@@ -284,6 +301,20 @@ POST /api/workspaces/:slug/projects/:key/tasks
 | Method | Path | Auth | Role | Description |
 |---|---|---|---|---|
 | GET | `/?q=...&type=task\|message` | ✅ | — | Full-text search across tasks and messages |
+
+---
+
+### Dashboard Routes — `/api/workspaces/:slug/dashboard`
+| Method | Path | Auth | Role | Description |
+|---|---|---|---|---|
+| GET | `/` | ✅ | W: owner/admin/member | Persona-based workspace home: shared my-work + sprint sections for everyone, plus workspace-wide admin sections for owners/admins |
+
+---
+
+### Analytics Routes — `/api/workspaces/:slug/analytics`
+| Method | Path | Auth | Role | Description |
+|---|---|---|---|---|
+| GET | `/?projectKey=...&from=...&to=...` | ✅ | W: owner/admin/member | 7 delivery-metric aggregations (cycle time, throughput, contribution, burndown, CI success rate, velocity); scoped to the caller's project memberships unless the caller is an admin |
 
 ---
 
@@ -305,37 +336,60 @@ POST /api/workspaces/:slug/projects/:key/tasks
 | Room Pattern | Purpose |
 |---|---|
 | `user:{userId}` | Personal room (auto-joined on connect) for direct notifications |
-| `channel:{channelId}` | Message room — joined/left via `join_room` / `leave_room` events |
+| `workspace:{workspaceId}` | Presence + workspace-wide events (auto-joined on connect, restored per-connection from DB membership) |
+| `channel:{channelId}` | Message room — joined/left via `join_room` / `leave_room` events, client-requested (not auto-restored on reconnect) |
+| `project:{projectId}` | Task-board room — joined/left via `join_room` / `leave_room` events, client-requested (not auto-restored on reconnect) |
 
 ### Events
 | Event | Direction | Payload | Description |
 |---|---|---|---|
-| `join_room` | Client → Server | `roomId: string` | Join a channel room |
-| `leave_room` | Client → Server | `roomId: string` | Leave a channel room |
+| `join_room` | Client → Server | `roomId: string` | Join a channel or project room |
+| `leave_room` | Client → Server | `roomId: string` | Leave a room |
+| `room_join_denied` | Server → Client | `{ roomId: string }` | Sent when RBAC denies joining a room |
 | `new_message` | Server → Client | `Message` object | New message broadcast to channel members |
+| `message_updated` | Server → Client | `Message` object | Message was edited |
+| `message_deleted` | Server → Client | `{ messageId, threadId }` | Message was deleted |
+| `message_reaction_added` | Server → Client | `{ messageId, userId, emoji }` | Reaction added |
+| `message_reaction_removed` | Server → Client | `{ messageId, userId, emoji }` | Reaction removed |
+| `task_updated` | Server → Client | `Task` object | Task status, assignee, or field changed |
+| `new_notification` | Server → Client | `Notification` object | Pushed to personal `user:{id}` room |
+| `user_presence_updated` | Server → Client | `{ userId, presence, lastActiveAt }` | Workspace presence broadcast |
+| `call_started` | Server → Client | `{ channelRoomId, joinUrl }` | A video call started in a channel |
 
 ---
 
-## 🔮 Future Scope
+## 🤖 AI & Background Work
 
-### AI Module (`modules/ai/`)
-The `ai/` module directory exists but is **not yet mounted** in the Express app. Planned features include:
-- AI-powered sprint summaries on sprint close
-- AI contribution reports per team member
-- AI task duration estimation
-- Smart task suggestions based on project context
+### AI Integration (`services/ai.service.ts`)
+A thin Gemini client (REST `generateContent` on **`gemini-3.6-flash`**, JSON-mode output). Features:
+- **Sprint retrospective summaries** — generated on sprint close, persisted to `sprints.ai_summary`, posted to the project's first channel as a system message (`systemType: 'ai_sprint_summary'`), with `sprints.summary_message_id` recording which message.
+- **Task duration estimation** — on task creation, a fire-and-forget job estimates hours into `tasks.ai_duration_estimate`.
+- **CI failure explanation** — `summarizeCiFailure` caches its output on `github_ci_status.ai_failure_summary` (added in migration `0019`).
 
-The database schema already has fields reserved for AI output:
+Every call fails gracefully: if `GEMINI_API_KEY` is unset or the API errors, the feature is skipped and never blocks the underlying request. Database fields:
 - `sprints.ai_summary` (jsonb)
-- `sprints.ai_contribution_report` (jsonb)
+- `sprints.summary_message_id` (uuid → messages)
 - `tasks.ai_duration_estimate` (numeric)
+- `github_ci_status.ai_failure_summary` (text)
 
-### Background Workers (`workers/`)
-The `workers/` directory is **empty**. BullMQ and ioredis are installed in `package.json` but not wired up. Planned use cases:
-- Email notification delivery
-- Heavy webhook payload processing
-- Scheduled sprint reminders
-- AI processing jobs (long-running LLM calls)
+> **Removed on purpose: per-member contribution reports.** `generateSprintReport`
+> once also returned a `contributionReport` — one AI-written sentence judging each
+> assignee's contribution plus a task count, posted publicly to the project channel
+> on every sprint close with no review step. Individual activity metrics presented
+> with that kind of unearned authority are a documented anti-pattern; it was removed
+> alongside the Analytics contribution chart, and migration `0018` **dropped the
+> `sprints.ai_contribution_report` column**. The function is now deliberately
+> team-level only. Do not reintroduce it.
 
-### Storage Module (`modules/storage/`)
-Mounted at `/api/storage` but overlaps with the `files` module. May be consolidated in a future refactor.
+> **Quota.** The Gemini free tier allows **20 requests per day, per model** — not
+> per minute. Bulk generation (seeding, backfills) exhausts it fast and then returns
+> `429 RESOURCE_EXHAUSTED` until reset. A missing AI summary is far more often quota
+> than a bug.
+
+### Background Jobs (`workers/`)
+A lightweight in-process job queue (`workers/queue.ts`) processes slow work off the request path with a concurrency pool (4), retries, and exponential backoff. Registered jobs:
+- `email.send_invite` — invite delivery via the **SendGrid HTTP API** (enqueued by `inviteMember`; the invite row is committed first, so send latency or failure never blocks the response). Not SMTP — Render blocks outbound SMTP ports, so that transport could never connect from the deployed host. Delivery is additionally gated off outside production unless `SMTP_ALLOW_DEV=true`; see `services/email.service.ts`.
+- `github.webhook_event` — GitHub webhook payload processing (push, workflow_run, pull_request, issues, branch create/delete). Signature verification stays in the request handler; the event is enqueued after verification and the webhook returns `200` immediately.
+
+Failures are retried up to 3 times with backoff, then logged as permanently failed. Jobs are in-memory (lost on process exit) — swap `queue.ts` for BullMQ/ioredis if durable queues are needed. AI generation uses the same fire-and-forget pattern directly in the sprint/task controllers.
+
