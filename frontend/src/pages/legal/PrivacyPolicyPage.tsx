@@ -10,12 +10,12 @@ export function PrivacyPolicyPage() {
           <p className='text-sm text-zinc-500 font-medium'>Last updated: {new Date().toLocaleDateString()}</p>
           
           <h2>1. Introduction</h2>
-          <p>Welcome to DevSync. We respect your privacy and are committed to protecting your personal data. This privacy policy will inform you about how we look after your personal data when you visit our website and tell you about your privacy rights and how the law protects you.</p>
+          <p>Welcome to DevSync. We respect your privacy and are committed to protecting your personal data. This privacy policy will inform you about how we look after your personal data (as a Data Principal) when you visit our website, and tell you about your privacy rights and how the law protects you.</p>
           
           <h2>2. Information We Collect</h2>
           <p>We may collect, use, store, and transfer different kinds of personal data about you, including:</p>
           <ul>
-            <li><strong>Identity Data:</strong> First name, last name, username.</li>
+            <li><strong>Personal Data:</strong> First name, last name, username.</li>
             <li><strong>Contact Data:</strong> Email address.</li>
             <li><strong>Technical Data:</strong> IP address, browser type and version, time zone setting and location, browser plug-in types and versions, operating system and platform.</li>
             <li><strong>Usage Data:</strong> Information about how you use our website and services, including chat logs and project data.</li>
@@ -50,15 +50,19 @@ export function PrivacyPolicyPage() {
           </ul>
           
           <h2>5. Data Retention Policy</h2>
-          <p>We will only retain your personal data for as long as reasonably necessary to fulfill the purposes we collected it for, including for the purposes of satisfying any legal, regulatory, tax, accounting, or reporting requirements. We may retain your personal data for a longer period in the event of a complaint or if we reasonably believe there is a prospect of litigation in respect to our relationship with you.</p>
+          <p>We retain your personal data only for as long as your account is active. Upon account deletion, all personal data is permanently erased within 30 days, except where retention is strictly required for legal, regulatory, or tax compliance purposes.</p>
           
           <h2>6. Your Legal Rights</h2>
-          <p>Under certain circumstances, you have rights under data protection laws in relation to your personal data, including the right to request access, correction, erasure, restriction, transfer, to object to processing, to portability of data, and (where the lawful ground of processing is consent) to withdraw consent.</p>
+          <p>As a Data Principal under the Digital Personal Data Protection (DPDP) Act, you have specific rights in relation to your personal data, including the Right to Information about your personal data, the Right to Correction and Erasure, the Right of Grievance Redressal, and the Right to Nominate a representative.</p>
           
-          <h2>7. Grievance Officer / Data Protection Contact</h2>
-          <p>We have appointed a data privacy manager who is responsible for overseeing questions in relation to this privacy policy. If you have any questions about this privacy policy, including any requests to exercise your legal rights, please contact them using the details set out below:</p>
-          <p>Email: <a href='mailto:privacy@devsync.app' className='text-primary hover:underline'>privacy@devsync.app</a></p>
-          <p>Or visit our <Link to='/contact-us' className='text-primary hover:underline'>Contact Us</Link> page.</p>
+          <h2>7. Grievance Officer / Identity of Data Fiduciary</h2>
+          <p>We have appointed a Grievance Officer who is responsible for overseeing questions in relation to this privacy policy. If you have any questions about this privacy policy, including any requests to exercise your legal rights, please contact them using the details set out below:</p>
+          <ul className="list-none pl-0 mt-4 border-l-2 border-primary/50 pl-4">
+            <li><strong>Entity:</strong> DevSync (Data Fiduciary)</li>
+            <li><strong>Email:</strong> <a href="mailto:privacy@devsync.app" className="text-primary hover:underline">privacy@devsync.app</a></li>
+            <li><strong>Registered Address:</strong> [Insert Registered Indian Business Address Here]</li>
+          </ul>
+          <p className="mt-4">Or visit our <Link to="/contact-us" className="text-primary hover:underline">Contact Us</Link> page.</p>
         </div>
       </div>
     </div>
