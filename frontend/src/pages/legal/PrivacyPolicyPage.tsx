@@ -57,11 +57,7 @@ export function PrivacyPolicyPage() {
           
           <h2>7. Grievance Officer / Identity of Data Fiduciary</h2>
           <p>We have appointed a Grievance Officer who is responsible for overseeing questions in relation to this privacy policy. If you have any questions about this privacy policy, including any requests to exercise your legal rights, please contact them using the details set out below:</p>
-          <ul className="list-none pl-0 mt-4 border-l-2 border-primary/50 pl-4">
-            <li><strong>Entity:</strong> DevSync (Data Fiduciary)</li>
-            <li><strong>Email:</strong> <a href="mailto:privacy@devsync.app" className="text-primary hover:underline">privacy@devsync.app</a></li>
-            <li><strong>Registered Address:</strong> [Insert Registered Indian Business Address Here]</li>
-          </ul>
+          <p className="mt-4"><strong>Email:</strong> <a href="mailto:privacy@devsync.app" className="text-primary hover:underline">privacy@devsync.app</a></p>
           <p className="mt-4">Or visit our <Link to="/contact-us" className="text-primary hover:underline">Contact Us</Link> page.</p>
         </div>
       </div>
