@@ -78,7 +78,9 @@ test.describe('Mention popup — people', () => {
 
     // The sent message actually contains the real mention node, not a plain
     // "@Dave" the backend's fuzzy ilike fallback would have to guess at.
-    const row = ownerPage.locator('.rich-message-content', { hasText: marker });
+    // .last(): the optimistic send and the server-confirmed message both
+    // match hasText briefly, same as the task-mention tests below.
+    const row = ownerPage.locator('.rich-message-content', { hasText: marker }).last();
     await expect(row.locator('span[data-type="mention"]')).toHaveText(`@${TEST_USERS.developer.name}`);
 
     await expect

@@ -95,6 +95,10 @@ test.describe('Password Recovery — UI', () => {
     await page.evaluate(async (apiBase) => {
       await fetch(`${apiBase}/auth/logout`, { method: 'POST', credentials: 'include' });
       localStorage.clear();
+      // localStorage.clear() also drops the cookie-consent flag the base
+      // storage state seeded, which brings CookieConsentBanner back over
+      // the login form's Sign in button on the next goto.
+      localStorage.setItem('cookie-consent', 'all');
     }, API_URL);
     await page.goto(`${BASE}/login`);
     await page.getByPlaceholder('you@company.com').fill(email);
