@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LogOutIcon, SearchIcon, SettingsIcon, LayersIcon, UserCogIcon } from 'lucide-react';
+import { LogOutIcon, SearchIcon, SettingsIcon, LayersIcon, UserCogIcon, HelpCircleIcon } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -140,6 +140,12 @@ export function WorkspaceTopBar({ slug }: { slug: string }) {
                 </Link>
               </DropdownMenuItem>
             ) : null}
+            <DropdownMenuItem asChild>
+              <Link to="/contact-us" target="_blank" rel="noreferrer">
+                <HelpCircleIcon className="size-4" aria-hidden="true" />
+                Help & Support
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => void signOut()}>
               <LogOutIcon className="size-4" aria-hidden="true" />

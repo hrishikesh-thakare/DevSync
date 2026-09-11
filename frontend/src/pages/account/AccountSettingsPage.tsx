@@ -23,6 +23,7 @@ import { PreferencesCard } from '@/pages/account/PreferencesCard';
 import { ChangePasswordCard } from '@/pages/account/ChangePasswordCard';
 import { SessionsCard } from '@/pages/account/SessionsCard';
 import { DeleteAccountCard } from '@/pages/account/DeleteAccountCard';
+import { ExportDataCard } from '@/pages/account/ExportDataCard';
 
 /**
  * Account settings, deliberately outside the workspace shell — nothing here is
@@ -140,6 +141,7 @@ export function AccountSettingsPage() {
             </TabsContent>
 
             <TabsContent value="account" className="m-0 flex flex-col gap-6">
+              <ExportDataCard />
               <DeleteAccountCard />
             </TabsContent>
           </main>
