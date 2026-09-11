@@ -8,6 +8,7 @@ import { Loader2Icon, MailOpenIcon } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Separator } from '@/components/ui/separator';
 import { PASSWORD_ERROR, PASSWORD_REGEX, PASSWORD_RULE } from '@/lib/password';
@@ -123,9 +124,8 @@ export function RegisterPage() {
 
           <Field data-invalid={!!errors.password}>
             <FieldLabel htmlFor="password">Password</FieldLabel>
-            <Input
+            <PasswordInput
               id="password"
-              type="password"
               autoComplete="new-password"
               aria-invalid={!!errors.password}
               {...form.register('password')}

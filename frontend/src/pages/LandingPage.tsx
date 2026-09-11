@@ -610,10 +610,31 @@ function FinalCta() {
 
 function Footer() {
   const columns = [
-    { title: 'Product', links: ['Features', 'Why switch', 'Customers', 'FAQ'] },
-    { title: 'Workspace', links: ['Boards', 'Sprints', 'Channels', 'Analytics'] },
-    { title: 'Company', links: ['About', 'Changelog', 'Careers', 'Contact'] },
-    { title: 'Legal', links: ['Privacy', 'Terms', 'Security', 'Status'] },
+    { title: 'Product', links: [
+      { label: 'Features', to: '#features' }, 
+      { label: 'Why switch', to: '#why' }, 
+      { label: 'Customers', to: '#customers' }, 
+      { label: 'FAQ', to: '#faq' }
+    ] },
+    { title: 'Workspace', links: [
+      { label: 'Boards', to: '/register' }, 
+      { label: 'Sprints', to: '/register' }, 
+      { label: 'Channels', to: '/register' }, 
+      { label: 'Analytics', to: '/register' }
+    ] },
+    { title: 'Company', links: [
+      { label: 'About Us', to: '/about-us' }, 
+      { label: 'Contact Us', to: '/contact-us' }, 
+      { label: 'Changelog', to: '#' }, 
+      { label: 'Careers', to: '#' }
+    ] },
+    { title: 'Legal', links: [
+      { label: 'Privacy Policy', to: '/privacy-policy' }, 
+      { label: 'Terms of Service', to: '/terms-of-service' }, 
+      { label: 'Cookie Policy', to: '/cookie-policy' }, 
+      { label: 'Refund Policy', to: '/refund-policy' },
+      { label: 'Data Deletion', to: '/data-deletion' }
+    ] },
   ];
 
   return (
@@ -636,10 +657,16 @@ function Footer() {
               <h3 className="text-[13px] font-semibold text-zinc-200">{col.title}</h3>
               <ul className="mt-4 space-y-2.5">
                 {col.links.map((l) => (
-                  <li key={l}>
-                    <span className="text-[14px] text-zinc-500 transition-colors hover:text-zinc-300">
-                      {l}
-                    </span>
+                  <li key={l.label}>
+                    {l.to.startsWith('#') ? (
+                      <a href={l.to} className="text-[14px] text-zinc-500 transition-colors hover:text-zinc-300">
+                        {l.label}
+                      </a>
+                    ) : (
+                      <Link to={l.to} className="text-[14px] text-zinc-500 transition-colors hover:text-zinc-300">
+                        {l.label}
+                      </Link>
+                    )}
                   </li>
                 ))}
               </ul>

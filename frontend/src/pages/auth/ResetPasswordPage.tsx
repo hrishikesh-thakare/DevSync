@@ -7,7 +7,7 @@ import { CheckCircle2Icon, Loader2Icon, OctagonXIcon } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { apiFetch } from '@/lib/api';
 import { PASSWORD_ERROR, PASSWORD_REGEX, PASSWORD_RULE } from '@/lib/password';
@@ -123,9 +123,8 @@ export function ResetPasswordPage() {
         <FieldGroup>
           <Field data-invalid={!!errors.newPassword}>
             <FieldLabel htmlFor="newPassword">New password</FieldLabel>
-            <Input
+            <PasswordInput
               id="newPassword"
-              type="password"
               autoComplete="new-password"
               aria-invalid={!!errors.newPassword}
               {...form.register('newPassword')}
@@ -139,9 +138,8 @@ export function ResetPasswordPage() {
 
           <Field data-invalid={!!errors.confirmPassword}>
             <FieldLabel htmlFor="confirmPassword">Confirm new password</FieldLabel>
-            <Input
+            <PasswordInput
               id="confirmPassword"
-              type="password"
               autoComplete="new-password"
               aria-invalid={!!errors.confirmPassword}
               {...form.register('confirmPassword')}

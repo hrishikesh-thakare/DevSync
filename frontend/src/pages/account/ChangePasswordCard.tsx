@@ -8,7 +8,7 @@ import { Loader2Icon } from 'lucide-react';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { apiFetch } from '@/lib/api';
 import { PASSWORD_ERROR, PASSWORD_REGEX, PASSWORD_RULE } from '@/lib/password';
@@ -78,9 +78,8 @@ export function ChangePasswordCard() {
           <FieldGroup>
             <Field data-invalid={!!errors.currentPassword}>
               <FieldLabel htmlFor="currentPassword">Current password</FieldLabel>
-              <Input
+              <PasswordInput
                 id="currentPassword"
-                type="password"
                 autoComplete="current-password"
                 aria-invalid={!!errors.currentPassword}
                 {...form.register('currentPassword')}
@@ -90,9 +89,8 @@ export function ChangePasswordCard() {
 
             <Field data-invalid={!!errors.newPassword}>
               <FieldLabel htmlFor="accountNewPassword">New password</FieldLabel>
-              <Input
+              <PasswordInput
                 id="accountNewPassword"
-                type="password"
                 autoComplete="new-password"
                 aria-invalid={!!errors.newPassword}
                 {...form.register('newPassword')}
@@ -106,9 +104,8 @@ export function ChangePasswordCard() {
 
             <Field data-invalid={!!errors.confirmPassword}>
               <FieldLabel htmlFor="accountConfirmPassword">Confirm new password</FieldLabel>
-              <Input
+              <PasswordInput
                 id="accountConfirmPassword"
-                type="password"
                 autoComplete="new-password"
                 aria-invalid={!!errors.confirmPassword}
                 {...form.register('confirmPassword')}

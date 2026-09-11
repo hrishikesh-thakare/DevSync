@@ -36,6 +36,16 @@ const ResetPasswordPage = page(() => import('@/pages/auth/ResetPasswordPage'), '
 const VerifyEmailPage = page(() => import('@/pages/auth/VerifyEmailPage'), 'VerifyEmailPage');
 const InviteLandingPage = page(() => import('@/pages/auth/InviteLandingPage'), 'InviteLandingPage');
 
+const PrivacyPolicyPage = page(() => import('@/pages/legal/PrivacyPolicyPage'), 'PrivacyPolicyPage');
+const TermsOfServicePage = page(() => import('@/pages/legal/TermsOfServicePage'), 'TermsOfServicePage');
+const CookiePolicyPage = page(() => import('@/pages/legal/CookiePolicyPage'), 'CookiePolicyPage');
+const RefundPolicyPage = page(() => import('@/pages/legal/RefundPolicyPage'), 'RefundPolicyPage');
+const ContactUsPage = page(() => import('@/pages/legal/ContactUsPage'), 'ContactUsPage');
+const AboutUsPage = page(() => import('@/pages/legal/AboutUsPage'), 'AboutUsPage');
+const DataDeletionPage = page(() => import('@/pages/legal/DataDeletionPage'), 'DataDeletionPage');
+
+import { CookieConsentBanner } from '@/components/CookieConsentBanner';
+
 const AccountSettingsPage = page(() => import('@/pages/account/AccountSettingsPage'), 'AccountSettingsPage');
 
 const WorkspacePickerPage = page(() => import('@/pages/workspaces/WorkspacePickerPage'), 'WorkspacePickerPage');
@@ -105,6 +115,14 @@ export default function App() {
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/invite/:inviteToken" element={<InviteLandingPage />} />
+            
+            <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+            <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+            <Route path="/cookie-policy" element={<CookiePolicyPage />} />
+            <Route path="/refund-policy" element={<RefundPolicyPage />} />
+            <Route path="/contact-us" element={<ContactUsPage />} />
+            <Route path="/about-us" element={<AboutUsPage />} />
+            <Route path="/data-deletion" element={<DataDeletionPage />} />
 
             {/* Authenticated */}
             <Route element={<AuthGuard />}>
@@ -154,6 +172,7 @@ export default function App() {
           </Routes>
         </Suspense>
       </ErrorBoundary>
+      <CookieConsentBanner />
     </AuthBootstrap>
     </QueryClientProvider>
   );
