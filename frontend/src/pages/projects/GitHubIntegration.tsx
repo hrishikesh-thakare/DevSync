@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import {
@@ -14,6 +14,7 @@ import {
   GitPullRequestIcon,
   LockIcon,
   Loader2Icon,
+  MessageSquareIcon,
   RefreshCwIcon,
   Rows2Icon,
   Rows3Icon,
@@ -23,6 +24,7 @@ import {
 
 import { EmptyState, ErrorState } from '@/components/layout/PageState';
 import { apiFetch, ApiError } from '@/lib/api';
+import { useAuthStore } from '@/store/auth';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -68,9 +70,29 @@ const TABS: { value: GithubTab; label: string }[] = [
 export function GitHubIntegration() {
   const { slug = '', key = '' } = useParams();
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
+  const myUserId = useAuthStore((s) => s.user?.userId);
   const myRole = useMyProjectRole();
   const canConnect = myRole === 'project_admin';
   const canRerun = myRole === 'project_admin' || myRole === 'developer';
+  const [dmBusyFor, setDmBusyFor] = useState<string | null>(null);
+
+  // Same dedup-by-membership DM as WorkspaceMembersPage: repeat clicks land
+  // in the one existing conversation rather than spawning new ones.
+  const messageCommitAuthor = async (userId: string) => {
+    setDmBusyFor(userId);
+    try {
+      const data = await apiFetch(`/workspaces/${slug}/channels`, {
+        method: 'POST',
+        body: JSON.stringify({ type: 'dm', memberIds: [userId] }),
+      });
+      navigate(`/w/${slug}/channels/${data.channel.channelId}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not start the conversation.');
+    } finally {
+      setDmBusyFor(null);
+    }
+  };
 
   const {
     connection,
@@ -292,6 +314,24 @@ export function GitHubIntegration() {
                   when: c.committedAt,
                   href: c.url,
                   taskKey: c.taskKey,
+                  // Only when the commit's GitHub author resolved to a real
+                  // DevSync member (authorUserId), and it isn't your own commit.
+                  action:
+                    c.authorUserId && c.authorUserId !== myUserId ? (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Message ${c.authorGithubLogin ?? c.authorName ?? 'commit author'}`}
+                        disabled={dmBusyFor === c.authorUserId}
+                        onClick={() => void messageCommitAuthor(c.authorUserId!)}
+                      >
+                        {dmBusyFor === c.authorUserId ? (
+                          <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <MessageSquareIcon className="size-4" aria-hidden="true" />
+                        )}
+                      </Button>
+                    ) : undefined,
                 }))}
                 dense={dense}
                 slug={slug}
