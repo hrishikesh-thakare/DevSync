@@ -141,6 +141,17 @@ export function RegisterPage() {
             {isSubmitting ? <Loader2Icon className="size-4 animate-spin" aria-hidden="true" /> : null}
             Create account
           </Button>
+
+          <p className="mt-4 text-center text-[12.5px] leading-relaxed text-muted-foreground">
+            By creating an account, you agree to our{' '}
+            <Link to="/terms-of-service" className="underline underline-offset-4 hover:text-foreground">
+              Terms of Service
+            </Link>{' '}
+            and{' '}
+            <Link to="/privacy-policy" className="underline underline-offset-4 hover:text-foreground">
+              Privacy Policy
+            </Link>.
+          </p>
         </FieldGroup>
       </form>
     </AuthShell>
