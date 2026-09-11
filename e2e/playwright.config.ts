@@ -1,5 +1,6 @@
+import path from 'path';
 import { defineConfig, devices } from '@playwright/test';
-import { BASE_URL } from './helpers/constants.js';
+import { BASE_URL, AUTH_STATE_DIR } from './helpers/constants.js';
 
 const IS_CI = !!process.env.CI;
 
@@ -25,6 +26,14 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'on-first-retry',
     actionTimeout: 15_000,
+    // Dismisses CookieConsentBanner (fixed to the viewport bottom) before any
+    // test's first paint — without this, the base `page` fixture used by
+    // most auth/* specs gets a genuinely empty context and the banner
+    // intercepts every click near the bottom of the screen. Written by
+    // global-setup.ts; carries no accessToken, so it doesn't sign anyone in.
+    // The role fixtures (ownerPage, adminPage, ...) pass their own
+    // storageState to browser.newContext() and override this per-context.
+    storageState: path.resolve(import.meta.dirname, AUTH_STATE_DIR, 'base.json'),
   },
 
   // Global setup: authenticates all test users and saves storage states

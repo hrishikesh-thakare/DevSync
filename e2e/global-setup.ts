@@ -24,6 +24,22 @@ async function globalSetup(config: FullConfig) {
   // We need to parse BASE_URL to get the origin for storage state
   const origin = new URL(BASE_URL).origin;
 
+  // Tests that use the plain `page` fixture (most of auth/*, avatar-upload,
+  // etc.) never touch the per-role files below — Playwright hands them a
+  // genuinely empty context. playwright.config.ts points its top-level
+  // `use.storageState` at this file so those contexts start with the banner
+  // already dismissed too, without an accessToken that would sign them in.
+  const basePath = path.resolve(authDir, 'base.json');
+  fs.writeFileSync(
+    basePath,
+    JSON.stringify(
+      { cookies: [], origins: [{ origin, localStorage: [{ name: 'cookie-consent', value: 'all' }] }] },
+      null,
+      2,
+    ),
+    'utf8',
+  );
+
   for (const [role, user] of userEntries) {
     console.log(`  🔐 Authenticating ${role}: ${user.email}...`);
 
@@ -39,7 +55,12 @@ async function globalSetup(config: FullConfig) {
           {
             origin,
             localStorage: [
-              { name: 'accessToken', value: loginData.accessToken }
+              { name: 'accessToken', value: loginData.accessToken },
+              // Without this, CookieConsentBanner renders fixed to the
+              // viewport bottom on first paint and physically covers the
+              // chat composer, timing out any test that clicks into it
+              // (e.g. mentions-ui.spec.ts).
+              { name: 'cookie-consent', value: 'all' },
             ]
           }
         ]

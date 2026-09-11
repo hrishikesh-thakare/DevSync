@@ -39,7 +39,7 @@ test('uploading an avatar persists it to the profile', async ({ page }) => {
 
   await page.goto(`${BASE}/login`);
   await page.getByPlaceholder('you@company.com').fill(email);
-  await page.getByLabel('Password').fill(TEST_PASSWORD);
+  await page.getByLabel('Password', { exact: true }).fill(TEST_PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(`${BASE}/workspaces`);
 
