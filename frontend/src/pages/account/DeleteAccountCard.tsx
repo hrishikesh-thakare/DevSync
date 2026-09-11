@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
-
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
   AlertDialog,
@@ -90,6 +89,11 @@ export function DeleteAccountCard() {
           </AlertDialogContent>
         </AlertDialog>
       </CardContent>
+      <CardFooter className="pt-0">
+        <Link to="/data-deletion" className="text-sm text-primary hover:underline" target="_blank" rel="noreferrer">
+          Read our Data Deletion Policy
+        </Link>
+      </CardFooter>
     </Card>
   );
 }
