@@ -6,10 +6,10 @@ import {
   GitBranchIcon,
   GitPullRequestIcon,
   HashIcon,
+  MenuIcon,
   MinusIcon,
   PlusIcon,
   ShieldCheckIcon,
-  SparklesIcon,
   XIcon,
   ZapIcon,
 } from 'lucide-react';
@@ -125,8 +125,10 @@ export function LandingPage() {
 /* ── Navigation ──────────────────────────────────────────────────────────── */
 
 function Nav() {
+  const [isOpen, setIsOpen] = useState(false);
+
   return (
-    <header className="fixed inset-x-0 top-4 z-50 flex justify-center px-4 md:px-12 md:top-6">
+    <header className="fixed inset-x-0 top-4 z-50 flex flex-col items-center px-4 md:px-12 md:top-6">
       <div className="flex w-full max-w-[1500px] items-center justify-between rounded-full border border-white/[0.08] bg-[#08080A] px-4 py-2.5 shadow-2xl md:px-6">
         
         {/* Left: Logo */}
@@ -156,7 +158,7 @@ function Nav() {
         </nav>
 
         {/* Right: Actions */}
-        <div className="flex flex-1 items-center justify-end gap-2">
+        <div className="hidden flex-1 items-center justify-end gap-2 md:flex">
           <Link
             to="/login"
             className="rounded-full px-4 py-2 text-[13.5px] font-medium text-zinc-300 transition-colors hover:bg-white/[0.06] hover:text-white"
@@ -171,7 +173,50 @@ function Nav() {
           </Link>
         </div>
 
+        {/* Mobile menu toggle */}
+        <div className="flex flex-1 justify-end md:hidden">
+          <button onClick={() => setIsOpen(!isOpen)} className="p-2 text-zinc-300 hover:text-white">
+            {isOpen ? <XIcon className="size-5" /> : <MenuIcon className="size-5" />}
+          </button>
+        </div>
       </div>
+
+      {/* Mobile Menu Dropdown */}
+      {isOpen && (
+        <div className="absolute inset-x-4 top-full mt-2 rounded-2xl border border-white/[0.08] bg-[#08080A] p-4 shadow-2xl md:hidden">
+          <nav className="flex flex-col gap-4">
+            {[
+              ['Features', '#features'],
+              ['Why switch', '#why'],
+              ['Customers', '#customers'],
+              ['FAQ', '#faq'],
+            ].map(([label, href]) => (
+              <a
+                key={label}
+                href={href}
+                onClick={() => setIsOpen(false)}
+                className="text-[15px] font-bold text-zinc-300 transition-colors hover:text-white"
+              >
+                {label}
+              </a>
+            ))}
+            <div className="mt-4 flex flex-col gap-2 border-t border-white/[0.08] pt-4">
+              <Link
+                to="/login"
+                className="rounded-xl bg-white/5 px-4 py-2.5 text-center text-[13.5px] font-medium text-zinc-300 transition-colors hover:bg-white/[0.06] hover:text-white"
+              >
+                Sign in
+              </Link>
+              <Link
+                to="/register"
+                className="rounded-xl bg-primary px-5 py-2.5 text-center text-[13.5px] font-semibold text-white transition-all hover:bg-primary/90"
+              >
+                Get started
+              </Link>
+            </div>
+          </nav>
+        </div>
+      )}
     </header>
   );
 }
@@ -194,18 +239,6 @@ function Hero() {
 
       <div className="mx-auto w-full max-w-[1500px] px-6 pt-24 pb-16 lg:px-12 lg:pt-32">
         <div className="mx-auto max-w-5xl text-center">
-          <a
-            href="#features"
-            className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 py-1.5 pr-4 pl-1.5 text-[13px] text-zinc-200 backdrop-blur-md transition-colors hover:border-primary/50 hover:bg-primary/20"
-          >
-            <span className="flex items-center gap-1 rounded-full bg-primary px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-white uppercase shadow-[0_0_12px_var(--color-primary)]">
-              <SparklesIcon className="size-3" aria-hidden="true" />
-              New
-            </span>
-            Sprint analytics and GitHub CI, now built in
-            <ArrowRightIcon className="size-3.5" aria-hidden="true" />
-          </a>
-
           <h1 className="mx-auto mt-10 max-w-[min(100%,68rem)] text-[clamp(2.5rem,6.5vw,5.5rem)] leading-[1.05] font-bold tracking-[-0.04em]">
             Your board and your team,
             <br />
@@ -248,7 +281,6 @@ function Hero() {
         </div>
 
         <div className="relative mt-20 lg:mt-24">
-          <div className="absolute inset-0 -top-8 -bottom-8 -z-10 scale-[0.95] bg-primary/20 blur-[100px] rounded-[3rem] opacity-50"></div>
           <BoardPreview />
         </div>
       </div>
@@ -423,25 +455,25 @@ function WhySwitch() {
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0D0D10]">
-            <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 border-b border-white/10 px-6 py-4 text-[12px] font-semibold tracking-[0.1em] text-zinc-500 uppercase">
+            <div className="grid grid-cols-[1fr_auto_auto] gap-x-2 sm:gap-x-4 border-b border-white/10 px-4 sm:px-6 py-4 text-[11px] sm:text-[12px] font-semibold tracking-[0.1em] text-zinc-500 uppercase">
               <span />
-              <span className="w-20 text-center text-primary">DevSync</span>
-              <span className="w-20 text-center">Two tools</span>
+              <span className="w-16 sm:w-20 text-center text-primary">DevSync</span>
+              <span className="w-16 sm:w-20 text-center">Two tools</span>
             </div>
             {COMPARISON.map(([label, devsync, other]) => (
               <div
                 key={label as string}
-                className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 border-b border-white/[0.06] px-6 py-4 last:border-0"
+                className="grid grid-cols-[1fr_auto_auto] items-center gap-x-2 sm:gap-x-4 border-b border-white/[0.06] px-4 sm:px-6 py-4 last:border-0"
               >
-                <span className="text-[14.5px] text-zinc-300">{label as string}</span>
-                <span className="flex w-20 justify-center">
+                <span className="text-[13.5px] sm:text-[14.5px] text-zinc-300">{label as string}</span>
+                <span className="flex w-16 sm:w-20 justify-center">
                   {devsync ? (
                     <CheckIcon className="size-4 text-emerald-400" aria-hidden="true" />
                   ) : (
                     <XIcon className="size-4 text-zinc-700" aria-hidden="true" />
                   )}
                 </span>
-                <span className="flex w-20 justify-center">
+                <span className="flex w-16 sm:w-20 justify-center">
                   {other ? (
                     <CheckIcon className="size-4 text-zinc-600" aria-hidden="true" />
                   ) : (

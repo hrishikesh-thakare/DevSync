@@ -157,7 +157,7 @@ export function SprintListPage() {
           }
         />
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-4 sm:space-y-8">
           {groups.map((group) =>
             group.items.length === 0 ? null : (
               <section key={group.label}>
@@ -380,7 +380,7 @@ function CreateSprintDialog({
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="sp-start">Start date</FieldLabel>
               <Input id="sp-start" type="date" value={start} onChange={(e) => setStart(e.target.value)} />

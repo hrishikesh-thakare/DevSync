@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { MoreHorizontalIcon, Trash2Icon, UserPlusIcon } from 'lucide-react';
+import { MoreVerticalIcon, Trash2Icon, UserPlusIcon } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -256,7 +256,7 @@ export function ProjectMembersPage() {
               <TableRow className="hover:bg-transparent">
                 <TableHead>Member</TableHead>
                 <TableHead className="w-44">Role</TableHead>
-                {canManage ? <TableHead className="w-16 text-right"><span className="sr-only">Actions</span></TableHead> : null}
+                {canManage ? <TableHead className="w-10 sm:w-12 text-right"><span className="sr-only">Actions</span></TableHead> : null}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -325,7 +325,7 @@ export function ProjectMembersPage() {
                                 className="size-8 text-muted-foreground hover:text-foreground"
                                 disabled={busy === member.userId}
                               >
-                                <MoreHorizontalIcon className="size-4" />
+                                <MoreVerticalIcon className="size-4" />
                                 <span className="sr-only">Actions for {name}</span>
                               </Button>
                             </DropdownMenuTrigger>

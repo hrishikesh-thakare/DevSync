@@ -174,7 +174,7 @@ export function GlobalSearchResults() {
               <h2 className="mb-2 text-sm font-medium text-muted-foreground">
                 Tasks ({counts.tasks})
               </h2>
-              <Card>
+              <Card className="py-0 sm:py-2">
                 <CardContent className="px-0">
                   <ul className="divide-y">
                     {tasks.map((t) => (
@@ -214,7 +214,7 @@ export function GlobalSearchResults() {
               <h2 className="mb-2 text-sm font-medium text-muted-foreground">
                 Messages ({counts.messages})
               </h2>
-              <Card>
+              <Card className="py-0 sm:py-2">
                 <CardContent className="px-0">
                   <ul className="divide-y">
                     {messages.map((m) => (

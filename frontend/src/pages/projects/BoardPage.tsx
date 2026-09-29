@@ -152,7 +152,7 @@ export function BoardPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto w-full max-w-5xl p-6">
+      <div className="mx-auto w-full max-w-5xl px-4 py-4 sm:p-6">
         <BoardSkeleton />
       </div>
     );
@@ -160,18 +160,18 @@ export function BoardPage() {
 
   if (error) {
     return (
-      <div className="mx-auto w-full max-w-5xl p-6">
+      <div className="mx-auto w-full max-w-5xl px-4 py-4 sm:p-6">
         <ErrorState message={error instanceof Error ? error.message : 'Could not load tasks.'} />
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col p-6">
+    <div className="flex h-full flex-col px-4 py-4 sm:p-6">
       {/* Filters */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2">
         <Select value={assignee} onValueChange={setAssignee}>
-          <SelectTrigger className="w-52" aria-label="Filter by assignee">
+          <SelectTrigger className="w-full sm:w-52" aria-label="Filter by assignee">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -186,7 +186,7 @@ export function BoardPage() {
         </Select>
 
         <Select value={priority} onValueChange={setPriority}>
-          <SelectTrigger className="w-44" aria-label="Filter by priority">
+          <SelectTrigger className="w-full sm:w-44" aria-label="Filter by priority">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -234,7 +234,7 @@ export function BoardPage() {
         ) : null}
 
         {canEdit ? (
-          <Button className="ml-auto" onClick={() => setCreateIn('todo')}>
+          <Button className="w-full sm:w-auto sm:ml-auto" onClick={() => setCreateIn('todo')}>
             <PlusIcon className="size-4" aria-hidden="true" />
             Create task
           </Button>
@@ -242,12 +242,12 @@ export function BoardPage() {
       </div>
 
       {selectMode && selected.size > 0 ? (
-        <Card className="mb-4">
-          <CardContent className="flex flex-wrap items-center gap-3">
+        <Card className="mb-4 py-3 sm:py-4">
+          <CardContent className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 px-4 sm:px-6">
             <span className="text-sm text-foreground">{selected.size} selected</span>
 
             <Select onValueChange={(v) => void runBulk('Assigned', () => ({ assigneeId: v === UNASSIGN ? null : v }))}>
-              <SelectTrigger className="w-48" aria-label="Bulk assign">
+              <SelectTrigger className="w-full sm:w-48" aria-label="Bulk assign">
                 <SelectValue placeholder="Assign to…" />
               </SelectTrigger>
               <SelectContent>
@@ -266,7 +266,7 @@ export function BoardPage() {
                 void runBulk('Labelled', (t) => ({ labels: Array.from(new Set([...(t.labels ?? []), v])) }))
               }
             >
-              <SelectTrigger className="w-48" aria-label="Bulk add label">
+              <SelectTrigger className="w-full sm:w-48" aria-label="Bulk add label">
                 <SelectValue placeholder={labels.length ? 'Add label…' : 'No labels yet'} />
               </SelectTrigger>
               <SelectContent>
@@ -279,7 +279,7 @@ export function BoardPage() {
             </Select>
 
             <Select onValueChange={(v) => void runBulk('Moved', () => ({ status: v as TaskStatus }))}>
-              <SelectTrigger className="w-44" aria-label="Bulk move status">
+              <SelectTrigger className="w-full sm:w-44" aria-label="Bulk move status">
                 <SelectValue placeholder="Move to…" />
               </SelectTrigger>
               <SelectContent>
@@ -291,7 +291,7 @@ export function BoardPage() {
               </SelectContent>
             </Select>
 
-            <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setSelected(new Set())}>
+            <Button variant="ghost" size="sm" className="w-full sm:w-auto sm:ml-auto" onClick={() => setSelected(new Set())}>
               <XIcon className="size-4" aria-hidden="true" />
               Clear selection
             </Button>
@@ -339,3 +339,4 @@ export function BoardPage() {
     </div>
   );
 }
+

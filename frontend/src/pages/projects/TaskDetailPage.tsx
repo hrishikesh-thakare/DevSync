@@ -9,7 +9,7 @@ import {
   HistoryIcon,
   Loader2Icon,
   MessageSquareIcon,
-  SendIcon,
+  ArrowUpIcon,
   SparklesIcon,
   TagIcon,
   XIcon,
@@ -141,8 +141,8 @@ export function TaskDetailPage() {
   const type = ISSUE_TYPE_META[task.issueType];
 
   return (
-    <div className="mx-auto w-full max-w-5xl p-6">
-      <div className="mb-4 flex items-center gap-3">
+    <div className="mx-auto w-full max-w-5xl px-4 py-4 sm:p-6">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <span className="font-mono text-sm text-muted-foreground">{task.taskKey}</span>
         <Badge variant="outline">
           <span aria-hidden="true">{type?.glyph}</span> {type?.label}
@@ -162,7 +162,7 @@ export function TaskDetailPage() {
       <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">
         {/* Main column */}
         <div className="min-w-0 space-y-6">
-          <Input
+          <Textarea
             key={`title-${task.taskId}`}
             defaultValue={task.title}
             disabled={!canEdit}
@@ -174,8 +174,14 @@ export function TaskDetailPage() {
               }
               if (next !== task.title) void save({ title: next });
             }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                e.currentTarget.blur();
+              }
+            }}
             aria-label="Task title"
-            className="h-auto border-0 bg-transparent px-0 text-xl font-medium shadow-none focus-visible:ring-0"
+            className="h-auto min-h-0 border-0 bg-transparent px-0 py-0 text-xl font-medium shadow-none focus-visible:ring-0"
           />
 
           <section>
@@ -266,7 +272,7 @@ export function TaskDetailPage() {
                         {c.isSystem ? <Badge variant="outline">system</Badge> : null}
                         {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
                       </p>
-                      <p className="mt-0.5 text-sm whitespace-pre-wrap text-foreground">{c.bodyText}</p>
+                      <p className="mt-0.5 text-sm whitespace-pre-wrap break-words text-foreground">{c.bodyText}</p>
                     </div>
                   </li>
                 ))}
@@ -274,26 +280,31 @@ export function TaskDetailPage() {
             )}
 
             {canEdit ? (
-              <div className="flex items-start gap-2">
-                <Textarea
-                  rows={2}
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  placeholder="Write a comment…"
-                  aria-label="Write a comment"
+              <div className="relative rounded-3xl border border-input bg-background shadow-sm focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30 transition-[color,box-shadow]">
+                  <Textarea
+                    rows={1}
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    placeholder="Write a comment..."
+                    aria-label="Write a comment"
+                    className="min-h-[44px] border-0 bg-transparent px-4 py-2.5 pr-12 shadow-none resize-none focus-visible:ring-0"
                   onKeyDown={(e) => {
-                    // Enter sends; Shift+Enter keeps the newline.
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
                       void postComment();
                     }
                   }}
                 />
-                <Button onClick={() => void postComment()} disabled={!comment.trim() || posting}>
+                <Button
+                  size="icon"
+                  className="absolute bottom-1.5 right-1.5 size-8 rounded-full"
+                  onClick={() => void postComment()}
+                  disabled={!comment.trim() || posting}
+                >
                   {posting ? (
                     <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
                   ) : (
-                    <SendIcon className="size-4" aria-hidden="true" />
+                    <ArrowUpIcon className="size-4" aria-hidden="true" />
                   )}
                   <span className="sr-only">Post comment</span>
                 </Button>
@@ -670,3 +681,6 @@ function LabelPicker({
     </div>
   );
 }
+
+
+

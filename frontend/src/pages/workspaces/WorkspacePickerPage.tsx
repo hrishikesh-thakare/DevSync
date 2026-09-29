@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ErrorState } from '@/components/layout/PageState';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { useWorkspaces } from '@/store/workspaceStore';
@@ -43,7 +43,7 @@ export function WorkspacePickerPage() {
   return (
     <div className="min-h-svh bg-background">
       <div className="mx-auto w-full max-w-5xl px-6 py-12">
-        <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <header className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row">
           <div>
             <h1 className="text-3xl font-semibold text-foreground tracking-tight">
               {user ? `Welcome back, ${user.fullName.split(' ')[0]}` : 'Your workspaces'}
@@ -52,18 +52,20 @@ export function WorkspacePickerPage() {
               {user ? `Signed in as ${user.email}` : 'Pick a workspace to get started.'}
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <Button variant="secondary" asChild className="shadow-sm">
+          <div className="grid w-full grid-cols-2 gap-3 sm:w-auto sm:flex sm:flex-row sm:items-center">
+            <Button variant="secondary" asChild className="w-full shadow-sm sm:w-auto">
               <Link to="/account">
                 <UserCogIcon className="size-4 mr-2" aria-hidden="true" />
                 Account
               </Link>
             </Button>
-            <Button variant="secondary" onClick={() => void logout()} className="text-muted-foreground">
+            <Button variant="secondary" onClick={() => void logout()} className="w-full shadow-sm sm:w-auto">
               <LogOutIcon className="size-4 mr-2" aria-hidden="true" />
               Sign out
             </Button>
-            <CreateWorkspaceDialog />
+            <div className="col-span-2 flex w-full sm:w-auto [&>button]:w-full">
+              <CreateWorkspaceDialog />
+            </div>
           </div>
         </header>
 
@@ -106,13 +108,12 @@ export function WorkspacePickerPage() {
                   <li key={ws.workspaceId}>
                     <Card className="relative h-full flex flex-col transition-all hover:ring-1 hover:ring-ring/40">
                       <CardHeader className="flex flex-row items-center gap-4 space-y-0">
-                        <Avatar className="size-10 rounded-xl">
+                        <Avatar className="size-10">
                           {ws.iconUrl ? <AvatarImage src={ws.iconUrl} alt="" /> : null}
-                          <AvatarFallback className="rounded-xl bg-primary/10 text-primary font-medium">{initialsOf(ws.name)}</AvatarFallback>
+                          <AvatarFallback className="bg-primary/10 text-primary font-medium">{initialsOf(ws.name)}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <CardTitle className="truncate">{ws.name}</CardTitle>
-                          <CardDescription className="truncate">/w/{ws.slug}</CardDescription>
                         </div>
                         <Badge variant={ROLE_BADGE_VARIANT[ws.role as keyof typeof ROLE_BADGE_VARIANT] ?? 'outline'} className="shrink-0 capitalize">
                           {ws.role}
@@ -125,8 +126,8 @@ export function WorkspacePickerPage() {
                           <p className="text-sm text-muted-foreground/60 italic">No description</p>
                         )}
                       </CardContent>
-                      <CardFooter className="flex flex-row items-center justify-between mt-auto">
-                        <span className="text-xs text-muted-foreground">
+                      <CardFooter className="flex flex-row items-center justify-between mt-auto gap-4">
+                        <span className="min-w-0 truncate text-xs text-muted-foreground">
                           Joined {formatDistanceToNow(new Date(ws.joinedAt), { addSuffix: true })}
                         </span>
                         <Button size="sm" asChild>

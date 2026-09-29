@@ -53,8 +53,8 @@ export function PendingInvites({ invites }: { invites: WorkspaceSummary[] }) {
           <li key={ws.workspaceId}>
             <Card>
               <CardContent className="flex flex-wrap items-center gap-4">
-                <Avatar className="size-10 rounded-xl">
-                  <AvatarFallback className="rounded-xl">{initialsOf(ws.name)}</AvatarFallback>
+                <Avatar className="size-10">
+                  <AvatarFallback>{initialsOf(ws.name)}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium text-foreground">{ws.name}</p>

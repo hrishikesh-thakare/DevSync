@@ -62,7 +62,7 @@ export function ActiveSprintBoard() {
     return (
       <div className="mx-auto w-full max-w-5xl p-6">
         <Skeleton className="mb-4 h-24 w-full rounded-2xl" />
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-64 rounded-xl" />
           ))}

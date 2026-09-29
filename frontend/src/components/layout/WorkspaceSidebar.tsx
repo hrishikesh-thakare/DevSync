@@ -72,13 +72,10 @@ export function WorkspaceSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton asChild size="lg" tooltip={name || 'Workspace'}>
               <Link to={`/w/${slug}`}>
-                <Avatar className="size-8 rounded-lg">
-                  <AvatarFallback className="rounded-lg text-xs">{initialsOf(name || slug)}</AvatarFallback>
+                <Avatar className="size-8">
+                  <AvatarFallback className="text-xs">{initialsOf(name || slug)}</AvatarFallback>
                 </Avatar>
-                <div className="grid flex-1 text-left leading-tight">
-                  <span className="truncate font-medium">{name || 'Loading…'}</span>
-                  <span className="truncate text-xs text-muted-foreground">/w/{slug}</span>
-                </div>
+                <span className="truncate font-medium flex-1 text-left">{name || 'Loading…'}</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

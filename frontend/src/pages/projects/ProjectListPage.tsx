@@ -70,10 +70,10 @@ export function ProjectListPage() {
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((project) => (
             <li key={project.projectId}>
-              <Card className="relative h-full transition-shadow hover:ring-ring/40">
-                <CardContent className="flex h-full flex-col gap-3">
+              <Card className="relative h-full py-4 sm:py-6 transition-shadow hover:ring-ring/40">
+                <CardContent className="flex h-full flex-col gap-3 px-4 sm:px-6">
                   <div className="flex items-center gap-2">
-                    <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                    <span className="rounded bg-muted px-2 py-0.5 font-mono text-sm text-muted-foreground">
                       {project.key}
                     </span>
                     {project.leadName ? (
@@ -98,14 +98,14 @@ export function ProjectListPage() {
                     to={`/w/${slug}/projects/${project.key}`}
                     className="outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:after:ring-2 focus-visible:after:ring-ring"
                   >
-                    <span className="font-medium text-foreground">{project.name}</span>
+                    <span className="text-lg font-semibold break-words text-foreground">{project.name}</span>
                   </Link>
 
-                  <p className="line-clamp-2 text-sm text-muted-foreground">
+                  <p className="line-clamp-2 text-base text-muted-foreground">
                     {project.description || 'No description yet.'}
                   </p>
 
-                  <p className="mt-auto text-xs text-muted-foreground">
+                  <p className="mt-auto text-sm text-muted-foreground">
                     {project.issueCounter} {project.issueCounter === 1 ? 'issue' : 'issues'} created
                   </p>
                 </CardContent>
@@ -117,3 +117,5 @@ export function ProjectListPage() {
     </PageShell>
   );
 }
+
+

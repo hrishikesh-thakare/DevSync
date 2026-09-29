@@ -81,7 +81,26 @@ export function StatusCard({ onSaved }: { onSaved?: (presence: Presence) => void
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="presence">Presence</FieldLabel>
-              <Select value={presence} onValueChange={(v) => setPresence(v as Presence)}>
+              <Select
+                value={presence}
+                onValueChange={(v) => {
+                  const newPresence = v as Presence;
+                  setPresence(newPresence);
+                  apiFetch('/auth/presence', {
+                    method: 'POST',
+                    body: JSON.stringify({ presence: newPresence }),
+                  })
+                    .then(() => {
+                      onSaved?.(newPresence);
+                      toast.success('Presence updated.');
+                    })
+                    .catch((err) =>
+                      toast.error(
+                        err instanceof Error ? err.message : 'Could not update your presence.',
+                      ),
+                    );
+                }}
+              >
                 <SelectTrigger id="presence" className="w-48">
                   <SelectValue />
                 </SelectTrigger>

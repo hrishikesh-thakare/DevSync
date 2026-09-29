@@ -88,7 +88,7 @@ export function NotificationsInbox() {
           </EmptyHeader>
         </Empty>
       ) : (
-        <Card>
+        <Card className="py-0 sm:py-2">
           <CardContent className="px-0">
             <ul className="divide-y">
               {visible.map((n) => (
@@ -96,38 +96,38 @@ export function NotificationsInbox() {
                   <button
                     type="button"
                     onClick={() => void open(n.notificationId)}
-                    className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/50"
+                    className="flex w-full items-start gap-2.5 sm:gap-3 px-3 sm:px-4 py-3 text-left transition-colors hover:bg-accent/50"
                   >
-                    <span
-                      className={cn(
-                        'mt-2 size-1.5 shrink-0 rounded-full',
-                        n.isRead ? 'bg-transparent' : 'bg-primary',
-                      )}
-                      aria-hidden="true"
-                    />
+                    <div className="relative shrink-0">
+                      {!n.isRead ? (
+                        <span
+                          className="absolute -left-2.5 sm:-left-3 top-1.5 size-1.5 rounded-full bg-primary"
+                          aria-hidden="true"
+                        />
+                      ) : null}
+                      <Avatar className="size-7 sm:size-8">
+                        {n.actorAvatar ? <AvatarImage src={n.actorAvatar} alt="" /> : null}
+                        <AvatarFallback className="text-[10px]">
+                          {initialsOf(n.actorName ?? 'System')}
+                        </AvatarFallback>
+                      </Avatar>
+                    </div>
 
-                    <Avatar className="size-8 shrink-0">
-                      {n.actorAvatar ? <AvatarImage src={n.actorAvatar} alt="" /> : null}
-                      <AvatarFallback className="text-[10px]">
-                        {initialsOf(n.actorName ?? 'System')}
-                      </AvatarFallback>
-                    </Avatar>
-
-                    <span className="min-w-0 flex-1">
+                    <span className="min-w-0 flex-1 pr-1">
                       <span
                         className={cn(
-                          'block text-sm',
+                          'block text-xs sm:text-sm',
                           n.isRead ? 'text-muted-foreground' : 'font-medium text-foreground',
                         )}
                       >
                         {n.title}
                       </span>
                       {n.body ? (
-                        <span className="mt-0.5 block text-sm text-muted-foreground">{n.body}</span>
+                        <span className="mt-0.5 block text-xs sm:text-sm text-muted-foreground">{n.body}</span>
                       ) : null}
-                      <span className="mt-1 flex items-center gap-2">
-                        <Badge variant="outline">{n.type.replace(/_/g, ' ')}</Badge>
-                        <span className="text-xs text-muted-foreground">
+                      <span className="mt-1.5 flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="text-[10px] sm:text-xs px-1.5 py-0">{n.type.replace(/_/g, ' ')}</Badge>
+                        <span className="text-[10px] sm:text-xs text-muted-foreground">
                           {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
                         </span>
                       </span>

@@ -221,7 +221,7 @@ export function ProjectLabelsPage() {
             </p>
           </div>
 
-          <Card>
+          <Card className="py-0 sm:py-2">
             <CardContent className="px-0">
               <ul className="divide-y">
               {visible.map((label) =>

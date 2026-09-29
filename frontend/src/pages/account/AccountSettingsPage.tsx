@@ -94,10 +94,10 @@ export function AccountSettingsPage() {
         <Tabs defaultValue="profile" orientation="vertical" className="mt-8 flex flex-col md:flex-row gap-8">
           <aside className="w-full md:w-64 shrink-0">
             <TabsList variant="line" className="w-full sm:w-auto overflow-x-auto sm:overflow-visible">
-              <TabsTrigger value="profile">Profile</TabsTrigger>
-              <TabsTrigger value="preferences">Preferences</TabsTrigger>
-              <TabsTrigger value="security">Security</TabsTrigger>
-              <TabsTrigger value="account" className="data-[state=active]:text-destructive dark:data-[state=active]:text-destructive hover:text-destructive">
+              <TabsTrigger value="profile" className="text-base sm:text-sm">Profile</TabsTrigger>
+              <TabsTrigger value="preferences" className="text-base sm:text-sm">Preferences</TabsTrigger>
+              <TabsTrigger value="security" className="text-base sm:text-sm">Security</TabsTrigger>
+              <TabsTrigger value="account" className="text-base sm:text-sm data-[state=active]:text-destructive dark:data-[state=active]:text-destructive hover:text-destructive">
                 Account
               </TabsTrigger>
             </TabsList>
