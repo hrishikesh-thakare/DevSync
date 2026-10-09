@@ -11,6 +11,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Empty,
   EmptyDescription,
   EmptyHeader,
@@ -21,6 +28,7 @@ import { PageHeader, PageShell } from '@/components/layout/PageHeader';
 import { useNotificationStore } from '@/store/notificationStore';
 import { initialsOf } from '@/lib/initials';
 import { cn } from '@/lib/utils';
+import { Pager } from '@/components/Pager';
 
 export function NotificationsInbox() {
   const { slug = '' } = useParams();
@@ -28,6 +36,8 @@ export function NotificationsInbox() {
   const { notifications, unreadCount, isLoading, error, fetchNotifications, markAsRead, markAllAsRead, resolveUrl } =
     useNotificationStore();
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     void fetchNotifications();
@@ -43,7 +53,16 @@ export function NotificationsInbox() {
     }
   };
 
-  const visible = showUnreadOnly ? notifications.filter((n) => !n.isRead) : notifications;
+  const availableTypes = Array.from(new Set(notifications.map((n) => n.type)));
+
+  const visible = notifications.filter((n) => {
+    if (showUnreadOnly && n.isRead) return false;
+    if (typeFilter !== 'all' && n.type !== typeFilter) return false;
+    return true;
+  });
+
+  const ITEMS_PER_PAGE = 20;
+  const paginatedVisible = visible.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   return (
     <PageShell>
@@ -53,8 +72,21 @@ export function NotificationsInbox() {
           unreadCount > 0 ? `${unreadCount} unread` : 'You are all caught up.'
         }
         actions={
-          <>
-            <Button variant="outline" size="sm" onClick={() => setShowUnreadOnly((v) => !v)}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={typeFilter} onValueChange={(val) => { setTypeFilter(val); setPage(1); }}>
+              <SelectTrigger className="w-[160px] h-9">
+                <SelectValue placeholder="All types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                {availableTypes.map((type) => (
+                  <SelectItem key={type} value={type} className="capitalize">
+                    {type.replace(/_/g, ' ')}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" onClick={() => { setShowUnreadOnly((v) => !v); setPage(1); }}>
               {showUnreadOnly ? 'Show all' : 'Unread only'}
             </Button>
             {unreadCount > 0 ? (
@@ -63,7 +95,7 @@ export function NotificationsInbox() {
                 Mark all read
               </Button>
             ) : null}
-          </>
+          </div>
         }
       />
 
@@ -91,7 +123,7 @@ export function NotificationsInbox() {
         <Card className="py-0 sm:py-2">
           <CardContent className="px-0">
             <ul className="divide-y">
-              {visible.map((n) => (
+              {paginatedVisible.map((n) => (
                 <li key={n.notificationId}>
                   <button
                     type="button"
@@ -138,6 +170,17 @@ export function NotificationsInbox() {
             </ul>
           </CardContent>
         </Card>
+      )}
+
+      {visible.length > ITEMS_PER_PAGE && (
+        <div className="mt-4">
+          <Pager
+            page={page}
+            totalPages={Math.ceil(visible.length / ITEMS_PER_PAGE)}
+            totalCount={visible.length}
+            onPage={setPage}
+          />
+        </div>
       )}
 
       <p className="mt-4 text-xs text-muted-foreground">Workspace: {slug}</p>

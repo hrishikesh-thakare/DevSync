@@ -15,6 +15,7 @@ import {
   LockIcon,
   Loader2Icon,
   MessageSquareIcon,
+  MoreVerticalIcon,
   RefreshCwIcon,
   Rows2Icon,
   Rows3Icon,
@@ -29,6 +30,12 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -228,22 +235,24 @@ export function GitHubIntegration() {
           setState('all');
           setParams({ tab: v });
         }}
-        className="mb-4"
+        className="mb-4 w-full"
       >
-        <TabsList>
-          {TABS.map((t) => (
-            <TabsTrigger key={t.value} value={t.value}>
-              {t.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <div className="w-full overflow-x-auto pb-2 -mb-2 scrollbar-hide">
+          <TabsList className="w-max justify-start sm:w-fit">
+            {TABS.map((t) => (
+              <TabsTrigger key={t.value} value={t.value}>
+                {t.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
       </Tabs>
 
       {/* Filters relevant to the active tab */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2">
         {(tab === 'commits' || tab === 'ci') && branchOptions.length > 0 ? (
           <Select value={branch} onValueChange={setBranch}>
-            <SelectTrigger className="w-56" aria-label="Filter by branch">
+            <SelectTrigger className="w-full sm:w-56" aria-label="Filter by branch">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -259,7 +268,7 @@ export function GitHubIntegration() {
 
         {tab === 'prs' || tab === 'issues' ? (
           <Select value={state} onValueChange={setState}>
-            <SelectTrigger className="w-44" aria-label="Filter by state">
+            <SelectTrigger className="w-full sm:w-44" aria-label="Filter by state">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -277,7 +286,7 @@ export function GitHubIntegration() {
           size="sm"
           value={dense ? 'dense' : 'comfortable'}
           onValueChange={(v) => v && setDense(v === 'dense')}
-          className="ml-auto"
+          className="hidden sm:inline-flex sm:ml-auto"
           aria-label="Row density"
         >
           <ToggleGroupItem value="comfortable" aria-label="Comfortable density">
@@ -316,22 +325,22 @@ export function GitHubIntegration() {
                   taskKey: c.taskKey,
                   // Only when the commit's GitHub author resolved to a real
                   // DevSync member (authorUserId), and it isn't your own commit.
-                  action:
-                    c.authorUserId && c.authorUserId !== myUserId ? (
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Message ${c.authorGithubLogin ?? c.authorName ?? 'commit author'}`}
-                        disabled={dmBusyFor === c.authorUserId}
-                        onClick={() => void messageCommitAuthor(c.authorUserId!)}
-                      >
-                        {dmBusyFor === c.authorUserId ? (
-                          <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <MessageSquareIcon className="size-4" aria-hidden="true" />
-                        )}
-                      </Button>
-                    ) : undefined,
+                  actions:
+                    c.authorUserId && c.authorUserId !== myUserId
+                      ? [
+                          {
+                            label: `Message ${c.authorGithubLogin ?? c.authorName ?? 'author'}`,
+                            icon:
+                              dmBusyFor === c.authorUserId ? (
+                                <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
+                              ) : (
+                                <MessageSquareIcon className="size-4" aria-hidden="true" />
+                              ),
+                            disabled: dmBusyFor === c.authorUserId,
+                            onClick: () => void messageCommitAuthor(c.authorUserId!),
+                          },
+                        ]
+                      : undefined,
                 }))}
                 dense={dense}
                 slug={slug}
@@ -354,45 +363,38 @@ export function GitHubIntegration() {
                   when: run.triggeredAt,
                   href: run.htmlUrl,
                   taskKey: null,
-                  action: (
-                    <>
-                      {run.conclusion === 'failure' ? (
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={
-                            run.aiFailureSummary
-                              ? `AI summary already generated for ${run.workflowName ?? 'workflow'}`
-                              : `Summarize failure for ${run.workflowName ?? 'workflow'}`
-                          }
-                          disabled={summarizingRunId === run.runId || !!run.aiFailureSummary}
-                          onClick={() => handleSummarize(run.runId)}
-                        >
-                          {summarizingRunId === run.runId ? (
-                            <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
-                          ) : (
-                            <SparklesIcon className="size-4" aria-hidden="true" />
-                          )}
-                        </Button>
-                      ) : null}
-                      {canRerun ? (
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Re-run ${run.workflowName ?? 'workflow'}`}
-                          onClick={() => {
-                            void rerun(slug, key, run.runId)
-                              .then(() => toast.success('Re-run triggered on GitHub'))
-                              .catch((err: unknown) =>
-                                toast.error(err instanceof Error ? err.message : 'Could not re-run.'),
-                              );
-                          }}
-                        >
-                          <RefreshCwIcon className="size-4" aria-hidden="true" />
-                        </Button>
-                      ) : null}
-                    </>
-                  ),
+                  actions: [
+                    ...(run.conclusion === 'failure'
+                      ? [
+                          {
+                            label: run.aiFailureSummary ? 'AI summary ready' : 'Summarize failure',
+                            icon:
+                              summarizingRunId === run.runId ? (
+                                <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
+                              ) : (
+                                <SparklesIcon className="size-4" aria-hidden="true" />
+                              ),
+                            disabled: summarizingRunId === run.runId || !!run.aiFailureSummary,
+                            onClick: () => handleSummarize(run.runId),
+                          },
+                        ]
+                      : []),
+                    ...(canRerun
+                      ? [
+                          {
+                            label: 'Re-run workflow',
+                            icon: <RefreshCwIcon className="size-4" aria-hidden="true" />,
+                            onClick: () => {
+                              void rerun(slug, key, run.runId)
+                                .then(() => toast.success('Re-run triggered on GitHub'))
+                                .catch((err: unknown) =>
+                                  toast.error(err instanceof Error ? err.message : 'Could not re-run.'),
+                                );
+                            },
+                          },
+                        ]
+                      : []),
+                  ],
                   footer: run.aiFailureSummary ? (
                     <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 p-3">
                       <SparklesIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -547,6 +549,14 @@ function Pager({
   );
 }
 
+interface RowAction {
+  label: string;
+  icon?: React.ReactNode;
+  onClick?: () => void;
+  href?: string;
+  disabled?: boolean;
+}
+
 interface Row {
   id: string;
   icon: React.ReactNode;
@@ -557,8 +567,7 @@ interface Row {
   href: string | null;
   taskKey: string | null;
   badge?: string;
-  /** Per-row action, e.g. the CI tab's re-run button. */
-  action?: React.ReactNode;
+  actions?: RowAction[];
   /** Optional full-width content rendered as its own row below, e.g. the CI tab's AI summary. */
   footer?: React.ReactNode;
 }
@@ -592,80 +601,168 @@ function RowList({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-8" />
-          <TableHead>Title</TableHead>
-          <TableHead className="w-24">Task</TableHead>
-          <TableHead className="hidden w-32 sm:table-cell">When</TableHead>
-          <TableHead className="w-10" />
+          <TableHead className="hidden w-8 sm:table-cell" />
+          <TableHead className="w-full">Title</TableHead>
+          <TableHead className="hidden w-36 sm:table-cell text-right">When</TableHead>
+          <TableHead className="w-10 sm:w-20 text-right">
+            <span className="sr-only">Actions</span>
+          </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {rows.map((row) => (
-          <Fragment key={row.id}>
-          <TableRow>
-            <TableCell className={cellPad}>{row.icon}</TableCell>
+        {rows.map((row) => {
+          const allActions: RowAction[] = [
+            ...(row.actions ?? []),
+            ...(row.href
+              ? [
+                  {
+                    label: 'Open on GitHub',
+                    icon: <ExternalLinkIcon className="size-4" aria-hidden="true" />,
+                    href: row.href,
+                  },
+                ]
+              : []),
+          ];
 
-            <TableCell className={cn(cellPad, 'max-w-0 whitespace-normal')}>
-              <div className="flex items-center gap-2">
-                {row.mono ? (
-                  <code className="shrink-0 font-mono text-xs text-muted-foreground">
-                    {row.mono}
-                  </code>
-                ) : null}
-                <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                  {row.title}
-                </span>
-                {row.badge ? (
-                  <Badge variant="outline" className="shrink-0">
-                    {row.badge}
-                  </Badge>
-                ) : null}
-              </div>
-              {row.meta ? (
-                <p className="truncate text-xs text-muted-foreground">{row.meta}</p>
+          return (
+            <Fragment key={row.id}>
+              <TableRow>
+                <TableCell className={cn(cellPad, 'hidden sm:table-cell align-top')}>{row.icon}</TableCell>
+
+                <TableCell className={cn(cellPad, 'max-w-0 whitespace-normal align-top sm:align-middle')}>
+                  <div className="flex items-start sm:items-center gap-2">
+                    {row.mono ? (
+                      <code className="mt-0.5 sm:mt-0 shrink-0 font-mono text-xs text-muted-foreground">
+                        {row.mono}
+                      </code>
+                    ) : null}
+                    <span className="min-w-0 flex-1 break-words sm:truncate text-sm text-foreground">
+                      {row.title}
+                    </span>
+                    {row.taskKey ? (
+                      <Link
+                        to={`/w/${slug}/projects/${projectKey}/tasks/${row.taskKey}`}
+                        className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        {row.taskKey}
+                      </Link>
+                    ) : null}
+                    {row.badge ? (
+                      <Badge variant="outline" className="mt-0.5 sm:mt-0 shrink-0">
+                        {row.badge}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  {row.meta ? (
+                    <p className="mt-1 sm:mt-0 truncate text-xs text-muted-foreground">{row.meta}</p>
+                  ) : null}
+                </TableCell>
+
+                <TableCell className={cn(cellPad, 'hidden text-xs text-muted-foreground sm:table-cell align-top sm:align-middle sm:text-right whitespace-nowrap')}>
+                  {row.when ? formatDistanceToNow(new Date(row.when), { addSuffix: true }) : null}
+                </TableCell>
+
+                <TableCell className={cn(cellPad, 'align-top sm:align-middle text-right')}>
+                  {/* Mobile: Three-dots dropdown menu */}
+                  {allActions.length > 0 ? (
+                    <div className="flex justify-end sm:hidden">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="size-7 text-muted-foreground hover:text-foreground"
+                            aria-label={`Actions for ${row.title}`}
+                          >
+                            <MoreVerticalIcon className="size-4" aria-hidden="true" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          {allActions.map((act, idx) =>
+                            act.href ? (
+                              <DropdownMenuItem key={idx} asChild className="cursor-pointer">
+                                <a
+                                  href={act.href}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex w-full items-center gap-2"
+                                >
+                                  {act.icon}
+                                  <span>{act.label}</span>
+                                </a>
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem
+                                key={idx}
+                                disabled={act.disabled}
+                                onClick={act.onClick}
+                                className="flex cursor-pointer items-center gap-2"
+                              >
+                                {act.icon}
+                                <span>{act.label}</span>
+                              </DropdownMenuItem>
+                            )
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  ) : null}
+
+                  {/* Desktop: Direct buttons */}
+                  <div className="hidden sm:flex items-center justify-end gap-1">
+                    {row.actions?.map((act, idx) => (
+                      <Button
+                        key={idx}
+                        variant="ghost"
+                        size="icon-sm"
+                        className="size-7 text-muted-foreground hover:text-foreground"
+                        disabled={act.disabled}
+                        onClick={act.onClick}
+                        aria-label={act.label}
+                        title={act.label}
+                      >
+                        {act.icon}
+                      </Button>
+                    ))}
+                    {row.href ? (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        asChild
+                        className="size-7 text-muted-foreground hover:text-foreground"
+                      >
+                        <a
+                          href={row.href}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label="Open on GitHub"
+                          title="Open on GitHub"
+                        >
+                          <ExternalLinkIcon className="size-4" aria-hidden="true" />
+                        </a>
+                      </Button>
+                    ) : null}
+                  </div>
+                </TableCell>
+              </TableRow>
+              {row.footer ? (
+                <TableRow>
+                  {/*
+                    `TableCell` bakes in `first:pl-6` (a pseudo-class, so a plain
+                    `pl-*` here wouldn't reliably win on specificity) — this cell
+                    is always first-child of its own row, so overriding the same
+                    `first:` variant is what actually takes effect. Set to exactly
+                    cancel the AI panel's own `p-3`, so its icon lines up with the
+                    row's leading icon above it instead of sitting 12px further in.
+                  */}
+                  <TableCell colSpan={4} className="whitespace-normal pt-0 pb-3 first:pl-3">
+                    {row.footer}
+                  </TableCell>
+                </TableRow>
               ) : null}
-            </TableCell>
-
-            <TableCell className={cellPad}>
-              {/* Smart-commit linking is done server-side; surface the result. */}
-              {row.taskKey ? (
-                <Link
-                  to={`/w/${slug}/projects/${projectKey}/tasks/${row.taskKey}`}
-                  className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground hover:text-foreground"
-                >
-                  {row.taskKey}
-                </Link>
-              ) : null}
-            </TableCell>
-
-            <TableCell className={cn(cellPad, 'hidden text-xs text-muted-foreground sm:table-cell')}>
-              {row.when ? formatDistanceToNow(new Date(row.when), { addSuffix: true }) : null}
-            </TableCell>
-
-            <TableCell className={cellPad}>
-              <div className="flex items-center gap-1">
-                {row.action}
-                {row.href ? <ExternalLink href={row.href} /> : null}
-              </div>
-            </TableCell>
-          </TableRow>
-          {row.footer ? (
-            <TableRow>
-              {/*
-                `TableCell` bakes in `first:pl-6` (a pseudo-class, so a plain
-                `pl-*` here wouldn't reliably win on specificity) — this cell
-                is always first-child of its own row, so overriding the same
-                `first:` variant is what actually takes effect. Set to exactly
-                cancel the AI panel's own `p-3`, so its icon lines up with the
-                row's leading icon above it instead of sitting 12px further in.
-              */}
-              <TableCell colSpan={5} className="whitespace-normal pt-0 pb-3 first:pl-3">
-                {row.footer}
-              </TableCell>
-            </TableRow>
-          ) : null}
-          </Fragment>
-        ))}
+            </Fragment>
+          );
+        })}
       </TableBody>
     </Table>
   );
@@ -674,20 +771,6 @@ function RowList({
 /** Compact empty state shared by all five GitHub tabs. */
 function EmptyRow({ children }: { children: string }) {
   return <EmptyState compact title={children} className="py-10" />;
-}
-
-function ExternalLink({ href }: { href: string }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      className="shrink-0 text-muted-foreground hover:text-foreground"
-      aria-label="Open on GitHub"
-    >
-      <ExternalLinkIcon className="size-4" aria-hidden="true" />
-    </a>
-  );
 }
 
 function CiIcon({ conclusion, status }: { conclusion: string | null; status: string | null }) {

@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PageHeader, PageShell } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/layout/PageState';
+import { Pager } from '@/components/Pager';
 import { useProjectStore, useMyProjectRole } from '@/store/projectStore';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
 import { initialsOf } from '@/lib/initials';
@@ -89,6 +90,8 @@ export function ProjectMembersPage() {
   const [roleFilter, setRoleFilter] = useState(ANY);
   const [memberToRemove, setMemberToRemove] = useState<ProjectMember | null>(null);
 
+  const [page, setPage] = useState(1);
+
   // Only workspace members can be added to a project — the server rejects
   // anyone else with a 400, so they never appear in the picker.
   const addable = useMemo(() => {
@@ -108,6 +111,10 @@ export function ProjectMembersPage() {
         (roleFilter === ANY || m.role === roleFilter),
     );
   }, [members, filter, roleFilter]);
+
+  const pageSize = 20;
+  const totalPages = Math.ceil(visible.length / pageSize);
+  const paginated = visible.slice((page - 1) * pageSize, page * pageSize);
 
   const onAdd = async () => {
     if (!addUserId) return;
@@ -160,8 +167,8 @@ export function ProjectMembersPage() {
 
       {canManage ? (
         <Card className="mb-6">
-          <CardContent className="flex flex-wrap items-end gap-3">
-            <div className="min-w-56 flex-1">
+          <CardContent className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-end gap-3 pt-6">
+            <div className="flex-1 min-w-0 sm:min-w-56">
               <label htmlFor="add-member" className="mb-1.5 block text-sm text-foreground">
                 Add a workspace member
               </label>
@@ -179,7 +186,7 @@ export function ProjectMembersPage() {
               </Select>
             </div>
 
-            <div className="w-44">
+            <div className="w-full sm:w-44">
               <label htmlFor="add-role" className="mb-1.5 block text-sm text-foreground">
                 Role
               </label>
@@ -197,7 +204,7 @@ export function ProjectMembersPage() {
               </Select>
             </div>
 
-            <Button onClick={() => void onAdd()} disabled={!addUserId || busy === 'add'}>
+            <Button className="w-full sm:w-auto" onClick={() => void onAdd()} disabled={!addUserId || busy === 'add'}>
               <UserPlusIcon className="size-4" aria-hidden="true" />
               Add
             </Button>
@@ -205,18 +212,18 @@ export function ProjectMembersPage() {
         </Card>
       ) : null}
 
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      <div className="mb-3 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2">
         <Input
           type="search"
           value={filter}
-          onChange={(e) => setFilter(e.target.value)}
+          onChange={(e) => { setFilter(e.target.value); setPage(1); }}
           placeholder="Filter by name or email"
           aria-label="Filter project members"
-          className="max-w-xs"
+          className="w-full sm:max-w-xs"
         />
 
-        <Select value={roleFilter} onValueChange={setRoleFilter}>
-          <SelectTrigger className="w-44" aria-label="Filter by role">
+        <Select value={roleFilter} onValueChange={(val) => { setRoleFilter(val); setPage(1); }}>
+          <SelectTrigger className="w-full sm:w-44" aria-label="Filter by role">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -233,16 +240,18 @@ export function ProjectMembersPage() {
           <Button
             variant="ghost"
             size="sm"
+            className="w-full sm:w-auto"
             onClick={() => {
               setFilter('');
               setRoleFilter(ANY);
+              setPage(1);
             }}
           >
             Clear filters
           </Button>
         ) : null}
 
-        <p className="ml-auto text-xs text-muted-foreground">
+        <p className="mt-2 sm:mt-0 sm:ml-auto text-center sm:text-right text-xs text-muted-foreground">
           {visible.length === members.length
             ? `${members.length} members`
             : `${visible.length} of ${members.length} members`}
@@ -255,12 +264,12 @@ export function ProjectMembersPage() {
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead>Member</TableHead>
-                <TableHead className="w-44">Role</TableHead>
+                <TableHead className="w-28 sm:w-44">Role</TableHead>
                 {canManage ? <TableHead className="w-10 sm:w-12 text-right"><span className="sr-only">Actions</span></TableHead> : null}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visible.length === 0 ? (
+              {paginated.length === 0 ? (
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={canManage ? 3 : 2} className="p-0">
                     {/* The two cases read very differently to a user: an
@@ -288,18 +297,18 @@ export function ProjectMembersPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                visible.map((member) => {
+                paginated.map((member) => {
                   const name = member.displayName || member.fullName;
                   const isLastAdmin = member.role === 'project_admin' && adminCount === 1;
                   return (
                     <TableRow key={member.userId}>
-                      <TableCell>
-                        <div className="flex items-center gap-3.5">
-                          <Avatar className="size-8">
+                      <TableCell className="max-w-[150px] sm:max-w-none">
+                        <div className="flex items-center gap-2 sm:gap-3.5">
+                          <Avatar className="size-8 shrink-0">
                             {member.avatarUrl ? <AvatarImage src={member.avatarUrl} alt="" /> : null}
                             <AvatarFallback className="text-xs">{initialsOf(name)}</AvatarFallback>
                           </Avatar>
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p className="truncate font-medium text-foreground">{name}</p>
                             <p className="truncate text-xs text-muted-foreground">{member.email}</p>
                           </div>
@@ -369,6 +378,13 @@ export function ProjectMembersPage() {
               )}
             </TableBody>
           </Table>
+
+          <Pager 
+            page={page} 
+            totalPages={totalPages} 
+            totalCount={visible.length} 
+            onPage={setPage} 
+          />
         </CardContent>
       </Card>
 

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LogOutIcon, SearchIcon, SettingsIcon, LayersIcon, UserCogIcon, HelpCircleIcon } from 'lucide-react';
+import { LogOutIcon, SearchIcon, SettingsIcon, LayersIcon, UserCogIcon, HelpCircleIcon, SunIcon, MoonIcon, MonitorIcon } from 'lucide-react';
+
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,8 @@ import { useAuthStore } from '@/store/auth';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
 import { NotificationBell } from '@/components/layout/NotificationBell';
 import { initialsOf } from '@/lib/initials';
+import { useTheme } from '@/hooks/use-theme';
+
 
 /**
  * Which modifier the palette hint should show. Read once at module load —
@@ -34,12 +37,14 @@ export function WorkspaceTopBar({ slug }: { slug: string }) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { members, isOwner } = useCurrentWorkspaceStore();
+  const { theme, setTheme } = useTheme();
 
   // GET /auth/me returns only userId/email/fullName, so the avatar has to come
   // from the member roster — which does carry avatarUrl and presence.
   const me = members.find((m) => m.userId === user?.userId);
   const displayName = me?.displayName || me?.fullName || user?.fullName || user?.email || '';
   const avatarUrl = me?.avatarUrl ?? user?.avatarUrl ?? undefined;
+
 
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
@@ -145,6 +150,26 @@ export function WorkspaceTopBar({ slug }: { slug: string }) {
                 <HelpCircleIcon className="size-4" aria-hidden="true" />
                 Help & Support
               </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {/* ── Theme picker ── */}
+            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground pb-1">
+              Theme
+            </DropdownMenuLabel>
+            <DropdownMenuItem onSelect={() => setTheme('light')} className="gap-2">
+              <SunIcon className="size-4" aria-hidden="true" />
+              Light
+              {theme === 'light' && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setTheme('dark')} className="gap-2">
+              <MoonIcon className="size-4" aria-hidden="true" />
+              Dark
+              {theme === 'dark' && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setTheme('system')} className="gap-2">
+              <MonitorIcon className="size-4" aria-hidden="true" />
+              System
+              {theme === 'system' && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => void signOut()}>

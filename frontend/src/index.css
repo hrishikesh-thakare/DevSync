@@ -58,48 +58,17 @@
 }
 
 :root {
-    color-scheme: dark;
-    --background: oklch(0.141 0.005 285.823);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.21 0.006 285.885);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.21 0.006 285.885);
-    --popover-foreground: oklch(0.985 0 0);
+    /* Shared / neutral tokens — same in both themes */
     --primary: oklch(0.455 0.188 13.697);
     --primary-foreground: oklch(0.969 0.015 12.422);
-    --secondary: oklch(0.274 0.006 286.033);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.274 0.006 286.033);
-    --muted-foreground: oklch(0.705 0.015 286.067);
-    --accent: oklch(0.274 0.006 286.033);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.552 0.016 285.938);
     --chart-1: oklch(0.81 0.117 11.638);
     --chart-2: oklch(0.645 0.246 16.439);
     --chart-3: oklch(0.586 0.253 17.585);
     --chart-4: oklch(0.514 0.222 16.935);
     --chart-5: oklch(0.455 0.188 13.697);
-    --radius: 0.45rem;
-    --sidebar: oklch(0.21 0.006 285.885);
-    --sidebar-foreground: oklch(0.985 0 0);
     --sidebar-primary: oklch(0.645 0.246 16.439);
     --sidebar-primary-foreground: oklch(0.969 0.015 12.422);
-    --sidebar-accent: oklch(0.274 0.006 286.033);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.552 0.016 285.938);
-    --destructive-foreground: var(--color-red-800);
-    --success: var(--color-emerald-500);
-    --success-foreground: var(--color-emerald-900);
-    --info: var(--color-violet-500);
-    --info-foreground: var(--color-violet-900);
-    --warning: var(--color-yellow-500);
-    --warning-foreground: var(--color-yellow-900);
-    --invert: var(--color-zinc-900);
-    --invert-foreground: var(--color-zinc-50);
+    --radius: 0.45rem;
 }
 
 @layer base {
@@ -111,24 +80,113 @@
     }
   html {
     @apply font-sans;
+    /* Smooth theme switch — only background, text and border colours. Skip
+       transform/opacity so animations on page load are not slowed down. */
+    transition: background-color 0.2s ease, color 0.15s ease, border-color 0.15s ease;
     }
 }
 
-/* ─── DevSync domain tokens ───────────────────────────────────────────────────
-   Task status and priority need hues the base palette does not carry: every
-   --chart-* sits in the rose family (hue 11–17), so it cannot separate four
-   priorities. Added as their own block, in the same oklch idiom, leaving the
-   shadcn tokens above untouched. */
-:root {
+
+/* ─── Dark theme ──────────────────────────────────────────────────────────── */
+.dark {
+
+    color-scheme: dark;
+    --background: oklch(0.141 0.005 285.823);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.21 0.006 285.885);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.21 0.006 285.885);
+    --popover-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.274 0.006 286.033);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.274 0.006 286.033);
+    --muted-foreground: oklch(0.705 0.015 286.067);
+    --accent: oklch(0.274 0.006 286.033);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --destructive-foreground: var(--color-red-300);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.552 0.016 285.938);
+    --sidebar: oklch(0.21 0.006 285.885);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.274 0.006 286.033);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.552 0.016 285.938);
+    --success: var(--color-emerald-500);
+    --success-foreground: var(--color-emerald-300);
+    --info: var(--color-violet-500);
+    --info-foreground: var(--color-violet-300);
+    --warning: var(--color-yellow-500);
+    --warning-foreground: var(--color-yellow-300);
+    --invert: var(--color-zinc-700);
+    --invert-foreground: var(--color-zinc-50);
+
+    /* Domain tokens — dark: high-lightness pastels read well on near-black */
     --status-todo: oklch(0.705 0.015 286.067);
     --status-in-progress: oklch(0.68 0.14 250);
     --status-in-review: oklch(0.78 0.14 80);
     --status-done: oklch(0.72 0.15 155);
-
     --priority-critical: oklch(0.68 0.19 22);
     --priority-high: oklch(0.75 0.15 60);
     --priority-medium: oklch(0.68 0.12 250);
     --priority-low: oklch(0.62 0.02 286);
+}
+
+/* ─── Light theme ─────────────────────────────────────────────────────────── */
+.light {
+    color-scheme: light;
+    --background: oklch(0.975 0.002 286);
+    --foreground: oklch(0.13 0.006 285.823);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.13 0.006 285.823);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.13 0.006 285.823);
+    --secondary: oklch(0.92 0.004 286);
+    --secondary-foreground: oklch(0.18 0.006 286.033);
+    --muted: oklch(0.92 0.004 286);
+    /* 0.42 lightness gives ~5.5:1 against white — passes WCAG AA for small text */
+    --muted-foreground: oklch(0.42 0.012 286.067);
+    --accent: oklch(0.92 0.004 286);
+    --accent-foreground: oklch(0.18 0.006 286.033);
+    /* Slightly darker red in light to compensate for the bright background */
+    --destructive: oklch(0.58 0.22 22);
+    --destructive-foreground: oklch(0.3 0.12 22);
+    /* Hairline borders need to be darker to be visible on light bg */
+    --border: oklch(0 0 0 / 16%);
+    --input: oklch(0 0 0 / 18%);
+    /* Darker focus ring so it's visible against light backgrounds */
+    --ring: oklch(0.38 0.018 285.938);
+    --sidebar: oklch(0.95 0.003 286);
+    --sidebar-foreground: oklch(0.13 0.006 285.823);
+    --sidebar-accent: oklch(0.89 0.005 286);
+    --sidebar-accent-foreground: oklch(0.18 0.006 286.033);
+    --sidebar-border: oklch(0 0 0 / 12%);
+    --sidebar-ring: oklch(0.38 0.018 285.938);
+    --success: var(--color-emerald-700);
+    --success-foreground: var(--color-emerald-900);
+    --info: var(--color-violet-700);
+    --info-foreground: var(--color-violet-900);
+    --warning: var(--color-amber-600);
+    --warning-foreground: var(--color-amber-900);
+    --invert: var(--color-zinc-900);
+    --invert-foreground: var(--color-zinc-50);
+
+    /* Domain tokens — light: darken so text-white stays readable on chips,
+       and lower-lightness colours read against white/light-grey cards.
+       Priority badges use text-white, so bg lightness must stay ≤ 0.62 for
+       4.5:1 contrast against white. Status dots are colour-only indicators
+       (no text sits on them in normal views) so they can stay slightly
+       brighter, but we still pull them down to stay visible on white cards. */
+    --status-todo: oklch(0.52 0.015 286.067);      /* medium-dark grey */
+    --status-in-progress: oklch(0.45 0.17 250);    /* blue */
+    --status-in-review: oklch(0.55 0.16 80);        /* amber/olive */
+    --status-done: oklch(0.48 0.16 155);            /* green */
+    --priority-critical: oklch(0.52 0.22 22);       /* deep red */
+    --priority-high: oklch(0.55 0.18 60);           /* dark amber */
+    --priority-medium: oklch(0.47 0.15 250);        /* deep blue */
+    --priority-low: oklch(0.45 0.02 286);           /* dark grey */
 }
 
 @theme inline {
@@ -182,17 +240,7 @@
     outline: 2px solid var(--ring);
 }
 
-.dark {
-    --destructive-foreground: var(--color-red-600);
-    --success: var(--color-emerald-500);
-    --success-foreground: var(--color-emerald-600);
-    --info: var(--color-violet-500);
-    --info-foreground: var(--color-violet-600);
-    --warning: var(--color-yellow-500);
-    --warning-foreground: var(--color-yellow-600);
-    --invert: var(--color-zinc-700);
-    --invert-foreground: var(--color-zinc-50);
-}
+
 
 /* Vercel-style minimal scrollbars */
 ::-webkit-scrollbar {
@@ -219,5 +267,14 @@
 * {
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
+}
+
+/* Hide scrollbar for elements that need overflow without visible scrollbars */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }
 

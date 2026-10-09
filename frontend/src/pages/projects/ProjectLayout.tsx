@@ -122,7 +122,7 @@ export function ProjectLayout() {
           {/* A real tablist would need roving focus and arrow-key handling; these
               are navigation links that happen to look like tabs, so they stay
               links and get an aria-current instead. */}
-          <nav aria-label="Project sections" className="mt-4 -mb-px flex gap-1 overflow-x-auto">
+          <nav aria-label="Project sections" className="mt-4 -mb-px flex gap-1 overflow-x-auto scrollbar-hide">
             {TABS.map((tab) => (
               <NavLink
                 key={tab.label}

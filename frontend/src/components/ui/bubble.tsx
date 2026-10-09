@@ -34,17 +34,17 @@ const bubbleVariants = cva(
         destructive:
           "*:data-[slot=bubble-content]:bg-destructive/10 *:data-[slot=bubble-content]:text-destructive dark:*:data-[slot=bubble-content]:bg-destructive/20 [&>[data-slot=bubble-content]:is(button,a):hover]:bg-destructive/20 dark:[&>[data-slot=bubble-content]:is(button,a):hover]:bg-destructive/30",
         blue:
-          "[&>[data-slot=bubble-content]]:bg-blue-500/25 [&>[data-slot=bubble-content]]:text-blue-50",
+          "[&>[data-slot=bubble-content]]:bg-blue-500/20 [&>[data-slot=bubble-content]]:text-blue-950 dark:[&>[data-slot=bubble-content]]:bg-blue-500/25 dark:[&>[data-slot=bubble-content]]:text-blue-50",
         green:
-          "[&>[data-slot=bubble-content]]:bg-green-500/25 [&>[data-slot=bubble-content]]:text-green-50",
+          "[&>[data-slot=bubble-content]]:bg-green-500/20 [&>[data-slot=bubble-content]]:text-green-950 dark:[&>[data-slot=bubble-content]]:bg-green-500/25 dark:[&>[data-slot=bubble-content]]:text-green-50",
         amber:
-          "[&>[data-slot=bubble-content]]:bg-amber-500/25 [&>[data-slot=bubble-content]]:text-amber-50",
+          "[&>[data-slot=bubble-content]]:bg-amber-500/20 [&>[data-slot=bubble-content]]:text-amber-950 dark:[&>[data-slot=bubble-content]]:bg-amber-500/25 dark:[&>[data-slot=bubble-content]]:text-amber-50",
         purple:
-          "[&>[data-slot=bubble-content]]:bg-purple-500/25 [&>[data-slot=bubble-content]]:text-purple-50",
+          "[&>[data-slot=bubble-content]]:bg-purple-500/20 [&>[data-slot=bubble-content]]:text-purple-950 dark:[&>[data-slot=bubble-content]]:bg-purple-500/25 dark:[&>[data-slot=bubble-content]]:text-purple-50",
         pink:
-          "[&>[data-slot=bubble-content]]:bg-pink-500/25 [&>[data-slot=bubble-content]]:text-pink-50",
+          "[&>[data-slot=bubble-content]]:bg-pink-500/20 [&>[data-slot=bubble-content]]:text-pink-950 dark:[&>[data-slot=bubble-content]]:bg-pink-500/25 dark:[&>[data-slot=bubble-content]]:text-pink-50",
         teal:
-          "[&>[data-slot=bubble-content]]:bg-teal-500/25 [&>[data-slot=bubble-content]]:text-teal-50",
+          "[&>[data-slot=bubble-content]]:bg-teal-500/20 [&>[data-slot=bubble-content]]:text-teal-950 dark:[&>[data-slot=bubble-content]]:bg-teal-500/25 dark:[&>[data-slot=bubble-content]]:text-teal-50",
       },
     },
     defaultVariants: {

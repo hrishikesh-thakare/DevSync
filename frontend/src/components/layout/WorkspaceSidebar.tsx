@@ -1,4 +1,5 @@
-import { Link, NavLink, useParams } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, NavLink, useLocation, useParams } from 'react-router-dom';
 import {
   ChartLineIcon,
   FolderKanbanIcon,
@@ -27,6 +28,7 @@ import {
   SidebarMenuItem,
   SidebarMenuSkeleton,
   SidebarRail,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
@@ -42,7 +44,15 @@ const SIDEBAR_LIST_CAP = 8;
 
 export function WorkspaceSidebar() {
   const { slug = '' } = useParams();
+  const location = useLocation();
+  const { isMobile, setOpenMobile } = useSidebar();
   const { name, projects, channels, isLoading, isAdmin, isOwner } = useCurrentWorkspaceStore();
+
+  useEffect(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [location.pathname, isMobile, setOpenMobile]);
   const canManage = isAdmin();
   const visibleProjects = projects.slice(0, SIDEBAR_LIST_CAP);
   const hiddenProjects = projects.length - visibleProjects.length;
@@ -72,8 +82,8 @@ export function WorkspaceSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton asChild size="lg" tooltip={name || 'Workspace'}>
               <Link to={`/w/${slug}`}>
-                <Avatar className="size-8">
-                  <AvatarFallback className="text-xs">{initialsOf(name || slug)}</AvatarFallback>
+                <Avatar className="size-8 border-2 border-primary/30">
+                  <AvatarFallback className="bg-primary/10 text-xs font-medium text-primary">{initialsOf(name || slug)}</AvatarFallback>
                 </Avatar>
                 <span className="truncate font-medium flex-1 text-left">{name || 'Loading…'}</span>
               </Link>

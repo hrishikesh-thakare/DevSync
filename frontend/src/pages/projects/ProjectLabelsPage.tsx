@@ -22,6 +22,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { PageHeader, PageShell } from '@/components/layout/PageHeader';
+import { Pager } from '@/components/Pager';
 import { useLabelStore } from '@/store/labelStore';
 import { useMyProjectRole } from '@/store/projectStore';
 import type { ProjectLabel } from '@/types/api';
@@ -32,12 +33,7 @@ const DEFAULT_COLOR = '#6b7280';
 /** `createLabelSchema` validates colour against exactly this shape. */
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
-/**
- * `listLabels` returns every label in one payload with no pagination, and a
- * long-lived project accumulates hundreds. Render a window of them and let the
- * filter reach the rest, rather than putting the whole catalogue on screen.
- */
-const VISIBLE_LIMIT = 50;
+const ITEMS_PER_PAGE = 20;
 
 export function ProjectLabelsPage() {
   const { slug = '', key = '' } = useParams();
@@ -55,10 +51,7 @@ export function ProjectLabelsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
-  // Labels created in this session. The catalogue is sorted by name, so a new
-  // label usually lands outside the visible window and would look as though it
-  // had not been created at all. These are pinned to the top for as long as the
-  // page is open.
+  const [page, setPage] = useState(1);
   const [recentIds, setRecentIds] = useState<string[]>([]);
 
   const matching = useMemo(() => {
@@ -66,15 +59,18 @@ export function ProjectLabelsPage() {
     return q ? labels.filter((l) => l.name.toLowerCase().includes(q)) : labels;
   }, [labels, filter]);
 
-  const visible = useMemo(() => {
-    if (recentIds.length === 0) return matching.slice(0, VISIBLE_LIMIT);
+  const sortedAndMatching = useMemo(() => {
+    if (recentIds.length === 0) return matching;
     const recent = new Set(recentIds);
     const pinned = matching.filter((l) => recent.has(l.labelId));
     const rest = matching.filter((l) => !recent.has(l.labelId));
-    return [...pinned, ...rest].slice(0, VISIBLE_LIMIT);
+    return [...pinned, ...rest];
   }, [matching, recentIds]);
 
-  const hiddenCount = matching.length - visible.length;
+  const visible = useMemo(() => {
+    const start = (page - 1) * ITEMS_PER_PAGE;
+    return sortedAndMatching.slice(start, start + ITEMS_PER_PAGE);
+  }, [sortedAndMatching, page]);
 
   useEffect(() => {
     if (slug && key) void fetchLabels(slug, key);
@@ -209,7 +205,7 @@ export function ProjectLabelsPage() {
             <Input
               type="search"
               value={filter}
-              onChange={(e) => setFilter(e.target.value)}
+              onChange={(e) => { setFilter(e.target.value); setPage(1); }}
               placeholder="Filter labels"
               aria-label="Filter labels"
               className="max-w-xs"
@@ -301,12 +297,7 @@ export function ProjectLabelsPage() {
                   </li>
                 ),
               )}
-                {hiddenCount > 0 ? (
-                  <li className="px-4 py-3 text-sm text-muted-foreground">
-                    {hiddenCount} more {hiddenCount === 1 ? 'label' : 'labels'} — use the filter to
-                    find one.
-                  </li>
-                ) : matching.length === 0 ? (
+                {matching.length === 0 ? (
                   <li className="px-4 py-3 text-sm text-muted-foreground">
                     No label matches that search.
                   </li>
@@ -314,6 +305,15 @@ export function ProjectLabelsPage() {
               </ul>
             </CardContent>
           </Card>
+
+          {sortedAndMatching.length > ITEMS_PER_PAGE && (
+            <Pager
+              page={page}
+              totalPages={Math.ceil(sortedAndMatching.length / ITEMS_PER_PAGE)}
+              totalCount={sortedAndMatching.length}
+              onPage={setPage}
+            />
+          )}
         </>
       )}
     </PageShell>

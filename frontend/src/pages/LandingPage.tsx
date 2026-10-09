@@ -107,7 +107,7 @@ export function LandingPage() {
   }
 
   return (
-    <div className="min-h-svh overflow-x-hidden bg-[#08080A] text-zinc-100 antialiased">
+    <div className="dark min-h-svh overflow-x-hidden bg-[#08080A] text-zinc-100 antialiased">
       <Nav />
       <Hero />
       <TrustBar />
@@ -775,7 +775,7 @@ function Frame({ url, children }: { url: string; children: React.ReactNode }) {
 function BoardPreview() {
   return (
     <Frame url="devsync.app/w/acme/projects/PLAT">
-      <div className="flex gap-4 overflow-x-auto p-5">
+      <div className="flex gap-4 overflow-x-auto p-5 scrollbar-hide">
         {COLUMNS.map((col) => (
           <div key={col.status} className="w-[250px] shrink-0 lg:w-auto lg:flex-1">
             <div className="mb-3 flex items-center gap-2">

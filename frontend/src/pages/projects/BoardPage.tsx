@@ -300,7 +300,7 @@ export function BoardPage() {
       ) : null}
 
       <Kanban value={columns} onValueChange={setColumns} onValueCommit={onBoardCommit} getItemValue={getTaskId}>
-        <KanbanBoard className="flex-1 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+        <KanbanBoard className="flex-1 grid-cols-1 auto-rows-auto sm:auto-rows-fr sm:grid-cols-2 xl:grid-cols-4">
           {STATUS_ORDER.map((status) => (
             <BoardColumn
               key={status}

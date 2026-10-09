@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Pager } from '@/components/Pager';
 
 import { apiFetch, ApiError } from '@/lib/api';
 import { describeAuditAction, summariseChanges } from '@/lib/auditActions';
@@ -50,6 +51,7 @@ export function ActivityLog({
   const [actorFilter, setActorFilter] = useState('all');
   const [actionFilter, setActionFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     if (!entityId) return;
@@ -108,6 +110,13 @@ export function ActivityLog({
     });
   }, [filterable, logs, actorFilter, actionFilter, dateFilter]);
 
+  const ITEMS_PER_PAGE = 20;
+
+  const paginatedLogs = useMemo(() => {
+    const start = (page - 1) * ITEMS_PER_PAGE;
+    return visibleLogs.slice(start, start + ITEMS_PER_PAGE);
+  }, [visibleLogs, page]);
+
   if (isLoading) {
     return (
       <div className="space-y-2">
@@ -148,7 +157,7 @@ export function ActivityLog({
 
   const filterBar = filterable ? (
     <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3">
-      <Select value={actorFilter} onValueChange={setActorFilter}>
+      <Select value={actorFilter} onValueChange={(val) => { setActorFilter(val); setPage(1); }}>
         <SelectTrigger className="w-full sm:w-[180px]">
           <SelectValue placeholder="All actors" />
         </SelectTrigger>
@@ -160,7 +169,7 @@ export function ActivityLog({
         </SelectContent>
       </Select>
       
-      <Select value={actionFilter} onValueChange={setActionFilter}>
+      <Select value={actionFilter} onValueChange={(val) => { setActionFilter(val); setPage(1); }}>
         <SelectTrigger className="w-full sm:w-[180px]">
           <SelectValue placeholder="All actions" />
         </SelectTrigger>
@@ -172,7 +181,7 @@ export function ActivityLog({
         </SelectContent>
       </Select>
 
-      <Select value={dateFilter} onValueChange={setDateFilter}>
+      <Select value={dateFilter} onValueChange={(val) => { setDateFilter(val); setPage(1); }}>
         <SelectTrigger className="w-full sm:w-[150px]">
           <SelectValue placeholder="Any time" />
         </SelectTrigger>
@@ -185,7 +194,7 @@ export function ActivityLog({
 
       {actorFilter !== 'all' || actionFilter !== 'all' || dateFilter !== 'all' ? (
         <button
-          onClick={() => { setActorFilter('all'); setActionFilter('all'); setDateFilter('all'); }}
+          onClick={() => { setActorFilter('all'); setActionFilter('all'); setDateFilter('all'); setPage(1); }}
           className="text-sm text-left sm:text-center text-muted-foreground hover:text-foreground underline underline-offset-4"
         >
           Clear filters
@@ -223,7 +232,7 @@ export function ActivityLog({
     <>
       {filterBar}
       <ul className="divide-y rounded-2xl border">
-      {visibleLogs.map((log) => {
+      {paginatedLogs.map((log) => {
         const changes = summariseChanges(
           log.oldValues as Record<string, unknown> | null,
           log.newValues as Record<string, unknown> | null,
@@ -244,7 +253,7 @@ export function ActivityLog({
               {changes.length > 0 ? (
                 <ul className="mt-1 space-y-0.5">
                   {changes.slice(0, 4).map((c, i) => (
-                    <li key={i} className="break-words font-mono text-xs text-muted-foreground">
+                     <li key={i} className="break-words font-mono text-xs text-muted-foreground">
                       {c}
                     </li>
                   ))}
@@ -263,6 +272,14 @@ export function ActivityLog({
         );
       })}
       </ul>
+      {visibleLogs.length > ITEMS_PER_PAGE && (
+        <Pager
+          page={page}
+          totalPages={Math.ceil(visibleLogs.length / ITEMS_PER_PAGE)}
+          totalCount={visibleLogs.length}
+          onPage={setPage}
+        />
+      )}
     </>
   );
 }

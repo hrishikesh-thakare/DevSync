@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PageHeader, PageShell } from '@/components/layout/PageHeader';
 import { LeaveWorkspaceButton } from '@/pages/workspaces/LeaveWorkspaceButton';
+import { Pager } from '@/components/Pager';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
 import { useAuthStore } from '@/store/auth';
 import { apiFetch } from '@/lib/api';
@@ -128,6 +129,8 @@ export function WorkspaceMembersPage() {
   const [stateFilter, setStateFilter] = useState(ANY);
   const [memberToRemove, setMemberToRemove] = useState<WorkspaceMember | null>(null);
 
+  const [page, setPage] = useState(1);
+
   const hasFilters = filter.trim() !== '' || roleFilter !== ANY || stateFilter !== ANY;
 
   // A long-lived workspace can carry hundreds of members and the API returns
@@ -141,6 +144,10 @@ export function WorkspaceMembersPage() {
         (stateFilter === ANY || m.state === stateFilter),
     );
   }, [members, filter, roleFilter, stateFilter]);
+
+  const pageSize = 20;
+  const totalPages = Math.ceil(visible.length / pageSize);
+  const paginated = visible.slice((page - 1) * pageSize, page * pageSize);
 
   const canInvite = isAdmin();
   const canChangeRoles = isOwner();
@@ -278,14 +285,14 @@ export function WorkspaceMembersPage() {
         <Input
           type="search"
           value={filter}
-          onChange={(e) => setFilter(e.target.value)}
+          onChange={(e) => { setFilter(e.target.value); setPage(1); }}
           placeholder="Filter by name or email"
           aria-label="Filter members"
           className="w-full sm:max-w-xs"
         />
 
         <div className="flex gap-2">
-          <Select value={roleFilter} onValueChange={setRoleFilter}>
+          <Select value={roleFilter} onValueChange={(val) => { setRoleFilter(val); setPage(1); }}>
             <SelectTrigger className="flex-1 sm:w-36" aria-label="Filter by role">
               <SelectValue />
             </SelectTrigger>
@@ -299,7 +306,7 @@ export function WorkspaceMembersPage() {
             </SelectContent>
           </Select>
 
-          <Select value={stateFilter} onValueChange={setStateFilter}>
+          <Select value={stateFilter} onValueChange={(val) => { setStateFilter(val); setPage(1); }}>
             <SelectTrigger className="flex-1 sm:w-40" aria-label="Filter by status">
               <SelectValue />
             </SelectTrigger>
@@ -322,6 +329,7 @@ export function WorkspaceMembersPage() {
               setFilter('');
               setRoleFilter(ANY);
               setStateFilter(ANY);
+              setPage(1);
             }}
           >
             Clear filters
@@ -352,7 +360,7 @@ export function WorkspaceMembersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visible.length === 0 ? (
+              {paginated.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={showActionColumn ? 4 : 3}
@@ -362,7 +370,7 @@ export function WorkspaceMembersPage() {
                   </TableCell>
                 </TableRow>
               ) : null}
-              {visible.map((member) => {
+              {paginated.map((member) => {
                 const name = member.displayName || member.fullName;
                 const isMe = member.userId === myUserId;
                 const isTheOwner = member.role === 'owner';
@@ -457,6 +465,13 @@ export function WorkspaceMembersPage() {
               })}
             </TableBody>
           </Table>
+          
+          <Pager 
+            page={page} 
+            totalPages={totalPages} 
+            totalCount={visible.length} 
+            onPage={setPage} 
+          />
         </CardContent>
       </Card>
 

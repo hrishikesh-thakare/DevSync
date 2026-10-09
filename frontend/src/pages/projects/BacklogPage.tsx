@@ -215,18 +215,18 @@ export function BacklogPage() {
         ) : null}
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2">
         <Input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search title or key"
           aria-label="Search backlog"
-          className="w-52"
+          className="w-full sm:w-52"
         />
 
         <Select value={assignee} onValueChange={setAssignee}>
-          <SelectTrigger className="w-48" aria-label="Filter by assignee">
+          <SelectTrigger className="w-full sm:w-48" aria-label="Filter by assignee">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -241,7 +241,7 @@ export function BacklogPage() {
         </Select>
 
         <Select value={priority} onValueChange={setPriority}>
-          <SelectTrigger className="w-40" aria-label="Filter by priority">
+          <SelectTrigger className="w-full sm:w-40" aria-label="Filter by priority">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -255,7 +255,7 @@ export function BacklogPage() {
         </Select>
 
         <Select value={issueType} onValueChange={setIssueType}>
-          <SelectTrigger className="w-40" aria-label="Filter by type">
+          <SelectTrigger className="w-full sm:w-40" aria-label="Filter by type">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -286,12 +286,12 @@ export function BacklogPage() {
 
       {selected.size > 0 && canEdit ? (
         <Card className="mb-4">
-          <CardContent className="flex flex-wrap items-center gap-3">
-            <span className="text-sm text-foreground">
+          <CardContent className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 py-3 sm:py-6">
+            <span className="text-sm text-foreground sm:mr-auto">
               {selected.size} selected
             </span>
             <Select disabled={assigning || openSprints.length === 0} onValueChange={(v) => void assignToSprint(v)}>
-              <SelectTrigger className="w-56" aria-label="Add selected tasks to sprint">
+              <SelectTrigger className="w-full sm:w-56" aria-label="Add selected tasks to sprint">
                 <SelectValue
                   placeholder={openSprints.length ? 'Add to sprint…' : 'No open sprint available'}
                 />
@@ -309,7 +309,7 @@ export function BacklogPage() {
               disabled={assigning}
               onValueChange={(v) => void runBulk('Assigned', () => ({ assigneeId: v === UNASSIGN ? null : v }))}
             >
-              <SelectTrigger className="w-48" aria-label="Bulk assign">
+              <SelectTrigger className="w-full sm:w-48" aria-label="Bulk assign">
                 <SelectValue placeholder="Assign to…" />
               </SelectTrigger>
               <SelectContent>
@@ -328,7 +328,7 @@ export function BacklogPage() {
                 void runBulk('Labelled', (t) => ({ labels: Array.from(new Set([...(t.labels ?? []), v])) }))
               }
             >
-              <SelectTrigger className="w-48" aria-label="Bulk add label">
+              <SelectTrigger className="w-full sm:w-48" aria-label="Bulk add label">
                 <SelectValue placeholder={labels.length ? 'Add label…' : 'No labels yet'} />
               </SelectTrigger>
               <SelectContent>
@@ -340,7 +340,7 @@ export function BacklogPage() {
               </SelectContent>
             </Select>
 
-            <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setSelected(new Set())}>
+            <Button variant="ghost" size="sm" className="w-full sm:w-auto" onClick={() => setSelected(new Set())}>
               Clear selection
             </Button>
           </CardContent>
@@ -430,71 +430,76 @@ function BacklogRow({
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
       className={cn(
-        'flex items-center gap-3 rounded-lg bg-card px-3 py-2 ring-1 ring-foreground/5',
+        'flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 rounded-lg bg-card px-3 py-2 ring-1 ring-foreground/5',
         isDragging && 'opacity-40',
       )}
     >
-      {canEdit ? (
-        <>
-          <button
-            type="button"
-            className="cursor-grab text-muted-foreground active:cursor-grabbing"
-            aria-label={`Reorder ${task.taskKey}`}
-            {...attributes}
-            {...listeners}
-          >
-            <GripVerticalIcon className="size-4" aria-hidden="true" />
-          </button>
-          <Checkbox
-            checked={selected}
-            onCheckedChange={onToggle}
-            aria-label={`Select ${task.taskKey}`}
-          />
-        </>
-      ) : null}
+      <div className="flex w-full min-w-0 items-center gap-3 sm:w-auto">
+        {canEdit ? (
+          <>
+            <button
+              type="button"
+              className="shrink-0 cursor-grab text-muted-foreground active:cursor-grabbing"
+              aria-label={`Reorder ${task.taskKey}`}
+              {...attributes}
+              {...listeners}
+            >
+              <GripVerticalIcon className="size-4" aria-hidden="true" />
+            </button>
+            <Checkbox
+              className="shrink-0"
+              checked={selected}
+              onCheckedChange={onToggle}
+              aria-label={`Select ${task.taskKey}`}
+            />
+          </>
+        ) : null}
 
-      <span className="shrink-0 font-mono text-xs text-muted-foreground">{task.taskKey}</span>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="shrink-0 text-xs text-muted-foreground">
-            <span aria-hidden="true">{type?.glyph}</span>
-            <span className="sr-only">{type?.label}</span>
+        <span className="shrink-0 font-mono text-xs text-muted-foreground">{task.taskKey}</span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="shrink-0 text-xs text-muted-foreground">
+              <span aria-hidden="true">{type?.glyph}</span>
+              <span className="sr-only">{type?.label}</span>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{type?.label}</TooltipContent>
+        </Tooltip>
+
+        <button
+          type="button"
+          onClick={onOpen}
+          className="min-w-0 flex-1 truncate text-left text-sm text-foreground hover:underline"
+        >
+          {task.title}
+        </button>
+      </div>
+
+      <div className="flex w-full flex-wrap items-center gap-3 pl-7 sm:ml-auto sm:w-auto sm:flex-nowrap sm:pl-0">
+        <Badge variant="outline" className="shrink-0">
+          {STATUS_META[task.status].label}
+        </Badge>
+
+        <span className={cn('shrink-0 text-xs', priority?.text)}>{priority?.label}</span>
+
+        {task.storyPoints != null ? (
+          <span className="shrink-0 rounded bg-muted px-1.5 text-xs text-muted-foreground">
+            {task.storyPoints}
           </span>
-        </TooltipTrigger>
-        <TooltipContent>{type?.label}</TooltipContent>
-      </Tooltip>
+        ) : null}
 
-      <button
-        type="button"
-        onClick={onOpen}
-        className="min-w-0 flex-1 truncate text-left text-sm text-foreground hover:underline"
-      >
-        {task.title}
-      </button>
-
-      <Badge variant="outline" className="shrink-0">
-        {STATUS_META[task.status].label}
-      </Badge>
-
-      <span className={cn('hidden shrink-0 text-xs sm:inline', priority?.text)}>{priority?.label}</span>
-
-      {task.storyPoints != null ? (
-        <span className="shrink-0 rounded bg-muted px-1.5 text-xs text-muted-foreground">
-          {task.storyPoints}
-        </span>
-      ) : null}
-
-      {task.assigneeId ? (
-        <MemberAvatar
-          size="sm"
-          className="shrink-0"
-          member={{
-            userId: task.assigneeId,
-            fullName: task.assigneeName,
-            avatarUrl: task.assigneeAvatar,
-          }}
-        />
-      ) : null}
+        {task.assigneeId ? (
+          <MemberAvatar
+            size="sm"
+            className="shrink-0"
+            member={{
+              userId: task.assigneeId,
+              fullName: task.assigneeName,
+              avatarUrl: task.assigneeAvatar,
+            }}
+          />
+        ) : null}
+      </div>
     </li>
   );
 }
