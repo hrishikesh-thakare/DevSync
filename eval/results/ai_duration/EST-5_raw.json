@@ -1,0 +1,30 @@
+{
+  "task": {
+    "taskKey": "EST-5",
+    "issueType": "feature",
+    "title": "Implement search filter dropdown by priority on Kanban board",
+    "descriptionText": "Add a multi-select popover filter in the board header to filter cards by low/medium/high/urgent.",
+    "complexityCategory": "Moderate Feature (4-8h)"
+  },
+  "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-5 (feature)\nTitle: Implement search filter dropdown by priority on Kanban board\nDescription: Add a multi-select popover filter in the board header to filter cards by low/medium/high/urgent.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+  "rawResponseText": "{\"estimatedHours\": 5}",
+  "parsedHours": 5,
+  "processedHours": 5,
+  "meta": {
+    "modelVersion": "gemini-3.8-flash",
+    "responseId": "4BLWaovJM6K2juMPmcOUoQk",
+    "usageMetadata": {
+      "promptTokenCount": 95,
+      "candidatesTokenCount": 7,
+      "totalTokenCount": 421,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 95
+        }
+      ],
+      "thoughtsTokenCount": 319,
+      "serviceTier": "standard"
+    }
+  }
+}

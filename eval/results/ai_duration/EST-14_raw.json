@@ -1,0 +1,30 @@
+{
+  "task": {
+    "taskKey": "EST-14",
+    "issueType": "bug",
+    "title": "Fix race condition during concurrent sprint close",
+    "descriptionText": "Wrap sprint status update and task unlinking inside a SERIALIZABLE PostgreSQL transaction with advisory lock.",
+    "complexityCategory": "Complex Bug (6-12h)"
+  },
+  "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-14 (bug)\nTitle: Fix race condition during concurrent sprint close\nDescription: Wrap sprint status update and task unlinking inside a SERIALIZABLE PostgreSQL transaction with advisory lock.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+  "rawResponseText": "{\"estimatedHours\": 6}",
+  "parsedHours": 6,
+  "processedHours": 6,
+  "meta": {
+    "modelVersion": "gemini-3.8-flash",
+    "responseId": "VBPWatXiDq6zmNMPwfTcyAc",
+    "usageMetadata": {
+      "promptTokenCount": 89,
+      "candidatesTokenCount": 7,
+      "totalTokenCount": 322,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 89
+        }
+      ],
+      "thoughtsTokenCount": 226,
+      "serviceTier": "standard"
+    }
+  }
+}

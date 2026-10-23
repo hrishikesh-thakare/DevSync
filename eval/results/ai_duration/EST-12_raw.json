@@ -1,0 +1,30 @@
+{
+  "task": {
+    "taskKey": "EST-12",
+    "issueType": "task",
+    "title": "Migrate PostgreSQL connection pool to PgBouncer transaction mode",
+    "descriptionText": "Configure pooled connection string, adjust idle timeouts, and remove prepared statements incompatible with transaction pooling.",
+    "complexityCategory": "Infrastructure Task (4-8h)"
+  },
+  "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-12 (task)\nTitle: Migrate PostgreSQL connection pool to PgBouncer transaction mode\nDescription: Configure pooled connection string, adjust idle timeouts, and remove prepared statements incompatible with transaction pooling.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+  "rawResponseText": "{\"estimatedHours\": 12.0}",
+  "parsedHours": 12,
+  "processedHours": 12,
+  "meta": {
+    "modelVersion": "gemini-3.8-flash",
+    "responseId": "PRPWaq_CCoHEg8UP84LCwQ4",
+    "usageMetadata": {
+      "promptTokenCount": 91,
+      "candidatesTokenCount": 10,
+      "totalTokenCount": 429,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 91
+        }
+      ],
+      "thoughtsTokenCount": 328,
+      "serviceTier": "standard"
+    }
+  }
+}

@@ -33,7 +33,21 @@ export function WorkspaceLayout() {
     const socket = socketClient.connect();
 
     const onNotification = (notification: AppNotification) => {
-      addNotification(notification);
+      const isCurrentWorkspace =
+        (!notification.workspaceSlug && !notification.workspaceId) ||
+        (notification.workspaceSlug ? notification.workspaceSlug === slug : false) ||
+        (notification.workspaceId ? notification.workspaceId === workspaceId : false);
+      const isWorkspaceInvite = notification.type === 'workspace_invited';
+
+      // Drop real-time notifications for other workspaces to avoid tenant bleed
+      if (!isCurrentWorkspace && !isWorkspaceInvite) {
+        return;
+      }
+
+      if (isCurrentWorkspace) {
+        addNotification(notification);
+      }
+
       toast(notification.title, { description: notification.body ?? undefined });
     };
 
@@ -51,7 +65,7 @@ export function WorkspaceLayout() {
       socket.off('new_notification', onNotification);
       socket.off('user_presence_updated', onPresence);
     };
-  }, [workspaceId, addNotification, updateMemberPresence]);
+  }, [workspaceId, slug, addNotification, updateMemberPresence]);
 
   // Tear the connection down when leaving the workspace shell entirely.
   useEffect(() => () => socketClient.disconnect(), []);

@@ -1,0 +1,30 @@
+{
+  "task": {
+    "taskKey": "EST-20",
+    "issueType": "feature",
+    "title": "Re-architect entire monolithic platform into 8 distributed microservices",
+    "descriptionText": "Decompose monolith into auth, projects, tasks, chat, notifications, git-sync, analytics, and ai microservices communicating via gRPC and Kafka with distributed tracing and zero-downtime rolling deploys.",
+    "complexityCategory": "Massive Architecture (>80h cap)"
+  },
+  "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-20 (feature)\nTitle: Re-architect entire monolithic platform into 8 distributed microservices\nDescription: Decompose monolith into auth, projects, tasks, chat, notifications, git-sync, analytics, and ai microservices communicating via gRPC and Kafka with distributed tracing and zero-downtime rolling deploys.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+  "rawResponseText": "{\"estimatedHours\": 80}",
+  "parsedHours": 80,
+  "processedHours": 80,
+  "meta": {
+    "modelVersion": "gemini-3.8-flash",
+    "responseId": "YxXWasu8As-EjuMPnIq58Q4",
+    "usageMetadata": {
+      "promptTokenCount": 118,
+      "candidatesTokenCount": 8,
+      "totalTokenCount": 394,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 118
+        }
+      ],
+      "thoughtsTokenCount": 268,
+      "serviceTier": "standard"
+    }
+  }
+}

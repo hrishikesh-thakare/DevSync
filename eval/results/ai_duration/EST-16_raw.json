@@ -1,0 +1,30 @@
+{
+  "task": {
+    "taskKey": "EST-16",
+    "issueType": "feature",
+    "title": "Implement full-platform audit logging subsystem",
+    "descriptionText": "Record actor_id, action, timestamp, entity_type, entity_id, and JSON diff of old/new values across all mutations.",
+    "complexityCategory": "Major Feature (20-35h)"
+  },
+  "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-16 (feature)\nTitle: Implement full-platform audit logging subsystem\nDescription: Record actor_id, action, timestamp, entity_type, entity_id, and JSON diff of old/new values across all mutations.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+  "rawResponseText": "{\"estimatedHours\": 40}",
+  "parsedHours": 40,
+  "processedHours": 40,
+  "meta": {
+    "modelVersion": "gemini-3.8-flash",
+    "responseId": "hBPWat-VEYPXjuMPteT-uA4",
+    "usageMetadata": {
+      "promptTokenCount": 99,
+      "candidatesTokenCount": 8,
+      "totalTokenCount": 355,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 99
+        }
+      ],
+      "thoughtsTokenCount": 248,
+      "serviceTier": "standard"
+    }
+  }
+}

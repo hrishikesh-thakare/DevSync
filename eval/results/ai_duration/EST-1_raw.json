@@ -1,0 +1,30 @@
+{
+  "task": {
+    "taskKey": "EST-1",
+    "issueType": "bug",
+    "title": "Fix typo in 404 error page",
+    "descriptionText": "Correct spelling of \"occurred\" in NotFound.tsx line 42.",
+    "complexityCategory": "Trivial (<1h)"
+  },
+  "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-1 (bug)\nTitle: Fix typo in 404 error page\nDescription: Correct spelling of \"occurred\" in NotFound.tsx line 42.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+  "rawResponseText": "{\"estimatedHours\": 0.5}",
+  "parsedHours": 0.5,
+  "processedHours": 0.5,
+  "meta": {
+    "modelVersion": "gemini-3.8-flash",
+    "responseId": "thLWatnCFefy4-EP18Xu4Qk",
+    "usageMetadata": {
+      "promptTokenCount": 87,
+      "candidatesTokenCount": 9,
+      "totalTokenCount": 307,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 87
+        }
+      ],
+      "thoughtsTokenCount": 211,
+      "serviceTier": "standard"
+    }
+  }
+}

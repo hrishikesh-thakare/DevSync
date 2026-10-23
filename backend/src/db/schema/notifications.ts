@@ -8,10 +8,12 @@ import {
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { users } from './auth.js';
+import { workspaces } from './workspaces.js';
 
 // ─── notifications ───────────────────────────────────────────────────────────
 export const notifications = pgTable('notifications', {
   notificationId: uuid('notification_id').primaryKey().defaultRandom(),
+  workspaceId:    uuid('workspace_id').references(() => workspaces.workspaceId, { onDelete: 'cascade' }),
   recipientId:    uuid('recipient_id').references(() => users.userId, { onDelete: 'cascade' }),
   actorId:        uuid('actor_id').references(() => users.userId, { onDelete: 'set null' }),
   type:           varchar('type', { length: 50 }).notNull(),
@@ -31,6 +33,7 @@ export const notifications = pgTable('notifications', {
 
 // ─── Relations ───────────────────────────────────────────────────────────────
 export const notificationsRelations = relations(notifications, ({ one }) => ({
+  workspace: one(workspaces, { fields: [notifications.workspaceId], references: [workspaces.workspaceId] }),
   recipient: one(users, { fields: [notifications.recipientId], references: [users.userId] }),
   actor:     one(users, { fields: [notifications.actorId], references: [users.userId] }),
 }));

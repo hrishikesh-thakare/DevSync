@@ -1,18 +1,46 @@
 import { Request, Response } from 'express';
 import crypto from 'node:crypto';
+import { generateKeyBetween } from 'fractional-indexing';
 import { db } from '../../config/db.js';
 import { env } from '../../config/env.js';
 import { githubConnections, githubCommits, githubCiStatus, githubIssues, githubPullRequests, githubBranches } from '../../db/schema/github.js';
 import { tasks } from '../../db/schema/tasks.js';
 import { projects, projectMembers } from '../../db/schema/projects.js';
 import { users } from '../../db/schema/auth.js';
-import { eq, and, sql, inArray, or, desc, isNull, isNotNull, count } from 'drizzle-orm';
+import { eq, and, sql, inArray, or, desc, asc, isNull, isNotNull, count } from 'drizzle-orm';
 import { logAuditAction } from '../audit/audit.controller.js';
 import { createNotification } from '../notifications/notifications.controller.js';
 import { encrypt, decrypt } from '../../lib/encryption.js';
 import { enqueueJob } from '../../workers/queue.js';
 import { getIO } from '../../sockets/index.js';
 import { summarizeCiFailure } from '../../services/ai.service.js';
+
+// ─── HELPER: Generate rank for column auto-transitions ──────────────────────
+async function generateColumnRank(projectId: string, targetStatus: string): Promise<string> {
+  try {
+    const [firstTask] = await db
+      .select({ rank: tasks.rank })
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.projectId, projectId),
+          eq(tasks.status, targetStatus),
+          isNull(tasks.deletedAt),
+          isNotNull(tasks.rank)
+        )
+      )
+      .orderBy(asc(tasks.rank))
+      .limit(1);
+
+    if (!firstTask?.rank) {
+      return generateKeyBetween(null, null);
+    }
+
+    return generateKeyBetween(null, firstTask.rank);
+  } catch {
+    return generateKeyBetween(null, null);
+  }
+}
 
 // ─── HELPER: Verify GitHub Webhook Signature ─────────────────────────────────
 function verifyGitHubSignature(rawBody: Buffer, signatureHeader: string | undefined, webhookSecret: string): boolean {
@@ -534,34 +562,43 @@ const handlePushEvent = async (projectId: string, payload: any) => {
         });
 
         // ─── Smart Commit Status Update ────────────────────────────────
-        // If commit message contains "fixes DEV-101", "closes DEV-101", "resolves DEV-101"
+        // If commit message contains "fixes DEV-101", "DEV-101 resolved", "DEV-101 done", etc.
         // automatically move the task to 'done'
-        const closeRegex = new RegExp(`(?:fix(?:es|ed)?|close[sd]?|resolve[sd]?)\\s+${taskKey}`, 'i');
-        if (closeRegex.test(message)) {
-          await db
-            .update(tasks)
-            .set({ status: 'done', updatedAt: new Date() })
-            .where(eq(tasks.taskId, task.taskId));
-            
-          const io = getIO();
-          if (io) io.to(`project:${projectId}`).emit('task_updated', { taskId: task.taskId, status: 'done' });
+        const actionKeywords = 'fix(?:es|ed)?|close[sd]?|resolve[sd]?|complete[sd]?|finish(?:es|ed)?|merge[sd]?|done';
+        const escapedKey = taskKey.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const prefixRegex = new RegExp(`\\b(?:${actionKeywords})\\s*[:\\s-]*\\[?${escapedKey}\\]?\\b`, 'i');
+        const suffixRegex = new RegExp(`(?:\\[|\\b)${escapedKey}(?:\\]|\\b)\\s*[:\\s-]+\\s*(?:${actionKeywords})\\b`, 'i');
+        const isClosing = prefixRegex.test(message) || suffixRegex.test(message);
 
-          await logAuditAction({
-            actorId: authorUserId,
-            action: 'task.auto_closed_by_commit',
-            entityType: 'task',
-            entityId: task.taskId,
-            newValues: { status: 'done', commit_sha: commit.id.substring(0, 7) },
-          });
+        if (isClosing) {
+          if (task.status !== 'done') {
+            const newRank = await generateColumnRank(projectId, 'done');
+            await db
+              .update(tasks)
+              .set({ status: 'done', rank: newRank, updatedAt: new Date() })
+              .where(eq(tasks.taskId, task.taskId));
+              
+            const io = getIO();
+            if (io) io.to(`project:${projectId}`).emit('task_updated', { taskId: task.taskId, status: 'done', rank: newRank });
+
+            await logAuditAction({
+              actorId: authorUserId,
+              action: 'task.auto_closed_by_commit',
+              entityType: 'task',
+              entityId: task.taskId,
+              newValues: { status: 'done', commit_sha: commit.id.substring(0, 7) },
+            });
+          }
         } else if (task.status === 'todo') {
           // If a branch is pushed with the task ID, or a commit is linked to a todo task, move to in_progress
+          const newRank = await generateColumnRank(projectId, 'in_progress');
           await db
             .update(tasks)
-            .set({ status: 'in_progress', updatedAt: new Date() })
+            .set({ status: 'in_progress', rank: newRank, updatedAt: new Date() })
             .where(eq(tasks.taskId, task.taskId));
             
           const io = getIO();
-          if (io) io.to(`project:${projectId}`).emit('task_updated', { taskId: task.taskId, status: 'in_progress' });
+          if (io) io.to(`project:${projectId}`).emit('task_updated', { taskId: task.taskId, status: 'in_progress', rank: newRank });
 
           await logAuditAction({
             actorId: authorUserId,
@@ -986,10 +1023,11 @@ const handlePullRequestEvent = async (projectId: string, payload: any, defaultBr
   const isDefaultBranch = defaultBranch ? baseBranch === defaultBranch : (baseBranch === 'main' || baseBranch === 'master');
 
   if (state === 'merged' && taskId && isDefaultBranch) {
-    await db.update(tasks).set({ status: 'done', updatedAt: new Date() }).where(eq(tasks.taskId, taskId));
+    const newRank = await generateColumnRank(projectId, 'done');
+    await db.update(tasks).set({ status: 'done', rank: newRank, updatedAt: new Date() }).where(eq(tasks.taskId, taskId));
     
     const io = getIO();
-    if (io) io.to(`project:${projectId}`).emit('task_updated', { taskId, status: 'done' });
+    if (io) io.to(`project:${projectId}`).emit('task_updated', { taskId, status: 'done', rank: newRank });
     
     await logAuditAction({
       actorId: authorUserId,
@@ -1002,10 +1040,11 @@ const handlePullRequestEvent = async (projectId: string, payload: any, defaultBr
     // If PR is opened and linked to a task, auto-move task to "in_review"
     const linkedTask = await findTaskByKey(projectId, taskKey!);
     if (linkedTask && (linkedTask.status === 'todo' || linkedTask.status === 'in_progress')) {
-      await db.update(tasks).set({ status: 'in_review', updatedAt: new Date() }).where(eq(tasks.taskId, taskId));
+      const newRank = await generateColumnRank(projectId, 'in_review');
+      await db.update(tasks).set({ status: 'in_review', rank: newRank, updatedAt: new Date() }).where(eq(tasks.taskId, taskId));
       
       const io = getIO();
-      if (io) io.to(`project:${projectId}`).emit('task_updated', { taskId, status: 'in_review' });
+      if (io) io.to(`project:${projectId}`).emit('task_updated', { taskId, status: 'in_review', rank: newRank });
 
       await logAuditAction({
         actorId: authorUserId,
@@ -1164,10 +1203,11 @@ const handleBranchEvent = async (projectId: string, payload: any, event: string)
     if (taskId) {
       const linkedTask = await findTaskByKey(projectId, taskKey!);
       if (linkedTask && linkedTask.status === 'todo') {
-        await db.update(tasks).set({ status: 'in_progress', updatedAt: new Date() }).where(eq(tasks.taskId, taskId));
+        const newRank = await generateColumnRank(projectId, 'in_progress');
+        await db.update(tasks).set({ status: 'in_progress', rank: newRank, updatedAt: new Date() }).where(eq(tasks.taskId, taskId));
         
         const io = getIO();
-        if (io) io.to(`project:${projectId}`).emit('task_updated', { taskId, status: 'in_progress' });
+        if (io) io.to(`project:${projectId}`).emit('task_updated', { taskId, status: 'in_progress', rank: newRank });
       }
     }
   } else if (event === 'delete') {
@@ -1633,7 +1673,10 @@ export const createGithubBranch = async (req: Request, res: Response): Promise<v
     if (taskId) {
       const [task] = await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.taskId, taskId)).limit(1);
       if (task && task.status === 'todo') {
-        await db.update(tasks).set({ status: 'in_progress', updatedAt: new Date() }).where(eq(tasks.taskId, taskId));
+        const newRank = await generateColumnRank(projectId, 'in_progress');
+        await db.update(tasks).set({ status: 'in_progress', rank: newRank, updatedAt: new Date() }).where(eq(tasks.taskId, taskId));
+        const io = getIO();
+        if (io) io.to(`project:${projectId}`).emit('task_updated', { taskId, status: 'in_progress', rank: newRank });
       }
     }
 

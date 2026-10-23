@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, NavLink, useLocation, useParams } from 'react-router-dom';
 import {
   ChartLineIcon,
@@ -7,6 +7,7 @@ import {
   HistoryIcon,
   HomeIcon,
   ListTodoIcon,
+  LockIcon,
   MessageSquareIcon,
   MoreHorizontalIcon,
   PlusIcon,
@@ -31,6 +32,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { StartDmDialog } from '@/components/layout/StartDmDialog';
 import { useCurrentWorkspaceStore } from '@/store/currentWorkspace';
 import { initialsOf } from '@/lib/initials';
 import { cn } from '@/lib/utils';
@@ -47,6 +49,7 @@ export function WorkspaceSidebar() {
   const location = useLocation();
   const { isMobile, setOpenMobile } = useSidebar();
   const { name, projects, channels, isLoading, isAdmin, isOwner } = useCurrentWorkspaceStore();
+  const [dmOpen, setDmOpen] = useState(false);
 
   useEffect(() => {
     if (isMobile) {
@@ -57,20 +60,26 @@ export function WorkspaceSidebar() {
   const visibleProjects = projects.slice(0, SIDEBAR_LIST_CAP);
   const hiddenProjects = projects.length - visibleProjects.length;
 
-  // Split once, here, rather than re-deriving `isDirect` per row below.
-  // Direct messages get their own section entirely — the "Channels" list
-  // below only ever meant named, browsable channels (there's a whole
-  // separate directory page for those, `ChannelListPage.tsx`, that
-  // deliberately excludes DMs), and a DM mixed into that list rendered as a
-  // bare hash icon with a blank label before this existed. No cap on DMs:
-  // unlike channels there's no separate "browse all your DMs" page to hand
-  // the overflow to, and a realistic DM count doesn't need one.
-  const namedChannels = channels.filter(
-    (c): c is typeof c & { name: string } => c.type !== 'dm' && c.type !== 'group_dm',
+  const projectMap = useMemo(
+    () => new Map(projects.map((p) => [p.projectId, p])),
+    [projects],
   );
+
   const directChannels = channels.filter((c) => c.type === 'dm' || c.type === 'group_dm');
-  const visibleChannels = namedChannels.slice(0, SIDEBAR_LIST_CAP);
-  const hiddenChannels = namedChannels.length - visibleChannels.length;
+
+  const workspaceChannels = channels.filter(
+    (c): c is typeof c & { name: string } =>
+      c.type !== 'dm' && c.type !== 'group_dm' && !c.projectId,
+  );
+  const visibleWorkspaceChannels = workspaceChannels.slice(0, SIDEBAR_LIST_CAP);
+  const hiddenWorkspaceChannels = workspaceChannels.length - visibleWorkspaceChannels.length;
+
+  const projectChannels = channels.filter(
+    (c): c is typeof c & { name: string } =>
+      c.type !== 'dm' && c.type !== 'group_dm' && Boolean(c.projectId),
+  );
+  const visibleProjectChannels = projectChannels.slice(0, SIDEBAR_LIST_CAP);
+  const hiddenProjectChannels = projectChannels.length - visibleProjectChannels.length;
 
   const directMessageLabel = (channel: (typeof directChannels)[number]): string =>
     channel.otherParticipants?.map((p) => p.displayName || p.fullName).join(', ') || 'Direct message';
@@ -155,12 +164,19 @@ export function WorkspaceSidebar() {
 
         <SidebarGroup>
           <SidebarGroupLabel>Direct Messages</SidebarGroupLabel>
+          <SidebarGroupAction
+            title="New direct message"
+            onClick={() => setDmOpen(true)}
+          >
+            <PlusIcon />
+            <span className="sr-only">New direct message</span>
+          </SidebarGroupAction>
           <SidebarGroupContent>
             <SidebarMenu>
               {isLoading ? (
                 <SidebarMenuItem><SidebarMenuSkeleton showIcon /></SidebarMenuItem>
               ) : directChannels.length === 0 ? (
-                <EmptyHint>No conversations yet — message someone from Members</EmptyHint>
+                <EmptyHint>No conversations yet — click + to message someone</EmptyHint>
               ) : (
                 directChannels.map((channel) => (
                   <NavItem
@@ -176,25 +192,73 @@ export function WorkspaceSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel>Channels</SidebarGroupLabel>
+          <SidebarGroupLabel>Workspace Channels</SidebarGroupLabel>
+          {canManage ? (
+            <SidebarGroupAction asChild title="New workspace channel">
+              <Link to={`/w/${slug}/channels?new=true&scope=workspace`}>
+                <PlusIcon />
+                <span className="sr-only">New workspace channel</span>
+              </Link>
+            </SidebarGroupAction>
+          ) : null}
           <SidebarGroupContent>
             <SidebarMenu>
               {isLoading ? (
                 <SidebarMenuItem><SidebarMenuSkeleton showIcon /></SidebarMenuItem>
-              ) : namedChannels.length === 0 ? (
-                <EmptyHint>No channels yet</EmptyHint>
+              ) : workspaceChannels.length === 0 ? (
+                <EmptyHint>No workspace channels yet</EmptyHint>
               ) : (
-                visibleChannels.map((channel) => (
+                visibleWorkspaceChannels.map((channel) => (
                   <NavItem
                     key={channel.channelId}
                     to={`/w/${slug}/channels/${channel.channelId}`}
-                    icon={<HashIcon />}
+                    icon={channel.type === 'private' ? <LockIcon /> : <HashIcon />}
                     label={channel.name}
+                    tooltip={`#${channel.name} · Workspace`}
                   />
                 ))
               )}
-              {hiddenChannels > 0 ? (
-                <MoreRow to={`/w/${slug}/channels`} count={hiddenChannels} />
+              {hiddenWorkspaceChannels > 0 ? (
+                <MoreRow to={`/w/${slug}/channels?scope=workspace`} count={hiddenWorkspaceChannels} />
+              ) : null}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Project Channels</SidebarGroupLabel>
+          {canManage ? (
+            <SidebarGroupAction asChild title="New project channel">
+              <Link to={`/w/${slug}/channels?new=true&scope=projects`}>
+                <PlusIcon />
+                <span className="sr-only">New project channel</span>
+              </Link>
+            </SidebarGroupAction>
+          ) : null}
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {isLoading ? (
+                <SidebarMenuItem><SidebarMenuSkeleton showIcon /></SidebarMenuItem>
+              ) : projectChannels.length === 0 ? (
+                <EmptyHint>No project channels yet</EmptyHint>
+              ) : (
+                visibleProjectChannels.map((channel) => {
+                  const project = channel.projectId ? projectMap.get(channel.projectId) : undefined;
+                  return (
+                    <NavItem
+                      key={channel.channelId}
+                      to={`/w/${slug}/channels/${channel.channelId}`}
+                      icon={channel.type === 'private' ? <LockIcon /> : <HashIcon />}
+                      label={channel.name}
+                      badge={project?.key}
+                      badgePosition="end"
+                      tooltip={project ? `#${channel.name} · ${project.name}` : `#${channel.name}`}
+                    />
+                  );
+                })
+              )}
+              {hiddenProjectChannels > 0 ? (
+                <MoreRow to={`/w/${slug}/channels?scope=projects`} count={hiddenProjectChannels} />
               ) : null}
             </SidebarMenu>
           </SidebarGroupContent>
@@ -203,6 +267,7 @@ export function WorkspaceSidebar() {
 
       <SidebarFooter />
       <SidebarRail />
+      <StartDmDialog open={dmOpen} onOpenChange={setDmOpen} slug={slug} />
     </Sidebar>
   );
 }
@@ -236,31 +301,45 @@ function NavItem({
   icon,
   label,
   badge,
+  badgePosition = 'start',
+  tooltip,
 }: {
   to: string;
   end?: boolean;
   icon?: React.ReactNode;
   label: string;
   badge?: string;
+  badgePosition?: 'start' | 'end';
+  tooltip?: string;
 }) {
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild tooltip={label}>
+      <SidebarMenuButton asChild tooltip={tooltip || label}>
         <NavLink to={to} end={end}>
           {({ isActive }) => (
             <>
               {icon}
-              {badge ? (
+              {badge && badgePosition === 'start' ? (
                 <span
                   className={cn(
-                    'rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground',
+                    'rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground group-data-[collapsible=icon]:hidden',
                     isActive && 'text-foreground',
                   )}
                 >
                   {badge}
                 </span>
               ) : null}
-              <span className={cn('truncate', isActive && 'font-medium text-foreground')}>{label}</span>
+              <span className={cn('truncate flex-1 text-left', isActive && 'font-medium text-foreground')}>{label}</span>
+              {badge && badgePosition === 'end' ? (
+                <span
+                  className={cn(
+                    'ml-auto shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] uppercase text-muted-foreground group-data-[collapsible=icon]:hidden',
+                    isActive && 'text-foreground',
+                  )}
+                >
+                  {badge}
+                </span>
+              ) : null}
             </>
           )}
         </NavLink>

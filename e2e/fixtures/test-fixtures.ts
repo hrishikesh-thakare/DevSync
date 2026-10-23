@@ -9,7 +9,7 @@
  *   test('owner can do X', async ({ ownerPage }) => { ... });
  */
 import { test as base, type Page, type BrowserContext } from '@playwright/test';
-import { authStatePath } from '../helpers/constants.js';
+import { authStatePath, BASE_URL } from '../helpers/constants.js';
 import path from 'path';
 
 // Define the shape of our custom fixtures
@@ -30,7 +30,7 @@ type TestFixtures = {
 function createFixture(role: string) {
   return async ({ browser }: { browser: any }, use: any) => {
     const statePath = path.resolve(import.meta.dirname, '..', authStatePath(role));
-    const context = await browser.newContext({ storageState: statePath });
+    const context = await browser.newContext({ storageState: statePath, baseURL: BASE_URL });
     const page = await context.newPage();
     await use(page);
     await context.close();

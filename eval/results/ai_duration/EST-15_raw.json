@@ -1,0 +1,30 @@
+{
+  "task": {
+    "taskKey": "EST-15",
+    "issueType": "task",
+    "title": "Refactor monolithic tasks controller into domain service classes",
+    "descriptionText": "Extract task validation, transition triggers, and query builders from tasks.controller.ts (1,200 lines) into isolated service modules.",
+    "complexityCategory": "Refactoring (16-30h)"
+  },
+  "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-15 (task)\nTitle: Refactor monolithic tasks controller into domain service classes\nDescription: Extract task validation, transition triggers, and query builders from tasks.controller.ts (1,200 lines) into isolated service modules.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+  "rawResponseText": "{\"estimatedHours\": 16}",
+  "parsedHours": 16,
+  "processedHours": 16,
+  "meta": {
+    "modelVersion": "gemini-3.8-flash",
+    "responseId": "exPWaqhH6_aO4w_zi9OYCQ",
+    "usageMetadata": {
+      "promptTokenCount": 101,
+      "candidatesTokenCount": 8,
+      "totalTokenCount": 494,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 101
+        }
+      ],
+      "thoughtsTokenCount": 385,
+      "serviceTier": "standard"
+    }
+  }
+}

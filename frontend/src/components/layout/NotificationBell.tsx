@@ -23,8 +23,8 @@ export function NotificationBell({ slug }: { slug: string }) {
   const isMobile = useIsMobile();
 
   useEffect(() => {
-    void fetchNotifications();
-  }, [fetchNotifications]);
+    void fetchNotifications(slug);
+  }, [fetchNotifications, slug]);
 
   const open = async (id: string) => {
     void markAsRead(id);
@@ -65,7 +65,7 @@ export function NotificationBell({ slug }: { slug: string }) {
               size="xs"
               onClick={(e) => {
                 e.preventDefault();
-                void markAllAsRead();
+                void markAllAsRead(slug);
               }}
             >
               <CheckCheckIcon className="size-3.5" aria-hidden="true" />

@@ -66,6 +66,7 @@ test.describe('GitHub Authentication', () => {
       ['POST', `/workspaces/${SLUG}/projects/${KEY}/github/branches`],
       ['GET', `/workspaces/${SLUG}/projects/${KEY}/tasks/PROJ-1/github/commits`],
       ['GET', `/workspaces/${SLUG}/projects/${KEY}/tasks/PROJ-1/github/github-activity`],
+      ['POST', `/workspaces/${SLUG}/projects/${KEY}/github/ci/12345/summarize`],
       ['POST', '/github/oauth/exchange'],
     ] as const;
 

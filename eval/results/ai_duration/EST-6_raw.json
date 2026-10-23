@@ -1,0 +1,30 @@
+{
+  "task": {
+    "taskKey": "EST-6",
+    "issueType": "bug",
+    "title": "Prevent double-submission on task creation modal",
+    "descriptionText": "Disable submit button and display loading spinner while API request is in-flight.",
+    "complexityCategory": "Minor Fix (1-2h)"
+  },
+  "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-6 (bug)\nTitle: Prevent double-submission on task creation modal\nDescription: Disable submit button and display loading spinner while API request is in-flight.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+  "rawResponseText": "{\"estimatedHours\": 1.5}",
+  "parsedHours": 1.5,
+  "processedHours": 1.5,
+  "meta": {
+    "modelVersion": "gemini-3.8-flash",
+    "responseId": "-xLWasykGriajuMPiq_O4Q4",
+    "usageMetadata": {
+      "promptTokenCount": 85,
+      "candidatesTokenCount": 9,
+      "totalTokenCount": 368,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 85
+        }
+      ],
+      "thoughtsTokenCount": 274,
+      "serviceTier": "standard"
+    }
+  }
+}

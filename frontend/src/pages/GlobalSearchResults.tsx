@@ -5,9 +5,7 @@ import { HashIcon, SearchIcon } from 'lucide-react';
 
 import { ErrorState } from '@/components/layout/PageState';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -54,7 +52,6 @@ export function GlobalSearchResults() {
   const query = params.get('q') ?? '';
   const type = (params.get('type') ?? 'all') as 'all' | 'tasks' | 'messages';
 
-  const [input, setInput] = useState(query);
   const [tasks, setTasks] = useState<TaskHit[]>([]);
   const [messages, setMessages] = useState<MessageHit[]>([]);
   // The API caps each type at 25 rows per page but also returns the true totals.
@@ -101,39 +98,26 @@ export function GlobalSearchResults() {
     void run(query, type);
   }, [query, type, run]);
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setParams({ q: input, type });
-  };
-
   const total = counts.tasks + counts.messages;
 
   return (
     <PageShell>
-      <PageHeader title="Search" description="Full-text search across tasks and messages." />
-
-      <form onSubmit={submit} className="mb-4 flex gap-2" role="search">
-        <div className="relative flex-1">
-          <SearchIcon
-            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Search tasks and messages…"
-            aria-label="Search query"
-            className="pl-8"
-          />
-        </div>
-        <Button type="submit">Search</Button>
-      </form>
+      <PageHeader
+        title={query.trim().length >= 2 ? `Search results for "${query}"` : 'Search'}
+        description={
+          isLoading
+            ? 'Searching workspace...'
+            : query.trim().length >= 2
+              ? `Found ${total} result${total === 1 ? '' : 's'} across tasks and messages.`
+              : 'Full-text search across tasks and messages.'
+        }
+      />
 
       <Tabs value={type} onValueChange={(v) => setParams({ q: query, type: v })} className="mb-4">
         <TabsList>
-          <TabsTrigger value="all">All</TabsTrigger>
-          <TabsTrigger value="tasks">Tasks</TabsTrigger>
-          <TabsTrigger value="messages">Messages</TabsTrigger>
+          <TabsTrigger value="all">All ({counts.tasks + counts.messages})</TabsTrigger>
+          <TabsTrigger value="tasks">Tasks ({counts.tasks})</TabsTrigger>
+          <TabsTrigger value="messages">Messages ({counts.messages})</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -154,7 +138,7 @@ export function GlobalSearchResults() {
               <SearchIcon aria-hidden="true" />
             </EmptyMedia>
             <EmptyTitle>Search this workspace</EmptyTitle>
-            <EmptyDescription>Type at least two characters to begin.</EmptyDescription>
+            <EmptyDescription>Type in the search bar above or press <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">f</kbd> to begin.</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : total === 0 ? (

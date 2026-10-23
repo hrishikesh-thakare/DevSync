@@ -110,13 +110,56 @@ export function ChannelPage() {
   // results are a live search scoped to the channel's linked project, if it
   // has one. Fails soft to user-only results: a member without project
   // access, or a network hiccup, shouldn't block mentioning a person.
+  type UserMentionItem = Extract<MentionItem, { kind: 'user' }>;
+
+  // Cache project members to avoid repeated network requests when typing `@`
+  const projectMembersCache = useRef<Record<string, UserMentionItem[]>>({});
+
+  // Backs the composer's `@` mention popup.
+  // In project-based channels, user results are strictly scoped to the members
+  // of that project, and tasks are scoped to that project's tasks.
+  // In workspace channels, user results include workspace members.
   const getMentionItems = async (query: string, signal: AbortSignal): Promise<MentionItem[]> => {
     const q = query.trim().toLowerCase();
-    const userItems: MentionItem[] = workspaceMembers
+
+    let eligibleUsers: UserMentionItem[];
+    if (projectKey) {
+      if (projectMembersCache.current[projectKey]) {
+        eligibleUsers = projectMembersCache.current[projectKey];
+      } else {
+        try {
+          const data = await apiFetch(`/workspaces/${slug}/projects/${projectKey}/members`, { signal });
+          eligibleUsers = (data.members ?? []).map(
+            (m: { userId: string; fullName: string; displayName?: string | null; avatarUrl?: string | null }) => ({
+              kind: 'user' as const,
+              id: m.userId,
+              label: m.displayName || m.fullName,
+              avatarUrl: m.avatarUrl ?? null,
+            }),
+          );
+          projectMembersCache.current[projectKey] = eligibleUsers;
+        } catch {
+          eligibleUsers = workspaceMembers.map((m) => ({
+            kind: 'user' as const,
+            id: m.userId,
+            label: m.displayName || m.fullName,
+            avatarUrl: m.avatarUrl,
+          }));
+        }
+      }
+    } else {
+      eligibleUsers = workspaceMembers.map((m) => ({
+        kind: 'user' as const,
+        id: m.userId,
+        label: m.displayName || m.fullName,
+        avatarUrl: m.avatarUrl,
+      }));
+    }
+
+    const userItems: MentionItem[] = eligibleUsers
       // Not yourself — you don't @-mention the person typing.
-      .filter((m) => m.userId !== me?.userId)
-      .filter((m) => !q || m.fullName.toLowerCase().includes(q) || (m.displayName ?? '').toLowerCase().includes(q))
-      .map((m) => ({ kind: 'user', id: m.userId, label: m.displayName || m.fullName, avatarUrl: m.avatarUrl }));
+      .filter((m) => m.id !== me?.userId)
+      .filter((m) => !q || m.label.toLowerCase().includes(q));
 
     if (!projectKey) return userItems;
 
@@ -733,7 +776,16 @@ function MessageRow({
   // not HTML, so this render path is unchanged: converted to HTML and
   // sanitized in one step; see `e2e/tests/channels/messages.spec.ts`'s "XSS
   // sanitization" suite for exactly what has to survive that inert.
-  const safeBodyHtml = useMemo(() => renderMarkdownMessage(message.bodyText ?? '', slug), [message.bodyText, slug]);
+  const cleanBodyText = useMemo(() => {
+    const text = message.bodyText ?? '';
+    if (message.isSystem) {
+      // Strip leading decorative icons/emojis from system messages (e.g. 🔄, 👤, ✅)
+      return text.replace(/^(\p{Extended_Pictographic}|\uFE0F)+\s*/u, '');
+    }
+    return text;
+  }, [message.isSystem, message.bodyText]);
+
+  const safeBodyHtml = useMemo(() => renderMarkdownMessage(cleanBodyText, slug), [cleanBodyText, slug]);
 
   // Collapse the flat reaction rows into counts per emoji.
   const reactions = useMemo(() => {

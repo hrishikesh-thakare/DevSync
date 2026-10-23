@@ -219,6 +219,13 @@ export function CommandPalette() {
                     <HashIcon aria-hidden="true" />
                   )}
                   <span className="truncate">{channelLabel(channel)}</span>
+                  {channel.type !== 'dm' && channel.type !== 'group_dm' ? (
+                    <span className="ml-auto font-mono text-[10px] uppercase text-muted-foreground">
+                      {channel.projectId
+                        ? projects.find((p) => p.projectId === channel.projectId)?.key || 'project'
+                        : 'workspace'}
+                    </span>
+                  ) : null}
                 </CommandItem>
               ))}
             </CommandGroup>

@@ -8,6 +8,7 @@ const KEY = TEST_PROJECT.key;
 test.describe('Search', () => {
   let uniqueTitle: string;
   let uniqueText: string;
+  let taskKey: string;
 
   test.beforeAll(async () => {
     uniqueTitle = `UnicornQuest ${Date.now()}`;
@@ -18,6 +19,8 @@ test.describe('Search', () => {
       body: JSON.stringify({ title: uniqueTitle, issueType: 'task' }),
     });
     expect(created.status).toBe(201);
+    taskKey = created.data?.task?.taskKey || created.data?.taskKey;
+    expect(typeof taskKey).toBe('string');
     const channels = await apiRequest(`/workspaces/${SLUG}/channels`, accessToken);
     const channel = (channels.data?.channels || [])[0];
     if (channel) {
@@ -35,6 +38,35 @@ test.describe('Search', () => {
     expect(Array.isArray(data.tasks)).toBe(true);
     expect(typeof data.taskCount).toBe('number');
     expect(data.tasks.some((t: any) => (t.title || t.taskTitle || '').includes(uniqueTitle.split(' ')[0]))).toBe(true);
+  });
+
+  test('search finds a task by exact task key (case-insensitive)', async () => {
+    const { accessToken } = await apiLogin(TEST_USERS.owner.email);
+    // Upper case (e.g. TEST-1)
+    const { status: s1, data: d1 } = await apiRequest(`/workspaces/${SLUG}/search?q=${taskKey}&type=tasks`, accessToken);
+    expect(s1).toBe(200);
+    expect(d1.tasks.some((t: any) => t.taskKey === taskKey)).toBe(true);
+    // Exact taskKey match should be ranked first
+    expect(d1.tasks[0].taskKey).toBe(taskKey);
+
+    // Lower case (e.g. test-1)
+    const { status: s2, data: d2 } = await apiRequest(`/workspaces/${SLUG}/search?q=${taskKey.toLowerCase()}&type=tasks`, accessToken);
+    expect(s2).toBe(200);
+    expect(d2.tasks.some((t: any) => t.taskKey === taskKey)).toBe(true);
+  });
+
+  test('search finds a task by key variations without hyphen and with space', async () => {
+    const { accessToken } = await apiLogin(TEST_USERS.owner.email);
+    const withoutHyphen = taskKey.replace('-', '');
+    const withSpace = taskKey.replace('-', ' ');
+
+    const { status: s1, data: d1 } = await apiRequest(`/workspaces/${SLUG}/search?q=${withoutHyphen}&type=tasks`, accessToken);
+    expect(s1).toBe(200);
+    expect(d1.tasks.some((t: any) => t.taskKey === taskKey)).toBe(true);
+
+    const { status: s2, data: d2 } = await apiRequest(`/workspaces/${SLUG}/search?q=${encodeURIComponent(withSpace)}&type=tasks`, accessToken);
+    expect(s2).toBe(200);
+    expect(d2.tasks.some((t: any) => t.taskKey === taskKey)).toBe(true);
   });
 
   test('search finds a message by its unique content', async () => {

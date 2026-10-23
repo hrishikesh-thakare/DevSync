@@ -1,0 +1,43 @@
+{
+  "sprintId": "a2222222-0000-4000-8000-000000000002",
+  "sprintName": "Sprint 2 - Database Migration & Storage",
+  "characteristic": "Low Completion (30%), heavy work in progress and review",
+  "dateGenerated": "2026-10-19T12:45:21.742Z",
+  "model": "gemini-3.6-flash",
+  "inputs": {
+    "sprintName": "Sprint 2 - Database Migration & Storage",
+    "goal": "Migrate database schema and implement storage adapters",
+    "dateRange": "2026-03-16 to 2026-03-27",
+    "completedCount": 3,
+    "totalCount": 10,
+    "completionRate": 30,
+    "taskCount": 10
+  },
+  "rawResponseText": "{\n  \"summary\": \"During Sprint 2, the team focused on laying the foundation for database migration and storage adapter integration. Core setup tasks, including schema migrations, Drizzle ORM relations, and the Supabase storage bucket, were successfully completed. Key storage features and testing tasks remain in progress or queued for future work.\",\n  \"highlights\": [\n    \"Successfully established initial database schema migrations and ORM relations\",\n    \"Configured the primary Supabase storage bucket infrastructure\",\n    \"Advanced key upload, deletion, and download URL features into active development and code review\"\n  ]\n}",
+  "parsedReport": {
+    "summary": "During Sprint 2, the team focused on laying the foundation for database migration and storage adapter integration. Core setup tasks, including schema migrations, Drizzle ORM relations, and the Supabase storage bucket, were successfully completed. Key storage features and testing tasks remain in progress or queued for future work.",
+    "highlights": [
+      "Completed 3 of 10 tasks (30%)",
+      "Successfully established initial database schema migrations and ORM relations",
+      "Configured the primary Supabase storage bucket infrastructure",
+      "Advanced key upload, deletion, and download URL features into active development and code review"
+    ]
+  },
+  "metadata": {
+    "modelVersion": "gemini-3.6-flash",
+    "responseId": "6BDWarvGD829juMP1P-PoQk",
+    "usageMetadata": {
+      "promptTokenCount": 406,
+      "candidatesTokenCount": 125,
+      "totalTokenCount": 1321,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 406
+        }
+      ],
+      "thoughtsTokenCount": 790,
+      "serviceTier": "standard"
+    }
+  }
+}

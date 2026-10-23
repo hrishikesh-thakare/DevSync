@@ -1,0 +1,30 @@
+{
+  "task": {
+    "taskKey": "EST-3",
+    "issueType": "bug",
+    "title": "Fix button hover state color in dark mode",
+    "descriptionText": "Secondary button hover background has insufficient contrast against zinc-900 surface in dark mode.",
+    "complexityCategory": "Minor UI (<2h)"
+  },
+  "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-3 (bug)\nTitle: Fix button hover state color in dark mode\nDescription: Secondary button hover background has insufficient contrast against zinc-900 surface in dark mode.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+  "rawResponseText": "{\"estimatedHours\": 0.5}",
+  "parsedHours": 0.5,
+  "processedHours": 0.5,
+  "meta": {
+    "modelVersion": "gemini-3.8-flash",
+    "responseId": "yBLWavDgOc2wjuMPr6mPuQ4",
+    "usageMetadata": {
+      "promptTokenCount": 88,
+      "candidatesTokenCount": 9,
+      "totalTokenCount": 382,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 88
+        }
+      ],
+      "thoughtsTokenCount": 285,
+      "serviceTier": "standard"
+    }
+  }
+}

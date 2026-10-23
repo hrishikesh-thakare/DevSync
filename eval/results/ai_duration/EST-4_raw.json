@@ -1,0 +1,30 @@
+{
+  "task": {
+    "taskKey": "EST-4",
+    "issueType": "feature",
+    "title": "Add CSV export button to workspace members table",
+    "descriptionText": "Generate and trigger download of CSV formatted file containing full_name, email, role, and joined_at.",
+    "complexityCategory": "Minor Feature (2-4h)"
+  },
+  "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-4 (feature)\nTitle: Add CSV export button to workspace members table\nDescription: Generate and trigger download of CSV formatted file containing full_name, email, role, and joined_at.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+  "rawResponseText": "{\"estimatedHours\": 3}",
+  "parsedHours": 3,
+  "processedHours": 3,
+  "meta": {
+    "modelVersion": "gemini-3.8-flash",
+    "responseId": "0hLWatuQKNycjuMPk-yjkAk",
+    "usageMetadata": {
+      "promptTokenCount": 92,
+      "candidatesTokenCount": 7,
+      "totalTokenCount": 416,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 92
+        }
+      ],
+      "thoughtsTokenCount": 317,
+      "serviceTier": "standard"
+    }
+  }
+}

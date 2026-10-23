@@ -1,0 +1,21 @@
+task_key,issue_type,title,complexity_category,raw_model_hours,clipped_rounded_hours,clipping_applied,rounding_applied,reference_duration_hours (user supplied),d_min_hours,d_max_hours,model_version
+EST-1,bug,Fix typo in 404 error page,Trivial (<1h),0.5,0.5,none,false,,0.5,80,gemini-3.8-flash
+EST-2,task,Bump typescript from 5.7 to 5.8 in package.json,Trivial (<1h),1,1,none,false,,0.5,80,gemini-3.8-flash
+EST-3,bug,Fix button hover state color in dark mode,Minor UI (<2h),0.5,0.5,none,false,,0.5,80,gemini-3.8-flash
+EST-4,feature,Add CSV export button to workspace members table,Minor Feature (2-4h),3,3,none,false,,0.5,80,gemini-3.8-flash
+EST-5,feature,Implement search filter dropdown by priority on Kanban board,Moderate Feature (4-8h),5,5,none,false,,0.5,80,gemini-3.8-flash
+EST-6,bug,Prevent double-submission on task creation modal,Minor Fix (1-2h),1.5,1.5,none,false,,0.5,80,gemini-3.8-flash
+EST-7,task,Add composite database index on task_status_transitions,Database Task (1-2h),2,2,none,false,,0.5,80,gemini-3.8-flash
+EST-8,feature,Implement cursor-based pagination for channel message history,Moderate Feature (6-12h),12,12,none,false,,0.5,80,gemini-3.8-flash
+EST-9,bug,Fix WebSocket reconnection loop during network disconnect,Moderate Bug (3-6h),4,4,none,false,,0.5,80,gemini-3.8-flash
+EST-10,feature,Add drag-and-drop file attachment to task comments,Moderate Feature (4-8h),10,10,none,false,,0.5,80,gemini-3.8-flash
+EST-11,feature,Implement OAuth2 PKCE login flow with GitHub,Complex Feature (12-20h),12,12,none,false,,0.5,80,gemini-3.8-flash
+EST-12,task,Migrate PostgreSQL connection pool to PgBouncer transaction mode,Infrastructure Task (4-8h),12,12,none,false,,0.5,80,gemini-3.8-flash
+EST-13,feature,Real-time collaborative task reordering on Kanban board,Complex Feature (16-24h),24,24,none,false,,0.5,80,gemini-3.8-flash
+EST-14,bug,Fix race condition during concurrent sprint close,Complex Bug (6-12h),6,6,none,false,,0.5,80,gemini-3.8-flash
+EST-15,task,Refactor monolithic tasks controller into domain service classes,Refactoring (16-30h),16,16,none,false,,0.5,80,gemini-3.8-flash
+EST-16,feature,Implement full-platform audit logging subsystem,Major Feature (20-35h),40,40,none,false,,0.5,80,gemini-3.8-flash
+EST-17,task,Set up automated CI/CD pipeline with GitHub Actions,DevOps Task (6-12h),5,5,none,false,,0.5,80,gemini-3.8-flash
+EST-18,feature,Full-text search engine with PostgreSQL tsvector and GIN indexing,Complex Feature (12-24h),8,8,none,false,,0.5,80,gemini-3.8-flash
+EST-19,task,Trivial port configuration change in .env.example,Trivial (<1h),0.5,0.5,none,false,,0.5,80,gemini-3.8-flash
+EST-20,feature,Re-architect entire monolithic platform into 8 distributed microservices,Massive Architecture (>80h cap),80,80,none,false,,0.5,80,gemini-3.8-flash

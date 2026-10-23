@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { HashIcon, LockIcon, PlusIcon } from 'lucide-react';
 
@@ -45,8 +45,11 @@ export function ChannelListPage() {
     [allChannels],
   );
   const canCreate = isAdmin();
+  const [searchParams] = useSearchParams();
+  const scopeParam = searchParams.get('scope');
+  const newParam = searchParams.get('new') === 'true';
 
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(newParam && canCreate);
   const [name, setName] = useState('');
   const [type, setType] = useState<ChannelType>('public');
   const [projectId, setProjectId] = useState('__none__');
@@ -54,7 +57,11 @@ export function ChannelListPage() {
 
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState(ANY);
-  const [projectFilter, setProjectFilter] = useState(ANY);
+  const [projectFilter, setProjectFilter] = useState(() => {
+    if (scopeParam === 'workspace') return '__workspace__';
+    if (scopeParam === 'projects') return '__all_projects__';
+    return ANY;
+  });
 
   const hasFilters = search.trim() !== '' || typeFilter !== ANY || projectFilter !== ANY;
 
@@ -65,7 +72,11 @@ export function ChannelListPage() {
         (!q || c.name.toLowerCase().includes(q)) &&
         (typeFilter === ANY || c.type === typeFilter) &&
         (projectFilter === ANY ||
-          (projectFilter === '__workspace__' ? !c.projectId : c.projectId === projectFilter)),
+          (projectFilter === '__workspace__'
+            ? !c.projectId
+            : projectFilter === '__all_projects__'
+              ? Boolean(c.projectId)
+              : c.projectId === projectFilter)),
     );
   }, [channels, search, typeFilter, projectFilter]);
 
@@ -135,12 +146,13 @@ export function ChannelListPage() {
             </Select>
 
             <Select value={projectFilter} onValueChange={setProjectFilter}>
-              <SelectTrigger className="w-48" aria-label="Filter by project">
+              <SelectTrigger className="w-52" aria-label="Filter by project">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ANY}>All channels</SelectItem>
                 <SelectItem value="__workspace__">Workspace-wide</SelectItem>
+                <SelectItem value="__all_projects__">All project channels</SelectItem>
                 {projects.map((p) => (
                   <SelectItem key={p.projectId} value={p.projectId}>
                     {p.key} — {p.name}
@@ -190,7 +202,13 @@ export function ChannelListPage() {
                   <HashIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                 )}
                 <span className="min-w-0 flex-1 truncate text-sm text-foreground">{channel.name}</span>
-                {channel.projectId ? <Badge variant="outline">project</Badge> : null}
+                {channel.projectId ? (
+                  <Badge variant="outline">
+                    {projects.find((p) => p.projectId === channel.projectId)?.key || 'project'}
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary">workspace</Badge>
+                )}
                 {channel.isAnnouncementOnly ? <Badge variant="secondary">announce</Badge> : null}
               </Link>
             </li>

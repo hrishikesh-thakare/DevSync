@@ -1,0 +1,30 @@
+{
+  "task": {
+    "taskKey": "EST-9",
+    "issueType": "bug",
+    "title": "Fix WebSocket reconnection loop during network disconnect",
+    "descriptionText": "Implement exponential backoff retry policy (1s, 2s, 4s, capped at 30s) when socket server drops.",
+    "complexityCategory": "Moderate Bug (3-6h)"
+  },
+  "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-9 (bug)\nTitle: Fix WebSocket reconnection loop during network disconnect\nDescription: Implement exponential backoff retry policy (1s, 2s, 4s, capped at 30s) when socket server drops.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+  "rawResponseText": "{\"estimatedHours\": 4}",
+  "parsedHours": 4,
+  "processedHours": 4,
+  "meta": {
+    "modelVersion": "gemini-3.8-flash",
+    "responseId": "FxPWatyTKdG9juMP3_aEuQ4",
+    "usageMetadata": {
+      "promptTokenCount": 99,
+      "candidatesTokenCount": 7,
+      "totalTokenCount": 323,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 99
+        }
+      ],
+      "thoughtsTokenCount": 217,
+      "serviceTier": "standard"
+    }
+  }
+}

@@ -33,6 +33,7 @@ export const env = {
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
 
   GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
+  GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-3-flash-preview',
 
   // Zoom (Server-to-Server OAuth app) — used only to mint meetings for the
   // channel "Start call" button. Not a per-user/per-workspace OAuth flow:

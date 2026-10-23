@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { LogOutIcon, SearchIcon, SettingsIcon, LayersIcon, UserCogIcon, HelpCircleIcon, SunIcon, MoonIcon, MonitorIcon } from 'lucide-react';
 
 
@@ -34,6 +34,19 @@ const isMac =
 export function WorkspaceTopBar({ slug }: { slug: string }) {
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const isSearchPage = location.pathname.endsWith('/search');
+  const urlQ = searchParams.get('q') ?? '';
+
+  // Synchronize top-bar search input with the URL ?q= parameter on the search page
+  useEffect(() => {
+    if (isSearchPage) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setQuery(urlQ);
+    }
+  }, [isSearchPage, urlQ]);
+
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { members, isOwner } = useCurrentWorkspaceStore();
@@ -49,7 +62,11 @@ export function WorkspaceTopBar({ slug }: { slug: string }) {
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
     const q = query.trim();
-    if (q.length >= 2) navigate(`/w/${slug}/search?q=${encodeURIComponent(q)}`);
+    if (q.length >= 2) {
+      navigate(`/w/${slug}/search?q=${encodeURIComponent(q)}`);
+    } else if (q.length === 0 && isSearchPage) {
+      navigate(`/w/${slug}/search`);
+    }
   };
 
   const signOut = async () => {

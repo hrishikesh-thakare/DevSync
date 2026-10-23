@@ -1,0 +1,30 @@
+{
+  "task": {
+    "taskKey": "EST-2",
+    "issueType": "task",
+    "title": "Bump typescript from 5.7 to 5.8 in package.json",
+    "descriptionText": "Update TypeScript version and verify build passes without new type errors.",
+    "complexityCategory": "Trivial (<1h)"
+  },
+  "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-2 (task)\nTitle: Bump typescript from 5.7 to 5.8 in package.json\nDescription: Update TypeScript version and verify build passes without new type errors.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+  "rawResponseText": "{\"estimatedHours\": 1}",
+  "parsedHours": 1,
+  "processedHours": 1,
+  "meta": {
+    "modelVersion": "gemini-3.8-flash",
+    "responseId": "vxLWaoTQK42MjuMPsKLS8A4",
+    "usageMetadata": {
+      "promptTokenCount": 90,
+      "candidatesTokenCount": 7,
+      "totalTokenCount": 310,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 90
+        }
+      ],
+      "thoughtsTokenCount": 213,
+      "serviceTier": "standard"
+    }
+  }
+}

@@ -1,0 +1,410 @@
+{
+  "timestamp": "2026-10-19T12:36:11.689Z",
+  "summary": {
+    "total_checks": 31,
+    "passed_checks": 29,
+    "failed_or_mismatched": 2,
+    "pass_rate_percent": 93.5
+  },
+  "checks": [
+    {
+      "category": "Cycle Time",
+      "metric": "Paper Eq. 5 End-to-End Cycle Time (Mean Hours)",
+      "expected": 82.13,
+      "actual": "N/A (App outputs stage dwell times)",
+      "pass": false,
+      "delta": "Definition Divergence",
+      "notes": "Paper Eq. 5 defines cycle time as T_done - T_first_in_progress per task (82.13h mean). DevSync codebase implements GitLab Value Stream stage dwell times instead of a single scalar task cycle time."
+    },
+    {
+      "category": "Cycle Time Stage Dwell",
+      "metric": "Stage 'todo' Avg Hours",
+      "expected": 7.67,
+      "actual": 7.67,
+      "pass": true,
+      "delta": 0,
+      "notes": "Sample size expected: 18, actual: 18"
+    },
+    {
+      "category": "Cycle Time Stage Dwell",
+      "metric": "Stage 'todo' Median Hours",
+      "expected": 3,
+      "actual": 3,
+      "pass": true,
+      "delta": 0
+    },
+    {
+      "category": "Cycle Time Stage Dwell",
+      "metric": "Stage 'todo' Sample Size",
+      "expected": 18,
+      "actual": 18,
+      "pass": true,
+      "delta": 0
+    },
+    {
+      "category": "Cycle Time Stage Dwell",
+      "metric": "Stage 'in_progress' Avg Hours",
+      "expected": 45.33,
+      "actual": 45.33,
+      "pass": true,
+      "delta": 0,
+      "notes": "Sample size expected: 18, actual: 18"
+    },
+    {
+      "category": "Cycle Time Stage Dwell",
+      "metric": "Stage 'in_progress' Median Hours",
+      "expected": 48,
+      "actual": 48,
+      "pass": true,
+      "delta": 0
+    },
+    {
+      "category": "Cycle Time Stage Dwell",
+      "metric": "Stage 'in_progress' Sample Size",
+      "expected": 18,
+      "actual": 18,
+      "pass": true,
+      "delta": 0
+    },
+    {
+      "category": "Cycle Time Stage Dwell",
+      "metric": "Stage 'in_review' Avg Hours",
+      "expected": 34.4,
+      "actual": 36.13,
+      "pass": false,
+      "delta": 1.73,
+      "notes": "Sample size expected: 15, actual: 15"
+    },
+    {
+      "category": "Cycle Time Stage Dwell",
+      "metric": "Stage 'in_review' Median Hours",
+      "expected": 24,
+      "actual": 24,
+      "pass": true,
+      "delta": 0
+    },
+    {
+      "category": "Cycle Time Stage Dwell",
+      "metric": "Stage 'in_review' Sample Size",
+      "expected": 15,
+      "actual": 15,
+      "pass": true,
+      "delta": 0
+    },
+    {
+      "category": "Weekly Throughput",
+      "metric": "Throughput Week of 2026-03-02 (2026-W10)",
+      "expected": 4,
+      "actual": 4,
+      "pass": true,
+      "delta": 0,
+      "notes": "Expected tasks: TASK-1, TASK-2, TASK-3, TASK-10"
+    },
+    {
+      "category": "Weekly Throughput",
+      "metric": "Throughput Week of 2026-03-09 (2026-W11)",
+      "expected": 3,
+      "actual": 3,
+      "pass": true,
+      "delta": 0,
+      "notes": "Expected tasks: TASK-4, TASK-5, TASK-6"
+    },
+    {
+      "category": "Weekly Throughput",
+      "metric": "Throughput Week of 2026-03-16 (2026-W12)",
+      "expected": 5,
+      "actual": 5,
+      "pass": true,
+      "delta": 0,
+      "notes": "Expected tasks: TASK-7, TASK-11, TASK-12, TASK-13, TASK-14"
+    },
+    {
+      "category": "Weekly Throughput",
+      "metric": "Throughput Week of 2026-03-23 (2026-W13)",
+      "expected": 3,
+      "actual": 3,
+      "pass": true,
+      "delta": 0,
+      "notes": "Expected tasks: TASK-15, TASK-16, TASK-17"
+    },
+    {
+      "category": "Weekly Throughput",
+      "metric": "Throughput Week of 2026-03-30 (2026-W14)",
+      "expected": 1,
+      "actual": 1,
+      "pass": true,
+      "delta": 0,
+      "notes": "Expected tasks: TASK-18"
+    },
+    {
+      "category": "Weekly Throughput",
+      "metric": "Total Throughput Completed Tasks Sum",
+      "expected": 16,
+      "actual": 16,
+      "pass": true,
+      "delta": 0
+    },
+    {
+      "category": "Sprint Velocity",
+      "metric": "Sprint 1 Completed Tasks Count",
+      "expected": 7,
+      "actual": 7,
+      "pass": true,
+      "delta": 0,
+      "notes": "Expected tasks: TASK-1, TASK-2, TASK-3, TASK-4, TASK-5, TASK-6, TASK-10"
+    },
+    {
+      "category": "Sprint Velocity",
+      "metric": "Sprint 1 Completed Story Points",
+      "expected": 27,
+      "actual": 27,
+      "pass": true,
+      "delta": 0
+    },
+    {
+      "category": "Sprint Velocity",
+      "metric": "Sprint 2 Completed Tasks Count",
+      "expected": 7,
+      "actual": 7,
+      "pass": true,
+      "delta": 0,
+      "notes": "Expected tasks: TASK-11, TASK-12, TASK-13, TASK-14, TASK-15, TASK-16, TASK-17"
+    },
+    {
+      "category": "Sprint Velocity",
+      "metric": "Sprint 2 Completed Story Points",
+      "expected": 29,
+      "actual": 29,
+      "pass": true,
+      "delta": 0
+    },
+    {
+      "category": "Completion Rate",
+      "metric": "Sprint 1 Completion Rate (%)",
+      "expected": 70,
+      "actual": 70,
+      "pass": true,
+      "delta": 0,
+      "notes": "7 / 10 tasks"
+    },
+    {
+      "category": "Completion Rate",
+      "metric": "Sprint 2 Completion Rate (%)",
+      "expected": 70,
+      "actual": 70,
+      "pass": true,
+      "delta": 0,
+      "notes": "7 / 10 tasks"
+    },
+    {
+      "category": "Contributor Activity",
+      "metric": "Alice Test Commits",
+      "expected": 15,
+      "actual": 15,
+      "pass": true,
+      "delta": 0
+    },
+    {
+      "category": "Contributor Activity",
+      "metric": "Alice Test Merged PRs",
+      "expected": 3,
+      "actual": 3,
+      "pass": true,
+      "delta": 0
+    },
+    {
+      "category": "Contributor Activity",
+      "metric": "Alice Test Finished Tasks",
+      "expected": 6,
+      "actual": 6,
+      "pass": true,
+      "delta": 0,
+      "notes": "Expected tasks: TASK-1, TASK-2, TASK-6, TASK-11, TASK-15, TASK-18"
+    },
+    {
+      "category": "Contributor Activity",
+      "metric": "Bob Test Commits",
+      "expected": 10,
+      "actual": 10,
+      "pass": true,
+      "delta": 0
+    },
+    {
+      "category": "Contributor Activity",
+      "metric": "Bob Test Merged PRs",
+      "expected": 2,
+      "actual": 2,
+      "pass": true,
+      "delta": 0
+    },
+    {
+      "category": "Contributor Activity",
+      "metric": "Bob Test Finished Tasks",
+      "expected": 6,
+      "actual": 6,
+      "pass": true,
+      "delta": 0,
+      "notes": "Expected tasks: TASK-3, TASK-4, TASK-7, TASK-12, TASK-13, TASK-17"
+    },
+    {
+      "category": "Contributor Activity",
+      "metric": "Charlie Test Commits",
+      "expected": 5,
+      "actual": 5,
+      "pass": true,
+      "delta": 0
+    },
+    {
+      "category": "Contributor Activity",
+      "metric": "Charlie Test Merged PRs",
+      "expected": 1,
+      "actual": 1,
+      "pass": true,
+      "delta": 0
+    },
+    {
+      "category": "Contributor Activity",
+      "metric": "Charlie Test Finished Tasks",
+      "expected": 4,
+      "actual": 4,
+      "pass": true,
+      "delta": 0,
+      "notes": "Expected tasks: TASK-5, TASK-10, TASK-14, TASK-16"
+    }
+  ],
+  "raw_endpoint_responses": {
+    "analytics": {
+      "role": "owner",
+      "window": {
+        "from": "2026-03-01T00:00:00.000Z",
+        "to": "2026-04-10T23:59:59.000Z"
+      },
+      "projects": [
+        {
+          "projectId": "00000000-0000-4000-8000-000000000002",
+          "key": "VAL",
+          "name": "Validation Project"
+        }
+      ],
+      "cycleTime": [
+        {
+          "status": "todo",
+          "avgHours": 7.67,
+          "medianHours": 3,
+          "sampleSize": 18
+        },
+        {
+          "status": "in_progress",
+          "avgHours": 45.33,
+          "medianHours": 48,
+          "sampleSize": 18
+        },
+        {
+          "status": "in_review",
+          "avgHours": 36.13,
+          "medianHours": 24,
+          "sampleSize": 15
+        }
+      ],
+      "throughput": [
+        {
+          "week": "2026-03-02 00:00:00+00",
+          "completed": 4
+        },
+        {
+          "week": "2026-03-09 00:00:00+00",
+          "completed": 3
+        },
+        {
+          "week": "2026-03-16 00:00:00+00",
+          "completed": 5
+        },
+        {
+          "week": "2026-03-23 00:00:00+00",
+          "completed": 3
+        },
+        {
+          "week": "2026-03-30 00:00:00+00",
+          "completed": 1
+        }
+      ],
+      "velocity": [
+        {
+          "sprintId": "11111111-0000-4000-8000-000000000001",
+          "name": "Sprint 1",
+          "sequenceNumber": 1,
+          "endDate": "2026-03-15T18:00:00.000Z",
+          "projectId": "00000000-0000-4000-8000-000000000002",
+          "completedPoints": 27,
+          "completedCount": 7
+        },
+        {
+          "sprintId": "22222222-0000-4000-8000-000000000002",
+          "name": "Sprint 2",
+          "sequenceNumber": 2,
+          "endDate": "2026-03-29T18:00:00.000Z",
+          "projectId": "00000000-0000-4000-8000-000000000002",
+          "completedPoints": 29,
+          "completedCount": 7
+        }
+      ],
+      "ciTrend": [],
+      "burndown": []
+    },
+    "sprints": {
+      "sprints": [
+        {
+          "sprintId": "11111111-0000-4000-8000-000000000001",
+          "projectId": "00000000-0000-4000-8000-000000000002",
+          "name": "Sprint 1",
+          "goal": "Deliver initial module",
+          "status": "closed",
+          "startDate": "2026-03-02T09:00:00.000Z",
+          "endDate": "2026-03-15T18:00:00.000Z",
+          "closedAt": "2026-03-16T09:00:00.000Z",
+          "closedBy": "11111111-1111-4111-8111-111111111111",
+          "velocityIssues": 7,
+          "capacityPoints": 40,
+          "sequenceNumber": 1,
+          "aiSummary": null,
+          "summaryMessageId": null,
+          "createdAt": "2026-03-02T09:00:00.000Z",
+          "updatedAt": "2026-03-16T09:00:00.000Z",
+          "stats": {
+            "taskCount": 10,
+            "totalPoints": 36,
+            "completedPoints": 27,
+            "completedCount": 7
+          }
+        },
+        {
+          "sprintId": "22222222-0000-4000-8000-000000000002",
+          "projectId": "00000000-0000-4000-8000-000000000002",
+          "name": "Sprint 2",
+          "goal": "Deliver secondary module",
+          "status": "closed",
+          "startDate": "2026-03-16T09:00:00.000Z",
+          "endDate": "2026-03-29T18:00:00.000Z",
+          "closedAt": "2026-03-30T09:00:00.000Z",
+          "closedBy": "11111111-1111-4111-8111-111111111111",
+          "velocityIssues": 7,
+          "capacityPoints": 40,
+          "sequenceNumber": 2,
+          "aiSummary": null,
+          "summaryMessageId": null,
+          "createdAt": "2026-03-16T09:00:00.000Z",
+          "updatedAt": "2026-03-30T09:00:00.000Z",
+          "stats": {
+            "taskCount": 10,
+            "totalPoints": 38,
+            "completedPoints": 29,
+            "completedCount": 7
+          }
+        }
+      ]
+    },
+    "tasks_count": 20,
+    "commits_count": 30,
+    "prs_count": 6
+  }
+}

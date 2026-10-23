@@ -1,0 +1,602 @@
+{
+  "EST-1": {
+    "task": {
+      "taskKey": "EST-1",
+      "issueType": "bug",
+      "title": "Fix typo in 404 error page",
+      "descriptionText": "Correct spelling of \"occurred\" in NotFound.tsx line 42.",
+      "complexityCategory": "Trivial (<1h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-1 (bug)\nTitle: Fix typo in 404 error page\nDescription: Correct spelling of \"occurred\" in NotFound.tsx line 42.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 0.5}",
+    "parsedHours": 0.5,
+    "processedHours": 0.5,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "thLWatnCFefy4-EP18Xu4Qk",
+      "usageMetadata": {
+        "promptTokenCount": 87,
+        "candidatesTokenCount": 9,
+        "totalTokenCount": 307,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 87
+          }
+        ],
+        "thoughtsTokenCount": 211,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-2": {
+    "task": {
+      "taskKey": "EST-2",
+      "issueType": "task",
+      "title": "Bump typescript from 5.7 to 5.8 in package.json",
+      "descriptionText": "Update TypeScript version and verify build passes without new type errors.",
+      "complexityCategory": "Trivial (<1h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-2 (task)\nTitle: Bump typescript from 5.7 to 5.8 in package.json\nDescription: Update TypeScript version and verify build passes without new type errors.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 1}",
+    "parsedHours": 1,
+    "processedHours": 1,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "vxLWaoTQK42MjuMPsKLS8A4",
+      "usageMetadata": {
+        "promptTokenCount": 90,
+        "candidatesTokenCount": 7,
+        "totalTokenCount": 310,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 90
+          }
+        ],
+        "thoughtsTokenCount": 213,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-3": {
+    "task": {
+      "taskKey": "EST-3",
+      "issueType": "bug",
+      "title": "Fix button hover state color in dark mode",
+      "descriptionText": "Secondary button hover background has insufficient contrast against zinc-900 surface in dark mode.",
+      "complexityCategory": "Minor UI (<2h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-3 (bug)\nTitle: Fix button hover state color in dark mode\nDescription: Secondary button hover background has insufficient contrast against zinc-900 surface in dark mode.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 0.5}",
+    "parsedHours": 0.5,
+    "processedHours": 0.5,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "yBLWavDgOc2wjuMPr6mPuQ4",
+      "usageMetadata": {
+        "promptTokenCount": 88,
+        "candidatesTokenCount": 9,
+        "totalTokenCount": 382,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 88
+          }
+        ],
+        "thoughtsTokenCount": 285,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-4": {
+    "task": {
+      "taskKey": "EST-4",
+      "issueType": "feature",
+      "title": "Add CSV export button to workspace members table",
+      "descriptionText": "Generate and trigger download of CSV formatted file containing full_name, email, role, and joined_at.",
+      "complexityCategory": "Minor Feature (2-4h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-4 (feature)\nTitle: Add CSV export button to workspace members table\nDescription: Generate and trigger download of CSV formatted file containing full_name, email, role, and joined_at.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 3}",
+    "parsedHours": 3,
+    "processedHours": 3,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "0hLWatuQKNycjuMPk-yjkAk",
+      "usageMetadata": {
+        "promptTokenCount": 92,
+        "candidatesTokenCount": 7,
+        "totalTokenCount": 416,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 92
+          }
+        ],
+        "thoughtsTokenCount": 317,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-5": {
+    "task": {
+      "taskKey": "EST-5",
+      "issueType": "feature",
+      "title": "Implement search filter dropdown by priority on Kanban board",
+      "descriptionText": "Add a multi-select popover filter in the board header to filter cards by low/medium/high/urgent.",
+      "complexityCategory": "Moderate Feature (4-8h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-5 (feature)\nTitle: Implement search filter dropdown by priority on Kanban board\nDescription: Add a multi-select popover filter in the board header to filter cards by low/medium/high/urgent.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 5}",
+    "parsedHours": 5,
+    "processedHours": 5,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "4BLWaovJM6K2juMPmcOUoQk",
+      "usageMetadata": {
+        "promptTokenCount": 95,
+        "candidatesTokenCount": 7,
+        "totalTokenCount": 421,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 95
+          }
+        ],
+        "thoughtsTokenCount": 319,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-6": {
+    "task": {
+      "taskKey": "EST-6",
+      "issueType": "bug",
+      "title": "Prevent double-submission on task creation modal",
+      "descriptionText": "Disable submit button and display loading spinner while API request is in-flight.",
+      "complexityCategory": "Minor Fix (1-2h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-6 (bug)\nTitle: Prevent double-submission on task creation modal\nDescription: Disable submit button and display loading spinner while API request is in-flight.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 1.5}",
+    "parsedHours": 1.5,
+    "processedHours": 1.5,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "-xLWasykGriajuMPiq_O4Q4",
+      "usageMetadata": {
+        "promptTokenCount": 85,
+        "candidatesTokenCount": 9,
+        "totalTokenCount": 368,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 85
+          }
+        ],
+        "thoughtsTokenCount": 274,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-7": {
+    "task": {
+      "taskKey": "EST-7",
+      "issueType": "task",
+      "title": "Add composite database index on task_status_transitions",
+      "descriptionText": "Create B-tree index on (project_id, changed_at) to accelerate analytics window aggregation queries.",
+      "complexityCategory": "Database Task (1-2h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-7 (task)\nTitle: Add composite database index on task_status_transitions\nDescription: Create B-tree index on (project_id, changed_at) to accelerate analytics window aggregation queries.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 2.0}",
+    "parsedHours": 2,
+    "processedHours": 2,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "BBPWaozpIZ7TjuMPg6r6oAk",
+      "usageMetadata": {
+        "promptTokenCount": 94,
+        "candidatesTokenCount": 9,
+        "totalTokenCount": 391,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 94
+          }
+        ],
+        "thoughtsTokenCount": 288,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-8": {
+    "task": {
+      "taskKey": "EST-8",
+      "issueType": "feature",
+      "title": "Implement cursor-based pagination for channel message history",
+      "descriptionText": "Load messages in chunks of 50 using cursor-based pagination as user scrolls upwards in channel view.",
+      "complexityCategory": "Moderate Feature (6-12h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-8 (feature)\nTitle: Implement cursor-based pagination for channel message history\nDescription: Load messages in chunks of 50 using cursor-based pagination as user scrolls upwards in channel view.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 12}",
+    "parsedHours": 12,
+    "processedHours": 12,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "DhPWau2IKMvZjuMPw8qFuA4",
+      "usageMetadata": {
+        "promptTokenCount": 92,
+        "candidatesTokenCount": 8,
+        "totalTokenCount": 433,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 92
+          }
+        ],
+        "thoughtsTokenCount": 333,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-9": {
+    "task": {
+      "taskKey": "EST-9",
+      "issueType": "bug",
+      "title": "Fix WebSocket reconnection loop during network disconnect",
+      "descriptionText": "Implement exponential backoff retry policy (1s, 2s, 4s, capped at 30s) when socket server drops.",
+      "complexityCategory": "Moderate Bug (3-6h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-9 (bug)\nTitle: Fix WebSocket reconnection loop during network disconnect\nDescription: Implement exponential backoff retry policy (1s, 2s, 4s, capped at 30s) when socket server drops.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 4}",
+    "parsedHours": 4,
+    "processedHours": 4,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "FxPWatyTKdG9juMP3_aEuQ4",
+      "usageMetadata": {
+        "promptTokenCount": 99,
+        "candidatesTokenCount": 7,
+        "totalTokenCount": 323,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 99
+          }
+        ],
+        "thoughtsTokenCount": 217,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-10": {
+    "task": {
+      "taskKey": "EST-10",
+      "issueType": "feature",
+      "title": "Add drag-and-drop file attachment to task comments",
+      "descriptionText": "Support dragging images/PDFs into comment textarea, uploading to storage bucket and rendering markdown link.",
+      "complexityCategory": "Moderate Feature (4-8h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-10 (feature)\nTitle: Add drag-and-drop file attachment to task comments\nDescription: Support dragging images/PDFs into comment textarea, uploading to storage bucket and rendering markdown link.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 10}",
+    "parsedHours": 10,
+    "processedHours": 10,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "IxPWavnLEICVjuMPvcfL0Q4",
+      "usageMetadata": {
+        "promptTokenCount": 93,
+        "candidatesTokenCount": 8,
+        "totalTokenCount": 434,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 93
+          }
+        ],
+        "thoughtsTokenCount": 333,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-11": {
+    "task": {
+      "taskKey": "EST-11",
+      "issueType": "feature",
+      "title": "Implement OAuth2 PKCE login flow with GitHub",
+      "descriptionText": "Support authorization code exchange with state and code_verifier validation, setting refresh tokens in httpOnly cookies.",
+      "complexityCategory": "Complex Feature (12-20h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-11 (feature)\nTitle: Implement OAuth2 PKCE login flow with GitHub\nDescription: Support authorization code exchange with state and code_verifier validation, setting refresh tokens in httpOnly cookies.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 12}",
+    "parsedHours": 12,
+    "processedHours": 12,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "NBPWaqSBIYLDjuMPg9_xyQ4",
+      "usageMetadata": {
+        "promptTokenCount": 92,
+        "candidatesTokenCount": 8,
+        "totalTokenCount": 408,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 92
+          }
+        ],
+        "thoughtsTokenCount": 308,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-12": {
+    "task": {
+      "taskKey": "EST-12",
+      "issueType": "task",
+      "title": "Migrate PostgreSQL connection pool to PgBouncer transaction mode",
+      "descriptionText": "Configure pooled connection string, adjust idle timeouts, and remove prepared statements incompatible with transaction pooling.",
+      "complexityCategory": "Infrastructure Task (4-8h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-12 (task)\nTitle: Migrate PostgreSQL connection pool to PgBouncer transaction mode\nDescription: Configure pooled connection string, adjust idle timeouts, and remove prepared statements incompatible with transaction pooling.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 12.0}",
+    "parsedHours": 12,
+    "processedHours": 12,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "PRPWaq_CCoHEg8UP84LCwQ4",
+      "usageMetadata": {
+        "promptTokenCount": 91,
+        "candidatesTokenCount": 10,
+        "totalTokenCount": 429,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 91
+          }
+        ],
+        "thoughtsTokenCount": 328,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-13": {
+    "task": {
+      "taskKey": "EST-13",
+      "issueType": "feature",
+      "title": "Real-time collaborative task reordering on Kanban board",
+      "descriptionText": "Broadcast task_reordered events via Socket.IO, compute fractional ranks, and handle concurrent drop conflict resolution.",
+      "complexityCategory": "Complex Feature (16-24h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-13 (feature)\nTitle: Real-time collaborative task reordering on Kanban board\nDescription: Broadcast task_reordered events via Socket.IO, compute fractional ranks, and handle concurrent drop conflict resolution.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 24}",
+    "parsedHours": 24,
+    "processedHours": 24,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "SxPWasCWNKeKjuMPjM3LwA4",
+      "usageMetadata": {
+        "promptTokenCount": 95,
+        "candidatesTokenCount": 8,
+        "totalTokenCount": 443,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 95
+          }
+        ],
+        "thoughtsTokenCount": 340,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-14": {
+    "task": {
+      "taskKey": "EST-14",
+      "issueType": "bug",
+      "title": "Fix race condition during concurrent sprint close",
+      "descriptionText": "Wrap sprint status update and task unlinking inside a SERIALIZABLE PostgreSQL transaction with advisory lock.",
+      "complexityCategory": "Complex Bug (6-12h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-14 (bug)\nTitle: Fix race condition during concurrent sprint close\nDescription: Wrap sprint status update and task unlinking inside a SERIALIZABLE PostgreSQL transaction with advisory lock.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 6}",
+    "parsedHours": 6,
+    "processedHours": 6,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "VBPWatXiDq6zmNMPwfTcyAc",
+      "usageMetadata": {
+        "promptTokenCount": 89,
+        "candidatesTokenCount": 7,
+        "totalTokenCount": 322,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 89
+          }
+        ],
+        "thoughtsTokenCount": 226,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-15": {
+    "task": {
+      "taskKey": "EST-15",
+      "issueType": "task",
+      "title": "Refactor monolithic tasks controller into domain service classes",
+      "descriptionText": "Extract task validation, transition triggers, and query builders from tasks.controller.ts (1,200 lines) into isolated service modules.",
+      "complexityCategory": "Refactoring (16-30h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-15 (task)\nTitle: Refactor monolithic tasks controller into domain service classes\nDescription: Extract task validation, transition triggers, and query builders from tasks.controller.ts (1,200 lines) into isolated service modules.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 16}",
+    "parsedHours": 16,
+    "processedHours": 16,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "exPWaqhH6_aO4w_zi9OYCQ",
+      "usageMetadata": {
+        "promptTokenCount": 101,
+        "candidatesTokenCount": 8,
+        "totalTokenCount": 494,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 101
+          }
+        ],
+        "thoughtsTokenCount": 385,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-16": {
+    "task": {
+      "taskKey": "EST-16",
+      "issueType": "feature",
+      "title": "Implement full-platform audit logging subsystem",
+      "descriptionText": "Record actor_id, action, timestamp, entity_type, entity_id, and JSON diff of old/new values across all mutations.",
+      "complexityCategory": "Major Feature (20-35h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-16 (feature)\nTitle: Implement full-platform audit logging subsystem\nDescription: Record actor_id, action, timestamp, entity_type, entity_id, and JSON diff of old/new values across all mutations.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 40}",
+    "parsedHours": 40,
+    "processedHours": 40,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "hBPWat-VEYPXjuMPteT-uA4",
+      "usageMetadata": {
+        "promptTokenCount": 99,
+        "candidatesTokenCount": 8,
+        "totalTokenCount": 355,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 99
+          }
+        ],
+        "thoughtsTokenCount": 248,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-17": {
+    "task": {
+      "taskKey": "EST-17",
+      "issueType": "task",
+      "title": "Set up automated CI/CD pipeline with GitHub Actions",
+      "descriptionText": "Create workflow executing ESLint, TypeScript check, unit test suite, and container build on pull request events.",
+      "complexityCategory": "DevOps Task (6-12h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-17 (task)\nTitle: Set up automated CI/CD pipeline with GitHub Actions\nDescription: Create workflow executing ESLint, TypeScript check, unit test suite, and container build on pull request events.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 5}",
+    "parsedHours": 5,
+    "processedHours": 5,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "jhPWarXjIMTZjuMP47uzsA4",
+      "usageMetadata": {
+        "promptTokenCount": 94,
+        "candidatesTokenCount": 7,
+        "totalTokenCount": 371,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 94
+          }
+        ],
+        "thoughtsTokenCount": 270,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-18": {
+    "task": {
+      "taskKey": "EST-18",
+      "issueType": "feature",
+      "title": "Full-text search engine with PostgreSQL tsvector and GIN indexing",
+      "descriptionText": "Add generated tsvector column for task title and description, create GIN index, and rank search results using ts_rank_cd.",
+      "complexityCategory": "Complex Feature (12-24h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-18 (feature)\nTitle: Full-text search engine with PostgreSQL tsvector and GIN indexing\nDescription: Add generated tsvector column for task title and description, create GIN index, and rank search results using ts_rank_cd.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 8}",
+    "parsedHours": 8,
+    "processedHours": 8,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "4RTWaorHOo2MjuMPsKLS8A4",
+      "usageMetadata": {
+        "promptTokenCount": 103,
+        "candidatesTokenCount": 7,
+        "totalTokenCount": 515,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 103
+          }
+        ],
+        "thoughtsTokenCount": 405,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-19": {
+    "task": {
+      "taskKey": "EST-19",
+      "issueType": "task",
+      "title": "Trivial port configuration change in .env.example",
+      "descriptionText": "Update sample port variable documentation from 3000 to 3001.",
+      "complexityCategory": "Trivial (<1h)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-19 (task)\nTitle: Trivial port configuration change in .env.example\nDescription: Update sample port variable documentation from 3000 to 3001.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 0.5}",
+    "parsedHours": 0.5,
+    "processedHours": 0.5,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "WRXWaomONYjp4-EP8tqjqAk",
+      "usageMetadata": {
+        "promptTokenCount": 91,
+        "candidatesTokenCount": 9,
+        "totalTokenCount": 323,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 91
+          }
+        ],
+        "thoughtsTokenCount": 223,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  "EST-20": {
+    "task": {
+      "taskKey": "EST-20",
+      "issueType": "feature",
+      "title": "Re-architect entire monolithic platform into 8 distributed microservices",
+      "descriptionText": "Decompose monolith into auth, projects, tasks, chat, notifications, git-sync, analytics, and ai microservices communicating via gRPC and Kafka with distributed tracing and zero-downtime rolling deploys.",
+      "complexityCategory": "Massive Architecture (>80h cap)"
+    },
+    "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-20 (feature)\nTitle: Re-architect entire monolithic platform into 8 distributed microservices\nDescription: Decompose monolith into auth, projects, tasks, chat, notifications, git-sync, analytics, and ai microservices communicating via gRPC and Kafka with distributed tracing and zero-downtime rolling deploys.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+    "rawResponseText": "{\"estimatedHours\": 80}",
+    "parsedHours": 80,
+    "processedHours": 80,
+    "meta": {
+      "modelVersion": "gemini-3.8-flash",
+      "responseId": "YxXWasu8As-EjuMPnIq58Q4",
+      "usageMetadata": {
+        "promptTokenCount": 118,
+        "candidatesTokenCount": 8,
+        "totalTokenCount": 394,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 118
+          }
+        ],
+        "thoughtsTokenCount": 268,
+        "serviceTier": "standard"
+      }
+    }
+  }
+}

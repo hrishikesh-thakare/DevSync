@@ -12,6 +12,7 @@ import { getIO } from '../../sockets/index.js';
 
 // ─── INTERNAL HELPER: Create a notification ──────────────────────────────────
 export const createNotification = async (params: {
+  workspaceId?: string;
   recipientId: string;
   actorId?: string;
   type: string;
@@ -40,10 +41,45 @@ export const createNotification = async (params: {
       return null; // Skip if user muted GitHub bot
     }
 
+    // Resolve workspaceId if not explicitly provided
+    let resolvedWorkspaceId = params.workspaceId || null;
+    if (!resolvedWorkspaceId) {
+      if (params.entityType === 'task') {
+        const [t] = await db
+          .select({ workspaceId: projects.workspaceId })
+          .from(tasks)
+          .innerJoin(projects, eq(tasks.projectId, projects.projectId))
+          .where(eq(tasks.taskId, params.entityId));
+        resolvedWorkspaceId = t?.workspaceId || null;
+      } else if (params.entityType === 'message') {
+        const [m] = await db
+          .select({ workspaceId: channels.workspaceId })
+          .from(messages)
+          .innerJoin(channels, eq(messages.channelId, channels.channelId))
+          .where(eq(messages.messageId, params.entityId));
+        resolvedWorkspaceId = m?.workspaceId || null;
+      } else if (params.entityType === 'sprint') {
+        const [s] = await db
+          .select({ workspaceId: projects.workspaceId })
+          .from(sprints)
+          .innerJoin(projects, eq(sprints.projectId, projects.projectId))
+          .where(eq(sprints.sprintId, params.entityId));
+        resolvedWorkspaceId = s?.workspaceId || null;
+      } else if (params.entityType === 'project') {
+        const [p] = await db
+          .select({ workspaceId: projects.workspaceId })
+          .from(projects)
+          .where(eq(projects.projectId, params.entityId));
+        resolvedWorkspaceId = p?.workspaceId || null;
+      } else if (params.entityType === 'workspace') {
+        resolvedWorkspaceId = params.entityId;
+      }
+    }
 
     const [notification] = await db
       .insert(notifications)
       .values({
+        workspaceId: resolvedWorkspaceId,
         recipientId: params.recipientId,
         actorId: params.actorId || null,
         type: params.type,
@@ -74,8 +110,20 @@ export const createNotification = async (params: {
       }
     }
 
+    // Resolve workspace slug for real-time tenant filtering on frontend
+    let workspaceSlug = null;
+    if (resolvedWorkspaceId) {
+      const [ws] = await db
+        .select({ slug: workspaces.slug })
+        .from(workspaces)
+        .where(eq(workspaces.workspaceId, resolvedWorkspaceId));
+      workspaceSlug = ws?.slug || null;
+    }
+
     const populatedNotification = {
       ...notification,
+      workspaceId: resolvedWorkspaceId,
+      workspaceSlug,
       actorId: params.actorId || null,
       actorName,
       actorAvatar,
@@ -95,14 +143,37 @@ export const createNotification = async (params: {
 
 // ─── GET MY NOTIFICATIONS ────────────────────────────────────────────────────
 // GET /api/notifications
+// or GET /api/workspaces/:slug/notifications
 export const getMyNotifications = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user!.userId;
-    const { unreadOnly, limit = 50 } = req.query;
+    const { unreadOnly, limit = 50, slug, workspaceId } = req.query;
 
     const parsedLimit = Math.min(parseInt(limit as string, 10) || 50, 100);
 
+    const targetSlug = ((req.params as any)?.slug as string) || (slug as string);
+    let targetWorkspaceId = ((req.params as any)?.workspaceId as string | undefined) || (workspaceId as string | undefined);
+
+    if (!targetWorkspaceId && targetSlug) {
+      const [ws] = await db
+        .select({ workspaceId: workspaces.workspaceId })
+        .from(workspaces)
+        .where(eq(workspaces.slug, targetSlug));
+      if (ws) {
+        targetWorkspaceId = ws.workspaceId;
+      }
+    }
+
+    if (targetSlug && !targetWorkspaceId) {
+      res.json({ notifications: [] });
+      return;
+    }
+
     let conditions = [eq(notifications.recipientId, userId)];
+
+    if (targetWorkspaceId) {
+      conditions.push(eq(notifications.workspaceId, targetWorkspaceId));
+    }
     
     if (unreadOnly === 'true') {
       conditions.push(eq(notifications.isRead, false));
@@ -111,6 +182,8 @@ export const getMyNotifications = async (req: Request, res: Response): Promise<v
     const results = await db
       .select({
         notificationId: notifications.notificationId,
+        workspaceId: notifications.workspaceId,
+        workspaceSlug: workspaces.slug,
         type: notifications.type,
         entityType: notifications.entityType,
         entityId: notifications.entityId,
@@ -127,6 +200,7 @@ export const getMyNotifications = async (req: Request, res: Response): Promise<v
       .from(notifications)
       .leftJoin(users, eq(notifications.actorId, users.userId))
       .leftJoin(messages, eq(notifications.entityId, messages.messageId))
+      .leftJoin(workspaces, eq(notifications.workspaceId, workspaces.workspaceId))
       .where(and(...conditions))
       .orderBy(desc(notifications.createdAt))
       .limit(parsedLimit);
@@ -170,19 +244,43 @@ export const markAsRead = async (req: Request, res: Response): Promise<void> => 
 
 // ─── MARK ALL AS READ ────────────────────────────────────────────────────────
 // PATCH /api/notifications/read-all
+// or PATCH /api/workspaces/:slug/notifications/read-all
 export const markAllAsRead = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user!.userId;
+    const { slug, workspaceId } = req.query;
+
+    const targetSlug = ((req.params as any)?.slug as string) || (slug as string);
+    let targetWorkspaceId = ((req.params as any)?.workspaceId as string | undefined) || (workspaceId as string | undefined);
+
+    if (!targetWorkspaceId && targetSlug) {
+      const [ws] = await db
+        .select({ workspaceId: workspaces.workspaceId })
+        .from(workspaces)
+        .where(eq(workspaces.slug, targetSlug));
+      if (ws) {
+        targetWorkspaceId = ws.workspaceId;
+      }
+    }
+
+    if (targetSlug && !targetWorkspaceId) {
+      res.json({ message: 'All notifications marked as read' });
+      return;
+    }
+
+    const conditions = [
+      eq(notifications.recipientId, userId),
+      eq(notifications.isRead, false),
+    ];
+
+    if (targetWorkspaceId) {
+      conditions.push(eq(notifications.workspaceId, targetWorkspaceId));
+    }
 
     await db
       .update(notifications)
       .set({ isRead: true, readAt: new Date() })
-      .where(
-        and(
-          eq(notifications.recipientId, userId),
-          eq(notifications.isRead, false)
-        )
-      );
+      .where(and(...conditions));
 
     res.json({ message: 'All notifications marked as read' });
   } catch (err) {
@@ -338,6 +436,22 @@ export const resolveNotification = async (req: Request, res: Response): Promise<
           .where(eq(projects.projectId, notif.entityId));
         if (project && project.slug && project.key) {
           url = `/w/${project.slug}/projects/${project.key}`;
+        }
+      } else if (url === '/workspaces' && (notif.entityType === 'workspace' || notif.type === 'workspace_invited')) {
+        const [ws] = await db
+          .select({ slug: workspaces.slug })
+          .from(workspaces)
+          .where(eq(workspaces.workspaceId, notif.entityId));
+        if (ws && ws.slug) {
+          url = `/w/${ws.slug}`;
+        }
+      } else if (url === '/workspaces' && notif.workspaceId) {
+        const [ws] = await db
+          .select({ slug: workspaces.slug })
+          .from(workspaces)
+          .where(eq(workspaces.workspaceId, notif.workspaceId));
+        if (ws && ws.slug) {
+          url = `/w/${ws.slug}`;
         }
       }
     }

@@ -1,0 +1,133 @@
+{
+  "dataset_metadata": {
+    "description": "Hand-crafted 20-task benchmark across 2 closed sprints with explicit edge-case timelines",
+    "total_tasks": 20,
+    "completed_tasks": 16,
+    "uncompleted_tasks": 4,
+    "sprints": 2,
+    "date_window": {
+      "from": "2026-03-01T00:00:00.000Z",
+      "to": "2026-04-10T23:59:59.000Z"
+    }
+  },
+  "cycle_time": {
+    "paper_definition_eq5": {
+      "description": "Total task cycle time from first transition into IN_PROGRESS to final transition into DONE",
+      "per_task_hours": {
+        "TASK-1": 48.0,
+        "TASK-2": 72.0,
+        "TASK-3": 24.0,
+        "TASK-4": 168.0,
+        "TASK-5": 30.0,
+        "TASK-6": 72.0,
+        "TASK-7": 168.0,
+        "TASK-10": 72.0,
+        "TASK-11": 48.0,
+        "TASK-12": 72.0,
+        "TASK-13": 48.0,
+        "TASK-14": 120.0,
+        "TASK-15": 32.0,
+        "TASK-16": 72.0,
+        "TASK-17": 96.0,
+        "TASK-18": 192.0
+      },
+      "completed_tasks_count": 16,
+      "total_hours_sum": 1314.0,
+      "mean_hours": 82.13,
+      "median_hours": 72.0,
+      "notes_on_reopened_tasks": "TASK-4 was marked DONE on March 5, reopened to IN_PROGRESS on March 6, and completed again on March 9. Definition A measures total lead time from first IN_PROGRESS to final DONE (168h). Definition B (excluding the 24h sitting in DONE) yields 144h with mean 80.63h."
+    },
+    "app_code_definition": {
+      "description": "DevSync computes stage dwell times using SQL LEAD() OVER (PARTITION BY task_id ORDER BY changed_at) - changed_at grouped by to_status, excluding done.",
+      "todo": {
+        "sample_size": 18,
+        "mean_hours": 7.67,
+        "median_hours": 3.0
+      },
+      "in_progress": {
+        "sample_size": 18,
+        "mean_hours": 45.33,
+        "median_hours": 48.0
+      },
+      "in_review": {
+        "sample_size": 15,
+        "mean_hours": 34.4,
+        "median_hours": 24.0
+      }
+    }
+  },
+  "weekly_throughput": {
+    "description": "Number of tasks completed per ISO week (Monday 00:00:00 UTC)",
+    "weeks": {
+      "2026-03-02": {
+        "iso_week": "2026-W10",
+        "completed": 4,
+        "task_keys": ["TASK-1", "TASK-2", "TASK-3", "TASK-10"]
+      },
+      "2026-03-09": {
+        "iso_week": "2026-W11",
+        "completed": 3,
+        "task_keys": ["TASK-4", "TASK-5", "TASK-6"]
+      },
+      "2026-03-16": {
+        "iso_week": "2026-W12",
+        "completed": 5,
+        "task_keys": ["TASK-7", "TASK-11", "TASK-12", "TASK-13", "TASK-14"]
+      },
+      "2026-03-23": {
+        "iso_week": "2026-W13",
+        "completed": 3,
+        "task_keys": ["TASK-15", "TASK-16", "TASK-17"]
+      },
+      "2026-03-30": {
+        "iso_week": "2026-W14",
+        "completed": 1,
+        "task_keys": ["TASK-18"]
+      }
+    },
+    "total_completed": 16
+  },
+  "sprint_velocity": {
+    "sprint_1": {
+      "name": "Sprint 1",
+      "total_tasks_assigned": 10,
+      "completed_count": 7,
+      "completed_points": 27,
+      "completion_rate_percent": 70.0,
+      "completed_task_keys": ["TASK-1", "TASK-2", "TASK-3", "TASK-4", "TASK-5", "TASK-6", "TASK-10"],
+      "uncompleted_or_late_task_keys": ["TASK-7", "TASK-8", "TASK-9"]
+    },
+    "sprint_2": {
+      "name": "Sprint 2",
+      "total_tasks_assigned": 10,
+      "completed_count": 7,
+      "completed_points": 29,
+      "completion_rate_percent": 70.0,
+      "completed_task_keys": ["TASK-11", "TASK-12", "TASK-13", "TASK-14", "TASK-15", "TASK-16", "TASK-17"],
+      "uncompleted_or_late_task_keys": ["TASK-18", "TASK-19", "TASK-20"]
+    }
+  },
+  "contributor_activity": {
+    "alice": {
+      "email": "alice@correctness.test",
+      "finished_tasks": 6,
+      "finished_task_keys": ["TASK-1", "TASK-2", "TASK-6", "TASK-11", "TASK-15", "TASK-18"],
+      "commits": 15,
+      "merged_prs": 3
+    },
+    "bob": {
+      "email": "bob@correctness.test",
+      "finished_tasks": 6,
+      "finished_task_keys": ["TASK-3", "TASK-4", "TASK-7", "TASK-12", "TASK-13", "TASK-17"],
+      "commits": 10,
+      "merged_prs": 2
+    },
+    "charlie": {
+      "email": "charlie@correctness.test",
+      "finished_tasks": 4,
+      "finished_task_keys": ["TASK-5", "TASK-10", "TASK-14", "TASK-16"],
+      "commits": 5,
+      "merged_prs": 1
+    }
+  }
+}

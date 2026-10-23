@@ -1,0 +1,30 @@
+{
+  "task": {
+    "taskKey": "EST-17",
+    "issueType": "task",
+    "title": "Set up automated CI/CD pipeline with GitHub Actions",
+    "descriptionText": "Create workflow executing ESLint, TypeScript check, unit test suite, and container build on pull request events.",
+    "complexityCategory": "DevOps Task (6-12h)"
+  },
+  "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-17 (task)\nTitle: Set up automated CI/CD pipeline with GitHub Actions\nDescription: Create workflow executing ESLint, TypeScript check, unit test suite, and container build on pull request events.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+  "rawResponseText": "{\"estimatedHours\": 5}",
+  "parsedHours": 5,
+  "processedHours": 5,
+  "meta": {
+    "modelVersion": "gemini-3.8-flash",
+    "responseId": "jhPWarXjIMTZjuMP47uzsA4",
+    "usageMetadata": {
+      "promptTokenCount": 94,
+      "candidatesTokenCount": 7,
+      "totalTokenCount": 371,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 94
+        }
+      ],
+      "thoughtsTokenCount": 270,
+      "serviceTier": "standard"
+    }
+  }
+}

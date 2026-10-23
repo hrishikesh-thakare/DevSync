@@ -1,0 +1,29 @@
+{
+  "name": "devsync-eval",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "seed": "tsx seed.ts",
+    "bench:latency": "tsx bench_latency.ts",
+    "bench:socket": "tsx bench_socket.ts",
+    "bench:all": "tsx run_all.ts",
+    "seed:correctness": "tsx seed_correctness.ts",
+    "test:correctness": "tsx validate_correctness.ts",
+    "test:ai": "tsx run_ai_pilot.ts"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^16.5.0",
+    "jsonwebtoken": "^9.0.2",
+    "postgres": "^3.4.7",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/node": "^22.15.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

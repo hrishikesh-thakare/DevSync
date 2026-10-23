@@ -9,9 +9,10 @@ interface NotificationState {
   unreadCount: number;
   isLoading: boolean;
   error: string | null;
-  fetchNotifications: () => Promise<void>;
+  currentSlug: string | null;
+  fetchNotifications: (slug?: string) => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
-  markAllAsRead: () => Promise<void>;
+  markAllAsRead: (slug?: string) => Promise<void>;
   addNotification: (notification: AppNotification) => void;
   /**
    * Asks the server where a notification points. The mapping from entity to
@@ -26,11 +27,15 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   unreadCount: 0,
   isLoading: false,
   error: null,
+  currentSlug: null,
 
-  fetchNotifications: async () => {
-    set({ isLoading: true, error: null });
+  fetchNotifications: async (slug?: string) => {
+    set({ isLoading: true, error: null, currentSlug: slug ?? null });
     try {
-      const data = await apiFetch('/notifications?limit=100');
+      const url = slug
+        ? `/workspaces/${encodeURIComponent(slug)}/notifications?limit=100`
+        : '/notifications?limit=100';
+      const data = await apiFetch(url);
       const notifs: AppNotification[] = data.notifications || [];
       const unreadCount = notifs.filter((n) => !n.isRead).length;
       set({ notifications: notifs, unreadCount, isLoading: false });
@@ -60,14 +65,18 @@ export const useNotificationStore = create<NotificationState>((set) => ({
     }
   },
 
-  markAllAsRead: async () => {
+  markAllAsRead: async (slug?: string) => {
+    const targetSlug = slug ?? useNotificationStore.getState().currentSlug;
     set((state) => ({
       notifications: state.notifications.map((n) => ({ ...n, isRead: true })),
       unreadCount: 0,
     }));
 
     try {
-      await apiFetch('/notifications/read-all', { method: 'PATCH' });
+      const url = targetSlug
+        ? `/workspaces/${encodeURIComponent(targetSlug)}/notifications/read-all`
+        : '/notifications/read-all';
+      await apiFetch(url, { method: 'PATCH' });
     } catch (err) {
       console.error('Failed to mark all as read', err);
     }
@@ -80,8 +89,12 @@ export const useNotificationStore = create<NotificationState>((set) => ({
 
   addNotification: (notification: AppNotification) => {
     set((state) => {
+      // If scoped to a workspace and the notification belongs to another workspace, ignore
+      if (state.currentSlug && notification.workspaceSlug && notification.workspaceSlug !== state.currentSlug) {
+        return state;
+      }
       // Avoid duplicates
-      if (state.notifications.some(n => n.notificationId === notification.notificationId)) {
+      if (state.notifications.some((n) => n.notificationId === notification.notificationId)) {
         return state;
       }
       const updated = [notification, ...state.notifications];

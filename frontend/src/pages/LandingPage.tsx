@@ -8,14 +8,17 @@ import {
   HashIcon,
   MenuIcon,
   MinusIcon,
+  MoonIcon,
   PlusIcon,
   ShieldCheckIcon,
+  SunIcon,
   XIcon,
   ZapIcon,
 } from 'lucide-react';
 
 import { LogoMark } from '@/components/Logo';
 import { useAuthStore } from '@/store/auth';
+import { useTheme } from '@/hooks/use-theme';
 import { cn } from '@/lib/utils';
 
 /**
@@ -107,7 +110,7 @@ export function LandingPage() {
   }
 
   return (
-    <div className="dark min-h-svh overflow-x-hidden bg-[#08080A] text-zinc-100 antialiased">
+    <div className="min-h-svh overflow-x-hidden bg-white text-zinc-900 antialiased transition-colors dark:bg-[#08080A] dark:text-zinc-100">
       <Nav />
       <Hero />
       <TrustBar />
@@ -126,16 +129,21 @@ export function LandingPage() {
 
 function Nav() {
   const [isOpen, setIsOpen] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
+
+  const toggleTheme = () => {
+    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
+  };
 
   return (
-    <header className="fixed inset-x-0 top-4 z-50 flex flex-col items-center px-4 md:px-12 md:top-6">
-      <div className="flex w-full max-w-[1500px] items-center justify-between rounded-full border border-white/[0.08] bg-[#08080A] px-4 py-2.5 shadow-2xl md:px-6">
+    <header className="fixed inset-x-0 top-4 z-50 flex flex-col items-center px-4 md:top-6 md:px-12">
+      <div className="flex w-full max-w-[1500px] items-center justify-between rounded-full border border-zinc-200/80 bg-white/80 px-4 py-2.5 shadow-xl backdrop-blur-md transition-colors md:px-6 dark:border-white/[0.08] dark:bg-[#08080A]/80 dark:shadow-2xl">
         
         {/* Left: Logo */}
         <div className="flex flex-1 items-center">
           <Link to="/" className="flex items-center gap-2 pl-2">
             <LogoMark className="size-6 text-primary" />
-            <span className="text-[16px] font-semibold tracking-[-0.02em]">DevSync</span>
+            <span className="text-[16px] font-semibold tracking-[-0.02em] text-zinc-900 dark:text-zinc-100">DevSync</span>
           </Link>
         </div>
 
@@ -150,7 +158,7 @@ function Nav() {
             <a
               key={label}
               href={href}
-              className="text-[15px] font-bold text-zinc-300 transition-colors hover:text-white"
+              className="text-[15px] font-medium text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
             >
               {label}
             </a>
@@ -159,9 +167,22 @@ function Nav() {
 
         {/* Right: Actions */}
         <div className="hidden flex-1 items-center justify-end gap-2 md:flex">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            className="flex size-9 items-center justify-center rounded-full text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/[0.06] dark:hover:text-white"
+          >
+            {resolvedTheme === 'dark' ? (
+              <SunIcon className="size-4.5" aria-hidden="true" />
+            ) : (
+              <MoonIcon className="size-4.5" aria-hidden="true" />
+            )}
+          </button>
           <Link
             to="/login"
-            className="rounded-full px-4 py-2 text-[13.5px] font-medium text-zinc-300 transition-colors hover:bg-white/[0.06] hover:text-white"
+            className="rounded-full px-4 py-2 text-[13.5px] font-medium text-zinc-700 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/[0.06] dark:hover:text-white"
           >
             Sign in
           </Link>
@@ -173,9 +194,27 @@ function Nav() {
           </Link>
         </div>
 
-        {/* Mobile menu toggle */}
-        <div className="flex flex-1 justify-end md:hidden">
-          <button onClick={() => setIsOpen(!isOpen)} className="p-2 text-zinc-300 hover:text-white">
+        {/* Mobile menu toggle & Theme toggle */}
+        <div className="flex flex-1 items-center justify-end gap-1 md:hidden">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            className="flex size-9 items-center justify-center rounded-full text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/[0.06] dark:hover:text-white"
+          >
+            {resolvedTheme === 'dark' ? (
+              <SunIcon className="size-4.5" aria-hidden="true" />
+            ) : (
+              <MoonIcon className="size-4.5" aria-hidden="true" />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsOpen(!isOpen)}
+            className="p-2 text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
+            aria-label={isOpen ? 'Close menu' : 'Open menu'}
+          >
             {isOpen ? <XIcon className="size-5" /> : <MenuIcon className="size-5" />}
           </button>
         </div>
@@ -183,7 +222,7 @@ function Nav() {
 
       {/* Mobile Menu Dropdown */}
       {isOpen && (
-        <div className="absolute inset-x-4 top-full mt-2 rounded-2xl border border-white/[0.08] bg-[#08080A] p-4 shadow-2xl md:hidden">
+        <div className="absolute inset-x-4 top-full mt-2 rounded-2xl border border-zinc-200 bg-white/95 p-4 shadow-2xl backdrop-blur-md md:hidden dark:border-white/[0.08] dark:bg-[#08080A]/95">
           <nav className="flex flex-col gap-4">
             {[
               ['Features', '#features'],
@@ -195,15 +234,15 @@ function Nav() {
                 key={label}
                 href={href}
                 onClick={() => setIsOpen(false)}
-                className="text-[15px] font-bold text-zinc-300 transition-colors hover:text-white"
+                className="text-[15px] font-medium text-zinc-700 transition-colors hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
               >
                 {label}
               </a>
             ))}
-            <div className="mt-4 flex flex-col gap-2 border-t border-white/[0.08] pt-4">
+            <div className="mt-2 flex flex-col gap-2 border-t border-zinc-200 pt-4 dark:border-white/[0.08]">
               <Link
                 to="/login"
-                className="rounded-xl bg-white/5 px-4 py-2.5 text-center text-[13.5px] font-medium text-zinc-300 transition-colors hover:bg-white/[0.06] hover:text-white"
+                className="rounded-xl bg-zinc-100 px-4 py-2.5 text-center text-[13.5px] font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-white/5 dark:text-zinc-300 dark:hover:bg-white/[0.06] dark:hover:text-white"
               >
                 Sign in
               </Link>
@@ -228,10 +267,10 @@ function Hero() {
     <section className="relative isolate overflow-hidden">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10 opacity-[0.05]"
+        className="pointer-events-none absolute inset-0 -z-10 text-zinc-900 opacity-[0.03] dark:text-white dark:opacity-[0.05]"
         style={{
           backgroundImage:
-            'linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)',
+            'linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)',
           backgroundSize: '64px 64px',
           maskImage: 'radial-gradient(70% 60% at 50% 0%, black, transparent)',
         }}
@@ -239,15 +278,15 @@ function Hero() {
 
       <div className="mx-auto w-full max-w-[1500px] px-6 pt-24 pb-16 lg:px-12 lg:pt-32">
         <div className="mx-auto max-w-5xl text-center">
-          <h1 className="mx-auto mt-10 max-w-[min(100%,68rem)] text-[clamp(2.5rem,6.5vw,5.5rem)] leading-[1.05] font-bold tracking-[-0.04em]">
+          <h1 className="mx-auto mt-10 max-w-[min(100%,68rem)] text-[clamp(2.5rem,6.5vw,5.5rem)] leading-[1.05] font-bold tracking-[-0.04em] text-zinc-900 dark:text-zinc-100">
             Your board and your team,
             <br />
-            <span className="text-white">
+            <span className="text-zinc-900 dark:text-white">
               finally in one place.
             </span>
           </h1>
 
-          <p className="mx-auto mt-8 max-w-2xl text-lg leading-relaxed text-zinc-400 sm:text-xl">
+          <p className="mx-auto mt-8 max-w-2xl text-lg leading-relaxed text-zinc-600 sm:text-xl dark:text-zinc-400">
             Your issue tracker says a task moved. Your chat app says why. DevSync puts the board,
             the sprint, the conversation and the repository in a single workspace — so the work and
             the talk about the work never drift apart.
@@ -266,14 +305,14 @@ function Hero() {
             </Link>
             <a
               href="#features"
-              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-7 py-4 text-[16px] font-medium text-zinc-200 backdrop-blur-md transition-all hover:bg-white/10 hover:border-white/20"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-100 px-7 py-4 text-[16px] font-medium text-zinc-800 backdrop-blur-md transition-all hover:bg-zinc-200 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200 dark:hover:border-white/20 dark:hover:bg-white/10"
             >
               See how it works
             </a>
           </div>
 
           <p className="mt-6 flex items-center justify-center gap-2 text-[13.5px] font-medium text-zinc-500">
-            <ShieldCheckIcon className="size-4 text-emerald-500/80" aria-hidden="true" />
+            <ShieldCheckIcon className="size-4 text-emerald-600 dark:text-emerald-500/80" aria-hidden="true" />
             <span className="text-balance">
               Private by default · Free while in development · Set up in under two minutes
             </span>
@@ -292,7 +331,7 @@ function Hero() {
 
 function TrustBar() {
   return (
-    <section className="border-y border-white/[0.06] bg-white/[0.015]">
+    <section className="border-y border-zinc-200 bg-zinc-50/50 dark:border-white/[0.06] dark:bg-white/[0.015]">
       <div className="mx-auto w-full max-w-[1500px] px-6 py-10 lg:px-12">
         <p className="text-center text-[12px] font-medium tracking-[0.18em] text-zinc-500 uppercase">
           Teams shipping with DevSync
@@ -301,7 +340,7 @@ function TrustBar() {
           {COMPANIES.map((name) => (
             <span
               key={name}
-              className="text-[17px] font-semibold tracking-tight text-zinc-500/80 transition-colors hover:text-zinc-300"
+              className="text-[17px] font-semibold tracking-tight text-zinc-400 transition-colors hover:text-zinc-600 dark:text-zinc-500/80 dark:hover:text-zinc-300"
             >
               {name}
             </span>
@@ -320,7 +359,7 @@ function Stats() {
       <div className="grid grid-cols-2 gap-x-8 gap-y-12 lg:grid-cols-4">
         {STATS.map((s) => (
           <div key={s.label} className="text-center">
-            <div className="text-5xl font-semibold tracking-tight tabular-nums text-white lg:text-6xl">
+            <div className="text-5xl font-semibold tracking-tight tabular-nums text-zinc-900 lg:text-6xl dark:text-white">
               {s.value}
             </div>
             <div className="mt-2 text-sm text-zinc-500">{s.label}</div>
@@ -360,16 +399,16 @@ const FEATURES = [
 
 function Features() {
   return (
-    <section id="features" className="scroll-mt-20 border-t border-white/[0.06]">
+    <section id="features" className="scroll-mt-20 border-t border-zinc-200 dark:border-white/[0.06]">
       <div className="mx-auto w-full max-w-[1500px] px-6 py-24 lg:px-12">
         <div className="mx-auto max-w-3xl text-center">
           <p className="text-[12px] font-semibold tracking-[0.18em] text-primary uppercase">
             Everything in one workspace
           </p>
-          <h2 className="mt-4 text-[clamp(2rem,4vw,3.25rem)] leading-[1.05] font-semibold tracking-[-0.03em] text-balance">
+          <h2 className="mt-4 text-[clamp(2rem,4vw,3.25rem)] leading-[1.05] font-semibold tracking-[-0.03em] text-balance text-zinc-900 dark:text-zinc-100">
             Three jobs that usually need three tools.
           </h2>
-          <p className="mt-5 text-lg text-zinc-400">
+          <p className="mt-5 text-lg text-zinc-600 dark:text-zinc-400">
             Not integrations bolted together — one product, one database, one set of permissions.
           </p>
         </div>
@@ -384,13 +423,13 @@ function Features() {
                 <p className="text-[12px] font-semibold tracking-[0.18em] text-primary uppercase">
                   {f.eyebrow}
                 </p>
-                <h3 className="mt-4 text-[clamp(1.6rem,3vw,2.4rem)] leading-tight font-semibold tracking-[-0.025em] text-balance">
+                <h3 className="mt-4 text-[clamp(1.6rem,3vw,2.4rem)] leading-tight font-semibold tracking-[-0.025em] text-balance text-zinc-900 dark:text-zinc-100">
                   {f.title}
                 </h3>
-                <p className="mt-5 text-[17px] leading-relaxed text-zinc-400">{f.body}</p>
+                <p className="mt-5 text-[17px] leading-relaxed text-zinc-600 dark:text-zinc-400">{f.body}</p>
                 <ul className="mt-8 space-y-3.5">
                   {f.points.map((p) => (
-                    <li key={p} className="flex items-start gap-3 text-[15px] text-zinc-300">
+                    <li key={p} className="flex items-start gap-3 text-[15px] text-zinc-700 dark:text-zinc-300">
                       <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/15">
                         <CheckIcon className="size-3 text-primary" aria-hidden="true" />
                       </span>
@@ -421,22 +460,22 @@ const COMPARISON = [
 
 function WhySwitch() {
   return (
-    <section id="why" className="scroll-mt-20 border-t border-white/[0.06] bg-white/[0.015]">
+    <section id="why" className="scroll-mt-20 border-t border-zinc-200 bg-zinc-50/50 dark:border-white/[0.06] dark:bg-white/[0.015]">
       <div className="mx-auto w-full max-w-[1500px] px-6 py-24 lg:px-12">
         <div className="grid items-center gap-16 lg:grid-cols-2 lg:gap-24">
           <div>
             <p className="text-[12px] font-semibold tracking-[0.18em] text-primary uppercase">
               Why teams switch
             </p>
-            <h2 className="mt-4 text-[clamp(2rem,4vw,3.25rem)] leading-[1.05] font-semibold tracking-[-0.03em] text-balance">
+            <h2 className="mt-4 text-[clamp(2rem,4vw,3.25rem)] leading-[1.05] font-semibold tracking-[-0.03em] text-balance text-zinc-900 dark:text-zinc-100">
               The tab you keep switching to is the problem.
             </h2>
-            <p className="mt-6 text-[17px] leading-relaxed text-zinc-400">
+            <p className="mt-6 text-[17px] leading-relaxed text-zinc-600 dark:text-zinc-400">
               A tracker records that something changed. A chat app records why. Keeping them apart
               means every decision lives in one tool and every task in another, and the person who
               needs both has to reconstruct the story from scratch.
             </p>
-            <p className="mt-4 text-[17px] leading-relaxed text-zinc-400">
+            <p className="mt-4 text-[17px] leading-relaxed text-zinc-600 dark:text-zinc-400">
               DevSync is not an integration between the two. It is one product where a message can
               reference a card, a card shows the discussion that produced it, and a commit moves
               both — with a single permission model deciding who sees what.
@@ -454,30 +493,30 @@ function WhySwitch() {
             </Link>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0D0D10]">
-            <div className="grid grid-cols-[1fr_auto_auto] gap-x-2 sm:gap-x-4 border-b border-white/10 px-4 sm:px-6 py-4 text-[11px] sm:text-[12px] font-semibold tracking-[0.1em] text-zinc-500 uppercase">
+          <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#0D0D10]">
+            <div className="grid grid-cols-[1fr_auto_auto] gap-x-2 border-b border-zinc-200 px-4 py-4 text-[11px] font-semibold tracking-[0.1em] text-zinc-500 uppercase sm:gap-x-4 sm:px-6 sm:text-[12px] dark:border-white/10">
               <span />
-              <span className="w-16 sm:w-20 text-center text-primary">DevSync</span>
-              <span className="w-16 sm:w-20 text-center">Two tools</span>
+              <span className="w-16 text-center text-primary sm:w-20">DevSync</span>
+              <span className="w-16 text-center sm:w-20">Two tools</span>
             </div>
             {COMPARISON.map(([label, devsync, other]) => (
               <div
                 key={label as string}
-                className="grid grid-cols-[1fr_auto_auto] items-center gap-x-2 sm:gap-x-4 border-b border-white/[0.06] px-4 sm:px-6 py-4 last:border-0"
+                className="grid grid-cols-[1fr_auto_auto] items-center gap-x-2 border-b border-zinc-100 px-4 py-4 last:border-0 sm:gap-x-4 sm:px-6 dark:border-white/[0.06]"
               >
-                <span className="text-[13.5px] sm:text-[14.5px] text-zinc-300">{label as string}</span>
-                <span className="flex w-16 sm:w-20 justify-center">
+                <span className="text-[13.5px] text-zinc-700 sm:text-[14.5px] dark:text-zinc-300">{label as string}</span>
+                <span className="flex w-16 justify-center sm:w-20">
                   {devsync ? (
-                    <CheckIcon className="size-4 text-emerald-400" aria-hidden="true" />
+                    <CheckIcon className="size-4 text-emerald-500 dark:text-emerald-400" aria-hidden="true" />
                   ) : (
-                    <XIcon className="size-4 text-zinc-700" aria-hidden="true" />
+                    <XIcon className="size-4 text-zinc-300 dark:text-zinc-700" aria-hidden="true" />
                   )}
                 </span>
-                <span className="flex w-16 sm:w-20 justify-center">
+                <span className="flex w-16 justify-center sm:w-20">
                   {other ? (
-                    <CheckIcon className="size-4 text-zinc-600" aria-hidden="true" />
+                    <CheckIcon className="size-4 text-zinc-400 dark:text-zinc-600" aria-hidden="true" />
                   ) : (
-                    <XIcon className="size-4 text-zinc-700" aria-hidden="true" />
+                    <XIcon className="size-4 text-zinc-300 dark:text-zinc-700" aria-hidden="true" />
                   )}
                 </span>
               </div>
@@ -493,13 +532,13 @@ function WhySwitch() {
 
 function Testimonials() {
   return (
-    <section id="customers" className="scroll-mt-20 border-t border-white/[0.06]">
+    <section id="customers" className="scroll-mt-20 border-t border-zinc-200 dark:border-white/[0.06]">
       <div className="mx-auto w-full max-w-[1500px] px-6 py-24 lg:px-12">
         <div className="mx-auto max-w-3xl text-center">
           <p className="text-[12px] font-semibold tracking-[0.18em] text-primary uppercase">
             Customers
           </p>
-          <h2 className="mt-4 text-[clamp(2rem,4vw,3.25rem)] leading-[1.05] font-semibold tracking-[-0.03em] text-balance">
+          <h2 className="mt-4 text-[clamp(2rem,4vw,3.25rem)] leading-[1.05] font-semibold tracking-[-0.03em] text-balance text-zinc-900 dark:text-zinc-100">
             Fewer tabs. Shorter standups.
           </h2>
         </div>
@@ -508,17 +547,17 @@ function Testimonials() {
           {TESTIMONIALS.map((t) => (
             <figure
               key={t.name}
-              className="flex flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-8"
+              className="flex flex-col rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-white/10 dark:bg-white/[0.03]"
             >
-              <blockquote className="flex-1 text-[16px] leading-relaxed text-zinc-200">
+              <blockquote className="flex-1 text-[16px] leading-relaxed text-zinc-700 dark:text-zinc-200">
                 “{t.quote}”
               </blockquote>
-              <figcaption className="mt-8 flex items-center gap-3.5 border-t border-white/[0.08] pt-6">
+              <figcaption className="mt-8 flex items-center gap-3.5 border-t border-zinc-100 pt-6 dark:border-white/[0.08]">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[13px] font-semibold text-primary">
                   {t.initials}
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-[14.5px] font-medium text-white">
+                  <span className="block truncate text-[14.5px] font-medium text-zinc-900 dark:text-white">
                     {t.name}
                   </span>
                   <span className="block truncate text-[13px] text-zinc-500">
@@ -540,23 +579,23 @@ function Faq() {
   const [open, setOpen] = useState<number | null>(0);
 
   return (
-    <section id="faq" className="scroll-mt-20 border-t border-white/[0.06] bg-white/[0.015]">
+    <section id="faq" className="scroll-mt-20 border-t border-zinc-200 bg-zinc-50/50 dark:border-white/[0.06] dark:bg-white/[0.015]">
       <div className="mx-auto w-full max-w-[1500px] px-6 py-24 lg:px-12">
         <div className="grid gap-14 lg:grid-cols-[minmax(0,22rem)_1fr] lg:gap-24">
           <div>
             <p className="text-[12px] font-semibold tracking-[0.18em] text-primary uppercase">
               FAQ
             </p>
-            <h2 className="mt-4 text-[clamp(2rem,3.5vw,2.75rem)] leading-[1.05] font-semibold tracking-[-0.03em] text-balance">
+            <h2 className="mt-4 text-[clamp(2rem,3.5vw,2.75rem)] leading-[1.05] font-semibold tracking-[-0.03em] text-balance text-zinc-900 dark:text-zinc-100">
               Questions, answered.
             </h2>
-            <p className="mt-5 text-[15px] leading-relaxed text-zinc-400">
+            <p className="mt-5 text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-400">
               Still unsure about something? Create a workspace and look around — nothing is behind a
               sales call.
             </p>
           </div>
 
-          <div className="divide-y divide-white/[0.08] border-y border-white/[0.08]">
+          <div className="divide-y divide-zinc-200 border-y border-zinc-200 dark:divide-white/[0.08] dark:border-white/[0.08]">
             {FAQS.map((item, i) => {
               const isOpen = open === i;
               return (
@@ -566,10 +605,10 @@ function Faq() {
                       type="button"
                       onClick={() => setOpen(isOpen ? null : i)}
                       aria-expanded={isOpen}
-                      className="flex w-full items-start gap-6 py-6 text-left transition-colors hover:text-white"
+                      className="flex w-full items-start gap-6 py-6 text-left transition-colors hover:text-zinc-900 dark:hover:text-white"
                     >
-                      <span className="flex-1 text-[17px] font-medium text-zinc-100">{item.q}</span>
-                      <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-white/15 text-zinc-400">
+                      <span className="flex-1 text-[17px] font-medium text-zinc-900 dark:text-zinc-100">{item.q}</span>
+                      <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-zinc-200 text-zinc-500 dark:border-white/15 dark:text-zinc-400">
                         {isOpen ? (
                           <MinusIcon className="size-3.5" aria-hidden="true" />
                         ) : (
@@ -587,7 +626,7 @@ function Faq() {
                     )}
                   >
                     <div className="overflow-hidden">
-                      <p className="max-w-2xl pb-7 text-[15.5px] leading-relaxed text-zinc-400">
+                      <p className="max-w-2xl pb-7 text-[15.5px] leading-relaxed text-zinc-600 dark:text-zinc-400">
                         {item.a}
                       </p>
                     </div>
@@ -606,12 +645,12 @@ function Faq() {
 
 function FinalCta() {
   return (
-    <section className="relative isolate overflow-hidden border-t border-white/[0.06]">
+    <section className="relative isolate overflow-hidden border-t border-zinc-200 dark:border-white/[0.06]">
       <div className="mx-auto w-full max-w-[1500px] px-6 py-32 text-center lg:px-12">
-        <h2 className="mx-auto max-w-3xl text-[clamp(2.5rem,5vw,4.5rem)] leading-[1.05] font-bold tracking-[-0.04em] text-balance">
+        <h2 className="mx-auto max-w-3xl text-[clamp(2.5rem,5vw,4.5rem)] leading-[1.05] font-bold tracking-[-0.04em] text-balance text-zinc-900 dark:text-zinc-100">
           Start with one project and a channel.
         </h2>
-        <p className="mx-auto mt-6 max-w-xl text-lg text-zinc-400">
+        <p className="mx-auto mt-6 max-w-xl text-lg text-zinc-600 dark:text-zinc-400">
           Create a workspace, invite the people you work with, and run your first sprint. It takes
           about two minutes.
         </p>
@@ -628,7 +667,7 @@ function FinalCta() {
           </Link>
           <Link
             to="/login"
-            className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-8 py-4 text-[16px] font-medium text-zinc-200 backdrop-blur-md transition-all hover:bg-white/10 hover:border-white/20"
+            className="inline-flex items-center rounded-xl border border-zinc-200 bg-zinc-100 px-8 py-4 text-[16px] font-medium text-zinc-800 backdrop-blur-md transition-all hover:bg-zinc-200 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200 dark:hover:border-white/20 dark:hover:bg-white/10"
           >
             Sign in
           </Link>
@@ -670,15 +709,15 @@ function Footer() {
   ];
 
   return (
-    <footer className="border-t border-white/[0.06]">
+    <footer className="border-t border-zinc-200 dark:border-white/[0.06]">
       <div className="mx-auto w-full max-w-[1500px] px-6 py-16 lg:px-12">
         <div className="grid gap-12 lg:grid-cols-[1.4fr_repeat(4,1fr)]">
           <div>
             <span className="flex items-center gap-2.5">
               <LogoMark className="size-7 text-primary" />
-              <span className="text-[17px] font-semibold tracking-[-0.02em]">DevSync</span>
+              <span className="text-[17px] font-semibold tracking-[-0.02em] text-zinc-900 dark:text-zinc-100">DevSync</span>
             </span>
-            <p className="mt-4 max-w-xs text-[14px] leading-relaxed text-zinc-500">
+            <p className="mt-4 max-w-xs text-[14px] leading-relaxed text-zinc-600 dark:text-zinc-500">
               Agile planning and team chat in one workspace, for teams that would rather ship than
               switch tabs.
             </p>
@@ -686,16 +725,16 @@ function Footer() {
 
           {columns.map((col) => (
             <div key={col.title}>
-              <h3 className="text-[13px] font-semibold text-zinc-200">{col.title}</h3>
+              <h3 className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-200">{col.title}</h3>
               <ul className="mt-4 space-y-2.5">
                 {col.links.map((l) => (
                   <li key={l.label}>
                     {l.to.startsWith('#') ? (
-                      <a href={l.to} className="text-[14px] text-zinc-500 transition-colors hover:text-zinc-300">
+                      <a href={l.to} className="text-[14px] text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-500 dark:hover:text-zinc-300">
                         {l.label}
                       </a>
                     ) : (
-                      <Link to={l.to} className="text-[14px] text-zinc-500 transition-colors hover:text-zinc-300">
+                      <Link to={l.to} className="text-[14px] text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-500 dark:hover:text-zinc-300">
                         {l.label}
                       </Link>
                     )}
@@ -706,11 +745,11 @@ function Footer() {
           ))}
         </div>
 
-        <div className="mt-14 flex flex-col gap-3 border-t border-white/[0.06] pt-8 sm:flex-row sm:items-center">
-          <p className="text-[13px] text-zinc-600">
+        <div className="mt-14 flex flex-col gap-3 border-t border-zinc-200 pt-8 sm:flex-row sm:items-center dark:border-white/[0.06]">
+          <p className="text-[13px] text-zinc-500 dark:text-zinc-600">
             © {new Date().getFullYear()} DevSync. All rights reserved.
           </p>
-          <p className="text-[13px] text-zinc-600 sm:ml-auto">Built for teams that ship.</p>
+          <p className="text-[13px] text-zinc-500 dark:text-zinc-600 sm:ml-auto">Built for teams that ship.</p>
         </div>
       </div>
     </footer>
@@ -728,29 +767,29 @@ const COLUMNS = [
     status: 'To Do',
     dot: 'bg-zinc-500',
     cards: [
-      { key: 'PLAT-142', title: 'Rate-limit the invite endpoint', priority: 'High', tone: 'text-amber-400', who: 'AC' },
-      { key: 'PLAT-138', title: 'Backfill completed_at for analytics', priority: 'Low', tone: 'text-zinc-500', who: 'DP' },
+      { key: 'PLAT-142', title: 'Rate-limit the invite endpoint', priority: 'High', tone: 'text-amber-500 dark:text-amber-400', who: 'AC' },
+      { key: 'PLAT-138', title: 'Backfill completed_at for analytics', priority: 'Low', tone: 'text-zinc-400 dark:text-zinc-500', who: 'DP' },
     ],
   },
   {
     status: 'In Progress',
-    dot: 'bg-blue-400',
+    dot: 'bg-blue-500 dark:bg-blue-400',
     cards: [
       { key: 'PLAT-131', title: 'Socket reconnect drops room membership', priority: 'Critical', tone: 'text-primary', who: 'BS' },
     ],
   },
   {
     status: 'In Review',
-    dot: 'bg-amber-400',
+    dot: 'bg-amber-500 dark:bg-amber-400',
     cards: [
-      { key: 'PLAT-127', title: 'Fractional ranks collide on tie', priority: 'Medium', tone: 'text-zinc-400', who: 'CN' },
+      { key: 'PLAT-127', title: 'Fractional ranks collide on tie', priority: 'Medium', tone: 'text-zinc-500 dark:text-zinc-400', who: 'CN' },
     ],
   },
   {
     status: 'Done',
-    dot: 'bg-emerald-400',
+    dot: 'bg-emerald-500 dark:bg-emerald-400',
     cards: [
-      { key: 'PLAT-119', title: 'Persist board filters per user', priority: 'Medium', tone: 'text-zinc-400', who: 'ER' },
+      { key: 'PLAT-119', title: 'Persist board filters per user', priority: 'Medium', tone: 'text-zinc-500 dark:text-zinc-400', who: 'ER' },
     ],
   },
 ];
@@ -759,12 +798,12 @@ function Frame({ url, children }: { url: string; children: React.ReactNode }) {
   return (
     <div
       aria-hidden="true"
-      className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0D0D10]/80 backdrop-blur-sm shadow-2xl shadow-black ring-1 ring-white/5 transition-transform duration-500 hover:scale-[1.01]"
+      className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-white/95 shadow-2xl backdrop-blur-sm ring-1 ring-zinc-900/5 transition-transform duration-500 hover:scale-[1.01] dark:border-white/10 dark:bg-[#0D0D10]/80 dark:shadow-black dark:ring-white/5"
     >
-      <div className="flex items-center gap-2 border-b border-white/[0.07] bg-white/[0.02] px-4 py-3">
-        <span className="size-2.5 rounded-full bg-white/10" />
-        <span className="size-2.5 rounded-full bg-white/10" />
-        <span className="size-2.5 rounded-full bg-white/10" />
+      <div className="flex items-center gap-2 border-b border-zinc-100 bg-zinc-50/80 px-4 py-3 dark:border-white/[0.07] dark:bg-white/[0.02]">
+        <span className="size-2.5 rounded-full bg-zinc-300 dark:bg-white/10" />
+        <span className="size-2.5 rounded-full bg-zinc-300 dark:bg-white/10" />
+        <span className="size-2.5 rounded-full bg-zinc-300 dark:bg-white/10" />
         <span className="ml-3 truncate font-mono text-[11.5px] text-zinc-500">{url}</span>
       </div>
       {children}
@@ -780,24 +819,24 @@ function BoardPreview() {
           <div key={col.status} className="w-[250px] shrink-0 lg:w-auto lg:flex-1">
             <div className="mb-3 flex items-center gap-2">
               <span className={cn('size-2 rounded-full', col.dot)} />
-              <span className="text-[13.5px] font-medium text-zinc-200">{col.status}</span>
-              <span className="text-[12px] text-zinc-600">{col.cards.length}</span>
+              <span className="text-[13.5px] font-medium text-zinc-700 dark:text-zinc-200">{col.status}</span>
+              <span className="text-[12px] text-zinc-400 dark:text-zinc-600">{col.cards.length}</span>
             </div>
             <div className="space-y-2.5">
               {col.cards.map((card) => (
                 <div
                   key={card.key}
-                  className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3.5"
+                  className="rounded-xl border border-zinc-200/80 bg-zinc-50/70 p-3.5 shadow-xs dark:border-white/[0.07] dark:bg-white/[0.025]"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-[11px] text-zinc-600">{card.key}</span>
+                    <span className="font-mono text-[11px] text-zinc-400 dark:text-zinc-600">{card.key}</span>
                     <span className={cn('ml-auto text-[10px] font-semibold uppercase', card.tone)}>
                       {card.priority}
                     </span>
                   </div>
-                  <p className="mt-2 text-[13.5px] leading-snug text-zinc-200">{card.title}</p>
+                  <p className="mt-2 text-[13.5px] leading-snug text-zinc-800 dark:text-zinc-200">{card.title}</p>
                   <div className="mt-3.5 flex items-center">
-                    <span className="flex size-6 items-center justify-center rounded-full bg-white/[0.07] text-[9px] font-medium text-zinc-400">
+                    <span className="flex size-6 items-center justify-center rounded-full bg-zinc-200 text-[9px] font-medium text-zinc-600 dark:bg-white/[0.07] dark:text-zinc-400">
                       {card.who}
                     </span>
                   </div>
@@ -822,41 +861,41 @@ function SprintPreview() {
     <Frame url="devsync.app/w/acme/projects/PLAT/sprints">
       <div className="space-y-6 p-6">
         <div className="flex items-baseline gap-3">
-          <span className="text-[15px] font-medium text-zinc-100">Sprint 14 · Platform</span>
+          <span className="text-[15px] font-medium text-zinc-900 dark:text-zinc-100">Sprint 14 · Platform</span>
           <span className="ml-auto text-[12.5px] text-zinc-500">4 days left</span>
         </div>
 
         <div>
           <div className="mb-2 flex items-baseline justify-between text-[12.5px]">
             <span className="text-zinc-500">Story points</span>
-            <span className="tabular-nums text-zinc-300">34 / 55</span>
+            <span className="tabular-nums text-zinc-700 dark:text-zinc-300">34 / 55</span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-white/[0.07]">
+          <div className="h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-white/[0.07]">
             <div className="h-full w-[62%] rounded-full bg-primary" />
           </div>
         </div>
 
-        <div className="space-y-3 border-t border-white/[0.07] pt-5">
+        <div className="space-y-3 border-t border-zinc-100 pt-5 dark:border-white/[0.07]">
           {rows.map((t) => (
             <div key={t.key} className="flex items-center gap-3 text-[13.5px]">
               <span
                 className={cn(
-                  'flex size-4 shrink-0 items-center justify-center rounded-full border border-white/15',
-                  t.done && 'border-emerald-400/50 bg-emerald-400/15',
+                  'flex size-4 shrink-0 items-center justify-center rounded-full border border-zinc-300 dark:border-white/15',
+                  t.done && 'border-emerald-500/50 bg-emerald-500/15 dark:border-emerald-400/50 dark:bg-emerald-400/15',
                 )}
               >
-                {t.done ? <CheckIcon className="size-2.5 text-emerald-400" /> : null}
+                {t.done ? <CheckIcon className="size-2.5 text-emerald-600 dark:text-emerald-400" /> : null}
               </span>
-              <span className="font-mono text-[11px] text-zinc-600">{t.key}</span>
+              <span className="font-mono text-[11px] text-zinc-400 dark:text-zinc-600">{t.key}</span>
               <span
                 className={cn(
-                  'min-w-0 flex-1 truncate text-zinc-300',
-                  t.done && 'text-zinc-600 line-through',
+                  'min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300',
+                  t.done && 'text-zinc-400 line-through dark:text-zinc-600',
                 )}
               >
                 {t.title}
               </span>
-              <span className="shrink-0 rounded-md border border-white/10 px-2 py-0.5 text-[11px] tabular-nums text-zinc-400">
+              <span className="shrink-0 rounded-md border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[11px] tabular-nums text-zinc-600 dark:border-white/10 dark:bg-transparent dark:text-zinc-400">
                 {t.pts}
               </span>
             </div>
@@ -877,29 +916,29 @@ function ChatPreview() {
   return (
     <Frame url="devsync.app/w/acme/channels/platform-team">
       <div>
-        <div className="flex items-center gap-2 border-b border-white/[0.07] px-5 py-3.5">
-          <HashIcon className="size-4 text-zinc-600" />
-          <span className="text-[14px] font-medium text-zinc-200">platform-team</span>
-          <span className="ml-auto flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[11.5px] text-zinc-400">
-            <span className="size-1.5 rounded-full bg-emerald-400" />3 online
+        <div className="flex items-center gap-2 border-b border-zinc-100 px-5 py-3.5 dark:border-white/[0.07]">
+          <HashIcon className="size-4 text-zinc-400 dark:text-zinc-600" />
+          <span className="text-[14px] font-medium text-zinc-800 dark:text-zinc-200">platform-team</span>
+          <span className="ml-auto flex items-center gap-1.5 rounded-full border border-zinc-200 px-2.5 py-1 text-[11.5px] text-zinc-600 dark:border-white/10 dark:text-zinc-400">
+            <span className="size-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400" />3 online
           </span>
         </div>
 
         <div className="space-y-5 p-5">
           {messages.map((m, i) => (
             <div key={i} className="flex gap-3">
-              <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-white/[0.07] text-[10px] font-medium text-zinc-400">
+              <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[10px] font-medium text-zinc-600 dark:bg-white/[0.07] dark:text-zinc-400">
                 {m.who}
               </span>
               <div className="min-w-0">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-[13.5px] font-medium text-zinc-200">{m.name}</span>
-                  <span className="text-[11px] text-zinc-600">{m.time}</span>
+                  <span className="text-[13.5px] font-medium text-zinc-900 dark:text-zinc-200">{m.name}</span>
+                  <span className="text-[11px] text-zinc-400 dark:text-zinc-600">{m.time}</span>
                 </div>
-                <p className="mt-1 text-[13.5px] leading-relaxed text-zinc-400">{m.body}</p>
+                <p className="mt-1 text-[13.5px] leading-relaxed text-zinc-600 dark:text-zinc-400">{m.body}</p>
                 {m.thread ? (
                   <div className="mt-2.5 flex items-center gap-2">
-                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-zinc-400">
+                    <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-[11px] text-zinc-600 dark:border-white/10 dark:text-zinc-400">
                       +1 · 2
                     </span>
                     <span className="text-[11.5px] text-primary">2 replies</span>
@@ -916,30 +955,30 @@ function ChatPreview() {
 
 function GitHubPreview() {
   const rows = [
-    { Icon: GitPullRequestIcon, primary: 'fix: re-join socket rooms on reconnect', meta: '#218 · opened by Bob · links PLAT-131', tone: 'text-emerald-400' },
-    { Icon: GitBranchIcon, primary: 'feat/PLAT-127-rank-collisions', meta: 'pushed 12 minutes ago · moved PLAT-127 to In Progress', tone: 'text-blue-400' },
-    { Icon: ZapIcon, primary: 'build · test · e2e', meta: 'workflow succeeded in 4m 12s', tone: 'text-emerald-400' },
+    { Icon: GitPullRequestIcon, primary: 'fix: re-join socket rooms on reconnect', meta: '#218 · opened by Bob · links PLAT-131', tone: 'text-emerald-500 dark:text-emerald-400' },
+    { Icon: GitBranchIcon, primary: 'feat/PLAT-127-rank-collisions', meta: 'pushed 12 minutes ago · moved PLAT-127 to In Progress', tone: 'text-blue-500 dark:text-blue-400' },
+    { Icon: ZapIcon, primary: 'build · test · e2e', meta: 'workflow succeeded in 4m 12s', tone: 'text-emerald-500 dark:text-emerald-400' },
   ];
 
   return (
     <Frame url="devsync.app/w/acme/projects/PLAT/github">
       <div>
-        <div className="flex items-center gap-2 border-b border-white/[0.07] px-5 py-3.5">
-          <GitBranchIcon className="size-4 text-zinc-600" />
-          <span className="font-mono text-[13px] text-zinc-300">acme/platform</span>
-          <span className="ml-auto flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-[11.5px] text-emerald-300">
+        <div className="flex items-center gap-2 border-b border-zinc-100 px-5 py-3.5 dark:border-white/[0.07]">
+          <GitBranchIcon className="size-4 text-zinc-400 dark:text-zinc-600" />
+          <span className="font-mono text-[13px] text-zinc-700 dark:text-zinc-300">acme/platform</span>
+          <span className="ml-auto flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11.5px] text-emerald-700 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-300">
             <ShieldCheckIcon className="size-3" />
             CI passing
           </span>
         </div>
 
-        <div className="divide-y divide-white/[0.06]">
+        <div className="divide-y divide-zinc-100 dark:divide-white/[0.06]">
           {rows.map((r) => (
             <div key={r.primary} className="flex items-start gap-3 px-5 py-4">
               <r.Icon className={cn('mt-0.5 size-4 shrink-0', r.tone)} />
               <div className="min-w-0">
-                <p className="truncate text-[13.5px] text-zinc-200">{r.primary}</p>
-                <p className="mt-1 text-[12px] text-zinc-600">{r.meta}</p>
+                <p className="truncate text-[13.5px] text-zinc-800 dark:text-zinc-200">{r.primary}</p>
+                <p className="mt-1 text-[12px] text-zinc-400 dark:text-zinc-600">{r.meta}</p>
               </div>
             </div>
           ))}

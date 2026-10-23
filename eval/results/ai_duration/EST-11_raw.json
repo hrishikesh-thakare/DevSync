@@ -1,0 +1,30 @@
+{
+  "task": {
+    "taskKey": "EST-11",
+    "issueType": "feature",
+    "title": "Implement OAuth2 PKCE login flow with GitHub",
+    "descriptionText": "Support authorization code exchange with state and code_verifier validation, setting refresh tokens in httpOnly cookies.",
+    "complexityCategory": "Complex Feature (12-20h)"
+  },
+  "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-11 (feature)\nTitle: Implement OAuth2 PKCE login flow with GitHub\nDescription: Support authorization code exchange with state and code_verifier validation, setting refresh tokens in httpOnly cookies.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+  "rawResponseText": "{\"estimatedHours\": 12}",
+  "parsedHours": 12,
+  "processedHours": 12,
+  "meta": {
+    "modelVersion": "gemini-3.8-flash",
+    "responseId": "NBPWaqSBIYLDjuMPg9_xyQ4",
+    "usageMetadata": {
+      "promptTokenCount": 92,
+      "candidatesTokenCount": 8,
+      "totalTokenCount": 408,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 92
+        }
+      ],
+      "thoughtsTokenCount": 308,
+      "serviceTier": "standard"
+    }
+  }
+}

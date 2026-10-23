@@ -1,0 +1,43 @@
+{
+  "sprintId": "a4444444-0000-4000-8000-000000000004",
+  "sprintName": "Sprint 4 - GitHub Integration Pipeline",
+  "characteristic": "Solo Contributor (100% of tasks assigned to Bob)",
+  "dateGenerated": "2026-10-19T12:46:12.621Z",
+  "model": "gemini-3.6-flash",
+  "inputs": {
+    "sprintName": "Sprint 4 - GitHub Integration Pipeline",
+    "goal": "Build GitHub webhook event parser and commit linking",
+    "dateRange": "2026-04-13 to 2026-04-24",
+    "completedCount": 4,
+    "totalCount": 5,
+    "completionRate": 80,
+    "taskCount": 5
+  },
+  "rawResponseText": "{\n  \"summary\": \"During Sprint 4, the team focused on building the GitHub webhook event parser and commit linking functionality. Core capabilities including HMAC verification, push/PR event parsing, and commit history visualization on the task modal were successfully delivered. Work on supporting branch deletion webhook events remains in progress and will carry over to the next sprint.\",\n  \"highlights\": [\n    \"Established secure GitHub HMAC webhook verification for incoming events\",\n    \"Automated parsing and linking for push commits and pull request events to task keys\",\n    \"Added a dedicated commit history view inside the task modal\"\n  ]\n}",
+  "parsedReport": {
+    "summary": "During Sprint 4, the team focused on building the GitHub webhook event parser and commit linking functionality. Core capabilities including HMAC verification, push/PR event parsing, and commit history visualization on the task modal were successfully delivered. Work on supporting branch deletion webhook events remains in progress and will carry over to the next sprint.",
+    "highlights": [
+      "Completed 4 of 5 tasks (80%)",
+      "Established secure GitHub HMAC webhook verification for incoming events",
+      "Automated parsing and linking for push commits and pull request events to task keys",
+      "Added a dedicated commit history view inside the task modal"
+    ]
+  },
+  "metadata": {
+    "modelVersion": "gemini-3.6-flash",
+    "responseId": "GRHWauO1EbrLjuMP0YLf2A4",
+    "usageMetadata": {
+      "promptTokenCount": 324,
+      "candidatesTokenCount": 126,
+      "totalTokenCount": 1333,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 324
+        }
+      ],
+      "thoughtsTokenCount": 883,
+      "serviceTier": "standard"
+    }
+  }
+}

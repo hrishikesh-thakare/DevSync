@@ -1,0 +1,30 @@
+{
+  "task": {
+    "taskKey": "EST-10",
+    "issueType": "feature",
+    "title": "Add drag-and-drop file attachment to task comments",
+    "descriptionText": "Support dragging images/PDFs into comment textarea, uploading to storage bucket and rendering markdown link.",
+    "complexityCategory": "Moderate Feature (4-8h)"
+  },
+  "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-10 (feature)\nTitle: Add drag-and-drop file attachment to task comments\nDescription: Support dragging images/PDFs into comment textarea, uploading to storage bucket and rendering markdown link.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+  "rawResponseText": "{\"estimatedHours\": 10}",
+  "parsedHours": 10,
+  "processedHours": 10,
+  "meta": {
+    "modelVersion": "gemini-3.8-flash",
+    "responseId": "IxPWavnLEICVjuMPvcfL0Q4",
+    "usageMetadata": {
+      "promptTokenCount": 93,
+      "candidatesTokenCount": 8,
+      "totalTokenCount": 434,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 93
+        }
+      ],
+      "thoughtsTokenCount": 333,
+      "serviceTier": "standard"
+    }
+  }
+}

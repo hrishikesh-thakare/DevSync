@@ -29,6 +29,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
   ref,
 ) {
   const [selected, setSelected] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const virtualRef = useRef({
     getBoundingClientRect: () => clientRect?.() || new DOMRect(0, 0, 0, 0),
@@ -41,6 +42,16 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
   useEffect(() => {
     setSelected(0);
   }, [items]);
+
+  // Keep the selected item scrolled into view when navigating via arrow keys
+  useEffect(() => {
+    if (!listRef.current) return;
+    const itemEls = listRef.current.querySelectorAll('[data-slot="command-item"]');
+    const selectedEl = itemEls[selected] as HTMLElement | undefined;
+    if (selectedEl) {
+      selectedEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }, [selected]);
 
   useImperativeHandle(ref, () => ({
     onKeyDown: ({ event }) => {
@@ -72,7 +83,8 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
         onOpenAutoFocus={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
-        className="w-72 p-0 overflow-hidden"
+        onWheel={(e) => e.stopPropagation()}
+        className="w-80 p-0 overflow-hidden shadow-xl border bg-popover rounded-2xl"
         align="start"
       >
         <Command
@@ -81,7 +93,11 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
           value={items[selected] ? itemValue(items[selected]) : undefined}
           className="border-none bg-transparent"
         >
-          <CommandList className="max-h-72 overflow-y-auto overflow-x-hidden">
+          <CommandList
+            ref={listRef}
+            onWheel={(e) => e.stopPropagation()}
+            className="max-h-64 overflow-y-auto overflow-x-hidden [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground overscroll-contain p-1"
+          >
             {loading ? (
               <p className="px-3 py-4 text-center text-xs text-muted-foreground">Searching…</p>
             ) : items.length === 0 ? (
@@ -95,6 +111,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
                         key={itemValue(item)}
                         value={itemValue(item)}
                         onSelect={() => command(item)}
+                        onMouseDown={(e) => e.preventDefault()}
                         onMouseEnter={() => setSelected(items.indexOf(item))}
                       >
                         <Avatar className="size-5 shrink-0">
@@ -113,6 +130,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
                         key={itemValue(item)}
                         value={itemValue(item)}
                         onSelect={() => command(item)}
+                        onMouseDown={(e) => e.preventDefault()}
                         onMouseEnter={() => setSelected(items.indexOf(item))}
                       >
                         <HashIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />

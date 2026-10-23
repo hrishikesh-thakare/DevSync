@@ -7,7 +7,7 @@ import {
   resolveNotification,
 } from './notifications.controller.js';
 
-const router = Router();
+const router = Router({ mergeParams: true });
 
 // All notification routes require authentication
 router.use(requireAuth);

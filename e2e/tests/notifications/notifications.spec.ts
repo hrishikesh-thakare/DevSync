@@ -126,4 +126,73 @@ test.describe('Notifications', () => {
     const readAll = await apiRequest('/notifications/read-all', '', { method: 'PATCH' });
     expect(readAll.status).toBe(401);
   });
+
+  test('notifications are strictly scoped per workspace and mark-all is isolated', async () => {
+    // 1. Register a dedicated test user
+    const email = `scope-${Date.now()}@demo.com`;
+    const { status: regStatus, data: regData } = await apiRequest('/auth/register', '', {
+      method: 'POST',
+      body: JSON.stringify({ email, fullName: 'Scope Tester', password: TEST_PASSWORD }),
+    });
+    expect([200, 201]).toContain(regStatus);
+    const scopeToken = regData.accessToken;
+
+    // 2. Create a second workspace
+    const ws2Slug = `scope-ws-${Date.now()}`;
+    const { status: wsStatus } = await apiRequest('/workspaces', ownerToken, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Scope WS2', slug: ws2Slug }),
+    });
+    expect(wsStatus).toBe(201);
+
+    try {
+      // 3. Invite user to Workspace 1 (SLUG)
+      const { status: inv1 } = await apiRequest(`/workspaces/${SLUG}/invite`, ownerToken, {
+        method: 'POST',
+        body: JSON.stringify({ email, role: 'member' }),
+      });
+      expect(inv1).toBe(201);
+
+      // 4. Invite user to Workspace 2 (ws2Slug)
+      const { status: inv2 } = await apiRequest(`/workspaces/${ws2Slug}/invite`, ownerToken, {
+        method: 'POST',
+        body: JSON.stringify({ email, role: 'member' }),
+      });
+      expect(inv2).toBe(201);
+
+      // 5. Query notifications scoped to Workspace 1 via route
+      const { data: ws1Notifs } = await apiRequest(`/workspaces/${SLUG}/notifications`, scopeToken);
+      expect(ws1Notifs.notifications.length).toBeGreaterThan(0);
+      expect(ws1Notifs.notifications.every((n: any) => n.workspaceSlug === SLUG)).toBe(true);
+
+      // 6. Query notifications scoped to Workspace 2 via route
+      const { data: ws2Notifs } = await apiRequest(`/workspaces/${ws2Slug}/notifications`, scopeToken);
+      expect(ws2Notifs.notifications.length).toBeGreaterThan(0);
+      expect(ws2Notifs.notifications.every((n: any) => n.workspaceSlug === ws2Slug)).toBe(true);
+
+      // 7. Verify cross-contamination does NOT occur
+      const ws1HasWs2Notifs = ws1Notifs.notifications.some((n: any) => n.workspaceSlug === ws2Slug);
+      const ws2HasWs1Notifs = ws2Notifs.notifications.some((n: any) => n.workspaceSlug === SLUG);
+      expect(ws1HasWs2Notifs).toBe(false);
+      expect(ws2HasWs1Notifs).toBe(false);
+
+      // 8. Mark all read in Workspace 1 ONLY
+      const { status: readAllStatus } = await apiRequest(`/workspaces/${SLUG}/notifications/read-all`, scopeToken, {
+        method: 'PATCH',
+      });
+      expect(readAllStatus).toBe(200);
+
+      // 9. Verify Workspace 1 unread notifications are now empty
+      const { data: ws1UnreadAfter } = await apiRequest(`/workspaces/${SLUG}/notifications?unreadOnly=true`, scopeToken);
+      expect(ws1UnreadAfter.notifications).toEqual([]);
+
+      // 10. Verify Workspace 2 unread notifications remain untouched (still unread)
+      const { data: ws2UnreadAfter } = await apiRequest(`/workspaces/${ws2Slug}/notifications?unreadOnly=true`, scopeToken);
+      expect(ws2UnreadAfter.notifications.length).toBeGreaterThan(0);
+      expect(ws2UnreadAfter.notifications.every((n: any) => n.isRead === false)).toBe(true);
+    } finally {
+      // Clean up the created workspace
+      await apiRequest(`/workspaces/${ws2Slug}`, ownerToken, { method: 'DELETE' });
+    }
+  });
 });

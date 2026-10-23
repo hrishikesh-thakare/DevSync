@@ -1,0 +1,30 @@
+{
+  "task": {
+    "taskKey": "EST-8",
+    "issueType": "feature",
+    "title": "Implement cursor-based pagination for channel message history",
+    "descriptionText": "Load messages in chunks of 50 using cursor-based pagination as user scrolls upwards in channel view.",
+    "complexityCategory": "Moderate Feature (6-12h)"
+  },
+  "prompt": "You are a software estimation assistant. Estimate how long (in hours, between 0.5 and 80) this task will take a developer.\n\nTask: EST-8 (feature)\nTitle: Implement cursor-based pagination for channel message history\nDescription: Load messages in chunks of 50 using cursor-based pagination as user scrolls upwards in channel view.\n\nRespond with STRICT JSON (no markdown): {\"estimatedHours\": <number>}",
+  "rawResponseText": "{\"estimatedHours\": 12}",
+  "parsedHours": 12,
+  "processedHours": 12,
+  "meta": {
+    "modelVersion": "gemini-3.8-flash",
+    "responseId": "DhPWau2IKMvZjuMPw8qFuA4",
+    "usageMetadata": {
+      "promptTokenCount": 92,
+      "candidatesTokenCount": 8,
+      "totalTokenCount": 433,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 92
+        }
+      ],
+      "thoughtsTokenCount": 333,
+      "serviceTier": "standard"
+    }
+  }
+}

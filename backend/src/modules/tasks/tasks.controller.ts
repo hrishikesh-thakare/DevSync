@@ -217,7 +217,7 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
       });
 
       // 7. Broadcast to project channels
-      const broadcasts = await broadcastToProjectChannels(tx, projectId, `✅ **${creator?.fullName || 'User'}** created task @${task.taskKey}: ${task.title}`);
+      const broadcasts = await broadcastToProjectChannels(tx, projectId, `**${creator?.fullName || 'User'}** created task @${task.taskKey}: ${task.title}`);
 
       return { task, broadcasts };
     });
@@ -595,7 +595,7 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
         const actorName = actor?.fullName || 'User';
 
         if (oldTask.status !== updated.status) {
-          broadcastMessage = `🔄 **${actorName}** moved @${updated.taskKey} to ${updated.status}`;
+          broadcastMessage = `**${actorName}** moved @${updated.taskKey} to ${updated.status}`;
           // Also add a system message to the task thread
           await tx.insert(messages).values({
             authorId: actorId,
@@ -607,9 +607,9 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
         } else if (oldTask.assigneeId !== updated.assigneeId) {
           if (updated.assigneeId) {
             const [assignee] = await tx.select({ fullName: users.fullName }).from(users).where(eq(users.userId, updated.assigneeId));
-            broadcastMessage = `👤 **${actorName}** assigned @${updated.taskKey} to ${assignee?.fullName || 'Someone'}`;
+            broadcastMessage = `**${actorName}** assigned @${updated.taskKey} to ${assignee?.fullName || 'Someone'}`;
           } else {
-            broadcastMessage = `👤 **${actorName}** unassigned @${updated.taskKey}`;
+            broadcastMessage = `**${actorName}** unassigned @${updated.taskKey}`;
           }
         }
 

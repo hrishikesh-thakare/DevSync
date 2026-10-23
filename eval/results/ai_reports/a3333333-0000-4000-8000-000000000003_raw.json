@@ -1,0 +1,43 @@
+{
+  "sprintId": "a3333333-0000-4000-8000-000000000003",
+  "sprintName": "Sprint 3 - API Performance & Stalled Reviews",
+  "characteristic": "Many Carried-Over Tasks (71.4% carried over), stalled review pipeline",
+  "dateGenerated": "2026-10-19T12:45:34.837Z",
+  "model": "gemini-3.6-flash",
+  "inputs": {
+    "sprintName": "Sprint 3 - API Performance & Stalled Reviews",
+    "goal": "Clear carried-over storage bottlenecks and optimize query latency",
+    "dateRange": "2026-03-30 to 2026-04-10",
+    "completedCount": 2,
+    "totalCount": 7,
+    "completionRate": 29,
+    "taskCount": 7
+  },
+  "rawResponseText": "{\n  \"summary\": \"Sprint 3 focused on addressing storage bottlenecks and optimizing query latencies across key endpoints. While foundational improvements like Redis caching and critical N+1 query resolutions were completed, a significant portion of the work stalled in code review or remained in progress. Streamlining the review phase will be essential to improving throughput in future iterations.\",\n  \"highlights\": [\n    \"Successfully added Redis caching for user presence to optimize load handling\",\n    \"Resolved the N+1 query issue on the project task listing endpoint\",\n    \"Progressed complex database and analytics query optimizations into the review pipeline\"\n  ]\n}",
+  "parsedReport": {
+    "summary": "Sprint 3 focused on addressing storage bottlenecks and optimizing query latencies across key endpoints. While foundational improvements like Redis caching and critical N+1 query resolutions were completed, a significant portion of the work stalled in code review or remained in progress. Streamlining the review phase will be essential to improving throughput in future iterations.",
+    "highlights": [
+      "Completed 2 of 7 tasks (29%)",
+      "Successfully added Redis caching for user presence to optimize load handling",
+      "Resolved the N+1 query issue on the project task listing endpoint",
+      "Progressed complex database and analytics query optimizations into the review pipeline"
+    ]
+  },
+  "metadata": {
+    "modelVersion": "gemini-3.6-flash",
+    "responseId": "DRHWasWqBfrOjuMPyMKWsQk",
+    "usageMetadata": {
+      "promptTokenCount": 370,
+      "candidatesTokenCount": 129,
+      "totalTokenCount": 1343,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 370
+        }
+      ],
+      "thoughtsTokenCount": 844,
+      "serviceTier": "standard"
+    }
+  }
+}

@@ -153,6 +153,8 @@ export type NotificationType =
 /** A row from `GET /notifications`. */
 export interface AppNotification {
   notificationId: string;
+  workspaceId?: string | null;
+  workspaceSlug?: string | null;
   type: NotificationType;
   entityType: string;
   entityId: string;

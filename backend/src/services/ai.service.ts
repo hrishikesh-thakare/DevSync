@@ -1,41 +1,57 @@
 import { env } from '../config/env.js';
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta';
-const GEMINI_MODEL = 'gemini-3.6-flash';
+
+const CANDIDATE_MODELS = [
+  env.GEMINI_MODEL,
+  'gemini-3-flash-preview',
+  'gemini-3.1-flash-lite',
+  'gemini-3.6-flash',
+].filter(Boolean) as string[];
 
 const isEnabled = (): boolean => !!env.GEMINI_API_KEY;
 
 const callGemini = async (prompt: string): Promise<string | null> => {
   if (!isEnabled()) return null;
 
-  try {
-    const res = await fetch(
-      `${GEMINI_ENDPOINT}/models/${GEMINI_MODEL}:generateContent?key=${env.GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: 'application/json', temperature: 0.4 },
-        }),
+  // Deduplicate in case env.GEMINI_MODEL is already in the fallback list
+  const modelsToTry = [...new Set(CANDIDATE_MODELS)];
+
+  for (const model of modelsToTry) {
+    try {
+      const res = await fetch(
+        `${GEMINI_ENDPOINT}/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: 'application/json', temperature: 0.4 },
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        console.warn(`Gemini model ${model} error ${res.status}:`, await res.text());
+        // If quota exceeded (429) or model not found (404), fall back to next model
+        if (res.status === 429 || res.status === 404) {
+          continue;
+        }
+        return null;
       }
-    );
 
-    if (!res.ok) {
-      console.warn(`Gemini API error ${res.status}:`, await res.text());
-      return null;
+      const data = await res.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text as string | undefined;
+      if (!text) continue;
+
+      // Strip markdown code fences if the model wraps the JSON
+      return text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```$/m, '').trim();
+    } catch (err) {
+      console.warn(`Gemini call failed for ${model}:`, err);
     }
-
-    const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text as string | undefined;
-    if (!text) return null;
-
-    // Strip markdown code fences if the model wraps the JSON
-    return text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```$/m, '').trim();
-  } catch (err) {
-    console.warn('Gemini call failed:', err);
-    return null;
   }
+
+  return null;
 };
 
 const parseJson = <T>(text: string | null): T | null => {

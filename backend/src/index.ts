@@ -129,6 +129,7 @@ import analyticsRoutes from './modules/analytics/analytics.routes.js';
 app.use('/api/workspaces/:slug/analytics', analyticsRoutes);
 
 import notificationsRoutes from './modules/notifications/notifications.routes.js';
+app.use('/api/workspaces/:slug/notifications', notificationsRoutes);
 app.use('/api/notifications', notificationsRoutes);
 
 import auditRoutes from './modules/audit/audit.routes.js';

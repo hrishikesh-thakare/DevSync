@@ -40,8 +40,8 @@ export function NotificationsInbox() {
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    void fetchNotifications();
-  }, [fetchNotifications]);
+    void fetchNotifications(slug);
+  }, [fetchNotifications, slug]);
 
   const open = async (id: string) => {
     void markAsRead(id);
@@ -90,7 +90,7 @@ export function NotificationsInbox() {
               {showUnreadOnly ? 'Show all' : 'Unread only'}
             </Button>
             {unreadCount > 0 ? (
-              <Button size="sm" onClick={() => void markAllAsRead()}>
+              <Button size="sm" onClick={() => void markAllAsRead(slug)}>
                 <CheckCheckIcon className="size-4" aria-hidden="true" />
                 Mark all read
               </Button>

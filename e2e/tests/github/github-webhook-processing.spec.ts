@@ -115,6 +115,60 @@ test.describe('GitHub webhook processing (fixture-driven, from a real captured d
     }
   });
 
+  test('push with a suffix closing keyword auto-closes the linked task and sets fractional rank', async () => {
+    const owner = await apiLogin(TEST_USERS.owner.email);
+    const key = await createProject(owner.accessToken);
+    try {
+      const task = await createTask(owner.accessToken, key, 'Auto-close via suffix commit');
+      const payload = loadFixture('push', task.taskKey);
+      payload.commits[0].message = `feat: core logic completed [${task.taskKey}] resolved`;
+      await runWebhookEvent(owner.accessToken, key, 'push', payload);
+
+      const updated = await getTask(owner.accessToken, key, task.taskKey);
+      expect(updated.status).toBe('done');
+      expect(updated.linkedCommitsCount).toBe(1);
+      expect(typeof updated.rank).toBe('string');
+      expect(updated.rank.length).toBeGreaterThan(0);
+    } finally {
+      await apiRequest(`/workspaces/${SLUG}/projects/${key}`, owner.accessToken, { method: 'DELETE' });
+    }
+  });
+
+  test('smart commit auto-transition places card at the top of the destination column using fractional indexing', async () => {
+    const owner = await apiLogin(TEST_USERS.owner.email);
+    const key = await createProject(owner.accessToken);
+    try {
+      // Create task 1 and manually set to done
+      const task1 = await createTask(owner.accessToken, key, 'Existing done task');
+      const { status: s1 } = await apiRequest(`/workspaces/${SLUG}/projects/${key}/tasks/${task1.taskKey}`, owner.accessToken, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'done' }),
+      });
+      expect(s1).toBe(200);
+      const updated1 = await getTask(owner.accessToken, key, task1.taskKey);
+      expect(updated1.status).toBe('done');
+
+      // Create task 2 in todo
+      const task2 = await createTask(owner.accessToken, key, 'New task auto-transitioned to done');
+      expect(task2.status).toBe('todo');
+
+      // Push commit resolving task2
+      const payload = loadFixture('push', task2.taskKey);
+      payload.commits[0].message = `${task2.taskKey}: done`;
+      await runWebhookEvent(owner.accessToken, key, 'push', payload);
+
+      const updated2 = await getTask(owner.accessToken, key, task2.taskKey);
+      expect(updated2.status).toBe('done');
+      expect(typeof updated2.rank).toBe('string');
+
+      // Compare ranks: updated2 (newly auto-transitioned) was placed before updated1
+      // In fractional-indexing (ASCII collation), a smaller key comes first
+      expect(updated2.rank < updated1.rank).toBe(true);
+    } finally {
+      await apiRequest(`/workspaces/${SLUG}/projects/${key}`, owner.accessToken, { method: 'DELETE' });
+    }
+  });
+
   test('push referencing a todo task without a closing keyword bumps it to in_progress', async () => {
     const owner = await apiLogin(TEST_USERS.owner.email);
     const key = await createProject(owner.accessToken);
@@ -236,6 +290,105 @@ test.describe('GitHub webhook processing (fixture-driven, from a real captured d
     } finally {
       await apiRequest(`/workspaces/${SLUG}/projects/${key}`, owner.accessToken, { method: 'DELETE' });
     }
+  });
+
+  test('pushing a commit triggers and records a successful CI/CD run in the CI runs section', async () => {
+    const owner = await apiLogin(TEST_USERS.owner.email);
+    const key = await createProject(owner.accessToken);
+    try {
+      // 1. Create a task in the project
+      const task = await createTask(owner.accessToken, key, 'Verify CI/CD runs pipeline');
+
+      // 2. Push a commit referencing the task
+      const commitSha = randomSha();
+      const pushPayload = loadFixture('push', task.taskKey);
+      pushPayload.commits = [
+        {
+          id: commitSha,
+          message: `feat(ci): implement robust CI test suite [${task.taskKey}]`,
+          timestamp: new Date().toISOString(),
+          url: `https://github.com/hrishikesh-thakare/github-integration-test/commit/${commitSha}`,
+          author: {
+            name: 'Hrishikesh Thakare',
+            email: 'hrishikeshthakare0809@gmail.com',
+            username: 'hrishikesh-thakare',
+          },
+        },
+      ];
+      await runWebhookEvent(owner.accessToken, key, 'push', pushPayload);
+
+      // Verify commit is linked
+      const commits = await apiRequest(`/workspaces/${SLUG}/projects/${key}/github/commits`, owner.accessToken);
+      expect(commits.data.commits.some((c: any) => c.commitSha === commitSha && c.taskKey === task.taskKey)).toBe(true);
+
+      // 3. Webhook delivery of a successful workflow_run triggered by that commit
+      const runId = Math.floor(1000000000 + Math.random() * 9000000000);
+      const workflowPayload = loadFixture('workflow_run_completed', task.taskKey);
+      workflowPayload.workflow_run.id = runId;
+      workflowPayload.workflow_run.name = 'DevSync CI Test';
+      workflowPayload.workflow_run.head_sha = commitSha;
+      workflowPayload.workflow_run.head_branch = 'main';
+      workflowPayload.workflow_run.status = 'completed';
+      workflowPayload.workflow_run.conclusion = 'success';
+      workflowPayload.workflow_run.html_url = `https://github.com/hrishikesh-thakare/github-integration-test/actions/runs/${runId}`;
+
+      await runWebhookEvent(owner.accessToken, key, 'workflow_run', workflowPayload);
+
+      // 4. Query CI runs in the project's GitHub CI section
+      const ci = await apiRequest(`/workspaces/${SLUG}/projects/${key}/github/ci`, owner.accessToken);
+      expect(ci.status).toBe(200);
+      expect(ci.data.runs.length).toBeGreaterThan(0);
+
+      const matchingRun = ci.data.runs.find((r: any) => r.headSha === commitSha);
+      expect(matchingRun).toBeDefined();
+      expect(matchingRun.status).toBe('completed');
+      expect(matchingRun.conclusion).toBe('success');
+      expect(matchingRun.workflowName).toBe('DevSync CI Test');
+      expect(matchingRun.headBranch).toBe('main');
+    } finally {
+      await apiRequest(`/workspaces/${SLUG}/projects/${key}`, owner.accessToken, { method: 'DELETE' });
+    }
+  });
+
+  test('CI failure summarize handles non-failed runs and non-existent runs correctly', async () => {
+    const owner = await apiLogin(TEST_USERS.owner.email);
+    const key = await createProject(owner.accessToken);
+    try {
+      // 1. Deliver a successful workflow run
+      const runId = Math.floor(1000000000 + Math.random() * 9000000000);
+      const successPayload = loadFixture('workflow_run_completed', 'UNUSED-1');
+      successPayload.workflow_run.id = runId;
+      successPayload.workflow_run.conclusion = 'success';
+      await runWebhookEvent(owner.accessToken, key, 'workflow_run', successPayload);
+
+      // Attempting to summarize a successful run is rejected with 400
+      const notFailureRes = await apiRequest(`/workspaces/${SLUG}/projects/${key}/github/ci/${runId}/summarize`, owner.accessToken, {
+        method: 'POST',
+      });
+      expect(notFailureRes.status).toBe(400);
+      expect(notFailureRes.data.error).toBe('Only failed runs can be summarized.');
+
+      // Attempting to summarize a non-existent run returns 404
+      const notFoundRes = await apiRequest(`/workspaces/${SLUG}/projects/${key}/github/ci/999999999999/summarize`, owner.accessToken, {
+        method: 'POST',
+      });
+      expect(notFoundRes.status).toBe(404);
+      expect(notFoundRes.data.error).toBe('Workflow run not found.');
+    } finally {
+      await apiRequest(`/workspaces/${SLUG}/projects/${key}`, owner.accessToken, { method: 'DELETE' });
+    }
+  });
+
+  test('CI runs section in GitHub tab displays successful CI/CD runs (UI)', async ({ ownerPage }) => {
+    // Navigate directly to the CI runs tab of the connected project (DS)
+    await ownerPage.goto('/w/northwind-labs/projects/DS/github?tab=ci');
+
+    // Verify the GitHub page header and CI runs tab
+    await expect(ownerPage.getByRole('tab', { name: /ci runs/i })).toBeVisible();
+
+    // Verify successful CI run is visible in the CI runs list
+    await expect(ownerPage.getByText('DevSync CI Test').first()).toBeVisible();
+    await expect(ownerPage.getByLabel('success').first()).toBeVisible();
   });
 
   test('redelivering the same commit does not double-count it (dedup)', async () => {

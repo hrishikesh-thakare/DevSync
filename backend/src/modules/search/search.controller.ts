@@ -54,9 +54,10 @@ export const globalSearch = async (req: Request, res: Response): Promise<void> =
     const searchTerm = q.trim();
 
     // 1. If workspaceId is provided, verify the user is a member
+    let wsMemberRole: string | null = null;
     if (workspaceId) {
       const [wsMember] = await db
-        .select({ id: workspaceMembers.id })
+        .select({ id: workspaceMembers.id, role: workspaceMembers.role })
         .from(workspaceMembers)
         .where(
           and(
@@ -71,31 +72,52 @@ export const globalSearch = async (req: Request, res: Response): Promise<void> =
         res.status(403).json({ error: 'You do not have access to this workspace.' });
         return;
       }
+      wsMemberRole = wsMember.role;
     }
+
+    const isWsAdmin = wsMemberRole === 'owner' || wsMemberRole === 'admin';
 
     // 2. Fetch accessible Project IDs for Tasks
-    const projectConditions = [eq(projectMembers.userId, userId)];
-    if (workspaceId) {
-      projectConditions.push(eq(projects.workspaceId, workspaceId));
+    let projectIds: string[];
+    if (isWsAdmin && workspaceId) {
+      const records = await db
+        .select({ projectId: projects.projectId })
+        .from(projects)
+        .where(and(eq(projects.workspaceId, workspaceId), isNull(projects.deletedAt)));
+      projectIds = records.map(p => p.projectId);
+    } else {
+      const projectConditions = [eq(projectMembers.userId, userId)];
+      if (workspaceId) {
+        projectConditions.push(eq(projects.workspaceId, workspaceId));
+      }
+      const projectRecords = await db
+        .select({ projectId: projectMembers.projectId })
+        .from(projectMembers)
+        .leftJoin(projects, eq(projectMembers.projectId, projects.projectId))
+        .where(and(...projectConditions, isNull(projects.deletedAt)));
+      projectIds = projectRecords.map(p => p.projectId).filter((id): id is string => id !== null);
     }
-    const projectRecords = await db
-      .select({ projectId: projectMembers.projectId })
-      .from(projectMembers)
-      .leftJoin(projects, eq(projectMembers.projectId, projects.projectId))
-      .where(and(...projectConditions));
-    const projectIds = projectRecords.map(p => p.projectId).filter((id): id is string => id !== null);
 
     // 3. Fetch accessible Channel IDs for Messages
-    const channelConditions = [eq(channelMembers.userId, userId)];
-    if (workspaceId) {
-      channelConditions.push(eq(channels.workspaceId, workspaceId));
+    let channelIds: string[];
+    if (isWsAdmin && workspaceId) {
+      const records = await db
+        .select({ channelId: channels.channelId })
+        .from(channels)
+        .where(and(eq(channels.workspaceId, workspaceId), eq(channels.isArchived, false)));
+      channelIds = records.map(c => c.channelId);
+    } else {
+      const channelConditions = [eq(channelMembers.userId, userId)];
+      if (workspaceId) {
+        channelConditions.push(eq(channels.workspaceId, workspaceId));
+      }
+      const channelRecords = await db
+        .select({ channelId: channelMembers.channelId })
+        .from(channelMembers)
+        .leftJoin(channels, eq(channelMembers.channelId, channels.channelId))
+        .where(and(...channelConditions, eq(channels.isArchived, false)));
+      channelIds = channelRecords.map(c => c.channelId).filter((id): id is string => id !== null);
     }
-    const channelRecords = await db
-      .select({ channelId: channelMembers.channelId })
-      .from(channelMembers)
-      .leftJoin(channels, eq(channelMembers.channelId, channels.channelId))
-      .where(and(...channelConditions));
-    const channelIds = channelRecords.map(c => c.channelId).filter((id): id is string => id !== null);
 
     let taskResults: any[] = [];
     let taskCount = 0;
@@ -104,13 +126,28 @@ export const globalSearch = async (req: Request, res: Response): Promise<void> =
 
     // ── SEARCH TASKS ──────────────────────────────────────────────────────
     if ((type === 'all' || type === 'tasks') && projectIds.length > 0) {
+      // Normalize task key matching: support "ds-15", "DS-15", "ds 15", "ds15"
+      const normalizedKey = searchTerm.replace(/\s+/g, '-');
+      const hyphenatedKey = /^([A-Za-z0-9]*[A-Za-z])(\d+)$/.test(searchTerm)
+        ? searchTerm.replace(/^([A-Za-z0-9]*[A-Za-z])(\d+)$/, '$1-$2')
+        : null;
+
+      const keyConditions = [
+        ilike(tasks.taskKey, `%${searchTerm}%`),
+        ilike(tasks.taskKey, `%${normalizedKey}%`),
+      ];
+      if (hyphenatedKey) {
+        keyConditions.push(ilike(tasks.taskKey, `%${hyphenatedKey}%`));
+      }
+
       // Build dynamic conditions
       const taskConditions: any[] = [
         inArray(tasks.projectId, projectIds),
         isNull(tasks.deletedAt),
         or(
           sql`description_tsv @@ plainto_tsquery('english', ${searchTerm})`,
-          ilike(tasks.title, `%${searchTerm}%`)
+          ilike(tasks.title, `%${searchTerm}%`),
+          ...keyConditions
         )
       ];
 
@@ -161,6 +198,11 @@ export const globalSearch = async (req: Request, res: Response): Promise<void> =
           rank: sql<number>`(
             ts_rank(description_tsv, plainto_tsquery('english', ${searchTerm}))
             + (CASE WHEN ${tasks.title} ILIKE '%' || ${searchTerm} || '%' THEN 1 ELSE 0 END)
+            + (CASE 
+                WHEN ${tasks.taskKey} ILIKE ${searchTerm} OR ${tasks.taskKey} ILIKE ${normalizedKey} THEN 10
+                WHEN ${tasks.taskKey} ILIKE '%' || ${searchTerm} || '%' THEN 5
+                ELSE 0
+               END)
           )`
         })
         .from(tasks)

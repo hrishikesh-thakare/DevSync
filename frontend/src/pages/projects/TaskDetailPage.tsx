@@ -272,7 +272,9 @@ export function TaskDetailPage() {
                         {c.isSystem ? <Badge variant="outline">system</Badge> : null}
                         {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
                       </p>
-                      <p className="mt-0.5 text-sm whitespace-pre-wrap break-words text-foreground">{c.bodyText}</p>
+                      <p className="mt-0.5 text-sm whitespace-pre-wrap break-words text-foreground">
+                        {c.isSystem ? c.bodyText.replace(/^(\p{Extended_Pictographic}|\uFE0F)+\s*/u, '') : c.bodyText}
+                      </p>
                     </div>
                   </li>
                 ))}

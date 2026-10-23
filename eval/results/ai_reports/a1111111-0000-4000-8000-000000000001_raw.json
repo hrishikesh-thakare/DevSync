@@ -1,0 +1,43 @@
+{
+  "sprintId": "a1111111-0000-4000-8000-000000000001",
+  "sprintName": "Sprint 1 - Core Auth & Onboarding",
+  "characteristic": "High Completion (100%), multi-contributor",
+  "dateGenerated": "2026-10-19T12:45:10.822Z",
+  "model": "gemini-3.6-flash",
+  "inputs": {
+    "sprintName": "Sprint 1 - Core Auth & Onboarding",
+    "goal": "Deliver user authentication and onboarding flow",
+    "dateRange": "2026-03-02 to 2026-03-13",
+    "completedCount": 8,
+    "totalCount": 8,
+    "completionRate": 100,
+    "taskCount": 8
+  },
+  "rawResponseText": "{\n  \"summary\": \"Sprint 1 focused on building the core authentication infrastructure and initial user onboarding experiences. The team successfully delivered fundamental user interfaces alongside critical backend security controls, such as rate limiting and token rotation. Overall, the foundational security and user access capabilities were established as planned.\",\n  \"highlights\": [\n    \"Delivered functional sign-up and login user interfaces integrated with session persistence.\",\n    \"Strengthened system security by implementing JWT token rotation, endpoint rate limiting, and account lockout rules.\",\n    \"Resolved password reset token issues and added unit test coverage for core authentication middleware.\"\n  ]\n}",
+  "parsedReport": {
+    "summary": "Sprint 1 focused on building the core authentication infrastructure and initial user onboarding experiences. The team successfully delivered fundamental user interfaces alongside critical backend security controls, such as rate limiting and token rotation. Overall, the foundational security and user access capabilities were established as planned.",
+    "highlights": [
+      "Completed 8 of 8 tasks (100%)",
+      "Delivered functional sign-up and login user interfaces integrated with session persistence.",
+      "Strengthened system security by implementing JWT token rotation, endpoint rate limiting, and account lockout rules.",
+      "Resolved password reset token issues and added unit test coverage for core authentication middleware."
+    ]
+  },
+  "metadata": {
+    "modelVersion": "gemini-3.6-flash",
+    "responseId": "1xDWaoqUCufkjuMP99DMmQk",
+    "usageMetadata": {
+      "promptTokenCount": 363,
+      "candidatesTokenCount": 128,
+      "totalTokenCount": 1331,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 363
+        }
+      ],
+      "thoughtsTokenCount": 840,
+      "serviceTier": "standard"
+    }
+  }
+}
