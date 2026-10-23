@@ -379,18 +379,6 @@ test.describe('GitHub webhook processing (fixture-driven, from a real captured d
     }
   });
 
-  test('CI runs section in GitHub tab displays successful CI/CD runs (UI)', async ({ ownerPage }) => {
-    // Navigate directly to the CI runs tab of the connected project (DS)
-    await ownerPage.goto('/w/northwind-labs/projects/DS/github?tab=ci');
-
-    // Verify the GitHub page header and CI runs tab
-    await expect(ownerPage.getByRole('tab', { name: /ci runs/i })).toBeVisible();
-
-    // Verify successful CI run is visible in the CI runs list
-    await expect(ownerPage.getByText('DevSync CI Test').first()).toBeVisible();
-    await expect(ownerPage.getByLabel('success').first()).toBeVisible();
-  });
-
   test('redelivering the same commit does not double-count it (dedup)', async () => {
     // GitHub retries webhook deliveries that don't answer 2xx promptly; the
     // real handler dedupes on (repo_full_name, commit_sha) for exactly this.

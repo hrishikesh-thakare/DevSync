@@ -48,6 +48,7 @@
     "vitest": "^4.1.11"
   },
   "overrides": {
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "follow-redirects": "^1.16.1"
   }
 }
