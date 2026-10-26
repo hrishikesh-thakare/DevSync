@@ -21,7 +21,7 @@ export const connectGithubSchema = z.object({
 
 // GitHub caps issue/PR comments at 65,536 chars.
 const GithubCommentBody = z
-  .string({ required_error: 'Comment body must be a string' })
+  .string({ message: 'Comment body must be a string' })
   .min(1, 'Comment cannot be empty')
   .max(65536, 'Comment must be 65,536 characters or less');
 

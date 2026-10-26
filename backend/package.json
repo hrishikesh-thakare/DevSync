@@ -32,7 +32,7 @@
     "morgan": "^1.10.0",
     "postgres": "^3.4.7",
     "socket.io": "^4.8.3",
-    "zod": "^3.25.36"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",

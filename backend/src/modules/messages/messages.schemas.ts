@@ -4,13 +4,13 @@ import { z } from 'zod';
 // every channel member — cap it so one message can't bloat the DB or freeze
 // clients. 10,000 chars is far beyond any legitimate chat message.
 const MessageText = z
-  .string({ required_error: 'Message text must be a string' })
+  .string({ message: 'Message text must be a string' })
   .min(1, 'Message cannot be empty')
   .max(10000, 'Message must be 10,000 characters or less');
 
 // Rich-text message blocks (optional, server-authored only for now)
 const MessageBlocks = z
-  .array(z.record(z.unknown()))
+  .array(z.record(z.string(), z.unknown()))
   .max(200, 'Message cannot contain more than 200 blocks')
   .nullable()
   .optional();
